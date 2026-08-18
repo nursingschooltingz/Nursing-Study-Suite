@@ -219,7 +219,7 @@ Use it as your reflexive "wait, is that true?" button. One honest limitation: th
 
 ## The legal bits (please actually read these)
 
-**Personal educational use.** This suite is provided for personal, educational, non-commercial use — your own studying. It is not a commercial product and comes with no support obligations.
+**Why it's shared.** This suite is shared as a study tool for nursing students, built for your own coursework studying. What you may legally do with the code is governed by the [LICENSE](LICENSE) file. It comes with no support obligations.
 
 **It can be wrong — verify everything.** The citation and audit systems exist because AI-generated content can contain errors, and they catch many but not all of them. Your official course materials, your instructors, and current clinical guidelines are the authorities — when the suite disagrees with them, they win. Be especially skeptical of anything involving drug doses, lab values, and safety parameters, and check those against your source every time.
 
