@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /*
  * LATTE Study Suite — regression test harness (v15.2)
- * Usage:  node latte-tests.js [path/to/LATTE-Study-Suite-*.html]
- * With no argument it picks the newest LATTE-Study-Suite*.html in the current folder.
+ * Usage:  node latte-tests.js [path/to/LATTE-Study-Suite-*.html or Nursing-Study-Suite-*.html]
+ * With no argument it picks the newest LATTE-Study-Suite*.html or Nursing-Study-Suite*.html in the current folder.
  *
  * The harness extracts the REAL functions from the shipped HTML (no copies to drift) and
  * exercises the deterministic logic that must never regress silently. It depends on these
@@ -17,11 +17,11 @@ const fs = require('fs');
 
 let file = process.argv[2];
 if (!file) {
-  const cands = fs.readdirSync('.').filter(f => /^LATTE-Study-Suite.*\.html$/i.test(f)).sort();
+  const cands = fs.readdirSync('.').filter(f => /^(LATTE-Study-Suite|Nursing-Study-Suite).*\.html$/i.test(f)).sort();
   file = cands[cands.length - 1];
 }
 if (!file || !fs.existsSync(file)) {
-  console.error('usage: node latte-tests.js <LATTE-Study-Suite html>'); process.exit(2);
+  console.error('usage: node latte-tests.js <LATTE-Study-Suite or Nursing-Study-Suite html>'); process.exit(2);
 }
 const S = fs.readFileSync(file, 'utf8');
 console.log('LATTE regression harness — testing: ' + file + ' (' + S.length.toLocaleString() + ' chars)\n');

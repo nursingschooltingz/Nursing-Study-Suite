@@ -56,3 +56,4 @@ $RECYCLE.BIN/
 local/
 scratch/
 *.local.*
+run-node-*.md
