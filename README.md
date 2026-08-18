@@ -215,4 +215,30 @@ Use it as your reflexive "wait, is that true?" button. One honest limitation: th
 
 **A note on AI accuracy.** Language models can be confidently wrong. This suite's answer to that isn't "trust us" — it's the citation system: verbatim quotes checked in code, packet-scoped fact IDs, numeric audits, coverage reports, and a Fact Inspector one click away. Use them. If a card or question ever contradicts your source, the receipt trail will show you in seconds — and your source wins.
 
+---
+
+## The legal bits (please actually read these)
+
+**Personal educational use.** This suite is provided for personal, educational, non-commercial use — your own studying. It is not a commercial product and comes with no support obligations.
+
+**It can be wrong — verify everything.** The citation and audit systems exist because AI-generated content can contain errors, and they catch many but not all of them. Your official course materials, your instructors, and current clinical guidelines are the authorities — when the suite disagrees with them, they win. Be especially skeptical of anything involving drug doses, lab values, and safety parameters, and check those against your source every time.
+
+**Not medical advice. Not for clinical use.** This is a study tool for coursework. Nothing it generates should inform the care of a real patient. In clinical settings, follow your institution's policies, current guidelines, and provider orders — never an AI study aid.
+
+**No real patient information.** Never enter PHI or any identifiable patient data. It's a study tool, not a clinical system.
+
+**The LATTE method belongs to Straight A Nursing.** This suite uses LATTE (Look, Assess, Tests, Treatments, Educate) as its organizational framework with credit and gratitude. It is **not affiliated with, endorsed by, or connected to Straight A Nursing** in any way. If the framework clicks for you, look them up — their materials are excellent and the method is theirs.
+
+**NCLEX®** is a registered trademark of the National Council of State Boards of Nursing (NCSBN). This suite is not affiliated with or endorsed by NCSBN. Generated questions are practice items *in the style of* the exam — they are not, and do not resemble access to, actual exam content.
+
+**Anki** is an independent open-source project. This suite generates files formatted for import into Anki but is not affiliated with the Anki project.
+
+**Google Gemini.** You bring your own API key, and your use of the API is governed by Google's terms of service. You are responsible for activity and any charges on your own key. This suite is not affiliated with Google.
+
+**Your source materials.** Only process materials you lawfully have access to. Outputs generated from copyrighted textbooks and lectures are for your personal study — don't redistribute them — and what you feed the tool should comply with your program's academic-integrity and content-sharing policies (secure exam content, for example, is off-limits).
+
+**As-is, no warranty.** The suite is provided as-is, without warranty of any kind — including accuracy, fitness for a particular purpose, or uninterrupted operation. Use it at your own risk; your grades, your API bill, and your decisions remain your own.
+
+---
+
 Good luck on your exam. Build the KB tonight; thank yourself Thursday.
