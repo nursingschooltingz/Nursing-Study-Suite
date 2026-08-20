@@ -4144,6 +4144,37 @@ function ngSplitParts(raw){
   const dm=raw.match(/DISTRIBUTION:([^\n]*)/i);
   return{p1,p2,p3,p4:p4m?p4m[1].trim():'',dist:dm?dm[1].trim():''};
 }
+// v15.7: resolve PART 3/4 citations back to fact IDs.
+// The grounding adapter asks for [fact-N] in PART 1 concept names; NCLEX_GEN_PROMPT asks for
+// C-numbers in PART 4 ("Source: C7"). Nothing ever asks for fact IDs in Parts 3/4, so the
+// v15 decision to count fact-N there produced a coverage figure that was structurally always
+// zero — 0/122 on a real 50-question run. v15 narrowed the scan to Parts 3+4 for a good
+// reason (scanning the whole response counted PART 1's mandatory listing and read ~100%
+// regardless of the questions); the mistake was counting the wrong token there.
+// This maps C-number -> fact IDs through PART 1 and resolves what Parts 3/4 actually cite,
+// which is the thing the metric was always meant to measure. No prompt change needed.
+function ngConceptFactMap(p1){
+  const m=new Map();
+  for(const line of String(p1||'').split('\n')){
+    const cm=line.match(/^\s*(C\d+)\s*\|/i);
+    if(!cm)continue;
+    const ids=[...line.matchAll(/fact-\d+/gi)].map(x=>x[0].toLowerCase());
+    if(ids.length)m.set(cm[1].toUpperCase(),[...new Set(ids)]);
+  }
+  return m;
+}
+function ngCitedFactIds(p1,p3,p4){
+  const map=ngConceptFactMap(p1),out=new Set();
+  const body=(p3||'')+'\n'+(p4||'');
+  for(const x of body.matchAll(/fact-\d+/gi))out.add(x[0].toLowerCase()); // cited directly
+  // A bare "C5" in clinical prose (a vertebra, a complement level) only resolves if C5 is a
+  // real logged concept carrying a fact ID, so the map lookup is the guard against noise.
+  for(const x of body.matchAll(/\bC(\d{1,3})\b/g)){
+    const ids=map.get('C'+x[1]);
+    if(ids)for(const id of ids)out.add(id);
+  }
+  return out;
+}
 function ngParseConcepts(p1){
   const out=[];
   for(const line of p1.split('\n')){
@@ -4279,6 +4310,13 @@ function validateNCLEXWorksheet(raw,expectedCount){
   // contents means the model reported compliance it did not verify — the exact failure the
   // in-call gate cannot detect, because it is the thing being checked.
   const d=ngParseDistribution(parts.dist);
+  // v15.7: a DISTRIBUTION line in the wrong FORMAT is not the same as a compliant one. A real
+  // run emitted prose ("Tier 1: 6 (Q1, Q3, ...), Tier 2: 3 ...") instead of the required
+  // "Tier [1:_ 2:_ 3:_] | Types [...]" shape. Both regexes missed, every comparison loop
+  // iterated over nothing, and the batch reported 0 errors — the self-report check silently
+  // disabled itself on exactly the output it exists to police. Say so out loud instead.
+  if(d.present&&q3.length&&!Object.keys(d.types).length&&!Object.keys(d.tiers).length)
+    issues.push({sev:'warn',msg:'DISTRIBUTION line is present but not in the required "Tier [1:_ 2:_ 3:_] | Types [MCQ:_ ...]" format, so its counts could not be checked against the worksheet'});
   if(d.present&&q3.length){
     const actualTypes={};
     for(const it of q3)actualTypes[it.type.toLowerCase()]=(actualTypes[it.type.toLowerCase()]||0)+1;
@@ -4606,7 +4644,7 @@ GROUNDING ADAPTER — INPUT FORM ONLY:
           // v15: count citations from Parts 3+4 only. The adapter REQUIRES every
           // allocated fact to be logged in PART 1, so scanning the whole response made
           // the coverage metric ~always 100% regardless of the actual questions.
-          const mentioned=ngParseFactIds((P.p3||'')+'\n'+(P.p4||''));
+          const mentioned=ngCitedFactIds(P.p1,P.p3,P.p4);
           const allocIds=new Set(alloc.targets.map(f=>f.id));
           for(const id of mentioned)if(allocIds.has(id)){citedAll.add(id);batchCited++;}
           const missed=alloc.targets.length-batchCited;

@@ -1029,6 +1029,45 @@ section('v15.7 — worksheet validator');
   t('ngParseKeyItem captures the tier', WS.ngParseKeyItem({ num: 1, text: mkA(1, null, 2) }).tier === 2);
   t('ngParseDistribution reads the Types counts', WS.ngParseDistribution('Types [MCQ:6 SATA:2 Ordering:1 Calc:1]').types.mcq === 6);
   t('ngParseDistribution on an absent line reports not present', WS.ngParseDistribution('').present === false);
+  // v15.7, from a real run: the model emitted the distribution as prose, both regexes missed,
+  // and the self-report check silently disabled itself while reporting 0 errors.
+  {
+    const prose = 'Tier 1: 6 (Q1, Q3, Q4), Tier 2: 3 (Q2, Q6), Tier 3: 1 (Q8).';
+    const d = WS.ngParseDistribution(prose);
+    t('a prose distribution parses no counts', !Object.keys(d.types).length && !Object.keys(d.tiers).length);
+    const found = V(build({ n: 1 }).replace(/DISTRIBUTION:[^\n]*/, 'DISTRIBUTION: ' + prose), 1);
+    t('a malformed DISTRIBUTION line warns instead of silently skipping',
+      has(found, 'not in the required', 'warn'));
+    t('a malformed DISTRIBUTION line is a warning, not an error',
+      !found.some(i => i.sev === 'error' && /DISTRIBUTION/.test(i.msg)));
+  }
+  t('a well-formed DISTRIBUTION line does not trip the malformed warning',
+    !has(V(build({ n: 2 }), 2), 'not in the required'));
+}
+/* ── 20b. v15.7 — fact-coverage resolution (real-run bug) ── */
+section('v15.7 — coverage resolution');
+{
+  const NG = new Function(
+    spanFrom('function ngConceptFactMap(', 'function ngParseCited(').replace(/function ngParseCited\($/, '') +
+    '\n;return {ngConceptFactMap,ngCitedFactIds};'
+  )();
+  const p1 = 'C1 | Digoxin hold parameter [fact-42] | ANCHOR: "hold if under 60" |\n' +
+             'C2 | Burn fluid resuscitation [fact-7] | ANCHOR: "Parkland" |\n' +
+             'C3 | Unlinked concept | ANCHOR: "x" |';
+  t('concept map links C-numbers to fact IDs', NG.ngConceptFactMap(p1).get('C1')[0] === 'fact-42');
+  t('a concept with no fact ID is not mapped', !NG.ngConceptFactMap(p1).has('C3'));
+  // The real failure: Parts 3/4 cite C-numbers, never fact IDs, so counting fact-N found none.
+  const p4 = '  1. ANSWER: B\n     Why B is correct: reasoning. (Source: C1 — "hold if under 60")\n     Why A is wrong: no. (Source: C2)';
+  t('C-number citations resolve to fact IDs', (() => {
+    const s = NG.ngCitedFactIds(p1, '', p4);
+    return s.has('fact-42') && s.has('fact-7');
+  })());
+  t('direct fact-N citations still count', NG.ngCitedFactIds(p1, 'see fact-99', '').has('fact-99'));
+  t('an unmapped C-number contributes nothing', NG.ngCitedFactIds(p1, '', '(Source: C3)').size === 0);
+  t('a stray C-number in clinical prose is ignored unless it is a logged concept',
+    NG.ngCitedFactIds(p1, 'injury at C7 of the spine', '').size === 0);
+  t('coverage uses the resolver, not the raw fact-ID scan',
+    S.includes('const mentioned=ngCitedFactIds(P.p1,P.p3,P.p4);'));
 }
 
 /* ── 21. v15.7 — provenance stamp + Anki abbreviation lint (B2, B5) ── */
