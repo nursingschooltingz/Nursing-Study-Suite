@@ -55,6 +55,17 @@ const provSpan = spanFrom('const entries=[];let qi=0;const claimed=new Set();', 
   "if(residual.length)entries.push({id:caseId+':case',caseId,factIds:residual,label:title+' — case context / debrief'});return entries;";
 const buildProv = new Function('parsed', 'cited', 'caseId', 'title', provSpan);
 
+// v15.6 item 4: the audit cluster sits after caseToMarkdown and depends on it, so it is
+// extracted as its own span rather than folded into clusterA.
+const AUDIT = new Function('CASE_QUESTION_RULES', 'caseRenderFactPacket',
+  spanFrom('function caseToMarkdown(', '\n  return L.join(\'\\n\');\n}') +
+  spanFrom('function caseIsGateEligible(', 'function CaseStudyGenerator()')
+    .replace(/function CaseStudyGenerator\(\)$/, '') +
+  ';return {caseToMarkdown,caseIsGateEligible,caseAuditPayload,caseBuildAuditPrompt,' +
+  'caseParseAuditVerdict,caseAuditIsAnswerAccuracy,caseRunPool,caseGateItems,caseAuditSummary,' +
+  'caseBuildRepairPrompt,CASE_AUDIT_STATUS};'
+)('«SHARED-QUESTION-RULES»', () => '«FACT-PACKET»');
+
 const hit = (re, x) => { re.lastIndex = 0; return re.test(x); };
 const has = (issues, frag, sev) => issues.some(i => i.msg.includes(frag) && (!sev || i.sev === sev));
 
@@ -685,6 +696,189 @@ section('v15.6 — difficulty contract');
   t('the bare Difficulty interpolation is gone', !S.includes('Difficulty: ${difficulty}. Produce'));
 }
 
-console.log('\n════════════════════════════');
-console.log(pass + ' passed · ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+/* ── 18. v15.6 — case NEIA audit pass (item 4) ── */
+section('v15.6 — case audit pass');
+{
+  const A = AUDIT;
+  const opt = (l, tx) => ({ label: l, text: tx });
+  const Q = (o) => Object.assign({
+    id: 'q1', type: 'MCQ', stem: 'What should the nurse do first?',
+    options: [opt('A', 'Alpha'), opt('B', 'Beta'), opt('C', 'Gamma'), opt('D', 'Delta')],
+    correctAnswers: ['B'], rationales: [], cjmmSkill: 'Take Action',
+  }, o);
+
+  // ── Scope (4a) ──
+  t('a well-formed MCQ is gate-eligible', A.caseIsGateEligible(Q({})));
+  t('SATA is not gate-eligible', !A.caseIsGateEligible(Q({ type: 'SATA', correctAnswers: ['A', 'B'] })));
+  t('Ordering is not gate-eligible', !A.caseIsGateEligible(Q({ type: 'Ordering' })));
+  t('Calculation is not gate-eligible', !A.caseIsGateEligible(Q({ type: 'Calculation' })));
+  t('Education is not gate-eligible', !A.caseIsGateEligible(Q({ type: 'Education' })));
+  t('Prioritization phrased as SATA is not gate-eligible',
+    !A.caseIsGateEligible(Q({ type: 'Prioritization', correctAnswers: ['A', 'B'] })));
+  t('an MCQ with two keys is not gate-eligible', !A.caseIsGateEligible(Q({ correctAnswers: ['A', 'B'] })));
+  t('an MCQ with two options is not gate-eligible', !A.caseIsGateEligible(Q({ options: [opt('A', 'x'), opt('B', 'y')] })));
+
+  // ── Payload (4b): the critical leak test ──
+  const CS = {
+    title: 'Worsening dyspnea', condition: 'Heart failure', difficulty: 'exam',
+    patient: { age: 72, sex: 'female', background: 'Lives alone.' },
+    stages: [
+      { stageNumber: 1, title: 'Arrival', narrative: 'The nurse enters at 0800.',
+        data: [{ label: 'RR', value: '28/min', supportType: 'direct', availability: 'revealed', factIds: ['fact-104'] }],
+        questions: [Q({ id: 's1q1' })] },
+      { stageNumber: 2, title: 'Labs', narrative: 'Results return.',
+        data: [{ label: 'BNP', value: '900 pg/mL', supportType: 'direct', availability: 'revealed', factIds: ['fact-205'] }],
+        questions: [Q({ id: 's2q1', stem: 'Which finding is most concerning?' })] },
+      { stageNumber: 3, title: 'Later', narrative: 'Overnight.',
+        data: [{ label: 'Weight', value: '3 kg up', supportType: 'direct', availability: 'revealed', factIds: ['fact-999'] }],
+        questions: [Q({ id: 's3q1' })] }],
+    debrief: { priorityProblem: 'Fluid overload', keyDecisions: ['Escalate'], notes: 'n', factIds: ['fact-104'] },
+  };
+  const p1 = A.caseAuditPayload(CS, 1, CS.stages[0].questions[0]);
+  const p2 = A.caseAuditPayload(CS, 2, CS.stages[1].questions[0]);
+
+  t('payload includes the item\'s own stage', p1.includes('Stage 1'));
+  t('payload truncates at the item\'s stage — stage 2 is absent from a stage-1 audit', !p1.includes('Stage 2'));
+  t('payload truncates future stages — stage 3 is absent from a stage-2 audit', !p2.includes('Stage 3'));
+  t('a stage-2 payload still carries stage 1 for cumulative context', p2.includes('Stage 1'));
+  t('payload carries the stem', p1.includes('What should the nurse do first?'));
+  t('payload carries the keyed answer', p1.includes('KEYED ANSWER: B'));
+  t('payload carries the options', p1.includes('A. Alpha') && p1.includes('D. Delta'));
+
+  // These are the assertions that matter most: the auditor must be blind to grounding.
+  t('payload leaks NO fact IDs', !/fact-\d+/.test(p1) && !/fact-\d+/.test(p2));
+  t('payload leaks no future-stage fact IDs', !p2.includes('fact-999'));
+  t('payload contains no supportType values', !/supportType|direct|neutral-framing/.test(p1));
+  t('payload contains no answer key section', !p1.includes('Answer Key'));
+  t('payload contains no rationales', !p1.includes('rationale'));
+  t('payload contains no debrief', !p1.includes('Fluid overload'));
+  t('payload shows what the student sees, including difficulty', p1.includes('Difficulty'));
+
+  // ── Prompt (4c, 4e) ──
+  const ap = A.caseBuildAuditPrompt('PAYLOAD');
+  t('audit prompt embeds the payload', ap.includes('PAYLOAD'));
+  t('audit prompt lists eleven criteria', /11\. TEST PLAN ALIGNMENT/.test(ap) && /1\. STEM CLARITY/.test(ap));
+  t('audit prompt makes alignment advisory only', ap.includes('It may NEVER produce a FAIL'));
+  t('audit prompt forbids a total score or band', ap.includes('Do NOT compute or report a total score'));
+  t('audit prompt offers REVIEW as a status', ap.includes('REVIEW — <what you could not resolve>'));
+  t('audit prompt states the auditor has no source facts', ap.includes('You do not have the case\'s source facts'));
+  t('audit prompt cites NEIA', ap.includes('Nurse Education in\nPractice 93:104804'));
+  t('audit prompt never ships the fact packet', !ap.includes('«FACT-PACKET»'));
+
+  // ── Verdict parsing (4d, 4e) ──
+  const V = A.caseParseAuditVerdict;
+  t('PASS parses', V('PASS').status === 'PASS');
+  t('FAIL with an em dash parses', V('FAIL — Distractor Plausibility').status === 'FAIL');
+  t('FAIL captures the criterion', V('FAIL — Distractor Plausibility').criterion === 'Distractor Plausibility');
+  t('FAIL with a hyphen parses', V('FAIL - Stem Clarity').criterion === 'Stem Clarity');
+  t('REVIEW parses with its detail', V('REVIEW — cannot verify the lab threshold').status === 'REVIEW');
+  t('unparseable output defaults to REVIEW, never PASS', V('the item looks fine to me').status === 'REVIEW');
+  t('empty output defaults to REVIEW', V('').status === 'REVIEW');
+  t('WARN lines are collected', V('PASS\nWARN Stem Clarity: tighten the second sentence').warns.length === 1);
+  t('WARN captures criterion and detail', (() => {
+    const w = V('PASS\nWARN Stem Clarity: tighten it').warns[0];
+    return w.criterion === 'Stem Clarity' && w.detail === 'tighten it';
+  })());
+  t('multiple WARNs are collected', V('PASS\nWARN A: x\nWARN B: y').warns.length === 2);
+  t('a WARN line does not become the verdict', V('WARN Stem Clarity: x\nPASS').status === 'PASS');
+
+  // Alignment can never fail an item — enforced in code, not just asked for in the prompt.
+  t('FAIL on Test Plan Alignment is downgraded to PASS', V('FAIL — Test Plan Alignment').status === 'PASS');
+  t('the downgraded alignment failure survives as a WARN',
+    V('FAIL — Test Plan Alignment').warns.some(w => /Test Plan Alignment/.test(w.criterion)));
+  t('FAIL on "Alignment with NCLEX-RN Test Plan" is also downgraded',
+    V('FAIL — Alignment with NCLEX-RN Test Plan').status === 'PASS');
+
+  // Answer accuracy never auto-repairs.
+  t('answer-accuracy FAIL is not auto-repairable', V('FAIL — Answer Accuracy').autoRepairable === false);
+  t('"Correct Answer: Accuracy" is recognised', A.caseAuditIsAnswerAccuracy('Correct Answer: Accuracy'));
+  t('a distractor FAIL IS auto-repairable', V('FAIL — Distractor Length').autoRepairable === true);
+  t('a PASS is never auto-repairable', V('PASS').autoRepairable === false);
+  t('a REVIEW is never auto-repairable', V('REVIEW — unclear').autoRepairable === false);
+
+  // ── Item enumeration + summary ──
+  const items = A.caseGateItems(CS);
+  t('every question is enumerated', items.length === 3);
+  t('gate items carry a stable stage:id key', items[0].key === '1:s1q1');
+  t('all three MCQs are eligible here', items.filter(i => i.eligible).length === 3);
+  {
+    const mixed = { stages: [{ stageNumber: 1, questions: [Q({ id: 'a' }), Q({ id: 'b', type: 'SATA', correctAnswers: ['A', 'B'] })] }] };
+    t('a SATA in the mix is enumerated but not eligible',
+      A.caseGateItems(mixed).length === 2 && A.caseGateItems(mixed).filter(i => i.eligible).length === 1);
+  }
+  {
+    const sum = A.caseAuditSummary([{ status: 'PASS', warns: [] }, { status: 'FAIL', warns: [{}] }, { status: 'N/A', warns: [] }, { status: 'REVIEW', warns: [] }]);
+    t('summary counts each status', sum.pass === 1 && sum.fail === 1 && sum.na === 1 && sum.review === 1);
+    t('summary counts warnings', sum.warns === 1);
+    t('summary reports no score, percentage, or band',
+      !('score' in sum) && !('band' in sum) && !('percent' in sum) && !('quality' in sum));
+  }
+
+  // ── Concurrency (4g) ──
+  {
+    const order = [];
+    let live = 0, peak = 0;
+    const work = Array.from({ length: 9 }, (_, i) => i);
+    const res = (() => A.caseRunPool(work, 3, async (x) => {
+      live++; peak = Math.max(peak, live);
+      await new Promise(r => setTimeout(r, 5));
+      live--; order.push(x);
+      return x * 2;
+    }))();
+    // resolved below via .then in the async wrapper
+    global.__poolCheck = res.then(r => ({ r, peak, order }));
+  }
+  {
+    const ctl = new AbortController();
+    ctl.abort();
+    global.__abortCheck = A.caseRunPool([1, 2, 3], 3, async x => x, ctl.signal)
+      .then(() => 'resolved', e => e.name);
+  }
+
+  // ── Repair prompt (4f) ──
+  const rp = A.caseBuildRepairPrompt({
+    conditionName: 'HF', facts: [], stageNumber: 2, q: Q({ id: 's2q1' }),
+    criterion: 'Distractor Length', visibleContext: 'CONTEXT-HERE',
+  });
+  t('repair prompt names the failed criterion', rp.includes('FAILED: Distractor Length'));
+  t('repair prompt carries the visible context', rp.includes('CONTEXT-HERE'));
+  t('repair prompt DOES ship the fact packet (repair is a generation call)', rp.includes('«FACT-PACKET»'));
+  t('repair prompt carries the shared question rules', rp.includes('«SHARED-QUESTION-RULES»'));
+  t('repair prompt pins the question id', rp.includes('"id": "s2q1"'));
+  t('repair prompt forbids the shortest-key workaround', rp.includes('making the key the shortest option'));
+  t('repair prompt requires answerability from already-shown data', rp.includes('Do not depend on data the student has not seen'));
+
+  // ── Wiring ──
+  t('casesAudit profile defaults to pro + high', /casesAudit:\{m:'pro',lv:'high'\}/.test(S));
+  t('casesAudit has a profile row', S.includes("{id:'casesAudit',label:'Case studies · audit'}"));
+  t('audit runs only when the case has zero structural errors', S.includes('if(runAudit&&errCount===0){'));
+  t('the pool is bounded at width 3', S.includes('caseRunPool(eligible,3,'));
+  t('the abort signal is threaded into the pool', S.includes('},ctl.signal);'));
+  t('repaired items are re-validated', S.includes('allIssues=revalidate(parsed);'));
+  t('answer-accuracy failures are excluded from repair', S.includes('r.status===\'FAIL\'&&!r.autoRepairable'));
+  // The panel must report counts only — never a derived score, percentage, or band. Checked
+  // structurally (no arithmetic over the totals) rather than by keyword, since the panel's
+  // own copy legitimately contains the words "score" and "band" while disclaiming them.
+  {
+    const panel = spanFrom('{/* v15.6: item-quality audit panel', 'accuracyFails>0');
+    t('audit panel does no arithmetic over the verdict counts',
+      !panel.includes('Math.round') && !panel.includes('/auditRows.length') && !panel.includes('toFixed'));
+    t('audit panel renders only status counts',
+      panel.includes('{auditTotals.pass} pass') && panel.includes('{auditTotals.fail} fail') && panel.includes('{auditTotals.review} review'));
+    t('audit panel states N/A is not a pass', panel.includes('N/A means the rubric does not apply'));
+    t('audit panel disclaims the uncriterion-validated bands', panel.includes('never been criterion-validated'));
+  }
+}
+
+(async () => {
+  const { r, peak, order } = await global.__poolCheck;
+  t('pool returns results in input order, not completion order', r.join(',') === '0,2,4,6,8,10,12,14,16');
+  t('pool never exceeds its width', peak <= 3);
+  t('pool actually ran concurrently', peak > 1);
+  t('pool processed every item', order.length === 9);
+  t('an already-aborted signal rejects with AbortError', (await global.__abortCheck) === 'AbortError');
+
+  console.log('\n════════════════════════════');
+  console.log(pass + ' passed · ' + fail + ' failed');
+  process.exit(fail ? 1 : 0);
+})();

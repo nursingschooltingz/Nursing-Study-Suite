@@ -339,6 +339,12 @@ const TOOL_PROFILE_DEFAULTS={
   nclex:{m:'flash',lv:'medium'},          // parsing existing Q&A out of messy PDF text
   nclexgen:{m:'flash',lv:'high'},         // distractor plausibility is genuine reasoning
   cases:{m:'flash',lv:'high'},            // unfolding clinical reasoning + strict grounding
+  // v15.6: applying a rubric to a rendered artifact is a JUDGMENT task, not a grounded
+  // extraction task, so high reasoning is appropriate here and specifically NOT in the
+  // ingestion stages — this does not contradict the earlier finding that high thinking
+  // degrades grounded summarization. Both top-performing raters in the June study were
+  // reasoning-enhanced configurations.
+  casesAudit:{m:'pro',lv:'high'},         // NEIA item-quality review of a rendered item
 };
 const PROFILE_ROWS=[
   {id:'knowledge',label:'Knowledge · extract'},
@@ -349,6 +355,7 @@ const PROFILE_ROWS=[
   {id:'nclex',label:'NCLEX · extract'},
   {id:'nclexgen',label:'NCLEX · generate'},
   {id:'cases',label:'Case studies'},
+  {id:'casesAudit',label:'Case studies · audit'},
 ];
 
 /* ═══════════════════════════════════════════════════════
@@ -5348,6 +5355,224 @@ function caseValidationStamp(issues){
     '','---',''].join('\n');
 }
 
+/* ═══════════════════════════════════════════════════════
+   v15.6 item 4 — case-level NEIA audit pass
+   ═══════════════════════════════════════════════════════ */
+// [NEIA-DERIVED]. The standalone NCLEX generator got an eleven-criterion gate in v4.2; the
+// Case Study Generator inherited only CASE_QUESTION_RULES (anchor/distractor/rationale/
+// completeness) and had no item-quality review at all. This closes that gap with a second
+// API call per eligible item.
+//
+// SCOPE — single-best-answer MCQ only, matching NCLEX_GEN_PROMPT v4.2's "GATE — MCQ ONLY".
+// The rubric was validated for one key and three plausible distractors; the May paper puts
+// SATA, ordered response, and NGN formats outside it. Everything else is gate=N/A, and an
+// N/A is NOT a pass — it means the instrument does not apply.
+function caseIsGateEligible(q){
+  return !!q&&String(q.type||'')==='MCQ'
+    &&(q.correctAnswers||[]).length===1
+    &&(q.options||[]).length>=3;
+}
+// THE CRITICAL DESIGN CONSTRAINT: the auditor sees exactly what the student sees through
+// the item's stage, and nothing else. No fact IDs, no sourceQuote, no fact packet, no
+// supportType, no generation reasoning, no prior audit output.
+// Built by truncating the case and reusing caseToMarkdown, then cutting at the page break
+// that separates worksheet from answer key. Assembling a second representation of the case
+// would guarantee eventual drift between the audited artifact and the printed one, and
+// cutting at the renderer's own boundary means a future field added to the answer key
+// cannot leak into the audit payload by accident.
+function caseAuditPayload(cs,stageNumber,q){
+  const stages=(cs.stages||[]);
+  const ix=stages.findIndex(s=>Number(s.stageNumber)===Number(stageNumber));
+  const through=ix>=0?stages.slice(0,ix+1):stages;
+  const md=caseToMarkdown({...cs,stages:through,debrief:null},{worksheetFactIds:false});
+  const cut=md.indexOf('\n<div class="pagebreak">');
+  const visible=(cut>=0?md.slice(0,cut):md).trim();
+  const opts=(q.options||[]).map(o=>'   '+(o.label||'')+'. '+(o.text||'')).join('\n');
+  return `${visible}
+
+═══ ITEM UNDER REVIEW ═══
+STEM: ${q.stem||''}
+${opts}
+KEYED ANSWER: ${(q.correctAnswers||[]).join(', ')||'—'}`;
+}
+// Criteria are stated in our own words with the source cited, never reproduced verbatim —
+// the rubric is Elsevier-copyrighted and this repo ships GPL-3.0. Same decision as v4.2.
+function caseBuildAuditPrompt(payload){
+  return `═══ NCLEX ITEM QUALITY REVIEW ═══
+
+ROLE: You are reviewing ONE multiple-choice item from an unfolding nursing case study.
+You are given the case exactly as the student sees it, up to and including this item.
+You do NOT have the source material the item was written from, and you must not ask for
+it. Review the item as written.
+
+Return ONLY the verdict lines specified at the bottom. No preamble, no commentary, no
+restatement of the item.
+
+═══ STOP CRITERIA ═══
+Check the item against these eleven. Each describes a DISQUALIFYING condition — the floor,
+not an ideal. Do not fail an item merely because a better version is imaginable.
+
+  1. STEM CLARITY — confusing, ambiguous, grammatically incorrect, or negatively
+     constructed ("all are correct except").
+  2. STEM RELEVANCE — requires knowledge or competencies outside a new graduate nurse's
+     scope.
+  3. ANSWER ACCURACY — the keyed answer does not correctly answer the question asked, or
+     another option is clearly better.
+  4. ANSWER INTEGRATION — the key is immediately apparent because it repeats terms from
+     the stem, or differs from the distractors in length or grammar.
+  5. DISTRACTOR LENGTH — lengths vary enough to reveal the key.
+  6. DISTRACTOR PLAUSIBILITY — a distractor is obviously incorrect or irrelevant.
+  7. DISTRACTOR DISTINCTIVENESS — distractors are too similar to each other.
+  8. DISTRACTOR CLARITY — a distractor is ambiguous or vague.
+  9. DISTRACTOR CONSISTENCY — distractors lack uniformity in style or grammar.
+ 10. BIAS — content or language could disadvantage test-takers by culture, language,
+     sexual orientation, sex/gender, age, or socioeconomic status.
+ 11. TEST PLAN ALIGNMENT — the item exercises no identifiable nursing activity.
+     ADVISORY ONLY: no Test Plan document is supplied to you. This criterion may WARN.
+     It may NEVER produce a FAIL. Never invent an activity statement to satisfy it.
+
+═══ IMPORTANT — WHAT YOU CAN AND CANNOT SEE ═══
+You do not have the case's source facts. Judge ANSWER ACCURACY on clinical correctness
+given the case as presented. If the item hinges on information you were not shown, that is
+a REVIEW, not a FAIL.
+
+═══ OUTPUT ═══
+Emit exactly one verdict line, plus at most three WARN lines:
+
+  PASS
+  FAIL — <criterion name>
+  REVIEW — <what you could not resolve>
+
+Use REVIEW when you genuinely cannot determine whether the item is sound. Forcing a
+borderline item into PASS is worse than admitting the uncertainty.
+A criterion 2 finding — merely improvable, not disqualifying — is a WARN, not a FAIL:
+
+  WARN <criterion name>: <the specific improvement>
+
+Do NOT compute or report a total score, a percentage, or a quality band (high / moderate /
+low). Those bands have not been criterion-validated. The reliable question is whether this
+item contains a disqualifying defect, not how good it is.
+
+Criteria adapted from the NEIA Scoring Tool (Simms, Hensel & Kumar, Nurse Education in
+Practice 93:104804, 2026).
+
+═══ THE CASE, AS THE STUDENT SEES IT ═══
+${payload}`;
+}
+// Verdict vocabulary. REVIEW exists because the June study measured both rater types
+// misclassifying ~86-88% of moderate-quality items, nearly all by rating them upward —
+// forcing a borderline item into PASS is exactly the failure mode the data predicts.
+const CASE_AUDIT_STATUS=new Set(['PASS','FAIL','REVIEW','N/A','ERROR']);
+// Criterion 3 is the ONLY one where the auditor overrules a keyed answer with no reference
+// standard, and it sits in the AI's second-weakest measured domain (ICC 0.575). A wrong
+// auto-repair here silently replaces a correct answer with an incorrect one, so an
+// answer-accuracy FAIL is surfaced for human review and never repaired automatically.
+function caseAuditIsAnswerAccuracy(criterion){
+  return /answer\s*accuracy|correct\s*answer\s*[:\-]?\s*accuracy/i.test(String(criterion||''));
+}
+function caseParseAuditVerdict(text){
+  const raw=String(text||'');
+  const lines=raw.split('\n').map(l=>l.trim()).filter(Boolean);
+  const warns=[];
+  let status='REVIEW',criterion='',detail='';
+  for(const line of lines){
+    let m;
+    if((m=line.match(/^WARN\s+([^:]+):\s*(.*)$/i))){warns.push({criterion:m[1].trim(),detail:m[2].trim()});continue;}
+    if(status!=='REVIEW'||criterion)continue; // first verdict line wins
+    if(/^PASS\b/i.test(line)){status='PASS';continue;}
+    if((m=line.match(/^FAIL\s*[—–\-:]\s*(.+)$/i))){status='FAIL';criterion=m[1].trim();continue;}
+    if((m=line.match(/^REVIEW\s*[—–\-:]\s*(.+)$/i))){status='REVIEW';detail=m[1].trim();continue;}
+  }
+  // A FAIL naming criterion 11 is downgraded here, not trusted. The prompt forbids it, but
+  // a prompt instruction is not an enforcement mechanism — this is.
+  if(status==='FAIL'&&/test\s*plan|alignment/i.test(criterion)){
+    warns.push({criterion:'Test Plan Alignment',detail:criterion});
+    status='PASS';criterion='';
+  }
+  return{status,criterion,detail,warns,
+    autoRepairable:status==='FAIL'&&!caseAuditIsAnswerAccuracy(criterion)};
+}
+// Bounded concurrency. A 5-stage case at 2 questions/stage is ~6 MCQ-eligible items; at the
+// June paper's measured 1.7-2.3 min/item for reasoning-enhanced models, serialized audits
+// would run 10-14 minutes and make the feature unusable. Width 3 by default.
+async function caseRunPool(items,width,worker,signal){
+  const out=new Array(items.length);
+  let next=0;
+  const lanes=Array.from({length:Math.max(1,Math.min(width,items.length||1))},async()=>{
+    for(;;){
+      const i=next++;
+      if(i>=items.length)return;
+      if(signal&&signal.aborted)throw Object.assign(new Error('Aborted'),{name:'AbortError'});
+      out[i]=await worker(items[i],i);
+    }
+  });
+  await Promise.all(lanes);
+  return out;
+}
+// Flattened list of every question with its stage, so the audit and the repair pass agree
+// on identity. Question ids are validated unique upstream, so (stage, id) is a stable key.
+function caseGateItems(cs){
+  const items=[];
+  for(const st of cs.stages||[])
+    for(const q of st.questions||[])
+      items.push({stageNumber:st.stageNumber,q,eligible:caseIsGateEligible(q),
+        key:String(st.stageNumber)+':'+String(q.id||'')});
+  return items;
+}
+// Repair is a GENERATION call, so unlike the audit it DOES receive the fact packet — a
+// rewritten item still has to be grounded, and the shared question rules still apply.
+// Only the failing item is regenerated, and only for non-answer-accuracy failures.
+function caseBuildRepairPrompt({conditionName,facts,stageNumber,q,criterion,visibleContext}){
+  return `═══ REPAIR ONE CASE-STUDY ITEM ═══
+
+An independent reviewer failed the item below on this criterion:
+
+  FAILED: ${criterion}
+
+Rewrite ONLY this item so it no longer meets that disqualifying condition. Everything else
+about the case stays as it is.
+
+RULES
+- Keep the same question id ("${q.id||''}"), the same type (MCQ), and the same option
+  labels. Return the same number of options.
+- The item must still be answerable from the case data already shown to the student in the
+  stage context below. Do not depend on data the student has not seen.
+- Every option and every rationale must still cite supplied fact IDs, exactly as before.
+- Do not "fix" a length or integration problem by making the key the shortest option or by
+  padding the distractors. The target is options indistinguishable on surface features.
+- If you cannot repair it without breaking grounding, return the item unchanged and say so
+  in "repairNote".
+
+${CASE_QUESTION_RULES}
+
+═══ STAGE CONTEXT ALREADY SHOWN TO THE STUDENT ═══
+${visibleContext}
+
+═══ THE FAILING ITEM (current JSON) ═══
+${JSON.stringify(q,null,2)}
+
+═══ RETURN EXACTLY THIS JSON, NOTHING ELSE ═══
+{
+  "id": "${q.id||''}",
+  "type": "MCQ",
+  "stem": "string",
+  "options": [ { "label": "A", "text": "string" } ],
+  "correctAnswers": ["B"],
+  "rationales": [ { "option": "B", "text": "string", "supportType": "direct", "factIds": ["fact-1"] } ],
+  "cjmmSkill": "${q.cjmmSkill||'Take Action'}",
+  "repairNote": "one sentence on what you changed, or why you could not"
+}
+
+${caseRenderFactPacket(conditionName,facts)}`;
+}
+function caseAuditSummary(results){
+  const n=s=>results.filter(r=>r.status===s).length;
+  return{pass:n('PASS'),fail:n('FAIL'),review:n('REVIEW'),na:n('N/A'),error:n('ERROR'),
+    total:results.length,
+    // Deliberately absent: any score, percentage, or quality band.
+    warns:results.reduce((a,r)=>a+((r.warns||[]).length),0)};
+}
+
 function CaseStudyGenerator(){
   const cfg=useConfig();const K=useKnowledge();
   const [conditionId,setConditionId]=useState('');
@@ -5365,6 +5590,11 @@ function CaseStudyGenerator(){
   const [coverage,setCoverage]=useState(null);
   const [view,setView]=useState('case');
   const [abortCtl,setAbortCtl]=useState(null);
+  // v15.6 item 4: NEIA audit pass. `audit` is a map of stage:qid -> verdict so per-item
+  // status can render while the pool is still running.
+  const [runAudit,setRunAudit]=useState(true);
+  const [audit,setAudit]=useState(null);
+  const [auditPhase,setAuditPhase]=useState('');
   const log=useCallback((msg,t='')=>setLogs(p=>[...p,{msg,t}]),[]);
 
   const conditions=K.knowledgeBase.conditions||[];
@@ -5381,6 +5611,7 @@ function CaseStudyGenerator(){
     if(!activeCondition){log('Build the LATTE Knowledge Base first, then pick a condition.','err');return;}
     if(!selectedFacts.length){log('This condition has no facts at the selected tiers. Include Tier 2/3 or pick another condition.','err');return;}
     setBusy(true);setLogs([]);setCaseStudy(null);setIssues([]);setCoverage(null);setLiveKB(0);
+    setAudit(null);setAuditPhase('');
     const ctl=new AbortController();setAbortCtl(ctl);
     const {model,level}=cfg.forTool('cases');
     try{
@@ -5401,11 +5632,102 @@ function CaseStudyGenerator(){
       // Validate against the PACKET, not the whole KB. A fact that exists somewhere in the
       // Knowledge Base but was never sent to this run is not grounding — it is coincidence.
       const allowedFactIds=new Set(selectedFacts.map(f=>String(f.id).toLowerCase()));
-      const structural=validateCaseStudy(parsed,K.factIndex,allowedFactIds,activeCondition.name);
-      const timing=validateStageTiming(parsed);
-      const allIssues=[...structural,...timing];
+      const revalidate=cs=>{
+        const s=validateCaseStudy(cs,K.factIndex,allowedFactIds,activeCondition.name);
+        return[...s,...validateStageTiming(cs)];
+      };
+      let allIssues=revalidate(parsed);
       setIssues(allIssues);
-      const errCount=allIssues.filter(x=>x.sev==='error').length;
+      let errCount=allIssues.filter(x=>x.sev==='error').length;
+
+      // ── v15.6 item 4: NEIA audit pass ──
+      // Code validation runs FIRST, deliberately: a structurally broken case must never
+      // consume audit calls. An ungrounded item is already disqualified, and paying for a
+      // rubric review of it would be spending the user's quota to grade a known failure.
+      if(runAudit&&errCount===0){
+        const {model:aModel,level:aLevel}=cfg.forTool('casesAudit');
+        const items=caseGateItems(parsed);
+        const eligible=items.filter(i=>i.eligible);
+        const naCount=items.length-eligible.length;
+        const seed={};
+        for(const it of items)if(!it.eligible)seed[it.key]={status:'N/A',criterion:'',warns:[]};
+        setAudit({...seed});
+        if(!eligible.length){
+          log('Audit skipped: no single-best-answer MCQ items in this case ('+naCount+' marked N/A).','warn');
+        }else{
+          setAuditPhase('audit');
+          log('Auditing '+eligible.length+' MCQ item(s) against 11 stop criteria · '+aModel+' [Thinking: '+aLevel+']'+(naCount?' · '+naCount+' item(s) N/A (rubric is MCQ-only)':''),'warn');
+          let done=0;
+          const results=await caseRunPool(eligible,3,async(it)=>{
+            const payload=caseAuditPayload(parsed,it.stageNumber,it.q);
+            let verdict;
+            try{
+              const out=await callGemini(cfg.apiKey,aModel,[{text:caseBuildAuditPrompt(payload)}],true,aLevel,ctl.signal,1);
+              verdict=caseParseAuditVerdict(out);
+            }catch(e){
+              if(e.name==='AbortError')throw e;
+              verdict={status:'ERROR',criterion:'',detail:e.message||String(e),warns:[],autoRepairable:false};
+            }
+            done++;
+            setAudit(p=>({...(p||{}),[it.key]:verdict}));
+            setAuditPhase('audit '+done+'/'+eligible.length);
+            return{...it,...verdict};
+          },ctl.signal);
+
+          const sum=caseAuditSummary(results.concat(Object.values(seed)));
+          log('Audit: '+sum.pass+' pass · '+sum.fail+' fail · '+sum.review+' review'+(sum.error?' · '+sum.error+' error':'')+(sum.na?' · '+sum.na+' N/A':'')+'.',sum.fail?'err':'ok');
+          for(const r of results){
+            if(r.status==='FAIL')log('  ✗ Stage '+r.stageNumber+' '+(r.q.id||'')+' FAIL — '+r.criterion,'err');
+            else if(r.status==='REVIEW')log('  ? Stage '+r.stageNumber+' '+(r.q.id||'')+' REVIEW — '+(r.detail||'unresolved'),'warn');
+            for(const w of r.warns||[])log('  ⓘ Stage '+r.stageNumber+' '+(r.q.id||'')+' WARN '+w.criterion+': '+w.detail,'warn');
+          }
+
+          // ── Repair, one round only ──
+          const accuracyFails=results.filter(r=>r.status==='FAIL'&&!r.autoRepairable);
+          const repairable=results.filter(r=>r.autoRepairable);
+          for(const r of accuracyFails)
+            log('  ⚠ Stage '+r.stageNumber+' '+(r.q.id||'')+' failed on answer accuracy — NOT auto-repaired. This is the one criterion where the reviewer overrules a keyed answer with no reference standard; it needs your eyes.','err');
+          if(repairable.length){
+            setAuditPhase('repair');
+            log('Repairing '+repairable.length+' item(s) in a fresh call (one round, no re-audit)...','warn');
+            let repaired=0;
+            await caseRunPool(repairable,3,async(r)=>{
+              try{
+                const visible=caseAuditPayload(parsed,r.stageNumber,r.q);
+                const out=await callGemini(cfg.apiKey,model,[{text:caseBuildRepairPrompt({
+                  conditionName:activeCondition.name,facts:selectedFacts,stageNumber:r.stageNumber,
+                  q:r.q,criterion:r.criterion,visibleContext:visible})}],true,level,ctl.signal,1,
+                  null,null,{responseMimeType:'application/json'});
+                const fixed=extractJSON(out);
+                if(!fixed||!fixed.stem||!Array.isArray(fixed.options))throw new Error('repair returned no usable item');
+                const st=(parsed.stages||[]).find(s=>Number(s.stageNumber)===Number(r.stageNumber));
+                const ix=(st&&st.questions||[]).findIndex(x=>String(x.id||'')===String(r.q.id||''));
+                if(!st||ix<0)throw new Error('could not locate the item to replace');
+                const note=fixed.repairNote||'';
+                delete fixed.repairNote;
+                st.questions[ix]=fixed;
+                repaired++;
+                log('  ✓ Stage '+r.stageNumber+' '+(r.q.id||'')+' repaired'+(note?' — '+note:''),'ok');
+              }catch(e){
+                if(e.name==='AbortError')throw e;
+                log('  ✗ Stage '+r.stageNumber+' '+(r.q.id||'')+' repair failed: '+(e.message||e),'err');
+              }
+            },ctl.signal);
+            if(repaired){
+              // Re-validate the repaired case. Repaired items are deliberately NOT re-audited:
+              // the loop is capped at one round, and anything still failing is surfaced instead.
+              allIssues=revalidate(parsed);
+              setIssues(allIssues);
+              errCount=allIssues.filter(x=>x.sev==='error').length;
+              log('Re-validated after repair: '+errCount+' error(s), '+(allIssues.length-errCount)+' warning(s).',errCount?'err':'ok');
+              if(errCount)log('A repaired item broke grounding. The case is shown but was NOT linked into the Fact Inspector.','err');
+            }
+          }
+          setAuditPhase('');
+        }
+      }else if(runAudit&&errCount){
+        log('Audit skipped: the case has '+errCount+' structural error(s). Fix grounding first — a rubric review of an ungrounded item spends quota to grade a known failure.','warn');
+      }
       // Coverage counts only the intersection with the packet, so it can never report more
       // facts grounded than were actually supplied.
       const cited=new Set(caseAllFactIds(parsed));
@@ -5456,8 +5778,25 @@ function CaseStudyGenerator(){
       if(errCount)log('Case failed validation — it is shown and exportable, but was NOT linked into the Fact Inspector. Fix the errors or regenerate before using it as study content.','err');
     }catch(e){
       if(e.name==='AbortError')log('Cancelled.','warn');else log('Error: '+(e.message||String(e)),'err');
-    }finally{setBusy(false);setAbortCtl(null);setLiveKB(0);}
-  },[cfg,activeCondition,selectedFacts,sufficiency,difficulty,stages,questionsPerStage,types,K]);
+    }finally{setBusy(false);setAbortCtl(null);setLiveKB(0);setAuditPhase('');}
+  },[cfg,activeCondition,selectedFacts,sufficiency,difficulty,stages,questionsPerStage,types,K,runAudit]);
+
+  // v15.6: audit verdicts joined back to their items for display. Derived rather than stored
+  // so a repaired case cannot leave a stale verdict on screen.
+  const auditRows=useMemo(()=>{
+    if(!caseStudy||!audit)return[];
+    return caseGateItems(caseStudy).map(it=>{
+      const v=audit[it.key];
+      if(!v)return null;
+      return{key:it.key,label:'Stage '+it.stageNumber+' '+(it.q.id||''),
+        status:v.status,criterion:v.criterion||'',detail:v.detail||'',warns:v.warns||[]};
+    }).filter(Boolean);
+  },[caseStudy,audit]);
+  const auditTotals=useMemo(()=>{
+    const n=s=>auditRows.filter(r=>r.status===s).length;
+    return{pass:n('PASS'),fail:n('FAIL'),review:n('REVIEW'),na:n('N/A'),error:n('ERROR'),
+      accuracyFails:auditRows.filter(r=>r.status==='FAIL'&&caseAuditIsAnswerAccuracy(r.criterion)).length};
+  },[auditRows]);
 
   const caseMd=useMemo(()=>caseStudy?caseValidationStamp(issues)+caseToMarkdown(caseStudy):'',[caseStudy,issues]);
   const casePrintMd=useMemo(()=>caseStudy?caseValidationStamp(issues)+caseToMarkdown(caseStudy,{worksheetFactIds:false}):'',[caseStudy,issues]);
@@ -5492,6 +5831,17 @@ function CaseStudyGenerator(){
         </div>
         <div style={{fontSize:10.5,color:'var(--text-dim)',lineHeight:1.5}}>Tier 1 facts drive the critical decisions. Tier 2 adds realistic context; Tier 3 adds lower-priority background detail. Distractors are built from contextually plausible near-misses at any tier, not from Tier 3. <b style={{color:'var(--text)'}}>{selectedFacts.length}</b> fact(s) selected for this case.</div>
         {sufficiency.warnings.length>0&&<div className="tip-banner" style={{marginTop:10,marginBottom:0,fontSize:10.5,lineHeight:1.5}}>⚠ {sufficiency.warnings.join(' · ')} The generator will not invent to fill these gaps.</div>}
+        <div style={{marginTop:12,paddingTop:12,borderTop:'1px solid var(--border)'}}>
+          <label style={{display:'flex',alignItems:'flex-start',gap:8,fontSize:11.5,cursor:'pointer'}}>
+            <input type="checkbox" checked={runAudit} onChange={()=>setRunAudit(v=>!v)} style={{marginTop:2}} />
+            <span>
+              <b>Run the item-quality audit</b> after generating
+              <span style={{display:'block',fontSize:10.5,color:'var(--text-dim)',lineHeight:1.5,marginTop:3}}>
+                A second review pass over each single-best-answer MCQ, checked against 11 stop criteria adapted from the NEIA scoring tool. Costs one extra API call per MCQ. Items that fail are rewritten once — except answer-accuracy failures, which are surfaced for you rather than auto-corrected.
+              </span>
+            </span>
+          </label>
+        </div>
       </div>
 
       {/* Case shape */}
@@ -5529,6 +5879,7 @@ function CaseStudyGenerator(){
 
       {busy&&<button className="btn-danger" style={{width:'100%',marginTop:10}} onClick={()=>abortCtl?.abort()}>Cancel</button>}
       {busy&&liveKB>0&&<div style={{fontSize:10,color:'var(--accent-cyan)',fontFamily:'JetBrains Mono',marginTop:6}}>▼ receiving {liveKB} KB</div>}
+      {busy&&auditPhase&&<div style={{fontSize:10,color:'var(--accent-warm)',fontFamily:'JetBrains Mono',marginTop:6}}>⚖ {auditPhase==='repair'?'repairing failed items':auditPhase.startsWith('audit ')?'item-quality audit '+auditPhase.slice(6):'item-quality audit'}</div>}
 
       {/* Logs */}
       {logs.length>0&&<div style={{marginTop:12,maxHeight:150,overflowY:'auto',background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:6,padding:10,fontFamily:'JetBrains Mono',fontSize:10,lineHeight:1.6}}>
@@ -5548,6 +5899,29 @@ function CaseStudyGenerator(){
         {coverage&&coverage.outOfPacket&&coverage.outOfPacket.length>0&&<div style={{fontSize:10,color:'var(--accent-red)',marginTop:7,lineHeight:1.5}}>{coverage.outOfPacket.length} cited fact ID(s) were never supplied to this run: {coverage.outOfPacket.slice(0,8).join(', ')}{coverage.outOfPacket.length>8?'…':''}</div>}
         {coverage&&coverage.uncovered.length>0&&<div style={{fontSize:9.5,color:'var(--text-dim)',marginTop:7,lineHeight:1.5}}>{coverage.uncovered.length} supplied fact(s) were not referenced by the case — that is expected; a single case cannot use every fact.</div>}
         {errCount>0&&<div style={{fontSize:10.5,color:'var(--accent-red)',marginTop:8,lineHeight:1.5,paddingTop:8,borderTop:'1px solid var(--border)'}}>This case was <b>not</b> linked into the Fact Inspector. Export is still available, and the exported file is stamped with these errors.</div>}
+      </div>}
+
+      {/* v15.6: item-quality audit panel. Reports per-item verdicts only — deliberately no
+          total score, percentage, or quality band, because those bands were set a priori and
+          have never had criterion-validity testing. */}
+      {auditRows.length>0&&<div style={{marginTop:12,padding:'11px 13px',borderRadius:8,border:'1px solid '+(auditTotals.fail?'rgba(248,113,113,.35)':auditTotals.review?'rgba(240,168,58,.35)':'rgba(52,211,153,.3)'),background:auditTotals.fail?'rgba(248,113,113,.06)':auditTotals.review?'rgba(240,168,58,.06)':'rgba(52,211,153,.05)'}}>
+        <span style={{fontSize:12,fontWeight:600,color:auditTotals.fail?'var(--accent-red)':auditTotals.review?'var(--accent-warm)':'var(--accent-green)'}}>
+          {auditTotals.fail?'⚠':auditTotals.review?'⚑':'✓'} Item quality: {auditTotals.pass} pass · {auditTotals.fail} fail · {auditTotals.review} review
+          {auditTotals.na>0&&<span style={{color:'var(--text-dim)',fontWeight:400}}> · {auditTotals.na} N/A</span>}
+          {auditTotals.error>0&&<span style={{color:'var(--text-dim)',fontWeight:400}}> · {auditTotals.error} not scored</span>}
+        </span>
+        <div style={{fontSize:9.5,color:'var(--text-dim)',marginTop:5,lineHeight:1.5}}>Each MCQ was reviewed against 11 stop criteria adapted from the NEIA scoring tool (Simms, Hensel &amp; Kumar 2026), seeing only what the student sees. <b>N/A means the rubric does not apply</b> to that format — it is not a pass. No total score is computed: the published quality bands have never been criterion-validated.</div>
+        <div style={{marginTop:8,maxHeight:190,overflowY:'auto',background:'var(--bg-deep)',border:'1px solid var(--border)',borderRadius:6,padding:8}}>
+          {auditRows.map(r=>{
+            const c=r.status==='FAIL'?'var(--accent-red)':r.status==='REVIEW'?'var(--accent-warm)':r.status==='PASS'?'var(--accent-green)':'var(--text-dim)';
+            const mark=r.status==='FAIL'?'✕':r.status==='REVIEW'?'?':r.status==='PASS'?'✓':'–';
+            return(<div key={r.key} style={{fontSize:10,fontFamily:'JetBrains Mono',lineHeight:1.6}}>
+              <span style={{color:c}}>{mark} {r.label} — {r.status}{r.criterion?': '+r.criterion:''}{r.detail&&r.status!=='PASS'?': '+r.detail:''}</span>
+              {(r.warns||[]).map((w,i)=><div key={i} style={{color:'var(--text-dim)',paddingLeft:14}}>⚠ {w.criterion}: {w.detail}</div>)}
+            </div>);
+          })}
+        </div>
+        {auditTotals.accuracyFails>0&&<div style={{fontSize:10.5,color:'var(--accent-red)',marginTop:8,lineHeight:1.5,paddingTop:8,borderTop:'1px solid var(--border)'}}>{auditTotals.accuracyFails} item(s) failed on <b>answer accuracy</b> and were deliberately <b>not</b> auto-repaired. This is the only criterion where the reviewer overrules a keyed answer with no reference standard, and an automated rewrite could replace a correct answer with a wrong one. Check these by hand against your source.</div>}
       </div>}
 
       {/* Results */}
