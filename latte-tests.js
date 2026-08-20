@@ -939,6 +939,19 @@ section('v15.6 — retest fixture');
   t('the retest runner is never invoked from this harness',
     !/require\(['"].*neia-retest/.test(fs.readFileSync('latte-tests.js', 'utf8')));
   t('the app never invokes the retest runner', !/neia-retest\.js['"]\s*\)/.test(S));
+  // v15.7: the first live run lost 4 of 30 calls to HTTP 429 and the analysis counted each
+  // lost call as a rater who changed their mind, producing three bogus demotion candidates.
+  // These pin the corrected accounting.
+  {
+    const R = fs.readFileSync('neia-retest.js', 'utf8');
+    t('errors are excluded from consistency stats', R.includes("const ok = rs.filter(r => r.status !== 'ERROR');"));
+    t('an item with under two answered runs is not judged', R.includes('const measurable = ok.length >= 2;'));
+    t('accuracy denominators count answered runs only', R.includes('soundRuns += ok.length;') && R.includes('seededRuns += ok.length;'));
+    t('demotion denominators skip items with under two answered runs', R.includes('if (ok.length < 2) continue;'));
+    t('verdict instability and label drift are distinguished', R.includes('const critRuns = new Map(), labelDrift = [];'));
+    t('label drift is explicitly not a demotion trigger', R.includes('NOT a demotion trigger'));
+    t('429 and 5xx are retried with backoff', R.includes("if (resp.status !== 429 && resp.status < 500) break;"));
+  }
   t('retest reports are gitignored', /neia-retest-report/.test(fs.readFileSync('.gitignore', 'utf8')));
 }
 

@@ -42,6 +42,7 @@ const LEVEL = arg('level', 'high');
 const WIDTH = Number(arg('width', 3));
 const ONLY = (arg('only', '') || '').split(',').map(s => s.trim()).filter(Boolean);
 const OUT = arg('out', 'neia-retest-report.json');
+const RETRY_MS = Number(arg('retryms', 20000)); // base backoff; doubles each attempt
 const KEY = process.env.GEMINI_API_KEY || '';
 
 if (!KEY) {
@@ -89,14 +90,27 @@ async function callOnce(prompt) {
     generationConfig: { maxOutputTokens: 65536, thinkingConfig: { thinkingLevel: LEVEL } },
     safetySettings: SAFETY,
   };
+  // Retry on 429/5xx with backoff. The first run of this harness lost 4 of 30 calls to
+  // free-tier quota exhaustion, and a lost call is worse than a slow one here: it reads to
+  // the analysis as a rater who changed their mind, which is exactly the thing being measured.
   const t0 = Date.now();
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': KEY },
-    body: JSON.stringify(body),
-  });
+  let resp, lastBody = '';
+  for (let attempt = 0; attempt <= 3; attempt++) {
+    resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': KEY },
+      body: JSON.stringify(body),
+    });
+    if (resp.ok) break;
+    lastBody = (await resp.text()).slice(0, 300);
+    if (resp.status !== 429 && resp.status < 500) break; // not retryable
+    if (attempt === 3) break;
+    const wait = RETRY_MS * Math.pow(2, attempt);
+    process.stdout.write('r');
+    await new Promise(r => setTimeout(r, wait));
+  }
   const ms = Date.now() - t0;
-  if (!resp.ok) throw new Error('HTTP ' + resp.status + ' ' + (await resp.text()).slice(0, 300));
+  if (!resp.ok) throw new Error('HTTP ' + resp.status + ' ' + lastBody);
   const j = await resp.json();
   const text = (((j.candidates || [])[0] || {}).content || {}).parts
     ? j.candidates[0].content.parts.map(p => p.text || '').join('')
@@ -157,36 +171,44 @@ console.log('Reference classifications are in-house; see referenceStandardCaveat
 
   const rows = [];
   let statusFlips = 0, criterionFlips = 0, falseFatal = 0, missedDefect = 0;
+  let soundRuns = 0, seededRuns = 0;
   let accuracyDisagree = 0, plausibilityDisagree = 0, errors = 0;
 
+  let insufficient = 0;
   for (const [id, rs] of byItem) {
     const statuses = rs.map(r => r.status);
-    const uniqStatus = [...new Set(statuses)];
-    const crits = rs.filter(r => r.status === 'FAIL').map(r => r.criterion);
+    // A call that never returned is NOT a rater who changed their mind. Errors are excluded
+    // from every stability and accuracy figure; an item with fewer than two successful runs
+    // has no measurable consistency at all and is reported separately.
+    const ok = rs.filter(r => r.status !== 'ERROR');
+    const uniqStatus = [...new Set(ok.map(r => r.status))];
+    const crits = ok.filter(r => r.status === 'FAIL').map(r => r.criterion);
     const uniqCrit = [...new Set(crits)];
     const band = rs[0].band, seeded = rs[0].seeded;
-    const flipped = uniqStatus.length > 1;
+    const measurable = ok.length >= 2;
+    const flipped = measurable && uniqStatus.length > 1;
+    if (!measurable) insufficient++;
     if (flipped) statusFlips++;
-    if (uniqCrit.length > 1) criterionFlips++;
+    if (measurable && uniqCrit.length > 1) criterionFlips++;
     errors += rs.filter(r => r.status === 'ERROR').length;
 
     // Band-specific error rates. Borderline items are deliberately excluded from every
     // accuracy metric: they exist to show the gate does NOT discriminate there, and scoring
     // them would be tuning toward the exact boundary the published data says is unreliable.
-    if (band === 'sound') falseFatal += rs.filter(r => r.status === 'FAIL').length;
-    if (band === 'seeded') missedDefect += rs.filter(r => r.status === 'PASS').length;
+    if (band === 'sound') { falseFatal += ok.filter(r => r.status === 'FAIL').length; soundRuns += ok.length; }
+    if (band === 'seeded') { missedDefect += ok.filter(r => r.status === 'PASS').length; seededRuns += ok.length; }
 
     // Per-criterion disagreement across identical runs, for the two domains the June study
     // measured as the AI's weakest (Correct Answer 0.575, Distractors 0.524).
-    const mentions = k => rs.filter(r =>
+    const mentions = k => ok.filter(r =>
       (r.criterion && k.test(r.criterion)) || (r.warnCriteria || []).some(c => k.test(c))).length;
     const acc = mentions(/answer\s*accuracy|correct\s*answer/i);
     const pla = mentions(/plausib/i);
-    if (acc > 0 && acc < rs.length) accuracyDisagree++;
-    if (pla > 0 && pla < rs.length) plausibilityDisagree++;
+    if (measurable && acc > 0 && acc < ok.length) accuracyDisagree++;
+    if (measurable && pla > 0 && pla < ok.length) plausibilityDisagree++;
 
     rows.push({ id, band, seededCriterion: seeded, statuses, uniqueStatuses: uniqStatus,
-      failCriteria: uniqCrit, flipped,
+      failCriteria: uniqCrit, flipped, measurable, okRuns: ok.length,
       meanMs: Math.round(rs.reduce((a, r) => a + r.ms, 0) / rs.length),
       meanTokensIn: Math.round(rs.reduce((a, r) => a + r.tokensIn, 0) / rs.length),
       meanTokensOut: Math.round(rs.reduce((a, r) => a + r.tokensOut, 0) / rs.length),
@@ -194,37 +216,55 @@ console.log('Reference classifications are in-house; see referenceStandardCaveat
   }
 
   // Which criteria were unstable — this is the list that drives FAIL -> WARN demotion.
-  const critRuns = new Map();
-  for (const [, rs] of byItem)
-    for (const r of rs) {
-      const c = r.status === 'FAIL' ? r.criterion : null;
-      if (!c) continue;
-      const k = c.trim();
-      if (!critRuns.has(k)) critRuns.set(k, { fired: 0, of: 0 });
+  // Denominators count SUCCESSFUL runs only. Counting a failed call here is what produced
+  // three spurious demotion candidates on the first run of this harness: a criterion that
+  // fired in 2 of 2 answered runs looked like "2/3" purely because the third call 429'd.
+  // TWO DIFFERENT THINGS, deliberately not conflated:
+  //
+  //   VERDICT instability — the item passes in one run and fails in another. This is what
+  //   gates, so this is what justifies demoting a criterion from FAIL to WARN.
+  //
+  //   LABEL drift — the verdict is stably FAIL across every run, but the auditor names a
+  //   different criterion each time. Informational only. A defect can genuinely satisfy two
+  //   criteria at once (a key that is too long is also an integration problem), so rotating
+  //   between two true labels is not unreliability about whether the item is broken.
+  //
+  // The first run of this harness reported label drift as a demotion candidate and would
+  // have weakened two criteria that never once disagreed about whether the item failed.
+  const critRuns = new Map(), labelDrift = [];
+  const touch = k => { if (!critRuns.has(k)) critRuns.set(k, { firedOnUnstable: 0, ofUnstable: 0 }); };
+  for (const [id, rs] of byItem) {
+    const ok = rs.filter(r => r.status !== 'ERROR');
+    if (ok.length < 2) continue;
+    const verdicts = new Set(ok.map(r => r.status));
+    const crits = ok.filter(r => r.status === 'FAIL').map(r => r.criterion.trim()).filter(Boolean);
+    const uniqCrits = [...new Set(crits)];
+    if (verdicts.size > 1) {
+      // Verdict genuinely flipped — every criterion implicated on this item is suspect.
+      for (const k of uniqCrits) { touch(k); const v = critRuns.get(k);
+        v.firedOnUnstable += crits.filter(c => c === k).length; v.ofUnstable += ok.length; }
+    } else if (uniqCrits.length > 1) {
+      labelDrift.push({ id, verdict: [...verdicts][0], criteria: uniqCrits, runs: ok.length });
     }
-  for (const [k, v] of critRuns)
-    for (const [, rs] of byItem) {
-      const fired = rs.filter(r => r.status === 'FAIL' && r.criterion.trim() === k).length;
-      if (fired > 0) { v.fired += fired; v.of += rs.length; }
-    }
+  }
   const unstable = [...critRuns.entries()]
-    .filter(([, v]) => v.fired > 0 && v.fired < v.of)
-    .map(([k, v]) => ({ criterion: k, firedIn: v.fired + '/' + v.of }));
+    .filter(([, v]) => v.firedOnUnstable > 0 && v.firedOnUnstable < v.ofUnstable)
+    .map(([k, v]) => ({ criterion: k, firedIn: v.firedOnUnstable + '/' + v.ofUnstable }));
 
-  const sound = rows.filter(r => r.band === 'sound').length * RUNS;
-  const seededN = rows.filter(r => r.band === 'seeded').length * RUNS;
+  const sound = soundRuns, seededN = seededRuns;
   const pad = (s, n) => String(s).padEnd(n);
 
   console.log('── per item ──');
   console.log(pad('id', 34) + pad('band', 12) + pad('verdicts', 22) + 'flip');
   for (const r of rows)
-    console.log(pad(r.id, 34) + pad(r.band, 12) + pad(r.statuses.join(','), 22) + (r.flipped ? 'YES' : '-'));
+    console.log(pad(r.id, 34) + pad(r.band, 12) + pad(r.statuses.join(','), 22) + (!r.measurable ? 'n/a' : r.flipped ? 'YES' : '-'));
 
   console.log('\n── stability ──');
-  console.log('  items whose overall verdict flipped across identical runs : ' + statusFlips + '/' + rows.length);
-  console.log('  items whose FAIL criterion changed between runs           : ' + criterionFlips + '/' + rows.length);
-  console.log('  answer-accuracy disagreement (raised in some runs only)   : ' + accuracyDisagree + '/' + rows.length);
-  console.log('  distractor-plausibility disagreement                      : ' + plausibilityDisagree + '/' + rows.length);
+  console.log('  items with enough successful runs to judge consistency    : ' + (rows.length - insufficient) + '/' + rows.length);
+  console.log('  items whose overall verdict flipped across identical runs : ' + statusFlips + '/' + (rows.length - insufficient));
+  console.log('  items where the FAIL label drifted (verdict still stable)  : ' + criterionFlips + '/' + (rows.length - insufficient));
+  console.log('  answer-accuracy disagreement (raised in some runs only)   : ' + accuracyDisagree + '/' + (rows.length - insufficient));
+  console.log('  distractor-plausibility disagreement                      : ' + plausibilityDisagree + '/' + (rows.length - insufficient));
 
   console.log('\n── accuracy against the in-house reference ──');
   console.log('  false fatal failures on sound items  : ' + falseFatal + '/' + sound);
@@ -253,15 +293,25 @@ console.log('Reference classifications are in-house; see referenceStandardCaveat
     console.log('\n── DEMOTION CANDIDATES ──\n  None: every criterion that fired did so in every run of the items it touched.');
   }
 
+  if (labelDrift.length) {
+    console.log('\n── label drift (informational, NOT a demotion trigger) ──');
+    console.log('  Verdict was stable across all runs; only the named criterion changed.');
+    console.log('  A defect can satisfy two criteria at once, so this is not a disagreement');
+    console.log('  about whether the item is broken.');
+    for (const d of labelDrift)
+      console.log('    · ' + d.id + '  ' + d.verdict + ' in ' + d.runs + '/' + d.runs + ' runs, labelled: ' + d.criteria.join(' / '));
+  }
+
   const report = {
     generatedAt: new Date().toISOString(),
     config: { model: MODEL, thinkingLevel: LEVEL, runs: RUNS, width: WIDTH, html: htmlFile },
     caveat: FIX.referenceStandardCaveat,
     noPublishedComparison: 'No figure here may be compared to any published ICC or accuracy value. The June 2026 study tested zero Gemini configurations.',
-    totals: { items: rows.length, calls: results.length, statusFlips, criterionFlips,
+    totals: { items: rows.length, measurableItems: rows.length - insufficient, calls: results.length, statusFlips, criterionFlips,
       falseFatal, falseFatalOf: sound, missedDefect, missedDefectOf: seededN,
       accuracyDisagree, plausibilityDisagree, errors },
     demotionCandidates: unstable,
+    labelDrift,
     rows,
     raw: results,
   };
