@@ -861,7 +861,12 @@ section('v15.6 — case audit pass');
   t('repair prompt requires answerability from already-shown data', rp.includes('Do not depend on data the student has not seen'));
 
   // ── Wiring ──
-  t('itemAudit profile defaults to pro + high', /itemAudit:\{m:'pro',lv:'high'\}/.test(S));
+  // v15.7: Flash, not Pro — a cost decision. Thinking stays high, which is the part that
+  // matters for rubric judgment. A real free-tier key exhausted its Pro allowance at ~26 calls.
+  t('itemAudit profile defaults to flash + high', /itemAudit:\{m:'flash',lv:'high'\}/.test(S));
+  t('the audit still uses high reasoning', /itemAudit:\{m:'\w+',lv:'high'\}/.test(S));
+  t('the Flash default is documented as a cost decision, not a quality one',
+    S.includes('This is a COST decision, not a quality one'));
   t('itemAudit has a profile row', S.includes("{id:'itemAudit',label:'Item quality · audit'}"));
   t('there is exactly ONE audit profile row, not one per source tool',
     (S.match(/label:'[^']*·\s*audit'/g) || []).filter(x => /Item quality/.test(x)).length === 1 && !S.includes("id:'nclexgenAudit'"));

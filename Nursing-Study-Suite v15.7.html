@@ -347,7 +347,12 @@ const TOOL_PROFILE_DEFAULTS={
   // ingestion stages — this does not contradict the earlier finding that high thinking
   // degrades grounded summarization. Both top-performing raters in the June study were
   // reasoning-enhanced configurations.
-  itemAudit:{m:'pro',lv:'high'},         // NEIA item-quality review of a rendered item
+  // v15.7: defaulted to FLASH, not Pro. This is a COST decision, not a quality one. The
+  // audit runs once per MCQ, and a real free-tier key exhausted its Pro allowance after
+  // ~26 calls — an audit you cannot afford to run is worth less than a cheaper one you can.
+  // Thinking stays high, which is the part that matters for rubric judgment. Switch this
+  // row to Pro in the per-tool profiles when quota allows; nothing else needs to change.
+  itemAudit:{m:'flash',lv:'high'},       // NEIA item-quality review of a rendered item
 };
 const PROFILE_ROWS=[
   {id:'knowledge',label:'Knowledge · extract'},
