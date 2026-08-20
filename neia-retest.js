@@ -43,6 +43,20 @@ const WIDTH = Number(arg('width', 3));
 const ONLY = (arg('only', '') || '').split(',').map(s => s.trim()).filter(Boolean);
 const OUT = arg('out', 'neia-retest-report.json');
 const RETRY_MS = Number(arg('retryms', 20000)); // base backoff; doubles each attempt
+const RPM = Number(arg('rpm', 0)); // 0 = unthrottled; otherwise cap request STARTS per minute
+
+// Global pacer. Free-tier Gemini limits are per-minute and per-day, and a concurrency pool
+// alone cannot respect either: width 3 at ~6s latency bursts ~28 requests/minute. This
+// serialises the *start* of every request so the pool still overlaps waiting, but never
+// exceeds the requested rate. --rpm 10 is a reasonable free-tier Pro setting.
+let _lastStart = 0;
+async function pace() {
+  if (!RPM) return;
+  const gap = 60000 / RPM;
+  const wait = Math.max(0, _lastStart + gap - Date.now());
+  _lastStart = Date.now() + wait;
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+}
 const KEY = process.env.GEMINI_API_KEY || '';
 
 if (!KEY) {
@@ -96,6 +110,7 @@ async function callOnce(prompt) {
   const t0 = Date.now();
   let resp, lastBody = '';
   for (let attempt = 0; attempt <= 3; attempt++) {
+    await pace();
     resp = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': KEY },

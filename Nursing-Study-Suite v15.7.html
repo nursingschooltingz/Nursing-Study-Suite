@@ -4629,17 +4629,22 @@ GROUNDING ADAPTER — INPUT FORM ONLY:
             log('  Audit skipped for this batch: no single-best-answer MCQ items ('+naCount+' N/A).','warn');
           }else{
             log('  Auditing '+eligible.length+' MCQ item(s) · '+aModel+' [Thinking: '+aLevel+']'+(naCount?' · '+naCount+' N/A (rubric is MCQ-only)':''),'warn');
-            let adone=0;
-            auditRows=await itemRunPool(eligible,3,async(g)=>{
+            let adone=0,quotaFails=0;
+            try{
+            auditRows=await itemRunPool(eligible,AUDIT_POOL_WIDTH,async(g)=>{
               const k=keyItems.get(g.num);
               const q={type:'MCQ',stem:g.item.stem,options:g.item.options,
                 correctAnswers:[(String(k&&k.answer||'').match(/\b([A-Z])\b/)||[])[1]||''].filter(Boolean)};
               let v;
               try{
-                const out=await callGemini(cfg.apiKey,aModel,[{text:itemBuildAuditPrompt(itemAuditPayload('',q))}],true,aLevel,ctl.signal,1);
+                const out=await callGemini(cfg.apiKey,aModel,[{text:itemBuildAuditPrompt(itemAuditPayload('',q))}],true,aLevel,ctl.signal,AUDIT_RETRIES);
                 v=itemParseAuditVerdict(out);
               }catch(e){
                 if(e.name==='AbortError')throw e;
+                // v15.7: stop after two quota failures rather than grinding through every
+                // remaining item. geminiRequest already backed off and retried; a further
+                // 429 means the allowance is gone and each attempt costs real time.
+                if(isQuotaError(e)&&++quotaFails>=2)throw Object.assign(new Error('API quota exhausted'),{name:'QuotaStop'});
                 v={status:'ERROR',criterion:'',detail:e.message||String(e),warns:[],autoRepairable:false};
               }
               adone++;
@@ -4648,6 +4653,11 @@ GROUNDING ADAPTER — INPUT FORM ONLY:
               for(const w of v.warns||[])log('      ⓘ Q'+g.num+' WARN '+w.criterion+': '+w.detail,'warn');
               return{...g,...v};
             },ctl.signal);
+            }catch(e){
+              if(e.name!=='QuotaStop')throw e;
+              auditRows=(auditRows||[]).filter(Boolean);
+              log('  ⚠ Audit stopped early — your Gemini API quota is exhausted. The worksheet itself is complete and still passed its structural checks; only the optional item review was cut short. Wait for your quota to reset, switch the "Item quality · audit" profile to Flash, or turn the audit off.','err');
+            }
 
             const fails=auditRows.filter(r=>r.status==='FAIL');
             const accuracy=fails.filter(r=>!r.autoRepairable);
@@ -4657,7 +4667,7 @@ GROUNDING ADAPTER — INPUT FORM ONLY:
             if(repairable.length){
               log('  Repairing '+repairable.length+' item(s), one round, no re-audit...','warn');
               const {model:gModel,level:gLevel}=cfg.forTool('nclexgen');
-              await itemRunPool(repairable,3,async(r)=>{
+              await itemRunPool(repairable,AUDIT_POOL_WIDTH,async(r)=>{
                 try{
                   const k=keyItems.get(r.num);
                   const keyRaw=k?k.raw:'';
@@ -5872,9 +5882,23 @@ function itemParseAuditVerdict(text){
   return{status,criterion,detail,warns,
     autoRepairable:status==='FAIL'&&!itemAuditIsAnswerAccuracy(criterion)};
 }
+// v15.7: quota-aware abort. A free-tier key that has run out will 429 every remaining call,
+// and geminiRequest's backoff makes each failure SLOW. Burning through 20 more doomed audits
+// wastes minutes and tells the user nothing new, so a caller can throw QuotaStop from the
+// worker to end the pool early with the results collected so far.
+function isQuotaError(e){
+  return /quota|rate limit|429|resource_exhausted/i.test(String((e&&e.message)||e||''));
+}
+// Two lanes, not three — see the pool comment below. geminiRequest already retries 429 with
+// Retry-After and exponential backoff; the audit calls shipped with a budget of 1, which is
+// too small to ride out a per-minute window, so they get 3.
+const AUDIT_POOL_WIDTH=2,AUDIT_RETRIES=3;
 // Bounded concurrency. A 5-stage case at 2 questions/stage is ~6 MCQ-eligible items; at the
 // June paper's measured 1.7-2.3 min/item for reasoning-enhanced models, serialized audits
-// would run 10-14 minutes and make the feature unusable. Width 3 by default.
+// would run 10-14 minutes and make the feature unusable.
+// Width 2, not 3: free-tier Gemini limits are per-minute, and width 3 at the ~6s latency
+// measured on this build bursts roughly 28 requests/minute, which exhausts a free-tier Pro
+// allowance quickly. Two lanes still overlap the waiting without spiking the rate.
 async function itemRunPool(items,width,worker,signal){
   const out=new Array(items.length);
   let next=0;
@@ -6043,15 +6067,19 @@ function CaseStudyGenerator(){
         }else{
           setAuditPhase('audit');
           log('Auditing '+eligible.length+' MCQ item(s) against 11 stop criteria · '+aModel+' [Thinking: '+aLevel+']'+(naCount?' · '+naCount+' item(s) N/A (rubric is MCQ-only)':''),'warn');
-          let done=0;
-          const results=await itemRunPool(eligible,3,async(it)=>{
+          let done=0,quotaFails=0,results=[];
+          try{
+          results=await itemRunPool(eligible,AUDIT_POOL_WIDTH,async(it)=>{
             const payload=caseAuditPayload(parsed,it.stageNumber,it.q);
             let verdict;
             try{
-              const out=await callGemini(cfg.apiKey,aModel,[{text:itemBuildAuditPrompt(payload)}],true,aLevel,ctl.signal,1);
+              const out=await callGemini(cfg.apiKey,aModel,[{text:itemBuildAuditPrompt(payload)}],true,aLevel,ctl.signal,AUDIT_RETRIES);
               verdict=itemParseAuditVerdict(out);
             }catch(e){
               if(e.name==='AbortError')throw e;
+              // v15.7: see the NCLEX audit — stop after two quota failures instead of
+              // spending minutes confirming the allowance is still gone.
+              if(isQuotaError(e)&&++quotaFails>=2)throw Object.assign(new Error('API quota exhausted'),{name:'QuotaStop'});
               verdict={status:'ERROR',criterion:'',detail:e.message||String(e),warns:[],autoRepairable:false};
             }
             done++;
@@ -6059,6 +6087,11 @@ function CaseStudyGenerator(){
             setAuditPhase('audit '+done+'/'+eligible.length);
             return{...it,...verdict};
           },ctl.signal);
+          }catch(e){
+            if(e.name!=='QuotaStop')throw e;
+            results=(results||[]).filter(Boolean);
+            log('⚠ Audit stopped early — your Gemini API quota is exhausted. The case itself is complete and still passed its grounding checks; only the optional item review was cut short. Wait for your quota to reset, switch the "Item quality · audit" profile to Flash, or turn the audit off.','err');
+          }
 
           const sum=itemAuditSummary(results.concat(Object.values(seed)));
           log('Audit: '+sum.pass+' pass · '+sum.fail+' fail · '+sum.review+' review'+(sum.error?' · '+sum.error+' error':'')+(sum.na?' · '+sum.na+' N/A':'')+'.',sum.fail?'err':'ok');
@@ -6077,7 +6110,7 @@ function CaseStudyGenerator(){
             setAuditPhase('repair');
             log('Repairing '+repairable.length+' item(s) in a fresh call (one round, no re-audit)...','warn');
             let repaired=0;
-            await itemRunPool(repairable,3,async(r)=>{
+            await itemRunPool(repairable,AUDIT_POOL_WIDTH,async(r)=>{
               try{
                 const visible=caseAuditPayload(parsed,r.stageNumber,r.q);
                 const out=await callGemini(cfg.apiKey,model,[{text:caseBuildRepairPrompt({

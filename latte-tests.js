@@ -867,7 +867,13 @@ section('v15.6 — case audit pass');
     (S.match(/label:'[^']*·\s*audit'/g) || []).filter(x => /Item quality/.test(x)).length === 1 && !S.includes("id:'nclexgenAudit'"));
   t('the renamed profile key is migrated for saved configs', S.includes('if(p.casesAudit&&!p.itemAudit)'));
   t('audit runs only when the case has zero structural errors', S.includes('if(runAudit&&errCount===0){'));
-  t('the pool is bounded at width 3', S.includes('itemRunPool(eligible,3,'));
+  // v15.7: narrowed 3 -> 2 after a live run exhausted free-tier quota. Width 3 at the ~6s
+  // latency measured on this build bursts roughly 28 requests/minute.
+  t('the audit pool is bounded and narrow', S.includes('const AUDIT_POOL_WIDTH=2') && S.includes('itemRunPool(eligible,AUDIT_POOL_WIDTH,'));
+  t('audit calls get a retry budget big enough to ride out a rate limit', S.includes('AUDIT_RETRIES=3'));
+  t('the audit stops early once quota is gone', S.includes("throw Object.assign(new Error('API quota exhausted'),{name:'QuotaStop'})"));
+  t('a QuotaStop is caught, not surfaced as a crash', (S.match(/if\(e\.name!=='QuotaStop'\)throw e;/g) || []).length === 2);
+  t('quota exhaustion is explained, not just logged as an error', S.includes('only the optional item review was cut short'));
   t('the abort signal is threaded into the pool', S.includes('},ctl.signal);'));
   t('repaired items are re-validated', S.includes('allIssues=revalidate(parsed);'));
   t('answer-accuracy failures are excluded from repair', S.includes('r.status===\'FAIL\'&&!r.autoRepairable'));
