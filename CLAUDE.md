@@ -21,7 +21,7 @@ Maintained by one person — a working LPN in an LPN-to-RN bridge program — be
 node latte-tests.js
 ```
 
-Expect **307 passed · 0 failed**. The harness extracts live functions from the shipped HTML by anchor strings — it never copies code, so it fails loudly if a refactor moves an anchor. That failure is signal, not noise: fix the anchor reference, don't weaken the test.
+Expect **356 passed · 0 failed**. The harness extracts live functions from the shipped HTML by anchor strings — it never copies code, so it fails loudly if a refactor moves an anchor. That failure is signal, not noise: fix the anchor reference, don't weaken the test.
 
 Watch for *vacuous* passes as well as failures: an end anchor that matches earlier than intended silently truncates a span, and every assertion about the missing tail then passes for the wrong reason. `caseBuildPrompt` hit exactly this — `'\n}\n'` matched inside its JSON-shape block. Where a span covers a prompt, assert that something near its *end* is present.
 
@@ -51,25 +51,26 @@ Do not "fix" these:
 - **Warn-tier validators.** Qualitative term scanning, missing-field checks, terminology lint, item heuristics, and difficulty signals warn rather than error, on purpose. Errors block registry inclusion; warnings inform. Don't escalate without asking. (Numeric entailment was the exception: v15.6 escalated it to error once `instantiated` gave the one legitimate case its own declared support type.)
 - **NEIA evidence tiering.** Comments are tagged `[NEIA-VALIDATED]` (the rubric states it), `[NEIA-DERIVED]` (our operationalization of a validated criterion), or `[LATTE-HEURISTIC]` (our invention). Never let a LATTE heuristic acquire the authority of a validated criterion, and never cite a published reliability figure as a property of this build — the reliability study tested zero Gemini configurations.
 - **Test Plan Alignment can warn but never fail.** No Test Plan document is supplied to either generator. A `FAIL` naming that criterion is downgraded in code, not merely discouraged in the prompt.
-- **The `casesAudit` auditor is blind to grounding on purpose.** It sees only what the student sees. Do not "helpfully" pass it fact IDs, source quotes, or the fact packet — that reintroduces the generator's own framing into its review.
+- **The `itemAudit` auditor is blind to grounding on purpose.** It sees only what the student sees. Do not "helpfully" pass it fact IDs, source quotes, or the fact packet — that reintroduces the generator's own framing into its review. One profile row serves both generators; do not split it per tool.
+- **The worksheet DISTRIBUTION check is an error, not a warning.** A worksheet whose own `DISTRIBUTION:` line disagrees with its contents means the model reported compliance it never verified — the precise failure an in-call self-gate cannot catch.
 - **`gemini-3.1-pro-preview` as the Pro default.** There is no stable Pro alias; this is the current Pro path.
 
 ## File map
 
 | File | Purpose |
 |---|---|
-| `Nursing-Study-Suite-*.html` | The entire application |
-| `latte-tests.js` | Regression harness, 307 assertions |
+| `Nursing-Study-Suite v15.7.html` | The entire application. The filename carries the version — quote it on the command line. Both harnesses auto-detect any `Nursing-Study-Suite*.html`, so a version bump needs no code change. |
+| `latte-tests.js` | Regression harness, 356 assertions |
 | `neia-fixture.json` | 10 fixed MCQs with reference classifications, for the audit test–retest |
 | `neia-retest.js` | Test–retest runner — **costs live API calls**, never part of `latte-tests.js` |
 | `CHANGELOG.md` | Release summary (Keep a Changelog format) |
 | `Nursing-Study-Suite-v16-spec.md` | Multimodal architecture spec — **build blocked** pending benchmark |
-| `Prompts.md` | The three main prompts, extracted verbatim |
+| `Prompts.md` | All five prompt families, extracted verbatim from live bytes. Regenerate it after any prompt edit — it drifts silently otherwise. |
 | `README.md` | End-user guide |
 
 ## Current state
 
-Shipping v15.6 (v15.5 shipped SRI pins + NCLEX prompt v4.2; v15.6 completed the NEIA brief). Open items:
+Shipping v15.7. The app file is `Nursing-Study-Suite v15.7.html` — both harnesses auto-detect it, so a rename needs no code change. Open items:
 
 - **Run `neia-retest.js`** — the audit gate's severities and the item-3 heuristic cutoffs are all provisional until it produces real flip data. This is the highest-value next action; everything else in v15.6 is calibrated on guesses.
 - **Test Plan activity statements** are not supplied to either generator, so Test Plan Alignment is WARN-only in both. Neither source paper reproduces the statements — Appendix A only links to NCSBN.

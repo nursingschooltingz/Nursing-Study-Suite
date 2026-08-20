@@ -4,7 +4,10 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>LATTE Study Suite</title>
-<!-- v15.5 (2026-08-20): v15 series — crash/PPTX/CVE fixes, DOMPurify no-downgrade chain, case validation + provenance + entailment hardening, KB replace guards, layout-aware PDF extraction + scanned-file detection, SRI integrity pins on every CDN script, NCLEX generator prompt v4.2 (NEIA-adapted item-quality gate). Full history: LATTE-v15-changelog.md · regression harness: latte-tests.js -->
+<!-- v15.7 (2026-08-20): v15 series — crash/PPTX/CVE fixes, DOMPurify no-downgrade chain, KB replace guards, layout-aware PDF extraction + scanned-file detection, SRI integrity pins on every CDN script.
+     v15.6 added NEIA-derived item quality to the Case Study Generator: terminology linting (warn), `instantiated` value provenance with numeric entailment at ERROR tier, deterministic MCQ heuristics, operationalized difficulty, and an independent per-item audit pass whose auditor sees only what the student sees.
+     v15.7 extends that to the NCLEX Generator: `validateNCLEXWorksheet` checks the worksheet's self-reported DISTRIBUTION against what it actually produced, the audit profile is now a single tool-agnostic `itemAudit` row, worksheet MCQs route through the same auditor and repair path, artifacts carry a provenance stamp naming the configuration that made them, and Anki cards are linted for error-prone dose abbreviations.
+     Full history: LATTE-v15-changelog.md · regression harness: latte-tests.js (354 assertions) · test-retest: neia-retest.js -->
 <!-- v15.3: crossorigin added (SRI-ready — paste the verified sha384 integrity attrs from
      the changelog after a local hash check; applying unverified hashes would hard-block
      every script). DOMPurify 3.4.12 loads through a no-downgrade chain: cdnjs, then the
@@ -344,7 +347,7 @@ const TOOL_PROFILE_DEFAULTS={
   // ingestion stages — this does not contradict the earlier finding that high thinking
   // degrades grounded summarization. Both top-performing raters in the June study were
   // reasoning-enhanced configurations.
-  casesAudit:{m:'pro',lv:'high'},         // NEIA item-quality review of a rendered item
+  itemAudit:{m:'pro',lv:'high'},         // NEIA item-quality review of a rendered item
 };
 const PROFILE_ROWS=[
   {id:'knowledge',label:'Knowledge · extract'},
@@ -355,7 +358,10 @@ const PROFILE_ROWS=[
   {id:'nclex',label:'NCLEX · extract'},
   {id:'nclexgen',label:'NCLEX · generate'},
   {id:'cases',label:'Case studies'},
-  {id:'casesAudit',label:'Case studies · audit'},
+  // v15.7: ONE audit row, not one per source tool. The payload is a rendered item and the
+  // prompt is criterion text; neither differs by which tool authored the item. Two rows
+  // would be two places to drift.
+  {id:'itemAudit',label:'Item quality · audit'},
 ];
 
 /* ═══════════════════════════════════════════════════════
@@ -2319,6 +2325,11 @@ NO INTERNAL PIPES: Never place | inside any field. Replace with / if needed.
 FAST REVIEW: Prefer one fact = one punchy card.
 NO FLUFF: Do not preserve textbook wording when shorter wording preserves meaning.
 NO TARGET-PADDING: Do not create notes to satisfy a note-count target.
+SAFE TRANSCRIPTION: When the PDF uses an error-prone dose abbreviation, transcribe it in its
+  unambiguous form. This is transcription, not paraphrase — the fact is unchanged, so
+  ZERO-SKIP and PDF ONLY still hold. q.d. -> daily · QOD -> every other day · IU ->
+  International Unit · a bare U -> unit · 5.0 mg -> 5 mg · .5 mg -> 0.5 mg.
+  Never alter the numeric value itself, and never "correct" a dose.
 
 OUTPUT FORMAT (LOCK THIS FIRST)
 
@@ -2997,6 +3008,17 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
       for(const c of all){const k=(c.text||'').toLowerCase().replace(/\s+/g,' ').trim();if(!k){deduped.push(c);continue;}if(seen.has(k)){const kept=seen.get(k);kept.factIds=[...new Set([...(kept.factIds||[]),...(c.factIds||[])])];continue;}seen.set(k,c);deduped.push(c);}
       if(all.length-deduped.length>0)log(`Removed ${all.length-deduped.length} duplicate(s); their fact IDs were merged into the surviving cards.`,'warn');
       deduped.forEach(c=>{c.lint=lintAnkiCard(c);if(c.lint.length)c.keep=false;});
+      // v15.7 B5: unsafe-abbreviation findings are WARN tier and kept OUT of `lint`, because
+      // `lint` unchecks the card. A dose written "5.0 mg" is worth flagging, not discarding —
+      // the fact is right and the card is still usable once you fix the transcription.
+      deduped.forEach(c=>{
+        const found=[];
+        ankiUnsafeAbbrevScan(c.text,'Text',found);
+        ankiUnsafeAbbrevScan(c.extra,'Extra',found);
+        c.abbrev=found.map(x=>x.msg);
+      });
+      const abbrevCount=deduped.filter(c=>(c.abbrev||[]).length).length;
+      if(abbrevCount)log(`⚠ ${abbrevCount} card(s) contain an error-prone dose abbreviation (q.d., IU, bare U, trailing/missing zero). They are still exportable — fix the transcription before drilling them.`,'warn');
       const lintCount=deduped.filter(c=>c.lint.length).length;
       const allFacts=kbAllFacts(K.knowledgeBase);
       const covered=new Set(deduped.filter(c=>c.keep&&!(c.lint||[]).length).flatMap(c=>c.factIds||[]));
@@ -3027,6 +3049,7 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
 
   const keptCount=filteredCards.filter(c=>c.keep).length;
   const liveLint=useMemo(()=>cards.filter(c=>c.lint&&c.lint.length).length,[cards]);
+  const liveAbbrev=useMemo(()=>cards.filter(c=>c.abbrev&&c.abbrev.length).length,[cards]);
 
   return(
     <div className="tool-panel">
@@ -3083,6 +3106,7 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
             <span style={{fontSize:12,fontWeight:600,color:coverage.uncovered.length?'var(--accent-red)':'var(--accent-green)'}}>
               {coverage.uncovered.length?'⚠':'✓'} Verified coverage: {coverage.coveredCount}/{coverage.total} facts mapped to a card
               {liveLint>0&&<span style={{color:'var(--accent-warm)',marginLeft:8}}>· {liveLint} lint issue{liveLint>1?'s':''}</span>}
+              {liveAbbrev>0&&<span style={{color:'var(--accent-warm)',marginLeft:8}} title="Error-prone dose abbreviations — exportable, but fix the transcription first">· {liveAbbrev} unsafe abbreviation{liveAbbrev>1?'s':''}</span>}
             </span>
             {coverage.uncovered.length>0&&<button className="btn-secondary" style={{padding:'3px 10px',fontSize:11}} onClick={()=>setShowUncovered(s=>!s)}>{showUncovered?'Hide':'Show'} {coverage.uncovered.length} uncovered</button>}
           </div>
@@ -3115,7 +3139,7 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
         {view==='list'&&filteredCards.map(c=><div key={c.id} style={{display:'flex',gap:8,padding:'10px 12px',background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:6,marginBottom:4,fontSize:12,opacity:c.keep?1:.35}}>
           <input type="checkbox" checked={c.keep} onChange={()=>toggle(c.id)} style={{accentColor:'var(--accent)',marginTop:2}}/>
           <TierBadge tier={getTier(c.tags)}/>
-          <div style={{flex:1,minWidth:0}}><div style={{fontFamily:'JetBrains Mono',fontSize:11,lineHeight:1.5,wordBreak:'break-word'}}>{c.text}</div>{c.extra&&<div style={{fontSize:10,color:'var(--text-dim)',marginTop:2}}>Extra: {c.extra}</div>}{c.tags&&<div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:4}}>{c.tags.split(/\s+/).map((t,j)=><span key={j} style={{fontSize:8,padding:'1px 6px',borderRadius:8,background:'var(--bg-card-alt)',color:'var(--text-dim)',border:'1px solid var(--border)'}}>{t}</span>)}</div>}{c.lint&&c.lint.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:4}}>{c.lint.map((x,j)=><span key={j} style={{fontSize:8,padding:'1px 6px',borderRadius:8,background:'rgba(248,113,113,.1)',color:'var(--accent-red)',border:'1px solid rgba(248,113,113,.3)'}}>{LINT_LABEL[x]||x}</span>)}</div>}</div>
+          <div style={{flex:1,minWidth:0}}><div style={{fontFamily:'JetBrains Mono',fontSize:11,lineHeight:1.5,wordBreak:'break-word'}}>{c.text}</div>{c.extra&&<div style={{fontSize:10,color:'var(--text-dim)',marginTop:2}}>Extra: {c.extra}</div>}{c.tags&&<div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:4}}>{c.tags.split(/\s+/).map((t,j)=><span key={j} style={{fontSize:8,padding:'1px 6px',borderRadius:8,background:'var(--bg-card-alt)',color:'var(--text-dim)',border:'1px solid var(--border)'}}>{t}</span>)}</div>}{c.lint&&c.lint.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:4}}>{c.lint.map((x,j)=><span key={j} style={{fontSize:8,padding:'1px 6px',borderRadius:8,background:'rgba(248,113,113,.1)',color:'var(--accent-red)',border:'1px solid rgba(248,113,113,.3)'}}>{LINT_LABEL[x]||x}</span>)}</div>}{c.abbrev&&c.abbrev.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:4}}>{c.abbrev.map((x,j)=><span key={j} title={x} style={{fontSize:8,padding:'1px 6px',borderRadius:8,background:'rgba(240,168,58,.1)',color:'var(--accent-warm)',border:'1px solid rgba(240,168,58,.3)'}}>unsafe abbreviation</span>)}</div>}</div>
           <button style={{background:'none',border:'none',color:'var(--text-dim)',cursor:'pointer',fontSize:13,flexShrink:0}} onClick={()=>del(c.id)}>×</button>
         </div>)}
       </div>}
@@ -3540,6 +3564,10 @@ const NCLEX_CATEGORY_LABELS={
 // that could not be verified against a primary NCSBN source, so the long-standing label
 // stands until it can be. Bump `version` with NCLEX_TEST_PLAN_VERSION when confirmed.
 const NCLEX_TEST_PLAN_VERSION=2026;
+// v15.7 B2: bump this whenever NEIA_TERMINOLOGY_RULES or the audit criteria text changes.
+// Deliberately a flat string, not a registry object with nested applicability/versions keys.
+// The suite has a handful of call sites, not a plugin system.
+const LATTE_STANDARDS_VERSION='LATTE-NEIA v1.0';
 const NCLEX_GEN_PROMPT=`═══ NCLEX QUESTION GENERATOR — v4.2 (printable output) ═══
 
 Return ONLY the four parts requested. No conversational preamble, no greetings, no
@@ -4136,6 +4164,205 @@ function ngSplitNumbered(text){
   if(cur)blocks.push(cur);
   return blocks.map(b=>({num:b.num,text:b.lines.join('\n').replace(/\s+$/,'')}));
 }
+/* ── v15.7 B1c: deterministic worksheet validation ──
+ * THE PROBLEM THIS CLOSES. NCLEX_GEN_PROMPT's gate runs inside the authoring call and
+ * reports itself on the DISTRIBUTION line. "Never report compliance you have not verified"
+ * is an unfalsifiable instruction: the only witness to the check is the thing being checked.
+ * The suite had three validators and none of them covered its primary item producer.
+ * Everything here is deterministic, costs no API calls, and checks the model's own claims
+ * against the artifact it actually produced.
+ * The KB architecture already states the governing principle — fresh attention on the same
+ * chunk beats a same-call self-audit, which models rubber-stamp. This is the code half of
+ * that; the audit pass (B1d) is the fresh-attention half.
+ */
+// Parse ONE numbered Part 3 block into a structured item. Format is fixed by the prompt:
+// a stem line, then "A. text" option lines. Ordering items use "___ step" and calculation
+// items end with "Answer: ____".
+function ngParseItem(block){
+  const raw=String(block.text||'');
+  const body=raw.replace(/^(\s{0,4})(?:Q)?\d{1,2}[.)]\s+/,'');
+  const lines=body.split('\n');
+  const options=[];
+  let stem=[];
+  for(const line of lines){
+    const m=line.match(/^\s*([A-Z])[.)]\s+(.*\S)\s*$/);
+    if(m&&m[1]>='A'&&m[1]<='H'){options.push({label:m[1],text:m[2].trim()});continue;}
+    if(!options.length)stem.push(line);
+  }
+  const stemText=stem.join(' ').replace(/\s+/g,' ').trim();
+  const isOrdering=/^\s*_{2,}\s+\S/m.test(body);
+  const isCalc=/Answer:\s*_{2,}/i.test(body);
+  const isSata=/select all that apply/i.test(stemText);
+  const type=isOrdering?'Ordering':isCalc?'Calculation':isSata?'SATA':options.length>=3?'MCQ':'Unknown';
+  return{num:block.num,type,stem:stemText,options,raw};
+}
+// Parse ONE numbered Part 4 block: the keyed answer, which options got a Why line, and the
+// Tags line (tier + CJMM), which is what makes the DISTRIBUTION claims checkable.
+function ngParseKeyItem(block){
+  const raw=String(block.text||'');
+  const am=raw.match(/ANSWER:\s*([^\n]+)/i);
+  const why=new Set();
+  for(const m of raw.matchAll(/^\s*Why\s+([A-Z])\s+is\s+(?:correct|wrong)/gim))why.add(m[1]);
+  const tagm=raw.match(/Tags:\s*([^\n]+)/i);
+  const tags=tagm?tagm[1]:'';
+  const tierm=tags.match(/Tier\s*([123])/i);
+  const cj=(tags.match(/\|\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s*$/)||[])[1]||'';
+  return{num:block.num,answer:am?am[1].trim():'',whyLabels:why,
+    tier:tierm?Number(tierm[1]):0,cjmm:cj.trim(),raw};
+}
+// Pull the model's self-reported Types counts off the DISTRIBUTION line.
+function ngParseDistribution(dist){
+  const out={types:{},tiers:{},present:!!String(dist||'').trim()};
+  const t=String(dist||'').match(/Types\s*\[([^\]]*)\]/i);
+  if(t)for(const m of t[1].matchAll(/([A-Za-z]+)\s*:\s*(\d+)/g))out.types[m[1].toLowerCase()]=Number(m[2]);
+  const ti=String(dist||'').match(/Tier\s*\[([^\]]*)\]/i);
+  if(ti)for(const m of ti[1].matchAll(/([123])\s*:\s*(\d+)/g))out.tiers[m[1]]=Number(m[2]);
+  return out;
+}
+// `expectedCount` is the batch size the app actually asked for — buildBatchBlock overrides
+// the prompt's default of 10, so the constant 10 is NOT the contract.
+function validateNCLEXWorksheet(raw,expectedCount){
+  const issues=[];
+  const text=String(raw||'');
+  if(!text.trim()){issues.push({sev:'error',msg:'Worksheet is empty'});return issues;}
+  const parts=ngSplitParts(text);
+  for(const[k,label]of[['p1','PART 1'],['p2','PART 2'],['p3','PART 3'],['p4','PART 4']])
+    if(!parts[k])issues.push({sev:'error',msg:`${label} is missing or empty — the prompt requires all four parts`});
+  const q3=ngSplitNumbered(parts.p3).map(ngParseItem);
+  const q4=ngSplitNumbered(parts.p4).map(ngParseKeyItem);
+  const n=Number(expectedCount)||0;
+
+  if(n&&q3.length!==n)issues.push({sev:'error',msg:`PART 3 has ${q3.length} numbered question(s); this batch asked for ${n}`});
+  if(n&&q4.length!==n)issues.push({sev:'error',msg:`PART 4 has ${q4.length} numbered entr(y/ies); this batch asked for ${n}`});
+  if(q3.length&&q4.length&&q3.length!==q4.length)
+    issues.push({sev:'error',msg:`PART 3 and PART 4 disagree: ${q3.length} questions vs ${q4.length} answer entries`});
+
+  // Truncation. A worksheet cut mid-answer-key is unusable, and the prompt explicitly says
+  // to shorten the batch rather than truncate — so a short last entry is a contract breach.
+  const last4=q4[q4.length-1];
+  if(last4&&!/Tags:/i.test(last4.raw))
+    issues.push({sev:'error',msg:`PART 4 entry ${last4.num} has no Tags line — the answer key appears truncated mid-entry`});
+  if(q3.length&&!parts.dist)
+    issues.push({sev:'warn',msg:'No DISTRIBUTION line — the prompt requires one after PART 4'});
+
+  const byNum=new Map(q4.map(k=>[k.num,k]));
+  for(const item of q3){
+    const where=`Q${item.num}`;
+    const key=byNum.get(item.num);
+    if(!key){issues.push({sev:'error',msg:`${where}: no matching PART 4 answer entry`});continue;}
+    if(!key.answer)issues.push({sev:'error',msg:`${where}: PART 4 entry has no ANSWER line`});
+    // The prompt promises a Why line for EVERY option, correct and incorrect alike.
+    for(const o of item.options)
+      if(!key.whyLabels.has(o.label))
+        issues.push({sev:'error',msg:`${where}: option ${o.label} has no "Why ${o.label} is…" line in PART 4`});
+    if(item.type==='MCQ'&&item.options.length!==4)
+      issues.push({sev:'warn',msg:`${where}: MCQ has ${item.options.length} options; the prompt specifies 4`});
+    if(item.type==='SATA'&&(item.options.length<5||item.options.length>6))
+      issues.push({sev:'warn',msg:`${where}: SATA has ${item.options.length} options; the prompt specifies 5-6`});
+    // Model-authored text only — never the anchor quotations in the Why lines.
+    neiaTerminologyScan(item.stem,`${where} stem`,issues);
+    for(const o of item.options)neiaTerminologyScan(o.text,`${where} option ${o.label}`,issues);
+    // MCQ-only surface heuristics, same scope rule as everywhere else.
+    if(item.type==='MCQ'){
+      const keyLabels=(key.answer.match(/\b([A-Z])\b/)||[])[1];
+      itemHeuristics({type:'MCQ',stem:item.stem,options:item.options,
+        correctAnswers:keyLabels?[keyLabels]:[]},issues,where);
+    }
+  }
+
+  // THE SELF-REPORT CHECK. A DISTRIBUTION line that disagrees with the worksheet's own
+  // contents means the model reported compliance it did not verify — the exact failure the
+  // in-call gate cannot detect, because it is the thing being checked.
+  const d=ngParseDistribution(parts.dist);
+  if(d.present&&q3.length){
+    const actualTypes={};
+    for(const it of q3)actualTypes[it.type.toLowerCase()]=(actualTypes[it.type.toLowerCase()]||0)+1;
+    const alias=k=>k==='calc'?'calculation':k;
+    for(const[k,v]of Object.entries(d.types)){
+      const a=actualTypes[alias(k)]||0;
+      if(a!==v)issues.push({sev:'error',msg:`DISTRIBUTION claims ${v} ${k.toUpperCase()} item(s) but PART 3 contains ${a} — the worksheet does not match its own reported distribution`});
+    }
+    const actualTiers={};
+    for(const k of q4)if(k.tier)actualTiers[k.tier]=(actualTiers[k.tier]||0)+1;
+    if(Object.keys(actualTiers).length)
+      for(const[k,v]of Object.entries(d.tiers)){
+        const a=actualTiers[k]||0;
+        if(a!==v)issues.push({sev:'error',msg:`DISTRIBUTION claims ${v} Tier ${k} item(s) but PART 4 tags show ${a}`});
+      }
+  }
+  return issues;
+}
+// v15.7 B1d: worksheet items are freestanding, so the gate list is a flat map over PART 3.
+// Same MCQ-only scope as the case generator — the rubric is not validated for the others.
+function nclexGateItems(items){
+  return (items||[]).map(it=>({num:it.num,item:it,key:'q'+it.num,
+    eligible:it.type==='MCQ'&&it.options.length>=3}));
+}
+// Render a repaired item back into worksheet text. STRATEGY and TAGS are carried over
+// verbatim from the original PART 4 entry rather than regenerated: they encode tier, CJMM,
+// and LATTE bucket, which the DISTRIBUTION line already counts. Letting a repair rewrite
+// them would silently invalidate the distribution the worksheet just asserted.
+function ngRenderQuestionBlock(num,item){
+  const opts=(item.options||[]).map(o=>'     '+o.label+'. '+String(o.text||'').trim()).join('\n');
+  return '  '+num+'. '+String(item.stem||'').trim()+'\n\n'+opts;
+}
+function ngRenderKeyBlock(num,item,carryStrategy,carryTags){
+  const L=['  '+num+'. ANSWER: '+String(item.correctLabel||'').trim()];
+  for(const r of item.rationales||[]){
+    const lbl=String(r.label||'').trim();
+    const kind=lbl===String(item.correctLabel||'').trim()?'correct':'wrong';
+    L.push('     Why '+lbl+' is '+kind+': '+String(r.text||'').trim()+(r.source?' (Source: '+r.source+')':''));
+  }
+  if(carryStrategy)L.push(carryStrategy);
+  if(carryTags)L.push(carryTags);
+  return L.join('\n');
+}
+// Replace one numbered block inside a PART section. Returns null if the block cannot be
+// located unambiguously — the caller then leaves the worksheet untouched. Corrupting a
+// worksheet to "fix" a style finding is strictly worse than shipping the finding.
+function ngSpliceBlock(sectionText,num,replacement){
+  const blocks=ngSplitNumbered(sectionText);
+  const target=blocks.filter(b=>b.num===num);
+  if(target.length!==1)return null;
+  const idx=sectionText.indexOf(target[0].text);
+  if(idx<0)return null;
+  return sectionText.slice(0,idx)+replacement+sectionText.slice(idx+target[0].text.length);
+}
+function ngBuildRepairPrompt({item,criterion,keyBlock}){
+  return `═══ REPAIR ONE NCLEX ITEM ═══
+
+An independent reviewer failed the item below on this criterion:
+
+  FAILED: ${criterion}
+
+Rewrite ONLY this item so it no longer meets that disqualifying condition.
+
+RULES
+- Keep the same question TYPE (single-best-answer MCQ) and the same number of options.
+- Keep the same option labels (A, B, C, D) in the same order.
+- The item must remain answerable from the same underlying content. Do not introduce a
+  new topic, a new condition, or clinical facts the original item did not rest on.
+- Every option still needs its own rationale.
+- Do NOT fix a length or integration problem by making the key the shortest option or by
+  padding the distractors. The target is options indistinguishable on surface features.
+- Do NOT restate the answer in the stem.
+
+═══ THE FAILING ITEM ═══
+STEM: ${item.stem}
+${(item.options||[]).map(o=>'  '+o.label+'. '+o.text).join('\n')}
+
+Its current answer key entry, for reference:
+${keyBlock||'(unavailable)'}
+
+═══ RETURN EXACTLY THIS JSON, NOTHING ELSE ═══
+{
+  "stem": "string",
+  "options": [ { "label": "A", "text": "string" } ],
+  "correctLabel": "B",
+  "rationales": [ { "label": "A", "text": "one sentence", "source": "C7" } ],
+  "repairNote": "one sentence on what you changed, or why you could not"
+}`;
+}
 function ngRenumber(text,n){return text.replace(/^(\s{0,4})(?:Q)?\d{1,2}[.)]\s+/,'$1'+n+'. ');}
 function ngStem(t){
   const f=t.replace(/^(\s{0,4})(?:Q)?\d{1,2}[.)]\s+/,'').split('\n')[0].trim();
@@ -4161,6 +4388,8 @@ function NCLEXGenerator(){
   const [view,setView]=useState('worksheet');
   const [abortCtl,setAbortCtl]=useState(null);
   const [allocMode,setAllocMode]=useState(true);
+  const [runAudit,setRunAudit]=useState(true); // v15.7 B1d: independent per-MCQ item audit
+  const [provenance,setProvenance]=useState(null); // v15.7 B2: what produced this worksheet
   const [factsPerQ,setFactsPerQ]=useState(3);
   const [coverage,setCoverage]=useState(null);
   // v15: the coverage panel referenced this state but it was declared only in
@@ -4254,6 +4483,10 @@ RULES FOR THIS BATCH:
     setBusy(true);setProg(0);setLogs([]);setBatches([]);setCoverage(null);setShowUncov(false);
     const ctl=new AbortController();setAbortCtl(ctl);
     const {model,level:toolLevel}=cfg.forTool('nclexgen');
+    // v15.7 B2: captured at run time — the profile can change before the artifact is exported.
+    const _aud=cfg.forTool('itemAudit');
+    setProvenance({genModel:model,genLevel:toolLevel,promptLabel:'NCLEX v4.2',
+      auditModel:runAudit?_aud.model:'',auditLevel:runAudit?_aud.level:''});
     const tk=Array.from({length:numBatches},(_,i)=>({id:i+1,name:'Batch '+(i+1),status:'pending',q:0}));
     setTrackers(tk);
 
@@ -4375,7 +4608,89 @@ GROUNDING ADAPTER — INPUT FORM ONLY:
           log(`  Coverage: ${batchCited}/${alloc.targets.length} allocated fact(s) cited${missed>0?` — ${missed} not referenced`:''}.`,missed>0?'warn':'ok');
         }
 
-        results.push({n:b,raw,...P,concepts,qCount:qs.length,factIds:[...ngParseFactIds(raw)]});
+        // ── v15.7 B1c/B1d: deterministic validation, then an independent audit ──
+        // The in-call gate on the DISTRIBUTION line is self-reported and unfalsifiable.
+        // These two passes are the external witness: code first (free, catches the
+        // self-report gap), then fresh attention on each MCQ (costs a call per item).
+        let workRaw=raw;
+        let wsIssues=validateNCLEXWorksheet(workRaw,size);
+        let wsErr=wsIssues.filter(x=>x.sev==='error').length;
+        log('  Worksheet check: '+wsErr+' error(s), '+(wsIssues.length-wsErr)+' warning(s).',wsErr?'err':'ok');
+        for(const x of wsIssues.filter(x=>x.sev==='error').slice(0,6))log('    ✕ '+x.msg,'err');
+        let auditRows=[];
+        if(runAudit&&!wsErr){
+          const {model:aModel,level:aLevel}=cfg.forTool('itemAudit');
+          const parsedItems=ngSplitNumbered(ngSplitParts(workRaw).p3).map(ngParseItem);
+          const keyItems=new Map(ngSplitNumbered(ngSplitParts(workRaw).p4).map(k=>[k.num,ngParseKeyItem(k)]));
+          const gate=nclexGateItems(parsedItems);
+          const eligible=gate.filter(g=>g.eligible);
+          const naCount=gate.length-eligible.length;
+          if(!eligible.length){
+            log('  Audit skipped for this batch: no single-best-answer MCQ items ('+naCount+' N/A).','warn');
+          }else{
+            log('  Auditing '+eligible.length+' MCQ item(s) · '+aModel+' [Thinking: '+aLevel+']'+(naCount?' · '+naCount+' N/A (rubric is MCQ-only)':''),'warn');
+            let adone=0;
+            auditRows=await itemRunPool(eligible,3,async(g)=>{
+              const k=keyItems.get(g.num);
+              const q={type:'MCQ',stem:g.item.stem,options:g.item.options,
+                correctAnswers:[(String(k&&k.answer||'').match(/\b([A-Z])\b/)||[])[1]||''].filter(Boolean)};
+              let v;
+              try{
+                const out=await callGemini(cfg.apiKey,aModel,[{text:itemBuildAuditPrompt(itemAuditPayload('',q))}],true,aLevel,ctl.signal,1);
+                v=itemParseAuditVerdict(out);
+              }catch(e){
+                if(e.name==='AbortError')throw e;
+                v={status:'ERROR',criterion:'',detail:e.message||String(e),warns:[],autoRepairable:false};
+              }
+              adone++;
+              log('    '+(v.status==='PASS'?'✓':v.status==='FAIL'?'✗':v.status==='REVIEW'?'?':'!')+' Q'+g.num+' '+v.status+(v.criterion?' — '+v.criterion:'')+'  ('+adone+'/'+eligible.length+')',
+                v.status==='FAIL'?'err':v.status==='PASS'?'ok':'warn');
+              for(const w of v.warns||[])log('      ⓘ Q'+g.num+' WARN '+w.criterion+': '+w.detail,'warn');
+              return{...g,...v};
+            },ctl.signal);
+
+            const fails=auditRows.filter(r=>r.status==='FAIL');
+            const accuracy=fails.filter(r=>!r.autoRepairable);
+            for(const r of accuracy)
+              log('    ⚠ Q'+r.num+' failed on answer accuracy — NOT auto-repaired. The key here is the model\'s own and there is no reference standard; check it yourself.','err');
+            const repairable=fails.filter(r=>r.autoRepairable);
+            if(repairable.length){
+              log('  Repairing '+repairable.length+' item(s), one round, no re-audit...','warn');
+              const {model:gModel,level:gLevel}=cfg.forTool('nclexgen');
+              await itemRunPool(repairable,3,async(r)=>{
+                try{
+                  const k=keyItems.get(r.num);
+                  const keyRaw=k?k.raw:'';
+                  const out=await callGemini(cfg.apiKey,gModel,[{text:ngBuildRepairPrompt({item:r.item,criterion:r.criterion,keyBlock:keyRaw})}],true,gLevel,ctl.signal,1,null,null,{responseMimeType:'application/json'});
+                  const fixed=extractJSON(out);
+                  if(!fixed||!fixed.stem||!Array.isArray(fixed.options)||!fixed.options.length)throw new Error('repair returned no usable item');
+                  const strat=(keyRaw.match(/^\s*Strategy:[^\n]*$/m)||[])[0]||'';
+                  const tags=(keyRaw.match(/^\s*Tags:[^\n]*$/m)||[])[0]||'';
+                  const parts=ngSplitParts(workRaw);
+                  const newP3=ngSpliceBlock(parts.p3,r.num,ngRenderQuestionBlock(r.num,fixed));
+                  const newP4=ngSpliceBlock(parts.p4,r.num,ngRenderKeyBlock(r.num,fixed,strat,tags));
+                  if(newP3===null||newP4===null)throw new Error('could not locate the item unambiguously — worksheet left untouched');
+                  workRaw=workRaw.replace(parts.p3,newP3).replace(parts.p4,newP4);
+                  log('    ✓ Q'+r.num+' repaired'+(fixed.repairNote?' — '+fixed.repairNote:''),'ok');
+                }catch(e){
+                  if(e.name==='AbortError')throw e;
+                  log('    ✗ Q'+r.num+' repair failed: '+(e.message||e)+' (original kept)','err');
+                }
+              },ctl.signal);
+              // Re-run the deterministic pass over the spliced worksheet. Repaired items are
+              // deliberately NOT re-audited: one round, and anything still failing surfaces.
+              wsIssues=validateNCLEXWorksheet(workRaw,size);
+              wsErr=wsIssues.filter(x=>x.sev==='error').length;
+              log('  Re-checked after repair: '+wsErr+' error(s), '+(wsIssues.length-wsErr)+' warning(s).',wsErr?'err':'ok');
+            }
+          }
+        }else if(runAudit&&wsErr){
+          log('  Audit skipped for this batch: fix the '+wsErr+' structural error(s) first — auditing a broken worksheet spends quota to grade a known failure.','warn');
+        }
+
+        const RP=ngSplitParts(workRaw);
+        results.push({n:b,raw:workRaw,...RP,concepts,qCount:qs.length,factIds:[...ngParseFactIds(workRaw)],
+          wsIssues,auditRows:auditRows.map(r=>({num:r.num,status:r.status,criterion:r.criterion,detail:r.detail,warns:r.warns||[]}))});
         setBatches([...results]);
         produced+=qs.length;
         setTrackers(p=>p.map(t=>t.id===b?{...t,status:'done',q:qs.length}:t));
@@ -4401,7 +4716,7 @@ GROUNDING ADAPTER — INPUT FORM ONLY:
     }catch(e){
       if(e.name==='AbortError')log('Cancelled.','warn');else log('Error: '+e.message,'err');
     }finally{setBusy(false);setAbortCtl(null);setProg(100);setLiveKB(0);}
-  },[cfg,targetCount,batchSize,numBatches,outcomes,points,focusContext,K.knowledgeBase,kbTiers,kbConditionFilter,log,allocMode,factsPerQ]);
+  },[cfg,targetCount,batchSize,numBatches,outcomes,points,focusContext,K.knowledgeBase,kbTiers,kbConditionFilter,log,allocMode,factsPerQ,runAudit]);
 
   // ── Assemble worksheet (renumbered across batches) ──
   const ws=useMemo(()=>{
@@ -4424,9 +4739,24 @@ GROUNDING ADAPTER — INPUT FORM ONLY:
       +ws.questions.join('\n\n')+'\n\n<div class="pagebreak"></div>\n\n## Answer Key\n\n'+ws.answers.join('\n\n');
   },[ws]);
 
-  const workMd=useMemo(()=>batches.map(b=>
-    '## Batch '+b.n+'\n\n### Concept Inventory\n\n'+(b.p1||'(none)')+'\n\n### Selection & Audit\n\n'+(b.p2||'(none)')+(b.dist?'\n\n### Distribution\n'+b.dist:'')
-  ).join('\n\n---\n\n'),[batches]);
+  // v15.7: the audit trail now carries the deterministic worksheet findings, the per-item
+  // audit verdicts, and the provenance stamp. The printable worksheet stays clean.
+  const workMd=useMemo(()=>(provenance?latteProvenanceStamp(provenance):'')+batches.map(b=>{
+    const wi=b.wsIssues||[],ar=b.auditRows||[];
+    const errs=wi.filter(x=>x.sev==='error');
+    let s='## Batch '+b.n+'\n\n### Concept Inventory\n\n'+(b.p1||'(none)')+'\n\n### Selection & Audit\n\n'+(b.p2||'(none)')+(b.dist?'\n\n### Distribution\n'+b.dist:'');
+    if(wi.length){
+      s+='\n\n### Worksheet checks (deterministic)\n\n'+errs.length+' error(s), '+(wi.length-errs.length)+' warning(s)\n\n'
+        +wi.map(x=>'- '+(x.sev==='error'?'**ERROR**':'warn')+': '+x.msg).join('\n');
+    }
+    if(ar.length){
+      s+='\n\n### Item quality audit\n\n'
+        +ar.map(r=>'- Q'+r.num+': **'+r.status+'**'+(r.criterion?' — '+r.criterion:'')+(r.detail&&r.status!=='PASS'?' — '+r.detail:'')
+          +(r.warns||[]).map(w=>'\n    - warn '+w.criterion+': '+w.detail).join('')).join('\n');
+      s+='\n\nN/A means the rubric does not apply to that format — it is not a pass. No total score is computed.';
+    }
+    return s;
+  }).join('\n\n---\n\n'),[batches,provenance]);
 
   const totalConcepts=useMemo(()=>new Set(batches.flatMap(b=>b.concepts.map(c=>c.name))).size,[batches]);
   const canRun=cfg.apiKey&&(K.knowledgeBase.conditions||[]).length&&!busy;
@@ -4472,6 +4802,15 @@ GROUNDING ADAPTER — INPUT FORM ONLY:
           <input type="checkbox" checked={allocMode} onChange={e=>setAllocMode(e.target.checked)} style={{accentColor:'var(--accent)',marginTop:2}}/>
           <span>Fact allocation <span className="badge-opt">recommended</span>
             <div style={{fontSize:10,color:'var(--text-dim)',marginTop:2,lineHeight:1.5}}>The app picks each batch's facts instead of resending the whole Knowledge Base and asking the model to avoid repeats. Cuts tokens sharply and makes duplicates structurally impossible. Turn off to compare against the original behaviour.</div>
+          </span>
+        </label>
+        {/* v15.7 B1d: the worksheet's own quality gate is self-reported. This is the
+            external check — free structural validation always, plus an optional
+            independent review of each MCQ. */}
+        <label style={{display:'flex',alignItems:'flex-start',gap:8,fontSize:12,color:'var(--text)',cursor:'pointer',marginTop:10}}>
+          <input type="checkbox" checked={runAudit} onChange={e=>setRunAudit(e.target.checked)} style={{accentColor:'var(--accent)',marginTop:2}}/>
+          <span>Independent item audit
+            <div style={{fontSize:10,color:'var(--text-dim)',marginTop:2,lineHeight:1.5}}>Every worksheet is structurally validated in code for free — question/answer counts, a rationale per option, truncation, and whether the DISTRIBUTION line matches what was actually produced. This adds a second review pass over each single-best-answer MCQ against 11 stop criteria, in a fresh call that never sees the source facts. <b style={{color:'var(--text)'}}>Costs one extra API call per MCQ</b> ({batchSize} per batch at most), so a run takes materially longer. Failed items are rewritten once, except answer-accuracy failures, which are surfaced for you instead.</div>
           </span>
         </label>
         {allocMode&&<div className="field-block" style={{marginTop:10,marginBottom:0}}>
@@ -4851,6 +5190,26 @@ function neiaTerminologyScan(text,where,issues){
       issues.push({sev:'warn',msg:`${where}: terminology \u2014 ${r.msg} (found "${hits[0]}")`});
   }
 }
+// v15.7 B5: the unsafe-abbreviation subset only, for Anki. Deliberately placed AFTER
+// neiaTerminologyScan so the rules and their primary scanner stay adjacent.
+// The AUTHORITY here is medication-safety practice \u2014 which the NEIA Terminology Reference
+// reproduces rather than originates. Do NOT claim NEIA validates flashcards; it validated
+// exam items. Cloze cards are the highest medication-safety surface in the suite: the Anki
+// prompt explicitly prioritizes doses, units, routes, and thresholds, and a missing leading
+// zero on a card is a dose error drilled to automaticity.
+// The preferred-vocabulary half (client / PHCP / UAP) is DELIBERATELY excluded: cloze cards
+// test recall of source content, not NCLEX register, and rewriting mid-cloze risks breaking
+// the deletion span for no learning benefit.
+const NEIA_UNSAFE_ABBREV_MSGS=['q.d.','QOD','IU','"U"','trailing zero','leading zero'];
+function ankiUnsafeAbbrevScan(text,where,issues){
+  for(const r of NEIA_TERMINOLOGY_RULES){
+    if(!NEIA_UNSAFE_ABBREV_MSGS.some(k=>r.msg.includes(k)))continue; // skip vocabulary rules
+    r.re.lastIndex=0;
+    const hits=String(text||'').match(r.re);
+    if(hits&&hits.length)
+      issues.push({sev:'warn',msg:`${where}: ${r.msg} (found "${hits[0]}")`});
+  }
+}
 
 // Deterministic post-generation validation.
 // `allowedFactIds` is the packet actually sent to the model. Checking against the whole KB
@@ -4993,7 +5352,7 @@ function caseContentWords(s){
   return String(s||'').toLowerCase().replace(/[^a-z0-9\s]/g,' ').split(/\s+/)
     .filter(w=>w.length>2&&!CASE_STOPWORDS.has(w));
 }
-function caseItemHeuristics(q,issues,where){
+function itemHeuristics(q,issues,where){
   if((q.type||'')!=='MCQ')return;
   const opts=(q.options||[]).filter(o=>o&&o.text!=null&&String(o.text).trim());
   const keyLabels=new Set((q.correctAnswers||[]).map(String));
@@ -5197,7 +5556,7 @@ function validateCaseStudy(caseStudy,factIndex,allowedFactIds,expectedCondition)
       if(!(q.correctAnswers||[]).length)issues.push({sev:'error',msg:`${qn}: no correct answer`});
       neiaTerminologyScan(q.stem,`${qn} stem`,issues);
       for(const o of q.options||[])neiaTerminologyScan(o.text,`${qn} option ${o.label||'?'}`,issues);
-      caseItemHeuristics(q,issues,qn); // v15.6: MCQ-only telemetry, self-guarded on q.type
+      itemHeuristics(q,issues,qn); // v15.6: MCQ-only telemetry, self-guarded on q.type
       // v15.3: per-type structural contracts. The SATA range is not a convention — the
       // prompt's typeList states it verbatim: "5-6 options, 2-4 correct". v15.2 shipped
       // >4 as a warn on the mistaken belief the prompt named no range; ChatGPT's review
@@ -5343,6 +5702,21 @@ function caseToMarkdown(cs,{worksheetFactIds=true}={}){
 // A case that failed validation stays exportable — you may want to inspect or hand-correct it —
 // but the exported artifact must say so on its face, or an unverified case is indistinguishable
 // from a verified one once it leaves the app.
+// v15.7 B2: which configuration produced this artifact.
+// [LATTE-HEURISTIC]. TOOL_PROFILE_DEFAULTS lets model and reasoning level be changed per
+// tool at any time, so an artifact cannot be reconstructed from the config as it stands
+// later. And the June paper's limitations state intra-rater consistency was never measured,
+// so two runs of ONE configuration may not agree. When output quality shifts after a model
+// or prompt change, this stamp is the only way to answer which configuration made a given
+// worksheet or case. It belongs in the audit trail, not in the student-facing view.
+function latteProvenanceStamp({genModel,genLevel,auditModel,auditLevel,promptLabel}){
+  const L=['```',
+    'Generator: '+(genModel||'—')+' [Thinking: '+(genLevel||'—')+']'+(promptLabel?'   Prompt: '+promptLabel:''),
+    'Auditor:   '+(auditModel?auditModel+' [Thinking: '+(auditLevel||'—')+']':'not run')+'   Criteria: '+LATTE_STANDARDS_VERSION,
+    'Standards: terminology — Simms 2026 reference   Test Plan: '+NCLEX_TEST_PLAN_VERSION,
+    '```',''];
+  return L.join('\n');
+}
 function caseValidationStamp(issues){
   const errs=(issues||[]).filter(x=>x.sev==='error');
   const warns=(issues||[]).filter(x=>x.sev!=='error');
@@ -5380,24 +5754,30 @@ function caseIsGateEligible(q){
 // would guarantee eventual drift between the audited artifact and the printed one, and
 // cutting at the renderer's own boundary means a future field added to the answer key
 // cannot leak into the audit payload by accident.
+// v15.7 B1b: split so the auditor can review an item from ANY tool. The item block is
+// tool-agnostic; only the visible-context prefix differs. A standalone NCLEX worksheet item
+// is freestanding and passes an empty context, which is a strictly simpler payload than the
+// case version — an unfolding item needs its stage history, a worksheet item does not.
+function itemAuditPayload(visibleContext,q){
+  const opts=(q.options||[]).map(o=>'   '+(o.label||'')+'. '+(o.text||'')).join('\n');
+  const block=`═══ ITEM UNDER REVIEW ═══
+STEM: ${q.stem||''}
+${opts}
+KEYED ANSWER: ${(q.correctAnswers||[]).join(', ')||'—'}`;
+  const ctx=String(visibleContext||'').trim();
+  return ctx?ctx+'\n\n'+block:block;
+}
 function caseAuditPayload(cs,stageNumber,q){
   const stages=(cs.stages||[]);
   const ix=stages.findIndex(s=>Number(s.stageNumber)===Number(stageNumber));
   const through=ix>=0?stages.slice(0,ix+1):stages;
   const md=caseToMarkdown({...cs,stages:through,debrief:null},{worksheetFactIds:false});
   const cut=md.indexOf('\n<div class="pagebreak">');
-  const visible=(cut>=0?md.slice(0,cut):md).trim();
-  const opts=(q.options||[]).map(o=>'   '+(o.label||'')+'. '+(o.text||'')).join('\n');
-  return `${visible}
-
-═══ ITEM UNDER REVIEW ═══
-STEM: ${q.stem||''}
-${opts}
-KEYED ANSWER: ${(q.correctAnswers||[]).join(', ')||'—'}`;
+  return itemAuditPayload((cut>=0?md.slice(0,cut):md).trim(),q);
 }
 // Criteria are stated in our own words with the source cited, never reproduced verbatim —
 // the rubric is Elsevier-copyrighted and this repo ships GPL-3.0. Same decision as v4.2.
-function caseBuildAuditPrompt(payload){
+function itemBuildAuditPrompt(payload){
   return `═══ NCLEX ITEM QUALITY REVIEW ═══
 
 ROLE: You are reviewing ONE multiple-choice item from an unfolding nursing case study.
@@ -5462,15 +5842,15 @@ ${payload}`;
 // Verdict vocabulary. REVIEW exists because the June study measured both rater types
 // misclassifying ~86-88% of moderate-quality items, nearly all by rating them upward —
 // forcing a borderline item into PASS is exactly the failure mode the data predicts.
-const CASE_AUDIT_STATUS=new Set(['PASS','FAIL','REVIEW','N/A','ERROR']);
+const ITEM_AUDIT_STATUS=new Set(['PASS','FAIL','REVIEW','N/A','ERROR']);
 // Criterion 3 is the ONLY one where the auditor overrules a keyed answer with no reference
 // standard, and it sits in the AI's second-weakest measured domain (ICC 0.575). A wrong
 // auto-repair here silently replaces a correct answer with an incorrect one, so an
 // answer-accuracy FAIL is surfaced for human review and never repaired automatically.
-function caseAuditIsAnswerAccuracy(criterion){
+function itemAuditIsAnswerAccuracy(criterion){
   return /answer\s*accuracy|correct\s*answer\s*[:\-]?\s*accuracy/i.test(String(criterion||''));
 }
-function caseParseAuditVerdict(text){
+function itemParseAuditVerdict(text){
   const raw=String(text||'');
   const lines=raw.split('\n').map(l=>l.trim()).filter(Boolean);
   const warns=[];
@@ -5490,12 +5870,12 @@ function caseParseAuditVerdict(text){
     status='PASS';criterion='';
   }
   return{status,criterion,detail,warns,
-    autoRepairable:status==='FAIL'&&!caseAuditIsAnswerAccuracy(criterion)};
+    autoRepairable:status==='FAIL'&&!itemAuditIsAnswerAccuracy(criterion)};
 }
 // Bounded concurrency. A 5-stage case at 2 questions/stage is ~6 MCQ-eligible items; at the
 // June paper's measured 1.7-2.3 min/item for reasoning-enhanced models, serialized audits
 // would run 10-14 minutes and make the feature unusable. Width 3 by default.
-async function caseRunPool(items,width,worker,signal){
+async function itemRunPool(items,width,worker,signal){
   const out=new Array(items.length);
   let next=0;
   const lanes=Array.from({length:Math.max(1,Math.min(width,items.length||1))},async()=>{
@@ -5565,7 +5945,7 @@ ${JSON.stringify(q,null,2)}
 
 ${caseRenderFactPacket(conditionName,facts)}`;
 }
-function caseAuditSummary(results){
+function itemAuditSummary(results){
   const n=s=>results.filter(r=>r.status===s).length;
   return{pass:n('PASS'),fail:n('FAIL'),review:n('REVIEW'),na:n('N/A'),error:n('ERROR'),
     total:results.length,
@@ -5595,6 +5975,7 @@ function CaseStudyGenerator(){
   const [runAudit,setRunAudit]=useState(true);
   const [audit,setAudit]=useState(null);
   const [auditPhase,setAuditPhase]=useState('');
+  const [provenance,setProvenance]=useState(null); // v15.7 B2: what produced this artifact
   const log=useCallback((msg,t='')=>setLogs(p=>[...p,{msg,t}]),[]);
 
   const conditions=K.knowledgeBase.conditions||[];
@@ -5611,9 +5992,14 @@ function CaseStudyGenerator(){
     if(!activeCondition){log('Build the LATTE Knowledge Base first, then pick a condition.','err');return;}
     if(!selectedFacts.length){log('This condition has no facts at the selected tiers. Include Tier 2/3 or pick another condition.','err');return;}
     setBusy(true);setLogs([]);setCaseStudy(null);setIssues([]);setCoverage(null);setLiveKB(0);
-    setAudit(null);setAuditPhase('');
+    setAudit(null);setAuditPhase('');setProvenance(null);
     const ctl=new AbortController();setAbortCtl(ctl);
     const {model,level}=cfg.forTool('cases');
+    // Captured at run time, not read from config at render time — the profile can change
+    // between generating an artifact and exporting it.
+    const _aud=cfg.forTool('itemAudit');
+    setProvenance({genModel:model,genLevel:level,promptLabel:'case builder v15.7',
+      auditModel:runAudit?_aud.model:'',auditLevel:runAudit?_aud.level:''});
     try{
       log('Selected '+selectedFacts.length+' grounded fact(s) for '+activeCondition.name+'.','ok');
       log('Model: '+model+' [Thinking: '+level+']'+(cfg.autoProfile?' (auto)':''),'warn');
@@ -5645,7 +6031,7 @@ function CaseStudyGenerator(){
       // consume audit calls. An ungrounded item is already disqualified, and paying for a
       // rubric review of it would be spending the user's quota to grade a known failure.
       if(runAudit&&errCount===0){
-        const {model:aModel,level:aLevel}=cfg.forTool('casesAudit');
+        const {model:aModel,level:aLevel}=cfg.forTool('itemAudit');
         const items=caseGateItems(parsed);
         const eligible=items.filter(i=>i.eligible);
         const naCount=items.length-eligible.length;
@@ -5658,12 +6044,12 @@ function CaseStudyGenerator(){
           setAuditPhase('audit');
           log('Auditing '+eligible.length+' MCQ item(s) against 11 stop criteria · '+aModel+' [Thinking: '+aLevel+']'+(naCount?' · '+naCount+' item(s) N/A (rubric is MCQ-only)':''),'warn');
           let done=0;
-          const results=await caseRunPool(eligible,3,async(it)=>{
+          const results=await itemRunPool(eligible,3,async(it)=>{
             const payload=caseAuditPayload(parsed,it.stageNumber,it.q);
             let verdict;
             try{
-              const out=await callGemini(cfg.apiKey,aModel,[{text:caseBuildAuditPrompt(payload)}],true,aLevel,ctl.signal,1);
-              verdict=caseParseAuditVerdict(out);
+              const out=await callGemini(cfg.apiKey,aModel,[{text:itemBuildAuditPrompt(payload)}],true,aLevel,ctl.signal,1);
+              verdict=itemParseAuditVerdict(out);
             }catch(e){
               if(e.name==='AbortError')throw e;
               verdict={status:'ERROR',criterion:'',detail:e.message||String(e),warns:[],autoRepairable:false};
@@ -5674,7 +6060,7 @@ function CaseStudyGenerator(){
             return{...it,...verdict};
           },ctl.signal);
 
-          const sum=caseAuditSummary(results.concat(Object.values(seed)));
+          const sum=itemAuditSummary(results.concat(Object.values(seed)));
           log('Audit: '+sum.pass+' pass · '+sum.fail+' fail · '+sum.review+' review'+(sum.error?' · '+sum.error+' error':'')+(sum.na?' · '+sum.na+' N/A':'')+'.',sum.fail?'err':'ok');
           for(const r of results){
             if(r.status==='FAIL')log('  ✗ Stage '+r.stageNumber+' '+(r.q.id||'')+' FAIL — '+r.criterion,'err');
@@ -5691,7 +6077,7 @@ function CaseStudyGenerator(){
             setAuditPhase('repair');
             log('Repairing '+repairable.length+' item(s) in a fresh call (one round, no re-audit)...','warn');
             let repaired=0;
-            await caseRunPool(repairable,3,async(r)=>{
+            await itemRunPool(repairable,3,async(r)=>{
               try{
                 const visible=caseAuditPayload(parsed,r.stageNumber,r.q);
                 const out=await callGemini(cfg.apiKey,model,[{text:caseBuildRepairPrompt({
@@ -5795,10 +6181,11 @@ function CaseStudyGenerator(){
   const auditTotals=useMemo(()=>{
     const n=s=>auditRows.filter(r=>r.status===s).length;
     return{pass:n('PASS'),fail:n('FAIL'),review:n('REVIEW'),na:n('N/A'),error:n('ERROR'),
-      accuracyFails:auditRows.filter(r=>r.status==='FAIL'&&caseAuditIsAnswerAccuracy(r.criterion)).length};
+      accuracyFails:auditRows.filter(r=>r.status==='FAIL'&&itemAuditIsAnswerAccuracy(r.criterion)).length};
   },[auditRows]);
 
-  const caseMd=useMemo(()=>caseStudy?caseValidationStamp(issues)+caseToMarkdown(caseStudy):'',[caseStudy,issues]);
+  // The audit-trail view carries the provenance stamp; the printable student view does not.
+  const caseMd=useMemo(()=>caseStudy?caseValidationStamp(issues)+(provenance?latteProvenanceStamp(provenance):'')+caseToMarkdown(caseStudy):'',[caseStudy,issues,provenance]);
   const casePrintMd=useMemo(()=>caseStudy?caseValidationStamp(issues)+caseToMarkdown(caseStudy,{worksheetFactIds:false}):'',[caseStudy,issues]);
   // Every checkbox can be unchecked, which would send the model an empty type list.
   const enabledTypeCount=Object.values(types).filter(Boolean).length;
@@ -6117,7 +6504,11 @@ function App(){
   // the manual Flash/Pro toggle. Opt-in and persisted, so an untouched build behaves
   // exactly as before and a customized profile survives reload.
   const [autoProfile,setAutoProfile]=useState(()=>{try{const v=localStorage.getItem('latte_auto_profile_v1');return v===null?true:v==='1';}catch{return true;}});
-  const [profiles,setProfiles]=useState(()=>{try{const r=localStorage.getItem('latte_tool_profiles_v1');const p=r?JSON.parse(r):null;return p&&typeof p==='object'&&!Array.isArray(p)?{...TOOL_PROFILE_DEFAULTS,...p}:TOOL_PROFILE_DEFAULTS;}catch{return TOOL_PROFILE_DEFAULTS;}});
+  // v15.7: `casesAudit` was renamed to `itemAudit`. A saved profile from v15.6 still carries
+  // the old key, which would silently fall back to defaults and quietly change the model a
+  // user had deliberately chosen. Migrate on read, and drop the stale key so it cannot
+  // resurface later. Keep this shim — removing it re-breaks anyone who has not re-saved.
+  const [profiles,setProfiles]=useState(()=>{try{const r=localStorage.getItem('latte_tool_profiles_v1');const p=r?JSON.parse(r):null;if(!p||typeof p!=='object'||Array.isArray(p))return TOOL_PROFILE_DEFAULTS;if(p.casesAudit&&!p.itemAudit){p.itemAudit=p.casesAudit;}delete p.casesAudit;return{...TOOL_PROFILE_DEFAULTS,...p};}catch{return TOOL_PROFILE_DEFAULTS;}});
   useEffect(()=>{try{localStorage.setItem('latte_auto_profile_v1',autoProfile?'1':'0');localStorage.setItem('latte_tool_profiles_v1',JSON.stringify(profiles));}catch(e){}},[autoProfile,profiles]);
   const setProfile=useCallback((id,patch)=>setProfiles(p=>({...p,[id]:{...(p[id]||TOOL_PROFILE_DEFAULTS[id]||{m:'flash',lv:'low'}),...patch}})),[]);
   const resetProfiles=useCallback(()=>setProfiles(TOOL_PROFILE_DEFAULTS),[]);

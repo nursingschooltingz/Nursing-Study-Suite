@@ -43,7 +43,7 @@ const clusterA = spanFrom('const CASE_CLINICAL_TOKEN_RE', 'function validateStag
 const clusterB = spanFrom('function validateStageTiming', '\n  return issues;\n}');
 const CASE = new Function(
   clusterA.slice(0, clusterA.lastIndexOf('function validateStageTiming')) + clusterB +
-  ';return {CASE_CLINICAL_TOKEN_RE,CASE_CLINICAL_TERM_RE,scanUncitedProse,caseNormalizeClinical,caseAuditTextValues,caseAuditDatumValues,validateCaseStudy,validateStageTiming,NEIA_TERMINOLOGY_RULES,neiaTerminologyScan,CASE_SUPPORT_TYPES,caseParseThreshold,caseSplitValue,caseUnitsCompatible,caseThresholdSatisfied,caseItemHeuristics,caseContentWords,caseDifficultySignals};'
+  ';return {CASE_CLINICAL_TOKEN_RE,CASE_CLINICAL_TERM_RE,scanUncitedProse,caseNormalizeClinical,caseAuditTextValues,caseAuditDatumValues,validateCaseStudy,validateStageTiming,NEIA_TERMINOLOGY_RULES,neiaTerminologyScan,CASE_SUPPORT_TYPES,caseParseThreshold,caseSplitValue,caseUnitsCompatible,caseThresholdSatisfied,itemHeuristics,caseContentWords,caseDifficultySignals};'
 )();
 const nclexChunkText = new Function(spanFrom('function nclexChunkText', '\n  return chunks;\n}') + ';return nclexChunkText;')();
 const nclexDedup = new Function(spanFrom('function nclexDedup', '\n}') + ';return nclexDedup;')();
@@ -61,10 +61,22 @@ const AUDIT = new Function('CASE_QUESTION_RULES', 'caseRenderFactPacket',
   spanFrom('function caseToMarkdown(', '\n  return L.join(\'\\n\');\n}') +
   spanFrom('function caseIsGateEligible(', 'function CaseStudyGenerator()')
     .replace(/function CaseStudyGenerator\(\)$/, '') +
-  ';return {caseToMarkdown,caseIsGateEligible,caseAuditPayload,caseBuildAuditPrompt,' +
-  'caseParseAuditVerdict,caseAuditIsAnswerAccuracy,caseRunPool,caseGateItems,caseAuditSummary,' +
-  'caseBuildRepairPrompt,CASE_AUDIT_STATUS};'
+  ';return {caseToMarkdown,caseIsGateEligible,caseAuditPayload,itemBuildAuditPrompt,' +
+  'itemParseAuditVerdict,itemAuditIsAnswerAccuracy,itemRunPool,caseGateItems,itemAuditSummary,' +
+  'caseBuildRepairPrompt,ITEM_AUDIT_STATUS};'
 )('«SHARED-QUESTION-RULES»', () => '«FACT-PACKET»');
+
+// v15.7 B1c: the worksheet validator depends on the ng* parsers, neiaTerminologyScan, and
+// itemHeuristics. Those live in different regions of the file, so they are stitched here —
+// still extracted, never copied.
+const WS = new Function(
+  spanFrom('function ngSplitParts(', 'function ngRenumber(').replace(/function ngRenumber\($/, '') +
+  spanFrom('const NEIA_TERMINOLOGY_RULES=', '\n}', 'const NEIA_TERMINOLOGY_RULES=') +
+  spanFrom('const CASE_LEN_RATIO_HI=', '\n}\n// Enums exactly as caseBuildPrompt defines them') +
+  // Leading newline is load-bearing: the preceding span ends in a line comment, which would
+  // otherwise swallow this return and make the whole extraction silently undefined.
+  '\n;return {validateNCLEXWorksheet,ngParseItem,ngParseKeyItem,ngParseDistribution,ngSplitParts};'
+)();
 
 const hit = (re, x) => { re.lastIndex = 0; return re.test(x); };
 const has = (issues, frag, sev) => issues.some(i => i.msg.includes(frag) && (!sev || i.sev === sev));
@@ -461,7 +473,7 @@ section('v15.6 — instantiated values');
 /* ── 15. v15.6 — deterministic item heuristics (item 3) ── */
 section('v15.6 — item heuristics');
 {
-  const H = (q) => { const i = []; CASE.caseItemHeuristics(q, i, 'Q'); return i; };
+  const H = (q) => { const i = []; CASE.itemHeuristics(q, i, 'Q'); return i; };
   const mcq = (stem, texts, key) => ({
     type: 'MCQ', stem,
     options: texts.map((tx, n) => ({ label: 'ABCD'[n], text: tx })),
@@ -535,7 +547,7 @@ section('v15.6 — item heuristics');
   t('Ordering is out of scope', H(Object.assign(mcq('x', [w(30, 1), w(5, 2), w(5, 3)], 'A'), { type: 'Ordering' })).length === 0);
   t('an MCQ whose key label matches no option is skipped safely',
     !H(mcq('What should the nurse do?', [w(30, 1), w(5, 2), w(5, 3), w(5, 4)], 'Z')).some(x => /option length/.test(x.msg)));
-  t('heuristics are wired into validateCaseStudy', S.includes('caseItemHeuristics(q,issues,qn);'));
+  t('heuristics are wired into validateCaseStudy', S.includes('itemHeuristics(q,issues,qn);'));
   t('thresholds are declared as LATTE heuristics, not NEIA', S.includes('const CASE_LEN_RATIO_HI=1.4'));
 }
 
@@ -755,7 +767,7 @@ section('v15.6 — case audit pass');
   t('payload shows what the student sees, including difficulty', p1.includes('Difficulty'));
 
   // ── Prompt (4c, 4e) ──
-  const ap = A.caseBuildAuditPrompt('PAYLOAD');
+  const ap = A.itemBuildAuditPrompt('PAYLOAD');
   t('audit prompt embeds the payload', ap.includes('PAYLOAD'));
   t('audit prompt lists eleven criteria', /11\. TEST PLAN ALIGNMENT/.test(ap) && /1\. STEM CLARITY/.test(ap));
   t('audit prompt makes alignment advisory only', ap.includes('It may NEVER produce a FAIL'));
@@ -766,7 +778,7 @@ section('v15.6 — case audit pass');
   t('audit prompt never ships the fact packet', !ap.includes('«FACT-PACKET»'));
 
   // ── Verdict parsing (4d, 4e) ──
-  const V = A.caseParseAuditVerdict;
+  const V = A.itemParseAuditVerdict;
   t('PASS parses', V('PASS').status === 'PASS');
   t('FAIL with an em dash parses', V('FAIL — Distractor Plausibility').status === 'FAIL');
   t('FAIL captures the criterion', V('FAIL — Distractor Plausibility').criterion === 'Distractor Plausibility');
@@ -791,7 +803,7 @@ section('v15.6 — case audit pass');
 
   // Answer accuracy never auto-repairs.
   t('answer-accuracy FAIL is not auto-repairable', V('FAIL — Answer Accuracy').autoRepairable === false);
-  t('"Correct Answer: Accuracy" is recognised', A.caseAuditIsAnswerAccuracy('Correct Answer: Accuracy'));
+  t('"Correct Answer: Accuracy" is recognised', A.itemAuditIsAnswerAccuracy('Correct Answer: Accuracy'));
   t('a distractor FAIL IS auto-repairable', V('FAIL — Distractor Length').autoRepairable === true);
   t('a PASS is never auto-repairable', V('PASS').autoRepairable === false);
   t('a REVIEW is never auto-repairable', V('REVIEW — unclear').autoRepairable === false);
@@ -807,7 +819,7 @@ section('v15.6 — case audit pass');
       A.caseGateItems(mixed).length === 2 && A.caseGateItems(mixed).filter(i => i.eligible).length === 1);
   }
   {
-    const sum = A.caseAuditSummary([{ status: 'PASS', warns: [] }, { status: 'FAIL', warns: [{}] }, { status: 'N/A', warns: [] }, { status: 'REVIEW', warns: [] }]);
+    const sum = A.itemAuditSummary([{ status: 'PASS', warns: [] }, { status: 'FAIL', warns: [{}] }, { status: 'N/A', warns: [] }, { status: 'REVIEW', warns: [] }]);
     t('summary counts each status', sum.pass === 1 && sum.fail === 1 && sum.na === 1 && sum.review === 1);
     t('summary counts warnings', sum.warns === 1);
     t('summary reports no score, percentage, or band',
@@ -819,7 +831,7 @@ section('v15.6 — case audit pass');
     const order = [];
     let live = 0, peak = 0;
     const work = Array.from({ length: 9 }, (_, i) => i);
-    const res = (() => A.caseRunPool(work, 3, async (x) => {
+    const res = (() => A.itemRunPool(work, 3, async (x) => {
       live++; peak = Math.max(peak, live);
       await new Promise(r => setTimeout(r, 5));
       live--; order.push(x);
@@ -831,7 +843,7 @@ section('v15.6 — case audit pass');
   {
     const ctl = new AbortController();
     ctl.abort();
-    global.__abortCheck = A.caseRunPool([1, 2, 3], 3, async x => x, ctl.signal)
+    global.__abortCheck = A.itemRunPool([1, 2, 3], 3, async x => x, ctl.signal)
       .then(() => 'resolved', e => e.name);
   }
 
@@ -849,10 +861,13 @@ section('v15.6 — case audit pass');
   t('repair prompt requires answerability from already-shown data', rp.includes('Do not depend on data the student has not seen'));
 
   // ── Wiring ──
-  t('casesAudit profile defaults to pro + high', /casesAudit:\{m:'pro',lv:'high'\}/.test(S));
-  t('casesAudit has a profile row', S.includes("{id:'casesAudit',label:'Case studies · audit'}"));
+  t('itemAudit profile defaults to pro + high', /itemAudit:\{m:'pro',lv:'high'\}/.test(S));
+  t('itemAudit has a profile row', S.includes("{id:'itemAudit',label:'Item quality · audit'}"));
+  t('there is exactly ONE audit profile row, not one per source tool',
+    (S.match(/label:'[^']*·\s*audit'/g) || []).filter(x => /Item quality/.test(x)).length === 1 && !S.includes("id:'nclexgenAudit'"));
+  t('the renamed profile key is migrated for saved configs', S.includes('if(p.casesAudit&&!p.itemAudit)'));
   t('audit runs only when the case has zero structural errors', S.includes('if(runAudit&&errCount===0){'));
-  t('the pool is bounded at width 3', S.includes('caseRunPool(eligible,3,'));
+  t('the pool is bounded at width 3', S.includes('itemRunPool(eligible,3,'));
   t('the abort signal is threaded into the pool', S.includes('},ctl.signal);'));
   t('repaired items are re-validated', S.includes('allIssues=revalidate(parsed);'));
   t('answer-accuracy failures are excluded from repair', S.includes('r.status===\'FAIL\'&&!r.autoRepairable'));
@@ -917,9 +932,135 @@ section('v15.6 — retest fixture');
     t('the seeded stem-clarity item really does contain a negative construction',
       /EXCEPT/.test(JSON.stringify(F.items.find(i => i.seededCriterion === 'Stem Clarity'))));
   }
-  t('the retest runner exists and is not wired into this harness',
-    fs.existsSync('neia-retest.js') && !S.includes('neia-retest'));
+  // The runner must exist but never EXECUTE from this harness or the app — it costs live
+  // API calls. A documentation mention (e.g. in the HTML header comment) is fine; an
+  // invocation is not.
+  t('the retest runner exists', fs.existsSync('neia-retest.js'));
+  t('the retest runner is never invoked from this harness',
+    !/require\(['"].*neia-retest/.test(fs.readFileSync('latte-tests.js', 'utf8')));
+  t('the app never invokes the retest runner', !/neia-retest\.js['"]\s*\)/.test(S));
   t('retest reports are gitignored', /neia-retest-report/.test(fs.readFileSync('.gitignore', 'utf8')));
+}
+
+/* ── 20. v15.7 — validateNCLEXWorksheet (B1c) ── */
+section('v15.7 — worksheet validator');
+{
+  const V = WS.validateNCLEXWorksheet;
+  // Minimal but structurally faithful worksheet builder.
+  const mkQ = (n, opts) => `  ${n}. A client reports new dyspnea. Which action should the nurse take first?\n\n` +
+    (opts || ['Elevate the head of the bed', 'Offer a glass of water', 'Dim the room lights', 'Raise the side rails'])
+      .map((tx, i) => `     ${'ABCD'[i]}. ${tx}`).join('\n');
+  const mkA = (n, whys, tier) => `  ${n}. ANSWER: A\n` +
+    (whys || ['A', 'B', 'C', 'D']).map(l => `     Why ${l} is ${l === 'A' ? 'correct' : 'wrong'}: reasoning here. (Source: C${n})`).join('\n') +
+    `\n     Strategy: airway and breathing come first.\n     Tags: NCLEX::RiskReduction | LATTE::Assess | Tier ${tier || 1} | Take Action`;
+  const build = ({ n = 2, dist, whys, opts, truncateLast } = {}) => {
+    const qs = Array.from({ length: n }, (_, i) => mkQ(i + 1, opts)).join('\n\n');
+    let as = Array.from({ length: n }, (_, i) => mkA(i + 1, whys)).join('\n\n');
+    if (truncateLast) as = as.replace(/\n\s*Strategy:[\s\S]*$/, '');
+    return `PART 1 — CONCEPT INVENTORY\nC1 | dyspnea | ANCHOR: "x" |\n\n` +
+      `PART 2 — SELECTION & AUDIT\nQ1 — cites [C1]\n\n` +
+      `PART 3 — QUESTIONS\n${qs}\n\n` +
+      `PART 4 — ANSWER KEY\n${as}\n\n` +
+      `DISTRIBUTION: Tier [1:${dist === undefined ? n : dist.tier1} 2:0 3:0] | Types [MCQ:${dist === undefined ? n : dist.mcq} SATA:0 Ordering:0 Calc:0] | Concepts logged: 25`;
+  };
+
+  // The three cases the brief names explicitly.
+  t('a correct worksheet produces zero errors', V(build({ n: 2 }), 2).filter(i => i.sev === 'error').length === 0);
+  t('a DISTRIBUTION line disagreeing with its own items → error',
+    has(V(build({ n: 2, dist: { mcq: 6, tier1: 2 } }), 2), 'does not match its own reported distribution', 'error'));
+  t('a truncated PART 4 → error',
+    has(V(build({ n: 2, truncateLast: true }), 2), 'appears truncated', 'error'));
+
+  // Count contracts. buildBatchBlock overrides the prompt's default of 10, so the batch size
+  // the app asked for is the contract — not the constant 10.
+  t('PART 3 short of the batch count → error', has(V(build({ n: 2 }), 3), 'PART 3 has 2 numbered question(s); this batch asked for 3', 'error'));
+  t('a batch of 2 validated against 2 is clean', V(build({ n: 2 }), 2).filter(i => i.sev === 'error').length === 0);
+
+  // Why-line coverage — the prompt promises one per option, correct and incorrect alike.
+  t('a missing Why line → error', has(V(build({ n: 1, whys: ['A', 'B', 'C'] }), 1), 'option D has no "Why D is…" line', 'error'));
+  t('all Why lines present → no such error', !has(V(build({ n: 1 }), 1), 'has no "Why'));
+
+  // Structural gaps.
+  t('empty input → error', has(V('', 1), 'Worksheet is empty', 'error'));
+  t('a missing PART 4 → error', has(V('PART 1 — x\nC1 | a |\n\nPART 2 — y\n\nPART 3 — z\n' + mkQ(1), 1), 'PART 4 is missing', 'error'));
+  t('no DISTRIBUTION line → warn, not error', has(V(build({ n: 1 }).replace(/\n\nDISTRIBUTION:[\s\S]*$/, ''), 1), 'No DISTRIBUTION line', 'warn'));
+
+  // Reuses the shared linters rather than reimplementing them.
+  t('terminology lint runs over worksheet stems',
+    has(V(build({ n: 1, opts: ['Ask the patient to sit up', 'b option here', 'c option here', 'd option here'] }), 1), 'terminology', 'warn'));
+  t('MCQ heuristics run over worksheet items',
+    has(V(build({ n: 1, opts: ['word '.repeat(30), 'short one', 'short two', 'short three'] }), 1), 'option length', 'warn'));
+  t('every heuristic/terminology finding stays warn-tier',
+    V(build({ n: 1, opts: ['Ask the patient to sit up', 'b option', 'c option', 'd option'] }), 1)
+      .filter(i => /terminology|option length/.test(i.msg)).every(i => i.sev === 'warn'));
+
+  // Parsers.
+  t('ngParseItem detects MCQ', WS.ngParseItem({ num: 1, text: mkQ(1) }).type === 'MCQ');
+  t('ngParseItem detects SATA from the stem',
+    WS.ngParseItem({ num: 1, text: '  1. (Select all that apply) Which apply?\n\n     A. a\n     B. b\n     C. c\n     D. d\n     E. e' }).type === 'SATA');
+  t('ngParseItem detects Ordering', WS.ngParseItem({ num: 1, text: '  1. Place in order.\n\n     ___ step one\n     ___ step two' }).type === 'Ordering');
+  t('ngParseItem detects Calculation', WS.ngParseItem({ num: 1, text: '  1. How many mL?\n\n     Answer: __________ mL' }).type === 'Calculation');
+  t('ngParseItem captures four options', WS.ngParseItem({ num: 1, text: mkQ(1) }).options.length === 4);
+  t('ngParseKeyItem captures the Why labels', WS.ngParseKeyItem({ num: 1, text: mkA(1) }).whyLabels.size === 4);
+  t('ngParseKeyItem captures the tier', WS.ngParseKeyItem({ num: 1, text: mkA(1, null, 2) }).tier === 2);
+  t('ngParseDistribution reads the Types counts', WS.ngParseDistribution('Types [MCQ:6 SATA:2 Ordering:1 Calc:1]').types.mcq === 6);
+  t('ngParseDistribution on an absent line reports not present', WS.ngParseDistribution('').present === false);
+}
+
+/* ── 21. v15.7 — provenance stamp + Anki abbreviation lint (B2, B5) ── */
+section('v15.7 — provenance + Anki lint');
+{
+  const P = new Function(
+    // The constant and its consumer live far apart in the file; two spans, not one range.
+    "const NCLEX_TEST_PLAN_VERSION=2026;\n" +
+    spanFrom("const LATTE_STANDARDS_VERSION=", ";\n") +
+    spanFrom("function latteProvenanceStamp(", "\n}") +
+    '\n;return {latteProvenanceStamp,LATTE_STANDARDS_VERSION};'
+  )();
+  const st = P.latteProvenanceStamp({ genModel: 'gemini-3.7-flash', genLevel: 'high',
+    auditModel: 'gemini-3.1-pro-preview', auditLevel: 'high', promptLabel: 'NCLEX v4.2' });
+  t('stamp names the generator model and level', /Generator: gemini-3\.7-flash \[Thinking: high\]/.test(st));
+  t('stamp names the auditor model and level', /Auditor:\s+gemini-3\.1-pro-preview \[Thinking: high\]/.test(st));
+  t('stamp names the prompt label', /Prompt: NCLEX v4\.2/.test(st));
+  t('stamp names the criteria version', /Criteria: LATTE-NEIA v1\.0/.test(st));
+  t('stamp names the Test Plan version', /Test Plan: 2026/.test(st));
+  t('stamp records when no audit ran',
+    /Auditor:\s+not run/.test(P.latteProvenanceStamp({ genModel: 'x', genLevel: 'low' })));
+  t('LATTE_STANDARDS_VERSION is a flat string, not a registry object',
+    typeof P.LATTE_STANDARDS_VERSION === 'string');
+  t('no ASSESSMENT_STANDARDS registry was built', !S.includes('ASSESSMENT_STANDARDS'));
+  t('stamp goes to the case audit trail, not the printable view',
+    S.includes('caseValidationStamp(issues)+(provenance?latteProvenanceStamp(provenance):\'\')+caseToMarkdown(caseStudy)') &&
+    !/casePrintMd=useMemo\(\(\)=>caseStudy\?caseValidationStamp\(issues\)\+latteProvenanceStamp/.test(S));
+  t('provenance is captured at run time, not read at render time',
+    S.includes("const _aud=cfg.forTool('itemAudit');"));
+}
+{
+  const A = new Function(
+    spanFrom('const NEIA_TERMINOLOGY_RULES=', '\n}', 'const NEIA_TERMINOLOGY_RULES=') +
+    spanFrom('const NEIA_UNSAFE_ABBREV_MSGS=', '\n}', 'const NEIA_UNSAFE_ABBREV_MSGS=') +
+    '\n;return {ankiUnsafeAbbrevScan};'
+  )();
+  const scan = txt => { const o = []; A.ankiUnsafeAbbrevScan(txt, 'Text', o); return o; };
+  t('"5.0 mg" on a card → warn', scan('Give {{c1::5.0 mg}} daily').some(i => /trailing zero/.test(i.msg)));
+  t('".5 mg" on a card → warn', scan('Give {{c1::.5 mg}}').some(i => /leading zero/.test(i.msg)));
+  t('"q.d." on a card → warn', scan('Dose is {{c1::q.d.}}').some(i => /q\.d\./.test(i.msg)));
+  t('"IU" on a card → warn', scan('Give {{c1::500 IU}}').some(i => /International Unit/.test(i.msg)));
+  t('bare "U" on a card → warn', scan('Give {{c1::10 U}} insulin').some(i => /"U" is unsafe/.test(i.msg)));
+  t('all findings are warn-tier', scan('Give 5.0 mg q.d.').every(i => i.sev === 'warn'));
+  t('safe transcription is clean', scan('Give {{c1::0.5 mg}} daily').length === 0);
+  // The deliberate exclusion: vocabulary rules must NOT fire on flashcards.
+  t('"patient" does NOT fire on an Anki card (vocabulary half excluded)',
+    !scan('The patient takes {{c1::furosemide}}').some(i => /client/.test(i.msg)));
+  t('"physician" does NOT fire on an Anki card',
+    !scan('Notify the physician about {{c1::bradycardia}}').some(i => /primary health care provider/.test(i.msg)));
+  t('abbreviation findings are kept out of `lint` so cards stay exportable',
+    S.includes('c.abbrev=found.map(x=>x.msg);') && !S.includes("issues.push('unsafe-abbrev')"));
+  t('the Anki prompt gained a SAFE TRANSCRIPTION directive', S.includes('SAFE TRANSCRIPTION:'));
+  t('the directive frames itself as transcription, not paraphrase',
+    S.includes('This is transcription, not paraphrase'));
+  t('the comment does not claim NEIA validates flashcards',
+    S.includes('Do NOT claim NEIA validates flashcards'));
 }
 
 (async () => {

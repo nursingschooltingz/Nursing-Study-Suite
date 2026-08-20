@@ -11,7 +11,31 @@ Every release since 15.0 has been verified against three gates before shipping: 
 
 ## [Unreleased]
 
-### v15.6 — in progress (NEIA hardening for the Case Study Generator)
+### v15.7 — item quality for the NCLEX Generator
+
+The v15.6 work gave the Case Study Generator deterministic checks and an independent audit. The NCLEX Generator — the suite's primary item producer — still had neither: its eleven-criterion gate ran *inside* the authoring call and reported itself on the `DISTRIBUTION:` line. "Never report compliance you have not verified" is unfalsifiable when the only witness is the thing being checked. v15.7 closes that.
+
+- **`validateNCLEXWorksheet` (B1c).** Deterministic, no API calls. Parses the worksheet and checks what the model asserts about itself: question/answer counts against the batch size actually requested, a Why line for every option, truncation, and — the important one — whether the `DISTRIBUTION:` counts match the items really present. A mismatch is an **error**. Also runs the shared terminology lint and MCQ heuristics over each item.
+- **One `itemAudit` profile, not one per tool (B1a/B1b).** `casesAudit` → `itemAudit`, labelled *Item quality · audit*. The payload is a rendered item and the criteria are the same regardless of which tool authored it, so two rows would be two places to drift. `caseAuditPayload` now delegates to a tool-agnostic `itemAuditPayload`. Saved v15.6 profiles are migrated on read so a customised model choice does not silently revert.
+- **Worksheet MCQs route through the auditor (B1d).** Same pipeline and same order as the case generator: author → deterministic validation → audit (pool of 3) → repair → re-validate. Errors block the audit, exactly as they do for cases. Repair splices the rewritten item back into the worksheet text and **carries the original Strategy and Tags lines through verbatim**, so a repair cannot invalidate the distribution the worksheet just asserted; if the item cannot be located unambiguously the worksheet is left untouched.
+- **Provenance stamp (B2).** `latteProvenanceStamp()` records the generator model and level, the auditor model and level, the criteria version (`LATTE_STANDARDS_VERSION`), and the Test Plan version. Captured at run time, because per-tool profiles can change between generating an artifact and exporting it — and because intra-rater consistency was never measured, so two runs of one configuration may not agree. Audit trail only, never the student-facing worksheet.
+- **Anki unsafe-abbreviation lint (B5).** A `SAFE TRANSCRIPTION` directive in the prompt plus a code-side scan of generated cards for `q.d.`, `QOD`, `IU`, bare `U`, trailing zeros, and missing leading zeros. **WARN tier, kept out of `lint`** so flagged cards stay exportable. The preferred-vocabulary half (client/PHCP/UAP) is deliberately excluded — cloze cards test source recall, not NCLEX register, and rewriting mid-cloze risks breaking the deletion span. The authority here is medication-safety practice, which the NEIA reference reproduces rather than originates; this does not claim NEIA validates flashcards.
+
+**The file is now `Nursing-Study-Suite v15.7.html`.** Both harnesses auto-detect any `Nursing-Study-Suite*.html`, so future version bumps need no code change.
+
+`Prompts.md` regenerated from live bytes and extended: `paBuildExtractPrompt` was stale by 592 chars (the v15.6 Stage 1 carve-out had never been documented), and the Case Study Generator and item-quality auditor now have sections of their own.
+
+Harness 307 → 356 assertions.
+
+#### Not done, and why
+
+- **The test–retest gate was not run.** It needs a live API key and ~30 calls. Every heuristic cutoff (`CASE_LEN_RATIO_*`, `CASE_JACCARD_DUP`) and every criterion severity therefore remains **provisional** — set from the brief's placeholders, not from measured flip data. Run `neia-retest.js` and tune before trusting any of them.
+- **B3** (extractor item-quality scan), **B4** (Needs Review queue), **B6** (strict dual audit), **B7** (Test Plan alignment) are not started.
+- **A2 and A3 needed no work** — both had already shipped in v15.6. The v15.7 brief was written against a stale copy of the file.
+
+---
+
+### v15.6 — NEIA hardening for the Case Study Generator
 
 Implements the v15.6 brief in full — all eight items.
 
@@ -36,7 +60,7 @@ Evidence tiering is enforced in code comments throughout: `[NEIA-VALIDATED]` for
   - The **borderline six are excluded from every accuracy rate** by design. They exist to confirm the gate does *not* discriminate at the moderate/high boundary; scoring them would mean tuning toward the exact band the published data says is unreliable.
   - The runner extracts the real prompt builders from the shipped HTML by anchor, never a copy. Built-ins only, key read from `GEMINI_API_KEY` and never written to the report. It costs live API calls and is deliberately **not** wired into `latte-tests.js` — but the fixture's shape and its compatibility with the shipped audit path *are* asserted there, so it cannot rot silently.
 
-Harness 98 → 307 assertions. `Prompts.md` regenerated from live bytes (its `NCLEX_GEN_PROMPT` section was still v4.1 after the v15.5 bump).
+Harness 98 → 307 assertions (356 as of v15.7). `Prompts.md` regenerated from live bytes (its `NCLEX_GEN_PROMPT` section was still v4.1 after the v15.5 bump).
 
 ### To do
 - Run the 20-page benchmark in `Nursing-Study-Suite-v16-spec.md` §11 to decide whether v16 multimodal ingestion gets built at all.

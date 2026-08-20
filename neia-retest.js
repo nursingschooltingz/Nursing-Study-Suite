@@ -70,7 +70,7 @@ const AUDIT = new Function('CASE_QUESTION_RULES', 'caseRenderFactPacket',
   spanFrom('function caseToMarkdown(', '\n  return L.join(\'\\n\');\n}') +
   spanFrom('function caseIsGateEligible(', 'function CaseStudyGenerator()')
     .replace(/function CaseStudyGenerator\(\)$/, '') +
-  ';return {caseAuditPayload,caseBuildAuditPrompt,caseParseAuditVerdict,caseIsGateEligible};'
+  ';return {caseAuditPayload,itemBuildAuditPrompt,itemParseAuditVerdict,caseIsGateEligible};'
 )('', () => '');
 
 const SAFETY = [
@@ -133,10 +133,10 @@ console.log('Reference classifications are in-house; see referenceStandardCaveat
   const results = await pool(jobs, WIDTH, async (job) => {
     const q = job.it.case.stages[0].questions[0];
     const payload = AUDIT.caseAuditPayload(job.it.case, 1, q);
-    const prompt = AUDIT.caseBuildAuditPrompt(payload);
+    const prompt = AUDIT.itemBuildAuditPrompt(payload);
     try {
       const r = await callOnce(prompt);
-      const v = AUDIT.caseParseAuditVerdict(r.text);
+      const v = AUDIT.itemParseAuditVerdict(r.text);
       process.stdout.write(v.status === 'PASS' ? '.' : v.status === 'FAIL' ? 'F' : v.status === 'REVIEW' ? '?' : 'x');
       return { id: job.it.id, band: job.it.band, seeded: job.it.seededCriterion, run: job.run,
         status: v.status, criterion: v.criterion, detail: v.detail,
