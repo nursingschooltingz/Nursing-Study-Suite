@@ -870,6 +870,58 @@ section('v15.6 — case audit pass');
   }
 }
 
+/* ── 19. v15.6 — test-retest fixture (item 8) ── */
+// The retest RUN costs live API calls and never executes here. These assertions validate the
+// fixture's shape and its compatibility with the shipped audit path, so the fixture cannot
+// rot silently and be discovered only after spending quota on a broken run.
+section('v15.6 — retest fixture');
+{
+  if (!fs.existsSync('neia-fixture.json')) {
+    t('neia-fixture.json exists', false);
+  } else {
+    const F = JSON.parse(fs.readFileSync('neia-fixture.json', 'utf8'));
+    const byBand = b => F.items.filter(i => i.band === b);
+    t('fixture holds 10 items', F.items.length === 10);
+    t('2 sound items', byBand('sound').length === 2);
+    t('2 seeded items', byBand('seeded').length === 2);
+    t('6 borderline items — the band the published data says raters collapse on', byBand('borderline').length === 6);
+    t('item ids are unique', new Set(F.items.map(i => i.id)).size === F.items.length);
+    t('every seeded item names exactly one criterion',
+      byBand('seeded').every(i => typeof i.seededCriterion === 'string' && i.seededCriterion.length > 0));
+    t('the two seeded items target different criteria',
+      new Set(byBand('seeded').map(i => i.seededCriterion)).size === 2);
+    t('sound and borderline items name no seeded criterion',
+      [...byBand('sound'), ...byBand('borderline')].every(i => i.seededCriterion === null));
+    t('every item carries a note explaining its classification',
+      F.items.every(i => typeof i.note === 'string' && i.note.length > 20));
+    t('the fixture records that its reference standard is in-house',
+      /authored in-house/.test(F.referenceStandardCaveat || ''));
+    t('the fixture warns against comparing to published figures',
+      /zero Gemini/.test(F.why || ''));
+    t('borderline band explicitly has no expected verdict',
+      /NO expected verdict/.test((F.bands || {}).borderline || ''));
+
+    // Every fixture item must survive the real audit path, or the run fails at call time.
+    let allEligible = true, allPayloadsClean = true, allHaveOneStage = true;
+    for (const it of F.items) {
+      const st = (it.case.stages || [])[0];
+      if (!st || (it.case.stages || []).length !== 1) { allHaveOneStage = false; continue; }
+      const q = (st.questions || [])[0];
+      if (!AUDIT.caseIsGateEligible(q)) allEligible = false;
+      const p = AUDIT.caseAuditPayload(it.case, 1, q);
+      if (/fact-\d+/.test(p) || !p.includes('KEYED ANSWER:')) allPayloadsClean = false;
+    }
+    t('every fixture item is a single-stage case', allHaveOneStage);
+    t('every fixture item is gate-eligible under the shipped scope check', allEligible);
+    t('every fixture payload builds cleanly and leaks no fact IDs', allPayloadsClean);
+    t('the seeded stem-clarity item really does contain a negative construction',
+      /EXCEPT/.test(JSON.stringify(F.items.find(i => i.seededCriterion === 'Stem Clarity'))));
+  }
+  t('the retest runner exists and is not wired into this harness',
+    fs.existsSync('neia-retest.js') && !S.includes('neia-retest'));
+  t('retest reports are gitignored', /neia-retest-report/.test(fs.readFileSync('.gitignore', 'utf8')));
+}
+
 (async () => {
   const { r, peak, order } = await global.__poolCheck;
   t('pool returns results in input order, not completion order', r.join(',') === '0,2,4,6,8,10,12,14,16');

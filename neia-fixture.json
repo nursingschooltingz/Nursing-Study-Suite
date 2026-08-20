@@ -1,0 +1,355 @@
+{
+  "schemaVersion": "1.0",
+  "purpose": "Test-retest fixture for the v15.6 casesAudit pass. Ten fixed MCQ items with reference classifications, run repeatedly under identical settings to measure whether one configuration scores an item the same way twice.",
+  "why": "No published figure establishes audit reliability for this build. The June 2026 reliability study (Simms, Hensel, Cavanaugh, Fox & Kumar, Nurse Educ Pract 94:104897) tested five OpenAI and two Anthropic configurations and zero Gemini, and lists intra-rater reliability as unmeasured while calling it a foundational property for operational use. Nothing here may be compared to any published ICC or accuracy figure.",
+  "referenceStandardCaveat": "The reference classifications below were authored in-house, the same limitation the source papers acknowledge of themselves: the authors wrote the rubric, the items, and the reference classifications, so agreement measures alignment with one interpretive framework rather than an external standard. The 'sound' and 'borderline' labels are judgment calls. Only the two seeded items carry a defect that is mechanically unambiguous, which is why missed-defect rate is the metric to trust most and 'false fatal on a sound item' the one to trust second.",
+  "bands": {
+    "sound": "Expected to PASS. A FAIL here is a false fatal failure.",
+    "seeded": "Contains exactly one deliberately injected defect on the named criterion. Expected to FAIL on that criterion. A PASS here is a missed defect.",
+    "borderline": "Genuinely improvable but not disqualifying. NO expected verdict. These exist to confirm the gate does not discriminate at the moderate/high boundary — inconsistent results here are expected behaviour, not a regression. Do not tune toward them."
+  },
+  "items": [
+    {
+      "id": "sound-1",
+      "band": "sound",
+      "seededCriterion": null,
+      "note": "Clean stem, four parallel options of similar length, one defensible key, no stem/key vocabulary repetition.",
+      "case": {
+        "title": "Heart failure — fluid status",
+        "condition": "Heart failure",
+        "difficulty": "exam",
+        "patient": { "age": 74, "sex": "female", "background": "Lives with her daughter." },
+        "stages": [{
+          "stageNumber": 1,
+          "title": "Morning assessment",
+          "narrative": "The nurse completes the morning assessment before breakfast.",
+          "data": [
+            { "label": "Weight today", "value": "78.6 kg", "supportType": "direct", "availability": "revealed", "factIds": ["fact-1"] },
+            { "label": "Weight yesterday", "value": "77.2 kg", "supportType": "direct", "availability": "revealed", "factIds": ["fact-1"] }
+          ],
+          "questions": [{
+            "id": "s1q1",
+            "type": "MCQ",
+            "stem": "Which action should the nurse take first?",
+            "options": [
+              { "label": "A", "text": "Notify the primary health care provider" },
+              { "label": "B", "text": "Encourage additional oral fluids" },
+              { "label": "C", "text": "Reposition the client on the left side" },
+              { "label": "D", "text": "Delay the morning medications" }
+            ],
+            "correctAnswers": ["A"],
+            "rationales": [],
+            "cjmmSkill": "Take Action"
+          }]
+        }]
+      }
+    },
+    {
+      "id": "sound-2",
+      "band": "sound",
+      "seededCriterion": null,
+      "note": "Recognition item with parallel, plausible options and no surface cue to the key.",
+      "case": {
+        "title": "Hypoglycemia",
+        "condition": "Hypoglycemia",
+        "difficulty": "exam",
+        "patient": { "age": 58, "sex": "male", "background": "Admitted for observation." },
+        "stages": [{
+          "stageNumber": 1,
+          "title": "Mid-morning",
+          "narrative": "The client rings the call light before lunch.",
+          "data": [
+            { "label": "Capillary glucose", "value": "54 mg/dL", "supportType": "direct", "availability": "revealed", "factIds": ["fact-2"] },
+            { "label": "Level of consciousness", "value": "Awake, able to swallow", "supportType": "direct", "availability": "revealed", "factIds": ["fact-2"] }
+          ],
+          "questions": [{
+            "id": "s1q1",
+            "type": "MCQ",
+            "stem": "Which intervention should the nurse implement?",
+            "options": [
+              { "label": "A", "text": "Give 15 grams of oral carbohydrate" },
+              { "label": "B", "text": "Hold all oral intake for one hour" },
+              { "label": "C", "text": "Begin an insulin correction dose" },
+              { "label": "D", "text": "Request a repeat sample in four hours" }
+            ],
+            "correctAnswers": ["A"],
+            "rationales": [],
+            "cjmmSkill": "Take Action"
+          }]
+        }]
+      }
+    },
+    {
+      "id": "seeded-stem-clarity",
+      "band": "seeded",
+      "seededCriterion": "Stem Clarity",
+      "note": "DEFECT: negatively constructed stem ('all of the following EXCEPT'), which criterion 1 names explicitly. Options are otherwise clean and of even length, so this item should fail on criterion 1 and nothing else.",
+      "case": {
+        "title": "Falls prevention",
+        "condition": "Falls risk",
+        "difficulty": "exam",
+        "patient": { "age": 81, "sex": "female", "background": "Admitted overnight." },
+        "stages": [{
+          "stageNumber": 1,
+          "title": "Room setup",
+          "narrative": "The nurse prepares the room at the start of the shift.",
+          "data": [
+            { "label": "Falls screening", "value": "High risk", "supportType": "direct", "availability": "revealed", "factIds": ["fact-3"] }
+          ],
+          "questions": [{
+            "id": "s1q1",
+            "type": "MCQ",
+            "stem": "All of the following reduce this client's falls risk EXCEPT which one?",
+            "options": [
+              { "label": "A", "text": "Keeping the bed in the lowest position" },
+              { "label": "B", "text": "Placing the call light within reach" },
+              { "label": "C", "text": "Leaving the side rails fully raised" },
+              { "label": "D", "text": "Ensuring footwear with a non-slip sole" }
+            ],
+            "correctAnswers": ["C"],
+            "rationales": [],
+            "cjmmSkill": "Generate Solutions"
+          }]
+        }]
+      }
+    },
+    {
+      "id": "seeded-distractor-plausibility",
+      "band": "seeded",
+      "seededCriterion": "Distractor Plausibility",
+      "note": "DEFECT: option D is obviously irrelevant to the scenario, which criterion 6 names as 'obviously incorrect or irrelevant'. Stem and remaining options are clean.",
+      "case": {
+        "title": "Chest tube",
+        "condition": "Chest tube management",
+        "difficulty": "exam",
+        "patient": { "age": 46, "sex": "male", "background": "Post-operative day one." },
+        "stages": [{
+          "stageNumber": 1,
+          "title": "Transport",
+          "narrative": "The client is being moved from the bed to a chair.",
+          "data": [
+            { "label": "Chest drainage system", "value": "Intact, no air leak", "supportType": "direct", "availability": "revealed", "factIds": ["fact-4"] }
+          ],
+          "questions": [{
+            "id": "s1q1",
+            "type": "MCQ",
+            "stem": "How should the nurse position the drainage system during the transfer?",
+            "options": [
+              { "label": "A", "text": "Below the level of the client's chest" },
+              { "label": "B", "text": "At the same height as the client's chest" },
+              { "label": "C", "text": "Above the level of the client's chest" },
+              { "label": "D", "text": "Inside the client's bedside meal tray" }
+            ],
+            "correctAnswers": ["A"],
+            "rationales": [],
+            "cjmmSkill": "Take Action"
+          }]
+        }]
+      }
+    },
+    {
+      "id": "borderline-1",
+      "band": "borderline",
+      "seededCriterion": null,
+      "note": "Key is somewhat longer and more qualified than the distractors — improvable on criterion 4, arguably not disqualifying.",
+      "case": {
+        "title": "Digoxin",
+        "condition": "Digoxin therapy",
+        "difficulty": "exam",
+        "patient": { "age": 79, "sex": "female", "background": "Takes digoxin daily." },
+        "stages": [{
+          "stageNumber": 1,
+          "title": "Before the dose",
+          "narrative": "The nurse prepares the morning medications.",
+          "data": [
+            { "label": "Apical pulse", "value": "52 beats per minute", "supportType": "direct", "availability": "revealed", "factIds": ["fact-5"] }
+          ],
+          "questions": [{
+            "id": "s1q1",
+            "type": "MCQ",
+            "stem": "Which action should the nurse take?",
+            "options": [
+              { "label": "A", "text": "Hold the dose and notify the primary health care provider of the apical rate before administering" },
+              { "label": "B", "text": "Give the dose as scheduled" },
+              { "label": "C", "text": "Give half the dose" },
+              { "label": "D", "text": "Recheck in one hour" }
+            ],
+            "correctAnswers": ["A"],
+            "rationales": [],
+            "cjmmSkill": "Take Action"
+          }]
+        }]
+      }
+    },
+    {
+      "id": "borderline-2",
+      "band": "borderline",
+      "seededCriterion": null,
+      "note": "Key repeats a distinctive term from the stem ('potassium'), touching criterion 4 — but the clinical concept has only one correct name, which is the legitimate case the smoke detector cannot separate.",
+      "case": {
+        "title": "Loop diuretic monitoring",
+        "condition": "Diuretic therapy",
+        "difficulty": "exam",
+        "patient": { "age": 68, "sex": "male", "background": "Started on a loop diuretic." },
+        "stages": [{
+          "stageNumber": 1,
+          "title": "Day two",
+          "narrative": "The nurse reviews the plan of care.",
+          "data": [
+            { "label": "Medication", "value": "Furosemide, oral, daily", "supportType": "direct", "availability": "revealed", "factIds": ["fact-6"] }
+          ],
+          "questions": [{
+            "id": "s1q1",
+            "type": "MCQ",
+            "stem": "Which laboratory value is most important for the nurse to monitor?",
+            "options": [
+              { "label": "A", "text": "Serum potassium" },
+              { "label": "B", "text": "Serum calcium" },
+              { "label": "C", "text": "Serum albumin" },
+              { "label": "D", "text": "Serum bilirubin" }
+            ],
+            "correctAnswers": ["A"],
+            "rationales": [],
+            "cjmmSkill": "Analyze Cues"
+          }]
+        }]
+      }
+    },
+    {
+      "id": "borderline-3",
+      "band": "borderline",
+      "seededCriterion": null,
+      "note": "Two options are close in meaning ('notify the provider' vs 'report the finding'), touching criterion 7 without being true synonyms.",
+      "case": {
+        "title": "Post-operative output",
+        "condition": "Post-operative care",
+        "difficulty": "exam",
+        "patient": { "age": 62, "sex": "female", "background": "Post-operative day one." },
+        "stages": [{
+          "stageNumber": 1,
+          "title": "Evening rounds",
+          "narrative": "The nurse totals the shift intake and output.",
+          "data": [
+            { "label": "Urine output", "value": "22 mL/hr over four hours", "supportType": "instantiated", "availability": "revealed", "factIds": ["fact-7"] }
+          ],
+          "questions": [{
+            "id": "s1q1",
+            "type": "MCQ",
+            "stem": "Which action is the priority?",
+            "options": [
+              { "label": "A", "text": "Notify the primary health care provider" },
+              { "label": "B", "text": "Report the finding at the end of the shift" },
+              { "label": "C", "text": "Increase the intravenous rate independently" },
+              { "label": "D", "text": "Document and continue to monitor" }
+            ],
+            "correctAnswers": ["A"],
+            "rationales": [],
+            "cjmmSkill": "Prioritize Hypotheses"
+          }]
+        }]
+      }
+    },
+    {
+      "id": "borderline-4",
+      "band": "borderline",
+      "seededCriterion": null,
+      "note": "Stem carries more scene-setting than the decision requires — improvable on criterion 1 concision, not confusing.",
+      "case": {
+        "title": "Warfarin teaching",
+        "condition": "Anticoagulation",
+        "difficulty": "exam",
+        "patient": { "age": 55, "sex": "male", "background": "Preparing for discharge." },
+        "stages": [{
+          "stageNumber": 1,
+          "title": "Discharge teaching",
+          "narrative": "The nurse begins discharge teaching in the afternoon.",
+          "data": [
+            { "label": "Discharge prescription", "value": "Warfarin, oral, daily", "supportType": "direct", "availability": "revealed", "factIds": ["fact-8"] }
+          ],
+          "questions": [{
+            "id": "s1q1",
+            "type": "MCQ",
+            "stem": "The nurse has gathered the teaching materials, closed the door, and confirmed that the client's family member is present and ready to listen. Which client statement indicates that teaching about the new prescription has been effective?",
+            "options": [
+              { "label": "A", "text": "\"I will keep my appointments for blood tests.\"" },
+              { "label": "B", "text": "\"I will double the dose if I miss one.\"" },
+              { "label": "C", "text": "\"I will start taking daily aspirin as well.\"" },
+              { "label": "D", "text": "\"I will stop the medication once I feel better.\"" }
+            ],
+            "correctAnswers": ["A"],
+            "rationales": [],
+            "cjmmSkill": "Evaluate Outcomes"
+          }]
+        }]
+      }
+    },
+    {
+      "id": "borderline-5",
+      "band": "borderline",
+      "seededCriterion": null,
+      "note": "Options are grammatically mixed — two noun phrases and two verb phrases — touching criterion 9 without obscuring the key.",
+      "case": {
+        "title": "Isolation precautions",
+        "condition": "Infection prevention",
+        "difficulty": "exam",
+        "patient": { "age": 38, "sex": "female", "background": "Newly admitted." },
+        "stages": [{
+          "stageNumber": 1,
+          "title": "Admission",
+          "narrative": "The nurse reviews the admission orders.",
+          "data": [
+            { "label": "Precautions ordered", "value": "Airborne", "supportType": "direct", "availability": "revealed", "factIds": ["fact-9"] }
+          ],
+          "questions": [{
+            "id": "s1q1",
+            "type": "MCQ",
+            "stem": "What does the nurse need before entering the room?",
+            "options": [
+              { "label": "A", "text": "A fit-tested respirator" },
+              { "label": "B", "text": "Apply a surgical mask" },
+              { "label": "C", "text": "A clean pair of gloves only" },
+              { "label": "D", "text": "Put on a sterile gown" }
+            ],
+            "correctAnswers": ["A"],
+            "rationales": [],
+            "cjmmSkill": "Take Action"
+          }]
+        }]
+      }
+    },
+    {
+      "id": "borderline-6",
+      "band": "borderline",
+      "seededCriterion": null,
+      "note": "Distractors are plausible but one is arguably also defensible depending on unit policy — the moderate-band judgment call the published data says raters cannot make consistently.",
+      "case": {
+        "title": "Delegation",
+        "condition": "Scope of practice",
+        "difficulty": "exam",
+        "patient": { "age": 70, "sex": "male", "background": "Stable, awaiting discharge." },
+        "stages": [{
+          "stageNumber": 1,
+          "title": "Shift assignment",
+          "narrative": "The charge nurse is distributing the morning workload.",
+          "data": [
+            { "label": "Staffing", "value": "One registered nurse and one UAP", "supportType": "direct", "availability": "revealed", "factIds": ["fact-10"] }
+          ],
+          "questions": [{
+            "id": "s1q1",
+            "type": "MCQ",
+            "stem": "Which task is appropriate to delegate to the UAP?",
+            "options": [
+              { "label": "A", "text": "Obtaining routine vital signs for a stable client" },
+              { "label": "B", "text": "Evaluating the response to a new medication" },
+              { "label": "C", "text": "Teaching the client about a new prescription" },
+              { "label": "D", "text": "Performing the admission assessment" }
+            ],
+            "correctAnswers": ["A"],
+            "rationales": [],
+            "cjmmSkill": "Generate Solutions"
+          }]
+        }]
+      }
+    }
+  ]
+}

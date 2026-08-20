@@ -13,7 +13,7 @@ Every release since 15.0 has been verified against three gates before shipping: 
 
 ### v15.6 — in progress (NEIA hardening for the Case Study Generator)
 
-Implements the v15.6 brief. Items 1–7 are done; only item 8 (the Gemini test–retest harness) is outstanding.
+Implements the v15.6 brief in full — all eight items.
 
 Evidence tiering is enforced in code comments throughout: `[NEIA-VALIDATED]` for anything the rubric states, `[NEIA-DERIVED]` for our operationalization of a validated criterion, `[LATTE-HEURISTIC]` for our own inventions. No published reliability figure is cited as a property of this build — the June study tested five OpenAI and two Anthropic configurations and zero Gemini.
 
@@ -31,7 +31,12 @@ Evidence tiering is enforced in code comments throughout: `[NEIA-VALIDATED]` for
 - **Priority Analyzer Stage 1 carve-out (item 6).** Rule 4 now distinguishes adding content (banned) from classifying content already present (permitted), resolving its conflict with the FLAGS block. CRIT-LAB gains a caveat that its ranges are heuristic buckets, not universal thresholds — a dialysis K+ or a therapeutic INR presented as this client's baseline is not critical.
 - **UI copy fix (item 7).** Tier 3 was described as the distractor pool; distractors are built from contextually plausible near-misses at any tier. No logic change.
 
-Harness 98 → 289 assertions. `Prompts.md` regenerated from live bytes (its `NCLEX_GEN_PROMPT` section was still v4.1 after the v15.5 bump).
+- **Gemini test–retest harness (item 8).** `neia-fixture.json` (10 fixed MCQs — 2 sound, 2 with a single injected defect each, 6 borderline) plus `neia-retest.js`, which runs each item N times under identical settings and reports verdict flips, per-criterion flips, false fatals on the sound items, missed defects on the seeded ones, answer-accuracy and distractor-plausibility disagreement, and latency/token cost. Any criterion that flips across identical runs is a demotion candidate: FAIL → WARN until it stabilises. This is also the run that will set item 3's provisional cutoffs.
+  - **It measures; it does not decide.** Nothing it reports may be compared to a published ICC or accuracy figure — the June study tested zero Gemini configurations and lists intra-rater reliability as unmeasured.
+  - The **borderline six are excluded from every accuracy rate** by design. They exist to confirm the gate does *not* discriminate at the moderate/high boundary; scoring them would mean tuning toward the exact band the published data says is unreliable.
+  - The runner extracts the real prompt builders from the shipped HTML by anchor, never a copy. Built-ins only, key read from `GEMINI_API_KEY` and never written to the report. It costs live API calls and is deliberately **not** wired into `latte-tests.js` — but the fixture's shape and its compatibility with the shipped audit path *are* asserted there, so it cannot rot silently.
+
+Harness 98 → 307 assertions. `Prompts.md` regenerated from live bytes (its `NCLEX_GEN_PROMPT` section was still v4.1 after the v15.5 bump).
 
 ### To do
 - Run the 20-page benchmark in `Nursing-Study-Suite-v16-spec.md` §11 to decide whether v16 multimodal ingestion gets built at all.

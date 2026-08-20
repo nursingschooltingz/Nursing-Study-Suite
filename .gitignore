@@ -57,3 +57,10 @@ local/
 scratch/
 *.local.*
 run-node-*.md
+
+# ── Test-retest reports ────────────────────────────────────────────────
+# neia-retest.js writes raw model output here. Not source material, but it is
+# large, noisy, and regenerated on every run. The FIXTURE is committed; the
+# report is not.
+neia-retest-report.json
+neia-retest-report*.json

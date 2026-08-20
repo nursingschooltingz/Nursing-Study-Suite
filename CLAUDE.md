@@ -21,11 +21,15 @@ Maintained by one person — a working LPN in an LPN-to-RN bridge program — be
 node latte-tests.js
 ```
 
-Expect **69 passed · 0 failed**. The harness extracts live functions from the shipped HTML by anchor strings — it never copies code, so it fails loudly if a refactor moves an anchor. That failure is signal, not noise: fix the anchor reference, don't weaken the test.
+Expect **307 passed · 0 failed**. The harness extracts live functions from the shipped HTML by anchor strings — it never copies code, so it fails loudly if a refactor moves an anchor. That failure is signal, not noise: fix the anchor reference, don't weaken the test.
+
+Watch for *vacuous* passes as well as failures: an end anchor that matches earlier than intended silently truncates a span, and every assertion about the missing tail then passes for the wrong reason. `caseBuildPrompt` hit exactly this — `'\n}\n'` matched inside its JSON-shape block. Where a span covers a prompt, assert that something near its *end* is present.
 
 Two more gates for changes touching the HTML:
-- **Babel parse** — the whole `<script type="text/babel">` block must transform cleanly with `presets:['react']`.
+- **Babel parse** — the whole `<script type="text/babel">` block must transform cleanly with `presets:['react']`. Install `@babel/standalone` outside the repo (a scratch dir) so no dependency lands here.
 - **Prompt byte-check** — extract all 11 constants and confirm they are unchanged.
+
+`neia-retest.js` is **not** part of any gate — it makes live API calls and costs quota. Run it by hand after a prompt or model change.
 
 New behavior gets a new assertion in `latte-tests.js`. A change without a test is not finished.
 
@@ -44,7 +48,10 @@ Do not "fix" these:
 - **`thinkingLevel` is lowercase.** Matches Google's documented REST format. Reviewers have claimed uppercase three times; they are wrong.
 - **Pass-1 vs pass-2 quote policy is asymmetric.** Primary extraction *keeps* facts whose `sourceQuote` fails verification (counting `quoteMiss`); the audit pass *discards* them. The risk profiles are inverted — see the code comments. Making both strict reintroduces omissions.
 - **`generateContent` (not the Interactions API).** Legacy but fully supported, and required for batch/caching.
-- **Warn-tier validators.** Numeric entailment, qualitative term scanning, and missing-field checks warn rather than error, on purpose. Errors block registry inclusion; warnings inform. Don't escalate without asking.
+- **Warn-tier validators.** Qualitative term scanning, missing-field checks, terminology lint, item heuristics, and difficulty signals warn rather than error, on purpose. Errors block registry inclusion; warnings inform. Don't escalate without asking. (Numeric entailment was the exception: v15.6 escalated it to error once `instantiated` gave the one legitimate case its own declared support type.)
+- **NEIA evidence tiering.** Comments are tagged `[NEIA-VALIDATED]` (the rubric states it), `[NEIA-DERIVED]` (our operationalization of a validated criterion), or `[LATTE-HEURISTIC]` (our invention). Never let a LATTE heuristic acquire the authority of a validated criterion, and never cite a published reliability figure as a property of this build — the reliability study tested zero Gemini configurations.
+- **Test Plan Alignment can warn but never fail.** No Test Plan document is supplied to either generator. A `FAIL` naming that criterion is downgraded in code, not merely discouraged in the prompt.
+- **The `casesAudit` auditor is blind to grounding on purpose.** It sees only what the student sees. Do not "helpfully" pass it fact IDs, source quotes, or the fact packet — that reintroduces the generator's own framing into its review.
 - **`gemini-3.1-pro-preview` as the Pro default.** There is no stable Pro alias; this is the current Pro path.
 
 ## File map
@@ -52,7 +59,9 @@ Do not "fix" these:
 | File | Purpose |
 |---|---|
 | `Nursing-Study-Suite-*.html` | The entire application |
-| `latte-tests.js` | Regression harness, 69 assertions |
+| `latte-tests.js` | Regression harness, 307 assertions |
+| `neia-fixture.json` | 10 fixed MCQs with reference classifications, for the audit test–retest |
+| `neia-retest.js` | Test–retest runner — **costs live API calls**, never part of `latte-tests.js` |
 | `CHANGELOG.md` | Release summary (Keep a Changelog format) |
 | `Nursing-Study-Suite-v16-spec.md` | Multimodal architecture spec — **build blocked** pending benchmark |
 | `Prompts.md` | The three main prompts, extracted verbatim |
@@ -60,11 +69,13 @@ Do not "fix" these:
 
 ## Current state
 
-Shipping v15.4. Open items:
+Shipping v15.6 (v15.5 shipped SRI pins + NCLEX prompt v4.2; v15.6 completed the NEIA brief). Open items:
 
-- **SRI `integrity` attributes** not yet applied — `crossorigin` is present and hashes must be computed from live CDN bytes. Both DOMPurify tags need one, including the jsDelivr fallback inside `document.write`.
+- **Run `neia-retest.js`** — the audit gate's severities and the item-3 heuristic cutoffs are all provisional until it produces real flip data. This is the highest-value next action; everything else in v15.6 is calibrated on guesses.
+- **Test Plan activity statements** are not supplied to either generator, so Test Plan Alignment is WARN-only in both. Neither source paper reproduces the statements — Appendix A only links to NCSBN.
+- **Unverified:** whether the 2026 Test Plan renames *Safety and Infection Control* to *Safety and Infection Prevention and Control*. `NCLEX_CATEGORY_LABELS` keeps the long-standing label until a primary source confirms.
 - **v16 multimodal ingestion** — architecture settled, build gated on the 20-page benchmark in the spec's §11. Do not start implementing it.
-- **v15.5 candidate** — de-hyphenation and ligature normalization in `kbNormForMatch`, to promote quote-verification misses caused by line-break hyphenation. Cheap, may resolve much of `quoteMiss` without vision.
+- **De-hyphenation candidate** — de-hyphenation and ligature normalization in `kbNormForMatch`, to promote quote-verification misses caused by line-break hyphenation. Cheap, may resolve much of `quoteMiss` without vision.
 
 ## Conventions
 
