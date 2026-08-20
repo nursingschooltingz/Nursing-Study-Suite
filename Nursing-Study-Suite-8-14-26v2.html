@@ -4622,6 +4622,46 @@ function caseRenderFactPacket(conditionName,facts){
   return L.join('\n');
 }
 
+// ── v15.6 item 5: operationalized difficulty ──
+// [LATTE-HEURISTIC]. Before this, `Difficulty: ${difficulty}` was interpolated bare and the
+// three levels had no behavioral contract at all.
+// NEIA's Difficulty subcategory carries NO stop criterion — its note reads only "A range of
+// difficulty levels recommended for nursing school examinations". Stem Relevance DOES stop.
+// That asymmetry is the whole design: hard is permitted, out-of-scope is fatal, so the
+// ceiling is the governing constraint at every level and is emitted with every level.
+// The STRUCTURAL SIGNATURE lines mirror what caseDifficultySignals() checks in code. The
+// model is told the contract because a signature it cannot see is one it cannot satisfy.
+function caseDifficultyBlock(difficulty){
+  const LEVELS={
+    foundational:{
+      cog:'direct cue recognition and straightforward application of a single fact',
+      dis:'plausible but separable — a prepared student can rule each one out',
+      sig:'none — no structural minimum is enforced at this level',
+    },
+    exam:{
+      cog:'integrate at least TWO revealed cues, then prioritize among plausible actions',
+      dis:'all options clinically plausible, several initially reasonable',
+      sig:'at least one "Analyze Cues" question, at least one "Take Action" question, and at\n  least one question whose rationales cite two or more distinct facts that were each\n  presented as revealed case data',
+    },
+    advanced:{
+      cog:'competing priorities, trend interpretation across stages, and reassessment after an intervention',
+      dis:'multiple defensible actions, one clearly best only after integrating every revealed cue',
+      sig:'at least one "Prioritize Hypotheses" AND one "Evaluate Outcomes" question; at least\n  one question in stage 3 or later whose rationales cite revealed data first presented in\n  TWO DIFFERENT earlier stages; and at least one MCQ where most distractors trace to\n  Tier 1-2 or safety-critical facts (actions correct at some other moment)',
+    },
+  };
+  const L=LEVELS[String(difficulty||'').toLowerCase()]||LEVELS.exam;
+  return `DIFFICULTY: ${difficulty}
+DIFFICULTY CEILING (all levels): difficulty must stay within the knowledge, judgment, and
+scope expected of a new graduate nurse. Increase difficulty through cue integration,
+competing priorities, temporal change, and near-miss options — never through specialty
+trivia, obscure facts, convoluted language, or content outside entry-level practice.
+An item whose stem requires knowledge outside a new graduate's role is disqualified
+regardless of how well it is written.
+  Cognitive construction: ${L.cog}.
+  Distractor construction: ${L.dis}.
+  STRUCTURAL SIGNATURE (checked in code): ${L.sig}.`;
+}
+
 // ── Strict case-generation prompt ──
 // Uses JSON output (deterministically validatable) + the shared NCLEX quality rules +
 // a hard SOURCE BOUNDARY that lists exactly what may and may not be invented, plus the
@@ -4708,7 +4748,8 @@ Stage arc for ${stages} stages:
   Stage 3 — Intervention (Treatments: orders, meds, precautions)
 ${stages>=4?'  Stage 4 — Discharge teaching OR deterioration (Educate, or a grounded complication)\n':''}${stages>=5?'  Stage 5 — Outcome evaluation (Evaluate response using revealed data)\n':''}
 ═══ QUESTIONS ═══
-Difficulty: ${difficulty}. Produce ${questionsPerStage} question(s) per stage.
+${caseDifficultyBlock(difficulty)}
+Produce ${questionsPerStage} question(s) per stage.
 Allowed question types (use a mix drawn from these; do not use a type the facts cannot support):
   ${typeList.join('\n  ')}
 Tag exactly one CJMM skill per question from: Recognize Cues · Analyze Cues ·
@@ -4993,6 +5034,90 @@ function caseItemHeuristics(q,issues,where){
       issues.push({sev:'warn',msg:`${where}: options ${opts[i].label} and ${opts[j].label} are near-duplicates (Jaccard ${jac.toFixed(2)}) — distractors must be meaningfully different choices`});
   }
 }
+// ── v15.6 item 5: countable difficulty contract ──
+// [LATTE-HEURISTIC]. A cjmmSkill label is free to stamp, so a skill distribution alone
+// proves nothing — the model can relabel its way to any spread. These check STRUCTURAL
+// signatures it cannot fake after the fact: which stage a cited fact was first revealed in,
+// and what tier the distractors' facts carry.
+// WARN tier. A difficulty shortfall is a quality signal for the author, not a broken
+// artifact — the case is still valid, it just is not as hard as it was asked to be.
+function caseDifficultySignals(caseStudy,factIndex){
+  const issues=[],level=String(caseStudy.difficulty||'').toLowerCase();
+  if(level!=='exam'&&level!=='advanced')return issues; // foundational imposes no minimum
+  const stages=caseStudy.stages||[];
+  const skills=new Set();
+  for(const st of stages)for(const q of st.questions||[])if(q.cjmmSkill)skills.add(String(q.cjmmSkill).trim());
+  // factId -> earliest stage that presented it as REVEALED data (background is available
+  // everywhere and so can never evidence cross-stage integration).
+  const firstRevealed=new Map();
+  for(const st of stages){
+    const n=Number(st.stageNumber);
+    if(!isFinite(n))continue;
+    for(const d of st.data||[]){
+      if((d.availability||'revealed')!=='revealed')continue;
+      for(const id of d.factIds||[]){
+        const k=String(id).toLowerCase();
+        if(!firstRevealed.has(k)||n<firstRevealed.get(k))firstRevealed.set(k,n);
+      }
+    }
+  }
+  const miss=m=>issues.push({sev:'warn',msg:`Requested difficulty "${caseStudy.difficulty}" but ${m}`});
+  if(level==='exam'){
+    if(!skills.has('Analyze Cues'))miss('no question is tagged "Analyze Cues"');
+    if(!skills.has('Take Action'))miss('no question is tagged "Take Action"');
+    let multi=false;
+    for(const st of stages)for(const q of st.questions||[]){
+      const ids=new Set();
+      for(const r of q.rationales||[])for(const id of r.factIds||[]){
+        const k=String(id).toLowerCase();
+        if(firstRevealed.has(k))ids.add(k);
+      }
+      if(ids.size>=2){multi=true;break;}
+    }
+    if(!multi)miss('no question integrates two or more distinct facts presented as revealed case data');
+    return issues;
+  }
+  // advanced
+  if(!skills.has('Prioritize Hypotheses'))miss('no question is tagged "Prioritize Hypotheses"');
+  if(!skills.has('Evaluate Outcomes'))miss('no question is tagged "Evaluate Outcomes"');
+  let crossStage=false;
+  for(const st of stages){
+    const n=Number(st.stageNumber);
+    if(!isFinite(n)||n<3)continue;
+    for(const q of st.questions||[]){
+      const earlier=new Set();
+      for(const r of q.rationales||[])for(const id of r.factIds||[]){
+        const s=firstRevealed.get(String(id).toLowerCase());
+        if(s!==undefined&&s<n)earlier.add(s);
+      }
+      if(earlier.size>=2){crossStage=true;break;}
+    }
+    if(crossStage)break;
+  }
+  if(!crossStage)miss('the case shows no cross-stage integration (no stage-3-or-later question cites revealed data from two different earlier stages)');
+  // Near-miss density: wrong options that are actions a competent nurse would legitimately
+  // take at some other moment, rather than obviously-wrong filler.
+  let nearMiss=false;
+  for(const st of stages)for(const q of st.questions||[]){
+    if((q.type||'')!=='MCQ')continue;
+    const keys=new Set((q.correctAnswers||[]).map(String));
+    const distractors=(q.options||[]).filter(o=>o&&!keys.has(String(o.label)));
+    if(!distractors.length)continue;
+    const byOption=new Map((q.rationales||[]).map(r=>[String(r.option),r]));
+    let strong=0;
+    for(const o of distractors){
+      const r=byOption.get(String(o.label));
+      const hit=(r&&r.factIds||[]).some(id=>{
+        const e=factIndex.get(String(id).toLowerCase());
+        return e&&e.fact&&(Number(e.fact.tier)<=2||!!e.fact.safetyCritical);
+      });
+      if(hit)strong++;
+    }
+    if(strong>distractors.length/2){nearMiss=true;break;}
+  }
+  if(!nearMiss)miss('no MCQ builds most of its distractors from Tier 1-2 or safety-critical facts (near-miss density)');
+  return issues;
+}
 // Enums exactly as caseBuildPrompt defines them. Downstream logic string-matches these
 // (neutral-framing gates the no-factIds allowance; availability drives stage timing), so
 // an off-vocabulary value silently changes behavior — error tier when present-but-invalid.
@@ -5115,6 +5240,7 @@ function validateCaseStudy(caseStudy,factIndex,allowedFactIds,expectedCondition)
   neiaTerminologyScan(db.notes,'debrief.notes',issues);
   for(const k of db.keyDecisions||[])neiaTerminologyScan(k,'debrief.keyDecisions',issues);
   checkIds(db.factIds,'debrief');
+  issues.push(...caseDifficultySignals(caseStudy,factIndex)); // v15.6: warn-tier, whole-case
   return issues;
 }
 // Stage-timing: a rationale may not depend on patient data that has not been revealed yet.

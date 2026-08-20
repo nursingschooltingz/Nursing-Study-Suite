@@ -43,7 +43,7 @@ const clusterA = spanFrom('const CASE_CLINICAL_TOKEN_RE', 'function validateStag
 const clusterB = spanFrom('function validateStageTiming', '\n  return issues;\n}');
 const CASE = new Function(
   clusterA.slice(0, clusterA.lastIndexOf('function validateStageTiming')) + clusterB +
-  ';return {CASE_CLINICAL_TOKEN_RE,CASE_CLINICAL_TERM_RE,scanUncitedProse,caseNormalizeClinical,caseAuditTextValues,caseAuditDatumValues,validateCaseStudy,validateStageTiming,NEIA_TERMINOLOGY_RULES,neiaTerminologyScan,CASE_SUPPORT_TYPES,caseParseThreshold,caseSplitValue,caseUnitsCompatible,caseThresholdSatisfied,caseItemHeuristics,caseContentWords};'
+  ';return {CASE_CLINICAL_TOKEN_RE,CASE_CLINICAL_TERM_RE,scanUncitedProse,caseNormalizeClinical,caseAuditTextValues,caseAuditDatumValues,validateCaseStudy,validateStageTiming,NEIA_TERMINOLOGY_RULES,neiaTerminologyScan,CASE_SUPPORT_TYPES,caseParseThreshold,caseSplitValue,caseUnitsCompatible,caseThresholdSatisfied,caseItemHeuristics,caseContentWords,caseDifficultySignals};'
 )();
 const nclexChunkText = new Function(spanFrom('function nclexChunkText', '\n  return chunks;\n}') + ';return nclexChunkText;')();
 const nclexDedup = new Function(spanFrom('function nclexDedup', '\n}') + ';return nclexDedup;')();
@@ -553,6 +553,136 @@ section('v15.6 — Priority Stage 1 + UI copy');
   t('Tier 3 copy describes background detail', S.includes('Tier 3 adds lower-priority background detail'));
   t('Tier 3 copy states distractors come from any tier',
     S.includes('Distractors are built from contextually plausible near-misses at any tier, not from Tier 3'));
+}
+
+/* ── 17. v15.6 — operationalized difficulty (item 5) ── */
+section('v15.6 — difficulty contract');
+{
+  // Fact index: f1/f2 are Tier 1, f3 is Tier 3 filler, f4 is safety-critical.
+  const DIX = new Map([
+    ['f1', { condition: {}, fact: { id: 'f1', text: 'a', tier: 1, safetyCritical: false } }],
+    ['f2', { condition: {}, fact: { id: 'f2', text: 'b', tier: 2, safetyCritical: false } }],
+    ['f3', { condition: {}, fact: { id: 'f3', text: 'c', tier: 3, safetyCritical: false } }],
+    ['f4', { condition: {}, fact: { id: 'f4', text: 'd', tier: 3, safetyCritical: true } }]]);
+  const D = cs => CASE.caseDifficultySignals(cs, DIX);
+  const datum = (ids, avail) => ({ label: 'x', value: 'y', supportType: 'direct', availability: avail || 'revealed', factIds: ids });
+  const mcqQ = (id, skill, ratIds, opts) => ({
+    id, type: 'MCQ', stem: 's', cjmmSkill: skill,
+    options: (opts || [{ label: 'A' }, { label: 'B' }, { label: 'C' }]),
+    correctAnswers: ['A'],
+    rationales: (opts || [{ label: 'A' }, { label: 'B' }, { label: 'C' }])
+      .map(o => ({ option: o.label, text: 't', supportType: 'direct', factIds: ratIds[o.label] || ['f1'] })),
+  });
+
+  t('foundational imposes no minimum', D({ difficulty: 'foundational', stages: [] }).length === 0);
+  t('an unknown difficulty string is not policed', D({ difficulty: 'nightmare', stages: [] }).length === 0);
+
+  // Advanced, all three signatures missing.
+  {
+    // Distractors cite f3 — Tier 3, not safety-critical — i.e. obviously-wrong filler.
+    const weak = { A: ['f1'], B: ['f3'], C: ['f3'] };
+    const cs = { difficulty: 'advanced', stages: [
+      { stageNumber: 1, data: [datum(['f1'])], questions: [mcqQ('q1', 'Evaluate Outcomes', weak)] },
+      { stageNumber: 2, data: [], questions: [mcqQ('q2', 'Evaluate Outcomes', weak)] }] };
+    const found = D(cs);
+    t('advanced with only Evaluate Outcomes → missing Prioritize Hypotheses warn',
+      has(found, 'no question is tagged "Prioritize Hypotheses"', 'warn'));
+    t('advanced with no cross-stage citation → warn', has(found, 'no cross-stage integration', 'warn'));
+    t('advanced with weak distractors → near-miss density warn', has(found, 'near-miss density', 'warn'));
+    t('difficulty findings are warn-tier, never error', found.every(i => i.sev === 'warn'));
+    t('the warn names the requested level', found.every(i => /Requested difficulty "advanced"/.test(i.msg)));
+  }
+
+  // Advanced, all three signatures genuinely satisfied.
+  {
+    const cs = { difficulty: 'advanced', stages: [
+      { stageNumber: 1, data: [datum(['f1'])], questions: [mcqQ('q1', 'Recognize Cues', {})] },
+      { stageNumber: 2, data: [datum(['f2'])], questions: [mcqQ('q2', 'Prioritize Hypotheses', {})] },
+      { stageNumber: 3, data: [datum(['f3'])], questions: [
+        // cites f1 (stage 1) and f2 (stage 2) → two different earlier stages
+        Object.assign(mcqQ('q3', 'Evaluate Outcomes', { A: ['f1', 'f2'], B: ['f2'], C: ['f4'] }),
+          { rationales: [
+            { option: 'A', text: 't', supportType: 'direct', factIds: ['f1', 'f2'] },
+            { option: 'B', text: 't', supportType: 'direct', factIds: ['f2'] },
+            { option: 'C', text: 't', supportType: 'direct', factIds: ['f4'] }] })] }] };
+    t('advanced satisfying all three signatures → zero difficulty warnings', D(cs).length === 0);
+  }
+
+  // Cross-stage requires TWO different earlier stages, not two facts from one stage.
+  {
+    const cs = { difficulty: 'advanced', stages: [
+      { stageNumber: 1, data: [datum(['f1']), datum(['f2'])], questions: [mcqQ('q1', 'Prioritize Hypotheses', {})] },
+      { stageNumber: 2, data: [], questions: [] },
+      { stageNumber: 3, data: [], questions: [
+        Object.assign(mcqQ('q3', 'Evaluate Outcomes', {}), { rationales: [
+          { option: 'A', text: 't', supportType: 'direct', factIds: ['f1', 'f2'] },
+          { option: 'B', text: 't', supportType: 'direct', factIds: ['f2'] },
+          { option: 'C', text: 't', supportType: 'direct', factIds: ['f4'] }] })] }] };
+    t('two facts from a single earlier stage is not cross-stage integration',
+      has(D(cs), 'no cross-stage integration', 'warn'));
+  }
+  // Background data is available everywhere, so it cannot evidence cross-stage integration.
+  {
+    const cs = { difficulty: 'advanced', stages: [
+      { stageNumber: 1, data: [datum(['f1'], 'background')], questions: [mcqQ('q1', 'Prioritize Hypotheses', {})] },
+      { stageNumber: 2, data: [datum(['f2'], 'background')], questions: [] },
+      { stageNumber: 3, data: [], questions: [
+        Object.assign(mcqQ('q3', 'Evaluate Outcomes', {}), { rationales: [
+          { option: 'A', text: 't', supportType: 'direct', factIds: ['f1', 'f2'] },
+          { option: 'B', text: 't', supportType: 'direct', factIds: ['f2'] },
+          { option: 'C', text: 't', supportType: 'direct', factIds: ['f4'] }] })] }] };
+    t('background-only citations do not count as cross-stage', has(D(cs), 'no cross-stage integration', 'warn'));
+  }
+
+  // Exam level.
+  {
+    const bare = { difficulty: 'exam', stages: [
+      { stageNumber: 1, data: [], questions: [mcqQ('q1', 'Recognize Cues', {})] }] };
+    const found = D(bare);
+    t('exam without Analyze Cues → warn', has(found, 'no question is tagged "Analyze Cues"', 'warn'));
+    t('exam without Take Action → warn', has(found, 'no question is tagged "Take Action"', 'warn'));
+    t('exam without two revealed facts in one question → warn',
+      has(found, 'two or more distinct facts presented as revealed case data', 'warn'));
+  }
+  {
+    const ok = { difficulty: 'exam', stages: [
+      { stageNumber: 1, data: [datum(['f1']), datum(['f2'])], questions: [
+        mcqQ('q1', 'Analyze Cues', {}),
+        Object.assign(mcqQ('q2', 'Take Action', {}), { rationales: [
+          { option: 'A', text: 't', supportType: 'direct', factIds: ['f1', 'f2'] },
+          { option: 'B', text: 't', supportType: 'direct', factIds: ['f1'] },
+          { option: 'C', text: 't', supportType: 'direct', factIds: ['f2'] }] })] }] };
+    t('exam satisfying all three signatures → zero difficulty warnings', D(ok).length === 0);
+  }
+  // Near-miss density needs a MAJORITY, not merely one strong distractor.
+  {
+    const half = { A: ['f1'], B: ['f2'], C: ['f3'] }; // 1 of 2 distractors is Tier<=2
+    const cs = { difficulty: 'advanced', stages: [
+      { stageNumber: 1, data: [datum(['f1'])], questions: [mcqQ('q1', 'Prioritize Hypotheses', half)] },
+      { stageNumber: 2, data: [datum(['f2'])], questions: [] },
+      { stageNumber: 3, data: [], questions: [
+        Object.assign(mcqQ('q3', 'Evaluate Outcomes', half), { rationales: [
+          { option: 'A', text: 't', supportType: 'direct', factIds: ['f1', 'f2'] },
+          { option: 'B', text: 't', supportType: 'direct', factIds: ['f2'] },
+          { option: 'C', text: 't', supportType: 'direct', factIds: ['f3'] }] })] }] };
+    // q3's distractors are f2 (tier 2, strong) and f3 (tier 3, weak) → exactly half, not a majority.
+    t('exactly half the distractors being strong is not a majority',
+      has(D(cs), 'near-miss density', 'warn'));
+  }
+  t('difficulty signals are wired into validateCaseStudy',
+    S.includes('issues.push(...caseDifficultySignals(caseStudy,factIndex));'));
+}
+{
+  const cp = spanFrom('function caseDifficultyBlock(', '\n}\n', 'function caseDifficultyBlock(');
+  t('the ceiling is emitted at every level', cp.includes('DIFFICULTY CEILING (all levels)'));
+  t('ceiling names cue integration as the legitimate lever', cp.includes('Increase difficulty through cue integration'));
+  t('ceiling forbids specialty trivia and convoluted language', cp.includes('never through specialty\ntrivia, obscure facts, convoluted language'));
+  t('ceiling states out-of-scope is disqualifying', cp.includes("outside a new graduate's role is disqualified"));
+  t('all three levels are defined', cp.includes('foundational:') && cp.includes('exam:') && cp.includes('advanced:'));
+  t('each level declares its structural signature', cp.includes('STRUCTURAL SIGNATURE (checked in code)'));
+  t('foundational declares no structural minimum', cp.includes('none — no structural minimum is enforced'));
+  t('an unknown level falls back to exam, not to nothing', cp.includes('||LEVELS.exam'));
+  t('the bare Difficulty interpolation is gone', !S.includes('Difficulty: ${difficulty}. Produce'));
 }
 
 console.log('\n════════════════════════════');
