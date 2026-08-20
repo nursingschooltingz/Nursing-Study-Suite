@@ -236,6 +236,67 @@ t('background facts are available from stage 1',
     stage(1, [q({ rationales: [{ factIds: ['fact-9'] }] })]),
     stage(2, [], [{ availability: 'background', factIds: ['fact-9'] }])] }).length);
 
+/* ── 12. v15.5 — NCLEX_GEN_PROMPT v4.2 gate + category label map ── */
+// The gate lives entirely in prompt text, so these assert the blocks are PRESENT and that
+// the superseded wording is GONE. A prompt edit that silently drops one of these is the
+// regression this section exists to catch.
+section('v15.5 — NCLEX_GEN_PROMPT v4.2');
+{
+  const p = spanFrom('const NCLEX_GEN_PROMPT=`', '\n`;');
+  const inPrompt = s => p.includes(s);
+
+  t('prompt declares v4.2', inPrompt('NCLEX QUESTION GENERATOR — v4.2'));
+  t('terminology block present', inPrompt('TERMINOLOGY — NCSBN usage, model-authored text only'));
+  t('terminology is scoped to model-authored text',
+    inPrompt('It does NOT apply to verbatim source-anchor quotations'));
+  t('anchor quotations exempt from the client rewrite', inPrompt('EXEMPT — do not rewrite these'));
+  t('five distractor tests present', inPrompt('FIVE DISTRACTOR TESTS'));
+  t('answer integration test present', inPrompt('ANSWER INTEGRATION TEST'));
+  t('integration test forbids the shortest-key workaround',
+    inPrompt('Do NOT correct this by making the key the shortest option'));
+  t('bias check present', inPrompt('BIAS CHECK — every rendered item'));
+  t('gate lists eleven criteria', inPrompt('ELEVEN stop criteria'));
+  t('gate is MCQ-scoped', inPrompt('GATE — MCQ ONLY'));
+  t('alignment is WARN-only, never fatal', inPrompt('ADVISORY ONLY IN THIS BUILD'));
+  t('gate fails on criteria 1-10 only', inPrompt('ANY ONE of criteria 1-10'));
+  t('no total score is computed', inPrompt('Do NOT compute or report a total item-quality score'));
+  t('warnings are terminal, not aggregated', inPrompt('Do NOT count, total, or aggregate warnings'));
+  t('NEIA source is cited', inPrompt('Nurse Education in\nPractice 93:104804'));
+  t('activity area is provisional and unquoted', inPrompt('Do NOT present it as a verbatim quotation'));
+
+  // Superseded wording must be gone — each of these was a defect the patch removed.
+  t('padded 2-4 sentence stem rule removed', !inPrompt('Stem: 2-4 sentences'));
+  t('mandatory patient age in stem removed', !inPrompt('patient age, key history'));
+  t('rubber-stamp honesty check removed', !inPrompt('rubber-stamped'));
+  t('bare length/specificity integration rule removed',
+    !inPrompt('Never make the correct answer identifiable by being longer'));
+
+  // Kept deliberately — the strongest passage in the prompt, explicitly out of scope.
+  t('CONTEXTUAL PLAUSIBILITY block preserved', inPrompt('CONTEXTUAL PLAUSIBILITY (critical)'));
+  t('tinea pedis example preserved', inPrompt('tinea pedis'));
+  t('four distractor types preserved', inPrompt('A misconception the source explicitly corrects'));
+
+  // Batch-relative reporting: buildBatchBlock() overrides the 10-question default, so the
+  // gate denominators must not be hardcoded to /6 and /10.
+  t('gate counts are batch-relative, not hardcoded',
+    inPrompt('Gate [MCQ passed:_/_, N/A:_]') && !inPrompt('MCQ passed:_/6'));
+}
+{
+  const src = spanFrom('const NCLEX_CATEGORY_LABELS=', 'const NCLEX_TEST_PLAN_VERSION=2026;');
+  const M = new Function(src + '\nreturn {L:NCLEX_CATEGORY_LABELS,V:NCLEX_TEST_PLAN_VERSION};')();
+  t('label map version matches the Test Plan version', M.L.version === M.V);
+
+  // Every category ID used in the prompt must resolve in the map, and vice versa.
+  const promptIds = spanFrom('  ManagementOfCare       —', '\n\n\n═══')
+    .split('\n').map(l => (l.match(/^\s{2}([A-Za-z]+)\s*—/) || [])[1]).filter(Boolean);
+  t('prompt lists all 8 categories', promptIds.length === 8);
+  t('every prompt category ID resolves to a label', promptIds.every(id => !!M.L.map[id]));
+  t('map has no IDs the prompt does not list',
+    Object.keys(M.L.map).every(id => promptIds.includes(id)));
+  t('labels are display strings, not IDs',
+    Object.entries(M.L.map).every(([id, label]) => label !== id && /\s/.test(label)));
+}
+
 console.log('\n════════════════════════════');
 console.log(pass + ' passed · ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

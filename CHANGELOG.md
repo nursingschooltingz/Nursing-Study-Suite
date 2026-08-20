@@ -12,12 +12,36 @@ Every release since 15.0 has been verified against three gates before shipping: 
 ## [Unreleased]
 
 ### To do
-- Paste verified SRI `integrity` attributes on all CDN script tags, including **both** DOMPurify tags (the primary and the one inside the `document.write` fallback). Hashes and the verification command are in `LATTE-v15-changelog.md`.
 - Run the 20-page benchmark in `Nursing-Study-Suite-v16-spec.md` §11 to decide whether v16 multimodal ingestion gets built at all.
+- Confirm against a primary NCSBN source whether the 2026 Test Plan renames *Safety and Infection Control* to *Safety and Infection Prevention and Control*. The v4.2 patch claimed it; it could not be verified. `NCLEX_CATEGORY_LABELS` keeps the long-standing label until then.
+- Supply real NCLEX-RN Test Plan activity statements to the generator, then promote Test Plan Alignment from WARN-only to a hard FAIL in the v4.2 gate.
 
 ### Under consideration
-- **v15.5** — de-hyphenation and ligature normalization in `kbNormForMatch`, to promote quote-verification misses caused by line-break hyphenation. Cheaper than v16 and may resolve a meaningful share of `quoteMiss`.
+- **De-hyphenation** — de-hyphenation and ligature normalization in `kbNormForMatch`, to promote quote-verification misses caused by line-break hyphenation. Cheaper than v16 and may resolve a meaningful share of `quoteMiss`.
 - **v16** — selective multimodal page ingestion. Architecture settled, build blocked pending benchmark data. See `Nursing-Study-Suite-v16-spec.md`.
+
+---
+
+## [15.5] — 2026-08-20
+
+### Added
+- **SRI `integrity` pins on every CDN script tag.** All eight tags — React, ReactDOM, Babel, marked, pdf.js, JSZip, and **both** DOMPurify tags (cdnjs and the jsDelivr fallback inside `document.write`) — now carry a `sha384` hash computed from the bytes each CDN actually served. The two DOMPurify hashes are identical, confirming jsDelivr serves the npm dist bytes verbatim as the v15.3 comment claimed.
+- **NCLEX generator prompt v4.1 → v4.2**, adapting the NEIA Scoring Tool (Simms, Hensel & Kumar, *Nurse Educ Pract* 93:104804, 2026):
+  - **NCSBN terminology block** — `client`/`prescription`/`order`/`primary health care provider`/`UAP` in model-authored text, plus error-prone abbreviation and decimal-formatting rules. Explicitly scoped so it never overrides the ANCHOR RULE: verbatim source quotations keep their own wording.
+  - **Eleven-criterion item-quality gate** in FINAL VERIFY, MCQ-only, emitting `gate=PASS/FAIL` per item. Criteria are written in the prompt's own voice, not reproduced verbatim — the rubric is Elsevier-copyrighted and this repo ships GPL-3.0.
+  - **Bias check** — the prompt library previously had zero coverage of bias, equity, or cultural language.
+  - **Five distractor tests** (length, plausibility, distinctiveness, clarity, consistency) and a content-blind **answer integration test** that explicitly forbids "make the key shortest" as a fix, since that just substitutes one test-wise cue for another.
+  - **`NCLEX_CATEGORY_LABELS`** — category IDs are now documented as internal version-stable identifiers with official display labels held in a separate versioned map, so the enum never has to be renamed and existing Anki tags never orphan.
+
+### Changed
+- **Stem rule no longer mandates padding or demographics.** Was "2-4 sentences" with required patient age and history; now "shortest clinically sufficient scenario" with detail included only when it changes the clinical decision. The old rule pushed toward the exact gratuitous demographics the bias criterion penalizes.
+- **Negatively constructed stems are now prohibited** ("which is NOT", "all are correct EXCEPT", "least likely"), with explicit carve-outs for the legitimate "requires intervention" false-response stem and for "least restrictive" as clinical content.
+- **Honesty check no longer demands a defect.** Was "if you pass all 10 with zero revisions you have rubber-stamped"; that instructed the model to manufacture a finding whether or not one existed. The disclosure fallback — name the two weakest options and justify them — is kept.
+- **Part 2d is now explicitly grounding-only**, since it runs before any text is rendered and structurally cannot assess clarity, integration, or bias.
+
+### Notes
+- **Test Plan Alignment is WARN-only in this build.** No Test Plan document is supplied to the model, and neither source paper reproduces the activity statements — Appendix A only links out to NCSBN. A gate that FAILs on an unverifiable criterion would reject every item or induce fabricated statements, so the criterion warns and never fails. The other ten stop criteria fail hard.
+- Harness grew 69 → 98 assertions.
 
 ---
 
