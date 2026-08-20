@@ -43,7 +43,7 @@ const clusterA = spanFrom('const CASE_CLINICAL_TOKEN_RE', 'function validateStag
 const clusterB = spanFrom('function validateStageTiming', '\n  return issues;\n}');
 const CASE = new Function(
   clusterA.slice(0, clusterA.lastIndexOf('function validateStageTiming')) + clusterB +
-  ';return {CASE_CLINICAL_TOKEN_RE,CASE_CLINICAL_TERM_RE,scanUncitedProse,caseNormalizeClinical,caseAuditTextValues,caseAuditDatumValues,validateCaseStudy,validateStageTiming};'
+  ';return {CASE_CLINICAL_TOKEN_RE,CASE_CLINICAL_TERM_RE,scanUncitedProse,caseNormalizeClinical,caseAuditTextValues,caseAuditDatumValues,validateCaseStudy,validateStageTiming,NEIA_TERMINOLOGY_RULES,neiaTerminologyScan,CASE_SUPPORT_TYPES,caseParseThreshold,caseSplitValue,caseUnitsCompatible,caseThresholdSatisfied,caseItemHeuristics,caseContentWords};'
 )();
 const nclexChunkText = new Function(spanFrom('function nclexChunkText', '\n  return chunks;\n}') + ';return nclexChunkText;')();
 const nclexDedup = new Function(spanFrom('function nclexDedup', '\n}') + ';return nclexDedup;')();
@@ -129,12 +129,17 @@ const IDX = new Map([
   ['fact-a', { condition: {}, fact: { text: 'Monitor potassium during loop diuretic therapy.', sourceQuote: 'Monitor serum potassium.' } }],
   ['fact-b', { condition: {}, fact: { text: 'A heart rate of 120 beats per minute suggests decompensation.', sourceQuote: '' } }],
   ['fact-c', { condition: {}, fact: { text: 'Report urine output below 30 mL/hr.', sourceQuote: '' } }]]);
-{ const i = []; CASE.caseAuditDatumValues({ label: 'Potassium', value: '2.4 mEq/L', factIds: ['fact-a'] }, IDX, 'Stage 1', i);
-  t('fabricated 2.4 mEq/L on a monitor-only fact → warn', has(i, 'does not appear', 'warn')); }
+// v15.6 item 2: escalated warn → error. The legitimate reason a value could be absent from
+// its cited facts (threshold instantiation) now has its own declared support type, so an
+// unexplained absence is no longer ambiguous.
+{ const i = []; CASE.caseAuditDatumValues({ label: 'Potassium', value: '2.4 mEq/L', supportType: 'direct', factIds: ['fact-a'] }, IDX, 'Stage 1', i);
+  t('fabricated 2.4 mEq/L on a monitor-only fact → error (was warn pre-v15.6)', has(i, 'does not appear', 'error')); }
 { const i = []; CASE.caseAuditDatumValues({ label: 'Heart rate', value: '120 bpm', factIds: ['fact-b'] }, IDX, 'Stage 1', i);
   t('"120 bpm" matches "120 beats per minute" via unit normalization', i.length === 0); }
-{ const i = []; CASE.caseAuditDatumValues({ label: 'Urine output', value: '22 mL/hr', factIds: ['fact-c'] }, IDX, 'Stage 1', i);
-  t('threshold instantiation (22 vs "<30") → warn (telemetry by design)', has(i, 'does not appear', 'warn')); }
+{ const i = []; CASE.caseAuditDatumValues({ label: 'Urine output', value: '22 mL/hr', supportType: 'instantiated', factIds: ['fact-c'] }, IDX, 'Stage 1', i);
+  t('declared instantiation (22 vs "below 30") → clean', i.length === 0); }
+{ const i = []; CASE.caseAuditDatumValues({ label: 'Urine output', value: '22 mL/hr', supportType: 'direct', factIds: ['fact-c'] }, IDX, 'Stage 1', i);
+  t('the same value undeclared → error naming the instantiated escape hatch', has(i, 'declare supportType "instantiated"', 'error')); }
 { const i = []; CASE.caseAuditDatumValues({ label: 'Position', value: 'High Fowler', factIds: ['fact-a'] }, IDX, 'Stage 1', i);
   t('datum without unit-bearing values → silent', i.length === 0); }
 { const i = []; CASE.caseAuditDatumValues({ label: 'K+', value: '2.4 mEq/L', factIds: [] }, IDX, 'Stage 1', i);
@@ -178,8 +183,8 @@ t('rationale supportType "Neutral-framing" (case drift) → invalid-enum error',
   has(V({ stages: [stage(1, [q({ type: 'MCQ', options: [{ label: 'A' }], correctAnswers: ['A'], rationales: [{ option: 'A', text: '', supportType: 'Neutral-framing', factIds: [] }] })])] }, 'HF'), 'invalid supportType', 'error'));
 t('rationale "neutral-framing" with no factIds → still allowed (no lacks-IDs error)',
   !has(V({ stages: [stage(1, [q({ type: 'MCQ', options: [{ label: 'A' }], correctAnswers: ['A'], rationales: [{ option: 'A', text: 'setting the scene', supportType: 'neutral-framing', factIds: [] }] })])] }, 'HF'), 'lacks fact IDs'));
-t('rationale fabricating "2.4 mEq/L" against a monitor-only fact → entailment warn',
-  has(V({ stages: [stage(1, [q({ type: 'MCQ', options: [{ label: 'A' }], correctAnswers: ['A'], rationales: [{ option: 'A', text: 'Incorrect because potassium is 2.4 mEq/L.', supportType: 'direct', factIds: ['fact-a'] }] })])] }, 'HF'), 'does not appear', 'warn'));
+t('rationale fabricating "2.4 mEq/L" against a monitor-only fact → entailment error',
+  has(V({ stages: [stage(1, [q({ type: 'MCQ', options: [{ label: 'A' }], correctAnswers: ['A'], rationales: [{ option: 'A', text: 'Incorrect because potassium is 2.4 mEq/L.', supportType: 'direct', factIds: ['fact-a'] }] })])] }, 'HF'), 'does not appear', 'error'));
 t('rationale value supported by its cited fact → no entailment warn',
   !has(V({ stages: [stage(1, [q({ type: 'MCQ', options: [{ label: 'A' }], correctAnswers: ['A'], rationales: [{ option: 'A', text: 'Correct because the rate is 120 bpm.', supportType: 'direct', factIds: ['fact-b'] }] })])] }, 'HF'), 'does not appear'));
 t('caseAuditTextValues with no factIds → silent',
@@ -295,6 +300,259 @@ section('v15.5 — NCLEX_GEN_PROMPT v4.2');
     Object.keys(M.L.map).every(id => promptIds.includes(id)));
   t('labels are display strings, not IDs',
     Object.entries(M.L.map).every(([id, label]) => label !== id && /\s/.test(label)));
+}
+
+/* ── 13. v15.6 — NEIA terminology linter (item 1) ── */
+section('v15.6 — NEIA terminology linter');
+{
+  const scan = (txt) => { const out = []; CASE.neiaTerminologyScan(txt, 'x', out); return out; };
+  const msgs = (txt) => scan(txt).map(i => i.msg).join(' | ');
+
+  // Positive — each should raise exactly one warn.
+  t('"the patient" → one warn', scan('Assess the patient before ambulating.').length === 1);
+  t('"administer 5.0 mg" → trailing-zero warn', /trailing zero/.test(msgs('administer 5.0 mg')));
+  t('".5 mL" → leading-zero warn', /missing leading zero/.test(msgs('draw up .5 mL')));
+  t('"give 10 U insulin" → unsafe-U warn', /"U" is unsafe/.test(msgs('give 10 U insulin')));
+  t('"IU" → unsafe warn', /International Unit/.test(msgs('give 500 IU daily')));
+  t('"physician" → provider warn', /primary health care provider/.test(msgs('Notify the physician.')));
+  t('every finding is warn-tier, never error', scan('the patient saw the doctor').every(i => i.sev === 'warn'));
+
+  // Negative — the false-positive guards. These are the assertions that matter most:
+  // an over-eager linter would push the author to reword a verbatim quote.
+  t('"outpatient" does not trip the patient rule', !/use "client"/.test(msgs('Refer to the outpatient clinic.')));
+  t('"0.5 mg" is clean', scan('administer 0.5 mg').length === 0);
+  t('"5 mg" is clean', scan('administer 5 mg').length === 0);
+  t('"10 units" spelled out is clean', scan('give 10 units of insulin').length === 0);
+  t('clean client-voiced prose raises nothing', scan('The client reports chest pain to the primary health care provider.').length === 0);
+
+  // Scope: the linter must never see source quotes. validateCaseStudy is the wiring point,
+  // so this proves a fact's sourceQuote containing "patient" produces no terminology issue.
+  {
+    const fact = { id: 'fact-1', text: 'monitor potassium', sourceQuote: 'The patient should be monitored for hypokalemia.' };
+    const idx = new Map([['fact-1', { fact, condition: 'HF' }]]);
+    const cs = {
+      condition: 'HF', title: 'Case', patient: { background: 'Lives alone.' },
+      stages: [{
+        stageNumber: 1, narrative: 'The nurse enters at 0800.',
+        data: [{ label: 'Potassium', value: '3.1 mEq/L', supportType: 'direct', availability: 'revealed', factIds: ['fact-1'] }],
+        questions: [{
+          id: 's1q1', type: 'MCQ', stem: 'What should the nurse do first?',
+          options: [{ label: 'A', text: 'Recheck the level' }, { label: 'B', text: 'Notify the provider' }],
+          correctAnswers: ['B'],
+          rationales: [{ option: 'A', text: 'Delays care.', supportType: 'direct', factIds: ['fact-1'] },
+                       { option: 'B', text: 'Correct escalation.', supportType: 'direct', factIds: ['fact-1'] }],
+          cjmmSkill: 'Take Action',
+        }],
+      }],
+      debrief: { priorityProblem: 'Low potassium', keyDecisions: ['Escalate'], notes: '', factIds: ['fact-1'] },
+    };
+    const found = CASE.validateCaseStudy(cs, idx, new Set(['fact-1']), 'HF');
+    t('sourceQuote containing "patient" produces zero terminology issues',
+      !found.some(i => /terminology/.test(i.msg)));
+    t('the same case is otherwise clean of terminology findings',
+      found.filter(i => /terminology/.test(i.msg)).length === 0);
+  }
+  // Positive wiring: a stem that says "patient" must surface through validateCaseStudy.
+  {
+    const fact = { id: 'fact-1', text: 'monitor potassium', sourceQuote: 'Monitor potassium closely.' };
+    const idx = new Map([['fact-1', { fact, condition: 'HF' }]]);
+    const cs = {
+      condition: 'HF', title: 'Case', patient: { background: '' },
+      stages: [{
+        stageNumber: 1, narrative: '',
+        data: [],
+        questions: [{
+          id: 's1q1', type: 'MCQ', stem: 'The patient reports dizziness. What is first?',
+          options: [{ label: 'A', text: 'Sit them down' }, { label: 'B', text: 'Notify the provider' }],
+          correctAnswers: ['B'],
+          rationales: [{ option: 'A', text: 'Partial.', supportType: 'direct', factIds: ['fact-1'] },
+                       { option: 'B', text: 'Correct.', supportType: 'direct', factIds: ['fact-1'] }],
+          cjmmSkill: 'Take Action',
+        }],
+      }],
+      debrief: {},
+    };
+    const found = CASE.validateCaseStudy(cs, idx, new Set(['fact-1']), 'HF');
+    t('a stem saying "patient" surfaces a terminology warn through validateCaseStudy',
+      found.some(i => /stem: terminology/.test(i.msg) && i.sev === 'warn'));
+  }
+}
+{
+  // Prompt-side companion (item 1d).
+  const cp = spanFrom('function caseBuildPrompt(', '`;\n}', 'function caseBuildPrompt(');
+  // Guard: the end anchor must reach the real end of the function. '\n}\n' does NOT — it
+  // matches inside the JSON-shape block, silently truncating the span so later assertions
+  // pass vacuously. This assertion fails loudly if the anchor regresses.
+  t('caseBuildPrompt span reaches the end of the prompt', cp.includes('Return ONLY the JSON object.'));
+  t('caseBuildPrompt carries the TERMINOLOGY block', cp.includes('TERMINOLOGY: use NCSBN Test Plan vocabulary'));
+  t('terminology block exempts quoted source', cp.includes('Quoted source material keeps its own wording'));
+  t('"client\'s first name" replaces "patient\'s first name"',
+    cp.includes("the client's first name") && !cp.includes("the patient's first name"));
+  t('education type is Client education', cp.includes('Client education (which teaching point'));
+  t('JSON key "patient" is deliberately unchanged', cp.includes('"patient": { "age": 0'));
+  t('prose field path patient.background is unchanged', cp.includes('title · patient.background · stage narrative'));
+}
+
+/* ── 14. v15.6 — instantiated support type + threshold parser (item 2) ── */
+section('v15.6 — instantiated values');
+{
+  const TH = CASE.caseParseThreshold;
+  t('parses "<30 mL/hr"', (() => { const r = TH('Report urine output <30 mL/hr.'); return r && r.op === '<' && r.value === 30; })());
+  t('parses "below 30"', (() => { const r = TH('Report urine output below 30 mL/hr.'); return r && r.op === '<' && r.value === 30; })());
+  t('parses "less than 90 mm Hg"', (() => { const r = TH('Hypotension is a systolic less than 90 mm Hg.'); return r && r.op === '<' && r.value === 90; })());
+  t('parses "at least 2 L"', (() => { const r = TH('Encourage at least 2 L of fluid daily.'); return r && r.op === '>=' && r.value === 2; })());
+  t('parses "no more than 3 g"', (() => { const r = TH('Restrict sodium to no more than 3 g daily.'); return r && r.op === '<=' && r.value === 3; })());
+  t('parses "greater than 100"', (() => { const r = TH('Tachycardia is a rate greater than 100 bpm.'); return r && r.op === '>' && r.value === 100; })());
+  t('parses a 7.35-7.45 range', (() => { const r = TH('The normal pH range is 7.35-7.45.'); return r && r.op === 'range' && r.lo === 7.35 && r.hi === 7.45; })());
+  t('parses an en-dash range', (() => { const r = TH('Normal range 7.35–7.45.'); return r && r.op === 'range' && r.hi === 7.45; })());
+  t('a fact with no comparator yields null', TH('Monitor serum potassium.') === null);
+  t('a comparator with no adjacent number yields null', TH('Keep the output below the stated threshold.') === null);
+  t('empty input yields null', TH('') === null);
+
+  const IX = new Map([
+    ['t-lt', { condition: {}, fact: { text: 'Report urine output below 30 mL/hr.', sourceQuote: '' } }],
+    ['t-ph', { condition: {}, fact: { text: 'The normal pH range is 7.35-7.45.', sourceQuote: '' } }],
+    ['t-none', { condition: {}, fact: { text: 'Monitor serum potassium.', sourceQuote: '' } }],
+    ['t-bp', { condition: {}, fact: { text: 'Hypotension is a systolic below 90 mm Hg.', sourceQuote: '' } }]]);
+  const audit = (text, ids, st) => { const i = []; CASE.caseAuditTextValues(text, ids, IX, 'X', i, st); return i; };
+
+  t('instantiated 22 mL/hr against "below 30" → clean', audit('Urine output 22 mL/hr', ['t-lt'], 'instantiated').length === 0);
+  t('instantiated 45 mL/hr against "below 30" → error', has(audit('Urine output 45 mL/hr', ['t-lt'], 'instantiated'), 'wrong side of the threshold', 'error'));
+  t('instantiated against a fact with no comparator → error naming the missing threshold',
+    has(audit('Potassium 2.4 mEq/L', ['t-none'], 'instantiated'), 'no parseable threshold', 'error'));
+  t('range: 7.40 inside 7.35-7.45 → clean', audit('pH 7.40 units', ['t-ph'], 'instantiated').length === 0);
+  t('range: 7.2 outside 7.35-7.45 → error', has(audit('pH 7.2 units', ['t-ph'], 'instantiated'), 'wrong side of the threshold', 'error'));
+  t('BP pair 82/50 against "systolic below 90" → clean (systolic compared in mmHg)',
+    audit('Blood pressure 82/50', ['t-bp'], 'instantiated').length === 0);
+  t('BP pair 120/80 against "systolic below 90" → error',
+    has(audit('Blood pressure 120/80', ['t-bp'], 'instantiated'), 'wrong side of the threshold', 'error'));
+
+  // Severity table: everything that is not instantiated or neutral-framing now errors.
+  t('direct with an uncited value → error', has(audit('Potassium 2.4 mEq/L', ['t-none'], 'direct'), 'does not appear', 'error'));
+  t('combined with an uncited value → error', has(audit('Potassium 2.4 mEq/L', ['t-none'], 'combined'), 'does not appear', 'error'));
+  t('inference with an uncited value → error', has(audit('Potassium 2.4 mEq/L', ['t-none'], 'inference'), 'does not appear', 'error'));
+  t('neutral-framing returns early even with a value and IDs', audit('Potassium 2.4 mEq/L', ['t-none'], 'neutral-framing').length === 0);
+  t('no factIds → still silent', audit('Potassium 2.4 mEq/L', [], 'direct').length === 0);
+  t('a value present verbatim in its cited fact → clean regardless of type',
+    audit('Report urine output below 30 mL', ['t-lt'], 'direct').length === 0);
+
+  // Enum + prompt contract.
+  t('"instantiated" is a valid supportType', CASE.CASE_SUPPORT_TYPES.has('instantiated'));
+  t('the enum still rejects off-vocabulary values', !CASE.CASE_SUPPORT_TYPES.has('Instantiated'));
+  {
+    const cp = spanFrom('function caseBuildPrompt(', '`;\n}', 'function caseBuildPrompt(');
+    t('prompt documents the instantiated support type', cp.includes('"instantiated"   — a specific client value'));
+    t('prompt warns instantiation is code-checked', cp.includes('is an ERROR unless you declare'));
+    t('SOURCE BOUNDARY no longer contradicts instantiation', cp.includes('EITHER verbatim OR as a'));
+  }
+}
+
+/* ── 15. v15.6 — deterministic item heuristics (item 3) ── */
+section('v15.6 — item heuristics');
+{
+  const H = (q) => { const i = []; CASE.caseItemHeuristics(q, i, 'Q'); return i; };
+  const mcq = (stem, texts, key) => ({
+    type: 'MCQ', stem,
+    options: texts.map((tx, n) => ({ label: 'ABCD'[n], text: tx })),
+    correctAnswers: [key || 'A'],
+  });
+  const w = (n, seed) => Array.from({ length: n }, (_, i) => 'word' + ((i + (seed || 0)) % 40)).join(' ');
+
+  // Length.
+  {
+    const found = H(mcq('What should the nurse do?', [w(30, 1), w(10, 2), w(10, 3), w(10, 4)], 'A'));
+    const m = found.find(x => /option length/.test(x.msg));
+    t('key 3× the median distractor → length diagnostic fires', !!m);
+    t('length diagnostic reports the measured ratio', !!m && /3\.00× the median/.test(m.msg));
+    t('length diagnostic names the word counts', !!m && /\(30 vs 10 words\)/.test(m.msg));
+  }
+  t('all options within ±10% → zero length diagnostics',
+    !H(mcq('What should the nurse do?', [w(10, 1), w(11, 2), w(10, 3), w(11, 4)], 'A')).some(x => /option length/.test(x.msg)));
+  // The false-positive guard: a long key is fine when a distractor is equally long.
+  t('legitimately long key matched by an equally long distractor → no unique-longest flag',
+    !H(mcq('What should the nurse do?', [w(30, 1), w(30, 2), w(10, 3), w(10, 4)], 'A')).some(x => /option length/.test(x.msg)));
+  t('key that is the unique shortest by a wide margin → flags',
+    H(mcq('What should the nurse do?', [w(3, 1), w(20, 2), w(20, 3), w(20, 4)], 'A')).some(x => /unique shortest/.test(x.msg)));
+
+  // Stem overlap.
+  t('key repeating a distinctive stem term → overlap diagnostic fires',
+    H(mcq('The client shows evidence of digoxin toxicity today.',
+      ['Hold the digoxin toxicity medication', 'Ambulate them promptly', 'Offer warm blankets', 'Dim the lights'], 'A'))
+      .some(x => /stem overlap/.test(x.msg)));
+  t('overlap diagnostic is labelled a smoke detector, not a verdict',
+    H(mcq('The client shows evidence of digoxin toxicity today.',
+      ['Hold the digoxin toxicity medication', 'Ambulate them promptly', 'Offer warm blankets', 'Dim the lights'], 'A'))
+      .some(x => /smoke detector/.test(x.msg)));
+  t('distractors sharing stem vocabulary equally → no overlap flag',
+    !H(mcq('The client shows evidence of digoxin toxicity.',
+      ['Hold the digoxin dose', 'Repeat the digoxin level', 'Review digoxin adherence', 'Chart the digoxin time'], 'A'))
+      .some(x => /stem overlap/.test(x.msg)));
+
+  // Distinctiveness.
+  // Reordered synonyms are the case Distinctiveness exists to catch — same token set,
+  // different surface form, both defensible to a confused student.
+  t('near-duplicate options → Jaccard diagnostic',
+    H(mcq('What should the nurse do?',
+      ['Elevate the legs immediately', 'Immediately elevate the legs', 'Offer warm blankets', 'Dim the lights'], 'C'))
+      .some(x => /near-duplicates/.test(x.msg)));
+  t('options at Jaccard 0.75 stay under the 0.8 cutoff',
+    !H(mcq('What should the nurse do?',
+      ['Elevate the legs immediately', 'Elevate the legs immediately now', 'Offer warm blankets', 'Dim the lights'], 'C'))
+      .some(x => /near-duplicates/.test(x.msg)));
+  t('distinct options → no Jaccard diagnostic',
+    !H(mcq('What should the nurse do?',
+      ['Elevate the legs', 'Administer oxygen', 'Offer warm blankets', 'Dim the lights'], 'A'))
+      .some(x => /near-duplicates/.test(x.msg)));
+
+  // Negative stems.
+  t('"which is NOT" stem → negative-construction diagnostic',
+    H(mcq('Which finding is NOT expected?', ['a', 'b', 'c', 'd'], 'A')).some(x => /negative construction/.test(x.msg)));
+  t('"all are correct EXCEPT" stem → diagnostic',
+    H(mcq('All are correct except one.', ['a', 'b', 'c', 'd'], 'A')).some(x => /negative construction/.test(x.msg)));
+  t('"outpatient" does not trip the negative-stem regex',
+    !H(mcq('The client is seen in the outpatient clinic.', ['a', 'b', 'c', 'd'], 'A')).some(x => /negative construction/.test(x.msg)));
+  t('"cannot" does not trip the bare "not" alternative',
+    !H(mcq('The client cannot ambulate independently.', ['a', 'b', 'c', 'd'], 'A')).some(x => /negative construction/.test(x.msg)));
+  // Consistency with NCLEX_GEN_PROMPT v4.2, which rules this clinical content, not a negation.
+  t('"least restrictive" is permitted, matching v4.2',
+    !H(mcq('Which is the least restrictive intervention?', ['a', 'b', 'c', 'd'], 'A')).some(x => /negative construction/.test(x.msg)));
+
+  // Scope + severity.
+  t('every heuristic finding is warn-tier',
+    H(mcq('Which is NOT expected?', [w(30, 1), w(10, 2), w(10, 3), w(10, 4)], 'A')).every(x => x.sev === 'warn'));
+  t('SATA is out of scope', H(Object.assign(mcq('x', [w(30, 1), w(5, 2), w(5, 3)], 'A'), { type: 'SATA' })).length === 0);
+  t('Ordering is out of scope', H(Object.assign(mcq('x', [w(30, 1), w(5, 2), w(5, 3)], 'A'), { type: 'Ordering' })).length === 0);
+  t('an MCQ whose key label matches no option is skipped safely',
+    !H(mcq('What should the nurse do?', [w(30, 1), w(5, 2), w(5, 3), w(5, 4)], 'Z')).some(x => /option length/.test(x.msg)));
+  t('heuristics are wired into validateCaseStudy', S.includes('caseItemHeuristics(q,issues,qn);'));
+  t('thresholds are declared as LATTE heuristics, not NEIA', S.includes('const CASE_LEN_RATIO_HI=1.4'));
+}
+
+/* ── 16. v15.6 — Priority Stage 1 carve-out + UI copy (items 6, 7) ── */
+section('v15.6 — Priority Stage 1 + UI copy');
+{
+  const pa = spanFrom('function paBuildExtractPrompt(', '\n}\n', 'function paBuildExtractPrompt(');
+  t('rule 4 keeps its no-new-content ban', pa.includes('Never add clinical facts from'));
+  t('rule 4 gains the classification carve-out', pa.includes('SCOPE: this bans ADDING clinical content'));
+  t('carve-out permits applying a FLAG', pa.includes('Applying a FLAG from the list above is classification'));
+  t('carve-out still bans writing new values', pa.includes('Writing a clinical value, threshold, or interpretation'));
+  t('CRIT-LAB gains the baseline caveat', pa.includes('heuristic\n                    buckets, not universal thresholds'));
+  t('CRIT-LAB caveat names the dialysis/INR cases', pa.includes("this client's expected baseline (dialysis K+"));
+  // The verbatim-qualifier rule is explicitly out of scope for this release.
+  t('rule 2 verbatim-qualifier requirement is untouched',
+    pa.includes("QUALIFIER — copy the source's own modifying words for the finding, verbatim.") &&
+    pa.includes('NEVER invent a qualifier.'));
+  t('Stage 1 still assigns no tiers', pa.includes('Do not write T1, T2, or T3 anywhere.'));
+  // Stage 1 output must never reach the terminology linter.
+  t('terminology linter is not wired into the Priority Analyzer',
+    !/paBuild\w+Prompt[\s\S]{0,4000}?neiaTerminologyScan/.test(S));
+}
+{
+  t('Tier 3 copy no longer calls Tier 3 a distractor pool',
+    !S.includes('Tier 3 supplies plausible non-urgent distractors'));
+  t('Tier 3 copy describes background detail', S.includes('Tier 3 adds lower-priority background detail'));
+  t('Tier 3 copy states distractors come from any tier',
+    S.includes('Distractors are built from contextually plausible near-misses at any tier, not from Tier 3'));
 }
 
 console.log('\n════════════════════════════');

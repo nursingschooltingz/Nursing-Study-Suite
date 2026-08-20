@@ -831,7 +831,7 @@ Produce the ranked analysis now.`;
 
 ---
 
-## 3 · NCLEX Question Generator (`NCLEX_GEN_PROMPT`, v4.1, 14,646 chars)
+## 3 · NCLEX Question Generator (`NCLEX_GEN_PROMPT`, v4.2, 24,083 chars)
 
 **Runtime assembly** — each batch the app sends is:
 
@@ -842,12 +842,12 @@ NCLEX_GEN_PROMPT + buildBatchBlock(batch, numBatches, size) + buildFocusBlock()
 // and the JS-side fact allocation for this batch.
 ````
 
-`buildBatchBlock` sets batch position and size, `buildFocusBlock` carries your condition filter and Additional Context, and the carry blocks pass forward prior batches’ question stems for dedup. The v4.1 prompt below is self-contained — it embeds its own anchoring, distractor, rationale, and completeness rules.
+`buildBatchBlock` sets batch position and size, `buildFocusBlock` carries your condition filter and Additional Context, and the carry blocks pass forward prior batches’ question stems for dedup. The v4.2 prompt below is self-contained — it embeds its own anchoring, distractor, rationale, and completeness rules.
 
 ### The generator prompt
 
 ````text
-═══ NCLEX QUESTION GENERATOR — v4.1 (printable output) ═══
+═══ NCLEX QUESTION GENERATOR — v4.2 (printable output) ═══
 
 Return ONLY the four parts requested. No conversational preamble, no greetings, no
 closing remarks, no "here is your worksheet." Begin directly with "PART 1".
@@ -858,6 +858,37 @@ that test clinical reasoning, not recall.
 
 CORE OBJECTIVE: Generate 10 NCLEX-style practice questions from the provided source
 material, in printable plain-text format.
+
+═══════════════════════════════════════════════
+TERMINOLOGY — NCSBN usage, model-authored text only
+═══════════════════════════════════════════════
+SCOPE: applies to text YOU write — stems, options, rationales, strategy tips,
+metadata. It does NOT apply to verbatim source-anchor quotations. Where the two
+conflict, the ANCHOR RULE wins: quote the source exactly as written, including its
+terminology. Grounding outranks style.
+
+In model-authored text use:
+  · client              — not patient
+  · prescription        — for medication directives
+  · order               — for non-medication interventions and treatments
+  · primary health care provider — not doctor, physician, or MD, unless the item
+                          turns on the distinction
+  · unlicensed assistive personnel (UAP) — whatever the local job title
+
+EXEMPT — do not rewrite these:
+  · verbatim anchor quotations, in Part 1 and in Part 4 "Why" lines
+  · proper names of devices, therapies, and protocols that contain "patient"
+    (patient-controlled analgesia, patient care technician, and similar)
+  · any span reproduced explicitly as source evidence
+
+NUMERIC FORMATTING — every dose, rate, and calculated value:
+  · leading zero required below 1              0.5 mg, never .5 mg
+  · trailing zeros prohibited                  5 mg, never 5.0 mg
+  · never write: q.d., QD, U, u, IU, Q.O.D., QOD
+    write: daily, unit, International Unit, every other day
+
+Avoid abbreviations in stems and options unless the item tests the abbreviation. BP,
+HR, and RR are understood but usually unnecessary.
 
 OUTPUT IN FOUR PARTS, IN THIS ORDER. Do not reorder.
   PART 1 — CONCEPT INVENTORY (working)
@@ -879,11 +910,22 @@ For each, one line in this format:
 
   C1 | [concept name] | ANCHOR: "[verbatim phrase from source, under 20 words,
        containing the actual fact/number/rule — NOT a paraphrase]" |
-       NCLEX: [category] | CJMM: [skill] | TIER: [1/2/3] | [rich/thin]
+       NCLEX: [category] | ACTIVITY-AREA: [nursing activity this could support, or NONE] |
+       CJMM: [skill] | TIER: [1/2/3] | [rich/thin]
 
 ANCHOR RULE: The anchor must be text you can actually find in the source. If you cannot
 quote it, you do not have it — do not log the concept. This is the grounding backbone;
 every option you later write must trace to one of these anchors.
+
+ACTIVITY-AREA RULE: category membership is not alignment. Name the specific nursing
+activity this concept could support — the concrete task a new graduate performs, such
+as "assess and respond to changes in client vital signs" — not the broad category.
+This is PROVISIONAL and UNVERIFIED. No NCLEX-RN Test Plan document is supplied with
+this prompt, so you are working from your own knowledge of the Test Plan's structure.
+Describe the activity in plain language. Do NOT present it as a verbatim quotation,
+do NOT attach a statement number, and do NOT claim it is an official activity
+statement. If nothing specific fits, write NONE — that is an acceptable answer and
+never disqualifies a concept.
 
 RICH vs THIN: "rich" = the source contains enough nearby detail to build 3 plausible
 wrong answers FROM THE SOURCE ITSELF. "thin" = it doesn't.
@@ -903,6 +945,12 @@ These are the highest-yield items and the ones most often missed on a first pass
 ═══════════════════════════════════════════════
 NCLEX CATEGORIES (use these exactly — do not invent new ones)
 ═══════════════════════════════════════════════
+CATEGORY IDs BELOW ARE INTERNAL, VERSION-STABLE IDENTIFIERS. They are not NCSBN
+display strings and never have been — ManagementOfCare, HealthPromotion,
+RiskReduction, and the rest are all abbreviations of longer official labels. Use the
+ID exactly as written in inventory lines and Tags. When you refer to a category in
+prose or in alignment reasoning, use its full official name, not the ID.
+
   ManagementOfCare       — delegation, scope of practice, prioritization, assignment,
                            advocacy, informed consent, referrals, chain of command
   SafetyInfectionControl — isolation precautions, standard/contact/airborne, error
@@ -995,10 +1043,17 @@ PART 2 — SELECTION & AUDIT  (generate BEFORE Part 3)
   DISTRACTORS ARE NOT EXEMPT. A distractor that is clinically true but absent from
   the source makes the question unanswerable from the material — that is a defect.
 
-2e. HONESTY CHECK — if you find yourself passing all 10 questions with zero revisions,
-  you have not audited, you have rubber-stamped. A real audit catches something.
-  State plainly what you changed and why. If you truly changed nothing, name the
-  two weakest options in the set and justify why each survives.
+  SCOPE OF THIS AUDIT: 2d verifies GROUNDING only — that every option traces to a
+  logged anchor. It cannot assess stem clarity, answer integration, option length,
+  distractor distinctiveness, or bias, because no rendered text exists yet. Those are
+  gated in FINAL VERIFY against the actual Part 3 output. Do not attempt them here and
+  do not treat 2d as a quality pass.
+
+2e. HONESTY CHECK — state plainly what you changed and why. Never invent a defect or
+  weaken a sound item to demonstrate that an audit occurred; a clean item is a valid
+  outcome, and an item needing little to no revision is the target, not a red flag.
+  If you changed nothing, name the two weakest options in the set and justify why
+  each survives.
 
 
 ═══════════════════════════════════════════════
@@ -1009,10 +1064,18 @@ pairing with the answer key.
 
 Format exactly:
 
-  1. [Stem: 2-4 sentences. Clinical scenario — patient age, key history, presenting
-     data. Use real NCLEX phrasing: "requires immediate intervention," "should the
-     nurse prioritize," "indicates the patient understands," "requires intervention
-     by the nurse." Never "all of the above" / "none of the above."]
+  1. [Stem: shortest clinically sufficient scenario, usually 1-4 sentences. Include a
+     detail ONLY if it changes the clinical decision. Do not add age, sex/gender,
+     diagnosis, history, labs, or social context to make the item look like an NCLEX
+     question — irrelevant detail degrades clarity and can introduce bias.
+     Use real NCLEX phrasing: "requires immediate intervention," "should the nurse
+     prioritize," "indicates the client understands," "requires intervention by the
+     nurse."
+     Prohibited: "all of the above," "none of the above," and negatively constructed
+     stems — "which is NOT," "all are correct EXCEPT," "least likely."
+     ("Requires intervention" and "requires follow-up" are standard false-response
+     stems and are permitted. "Least restrictive" is clinical content, not a negative
+     construction, and is permitted.)]
 
      A. [option]
      B. [option]
@@ -1049,8 +1112,29 @@ nurse in THIS scenario plausibly say or do this?
 Prefer distractors drawn from the SAME condition, or ones a genuinely confused student
 would mix up. Grounding is necessary but not sufficient.
 
-Never make the correct answer identifiable by being longer or more specific than the
-distractors. Match option length and specificity.
+FIVE DISTRACTOR TESTS — each is a separate stop criterion.
+  1. LENGTH — no option stands out by length.
+  2. PLAUSIBILITY — every distractor is realistically tempting to a learner with an
+     incomplete or incorrect grasp of the concept. See CONTEXTUAL PLAUSIBILITY above.
+  3. DISTINCTIVENESS — options are meaningfully different choices. No synonyms, no
+     option nested inside another, no two options both defensible as correct.
+  4. CLARITY — each option admits exactly one reading.
+  5. CONSISTENCY — options parallel in grammatical form, tense, perspective,
+     specificity, and units.
+
+ANSWER INTEGRATION TEST — run on the drafted option set, not on the plan.
+Set clinical correctness aside and read the four options as a test-wise student who
+does not know the content would. The key must NOT be identifiable because it:
+  · repeats a distinctive term, diagnosis, or number from the stem
+  · is the only option that grammatically completes the stem
+  · is longer, shorter, more specific, or more qualified than the distractors
+  · uses source-specific wording the distractors do not
+  · differs in grammatical structure from the distractors
+If a content-blind reader could pick it, rewrite the option set.
+Do NOT correct this by making the key the shortest option or by systematically
+avoiding the longest position. Both substitute one surface cue for another. The target
+is options that are indistinguishable on surface features, not options where the key
+occupies a predictable rank.
 
 
 ═══════════════════════════════════════════════
@@ -1095,14 +1179,80 @@ This preserves cross-filtering with existing Anki decks.
 
 
 ═══════════════════════════════════════════════
+BIAS CHECK — every rendered item, before FINAL VERIFY
+═══════════════════════════════════════════════
+An item fails if content or language could disadvantage a test-taker on grounds of
+culture, language, sexual orientation, sex/gender, age, or socioeconomic status.
+  · No demographic detail unless it changes the clinical reasoning. If the item works
+    with the detail removed, remove it.
+  · No idiom, colloquialism, or culturally specific reference that a competent nurse
+    who learned English as an additional language would not reliably parse.
+  · Difficulty comes from nursing judgment, never from sentence complexity, vocabulary
+    load, or syntactic density.
+  · No assumed access to housing, transport, insurance, family support, or technology
+    unless the item specifically tests a resource-access decision.
+A failing item is rewritten, not scored.
+
+
+═══════════════════════════════════════════════
 FINAL — VERIFY BEFORE YOU REPORT
 ═══════════════════════════════════════════════
-Before printing the DISTRIBUTION line, re-read PART 3 and list every question
-explicitly:
+Before printing the DISTRIBUTION line, re-read PART 3 as rendered — the actual stem
+and option text, not your Part 2 plan — and list every question explicitly:
 
-  Q1: topic=___ tier=___ cjmm=___ type=___
-  Q2: topic=___ tier=___ cjmm=___ type=___
-  ... through Q10
+  Q1: topic=___ tier=___ cjmm=___ type=___ activity=___ gate=PASS/FAIL[criterion]
+  Q2: topic=___ tier=___ cjmm=___ type=___ activity=___ gate=PASS/FAIL[criterion]
+  ... through the last question in this batch
+
+ACTIVITY — assign from the rendered stem and key, not from the concept's
+ACTIVITY-AREA. The candidate is a starting point; if the question as written does not
+exercise that activity, name the one it does. Plain language, never presented as a
+verbatim Test Plan quotation. If none applies, write NONE — this never fails an item.
+
+GATE — MCQ ONLY, the single-best-answer items with one key and three distractors.
+SATA, ordering, and calculation items are covered by the existing format rules; mark
+them gate=N/A. The item-quality criteria below were validated for single-best-answer
+MCQ only, so do not report a gate result for a format they were not built to assess.
+
+Check the rendered item against these ELEVEN stop criteria. Each describes the
+disqualifying condition — the floor, not an ideal. Do not fail an item merely because
+a better version is imaginable.
+
+  1. STEM CLARITY — confusing, ambiguous, grammatically incorrect, or negatively
+     constructed ("all are correct except").
+  2. STEM RELEVANCE — requires knowledge or competencies outside a new graduate
+     nurse's scope.
+  3. ANSWER ACCURACY — the keyed answer does not correctly answer the question asked.
+  4. ANSWER INTEGRATION — the key is immediately apparent because it repeats terms
+     from the stem, or differs from the distractors in length or grammar.
+  5. DISTRACTOR LENGTH — lengths vary enough to reveal the key.
+  6. DISTRACTOR PLAUSIBILITY — a distractor is obviously incorrect or irrelevant.
+  7. DISTRACTOR DISTINCTIVENESS — distractors are too similar to each other.
+  8. DISTRACTOR CLARITY — a distractor is ambiguous or vague.
+  9. DISTRACTOR CONSISTENCY — distractors lack uniformity in style or grammar.
+ 10. BIAS — content or language could disadvantage test-takers by culture, language,
+     sexual orientation, sex/gender, age, or socioeconomic status.
+ 11. TEST PLAN ALIGNMENT — the item exercises no identifiable nursing activity.
+     ADVISORY ONLY IN THIS BUILD: no Test Plan document is supplied, so this criterion
+     may WARN but must NEVER FAIL an item. Never fabricate a statement to satisfy it.
+
+FAIL if the item meets the disqualifying condition on ANY ONE of criteria 1-10. A
+single stop criterion disqualifies regardless of strength elsewhere — strengths do not
+offset a fatal flaw. Rewrite the item and re-check it. Never ship a FAIL with a note
+attached and never downgrade it in place.
+
+Merely improvable is NOT a failure. If the item is sound but could be sharpened, it
+PASSES. Emit at most one line per item:
+
+  WARN Q#: [criterion] — [the specific improvement]
+
+Warnings are advisory output for the human reviewer. Do NOT revise an item in response
+to a warning. Do NOT count, total, or aggregate warnings. Do NOT treat a warning-free
+batch as a goal.
+
+Do NOT compute or report a total item-quality score. Gate result only. These criteria
+are adapted from the NEIA Scoring Tool (Simms, Hensel & Kumar, Nurse Education in
+Practice 93:104804, 2026), whose scoring bands have not been criterion-validated.
 
 Tally FROM THAT LIST. Do not report a distribution you have not counted
 question-by-question. If a quota is violated, say so and fix it — never report
@@ -1112,8 +1262,12 @@ Then print:
 
   DISTRIBUTION: Tier [1:_ 2:_ 3:_] | CJMM [skill:count, ...] | Types [MCQ:_ SATA:_
   Ordering:_ Calc:_] | Topics [name:count, ...] | Concepts logged: _ | Concepts used: _
+  | Gate [MCQ passed:_/_, N/A:_] | Activity-named: _/_
 
 Give CJMM and Topics as COUNTS, not lists of names — a list cannot be checked for balance.
+Gate and Activity denominators are the counts for THIS batch — MCQ passed is out of the
+MCQ items in this batch, Activity-named is out of every item in this batch. Warnings do
+not appear on this line.
 
 
 COMPLETENESS RULE — Parts 3 and 4 must both contain exactly 10 numbered entries, and
@@ -1145,7 +1299,7 @@ Either way, the ANCHOR RULE is unchanged: every option must trace to verbatim so
 
 ## Appendix · Shared question-rule constants
 
-These four constants are named `NCLEX_*` but are **not** appended to the NCLEX Generator (its v4.1 prompt is self-contained). They are joined into `CASE_QUESTION_RULES` and consumed by the **Clinical Case Study Generator**. Included here because anyone reading the code will wonder.
+These four constants are named `NCLEX_*` but are **not** appended to the NCLEX Generator (its v4.2 prompt is self-contained). They are joined into `CASE_QUESTION_RULES` and consumed by the **Clinical Case Study Generator**. Included here because anyone reading the code will wonder.
 
 ### `NCLEX_ANCHOR_RULES` (370 chars)
 

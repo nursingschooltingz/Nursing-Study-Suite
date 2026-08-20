@@ -1860,7 +1860,11 @@ RULES
    PSYCH-SAFETY ... suicidal/homicidal ideation, self-harm, violence, elopement risk
    CRIT-LAB ....... critical-range value — INR in the 4s, K+ in the 6s, pH in the 6s/low 7s,
                     CO2 in the 50s, low O2 sat, high WBC, low ANC, low CD4, low platelets —
-                    or the guide labels it critical/panic
+                    or the guide labels it critical/panic. The ranges above are heuristic
+                    buckets, not universal thresholds. A value the chunk itself presents as
+                    this client's expected baseline (dialysis K+, therapeutic INR for a
+                    mechanical valve) is NOT critical. Flag what the text presents as
+                    abnormal for this client, not what the number looks like out of context.
    ROUTINE-LAB .... abnormal but not critical — creatinine, BUN, Hgb 8–11, bicarb, elevated HCT,
                     elevated BNP, elevated Na
    UNSTABLE ....... acute; unexpected or changed finding; post-op <12h; general anesthesia <12h;
@@ -1878,6 +1882,10 @@ RULES
 
 4. NO NEW CONTENT. If it is not in this chunk, it does not exist. Never add clinical facts from
    your own knowledge. Never expand an abbreviation into a fact the guide didn't state.
+   SCOPE: this bans ADDING clinical content to the inventory. It does not ban CLASSIFYING
+   content already in front of you. Applying a FLAG from the list above is classification
+   and is permitted. Writing a clinical value, threshold, or interpretation the chunk does
+   not state is not.
 
 5. Group items under the guide's own condition/topic headings. One line per item. Telegraphic.
 
@@ -4626,7 +4634,7 @@ function caseBuildPrompt({conditionName,facts,difficulty,stages,questionsPerStag
   if(includeTypes.prioritization)typeList.push('Prioritization (which action/finding comes first)');
   if(includeTypes.ordering)typeList.push('Ordered response — randomized steps to sequence (never list in correct order)');
   if(includeTypes.calculation)typeList.push('Calculation — only when the supplied facts contain the needed numbers; show the required unit');
-  if(includeTypes.education)typeList.push('Patient education (which teaching point is correct / indicates understanding)');
+  if(includeTypes.education)typeList.push('Client education (which teaching point is correct / indicates understanding)');
   return `═══ CLINICAL CASE STUDY GENERATOR (strict, source-grounded, JSON output) ═══
 
 ROLE: You are a nursing clinical-judgment case author with expertise in the NCSBN Clinical
@@ -4637,13 +4645,24 @@ Return ONLY a single valid JSON object. No markdown fence, no preamble, no comme
 
 ═══ SOURCE BOUNDARY (the most important rule) ═══
 You may invent ONLY neutral narrative details that do NOT affect clinical reasoning:
-time of day, room number, whether a family member is present, the patient's first name.
+time of day, room number, whether a family member is present, the client's first name.
 You may NOT invent any of the following — every one must trace to a supplied fact ID:
   diagnoses · comorbidities · allergies · home medications · medication doses ·
   laboratory or vital-sign values · assessment findings · procedures · provider orders ·
   contraindications · treatment responses · discharge restrictions · complications.
-A patient age and sex may be chosen freely ONLY if they do not change the clinical reasoning
+A client age and sex may be chosen freely ONLY if they do not change the clinical reasoning
 (e.g. do not invent "72-year-old with CKD" unless CKD is a supplied fact).
+Laboratory and vital-sign values must trace to a supplied fact EITHER verbatim OR as a
+bounded instantiation of a threshold that fact states — see supportType "instantiated"
+below. Presenting a concrete value rather than restating the rule is preferred, because a
+stem that quotes the decision rule hands the student the answer.
+
+TERMINOLOGY: use NCSBN Test Plan vocabulary in all learner-facing text — client (not
+patient), prescription for medications and order for other interventions, primary health
+care provider (not doctor/physician), UAP. Never use q.d., QOD, IU, a bare U for unit, a
+trailing zero (5.0 mg), or a decimal without a leading zero (.5 mg).
+This applies to text YOU write. Quoted source material keeps its own wording — never
+reword a verbatim quote to satisfy this rule.
 Every clinical datum, every correct answer, and every rationale MUST cite at least one supplied
 fact ID in its factIds array. If the facts cannot support a stage or question, produce fewer and
 say so in debrief.notes — NEVER fabricate to fill a quota.
@@ -4666,16 +4685,23 @@ numbers, and clock times are fine.
 Each data item and rationale carries a supportType describing how it relates to the facts:
   "direct"         — restates a single fact
   "combined"       — merges two or more facts (list every id)
-  "inference"      — a valid clinical inference from several facts (e.g. "patient is
+  "inference"      — a valid clinical inference from several facts (e.g. "client is
                      deteriorating" from falling SpO2 + new confusion); list every id
+  "instantiated"   — a specific client value generated from a cited THRESHOLD or RANGE
+                     fact (source says "urine output <30 mL/hr"; the case presents
+                     "22 mL/hr"). The cited fact MUST contain the threshold, and the
+                     value MUST fall on the side of it the case is claiming.
+                     Never use this to invent a value the facts do not bound.
   "neutral-framing"— invented narrative detail with no clinical weight (factIds may be empty)
 Do not pretend an inference is a direct quote.
+This is checked in code: a value absent from its cited facts is an ERROR unless you declare
+it "instantiated" AND a cited fact states a bound the value actually satisfies.
 
 ═══ STAGE DEPENDENCY ═══
 Generate exactly ${stages} stages that unfold in clinical order. A question in a stage may only
 depend on data revealed in that stage or an earlier one. Never let a Stage 1 question hinge on a
 lab that is not revealed until Stage 2. Background pathophysiology may be marked availability
-"background"; patient data that has been shown is availability "revealed".
+"background"; client data that has been shown is availability "revealed".
 Stage arc for ${stages} stages:
   Stage 1 — Initial presentation (BriefPatho + Look + baseline findings)
   Stage 2 — Assessment & diagnostics (Assess + Tests)
@@ -4746,6 +4772,38 @@ function scanUncitedProse(text,where,issues){
   if(terms&&terms.length)issues.push({sev:'warn',msg:`${where}: possible uncited clinical finding(s): ${[...new Set(terms.map(t=>t.toLowerCase()))].join(', ')} \u2014 assessment findings belong in the cited data array (warn-tier: neutral phrasing can trip this)`});
 }
 
+// \u2500\u2500 v15.6: NEIA terminology linter \u2500\u2500
+// [NEIA-VALIDATED] Terminology Reference, Appendix A of Simms, Hensel & Kumar,
+// Nurse Educ Pract 93:104804 (2026). Preferred vocabulary and unsafe abbreviations.
+// WARN tier only \u2014 the rubric's Terminology subcategory carries NO stop criterion; its
+// note reads "If the Terminology subcategory scores below 3 points, consider revision."
+// Making these fatal would over-reject on a criterion the rubric itself treats as advisory.
+// The trailing/leading-zero patterns partially overlap CASE_CLINICAL_TOKEN_RE. That overlap
+// is deliberate: different purpose (safe formatting vs. uncited data) and different severity.
+// Do NOT merge them \u2014 a single shared regex is how the %\b never-match bug happened.
+const NEIA_TERMINOLOGY_RULES=[
+  {re:/\bpatients?\b/gi,        msg:'use "client" (NCSBN Test Plan terminology)'},
+  {re:/\b(doctors?|physicians?|MDs?)\b/gi, msg:'use "primary health care provider"'},
+  {re:/\bq\.?\s?d\.?\b/gi,      msg:'"q.d." is unsafe \u2014 use "daily"'},
+  {re:/\bq\.?\s?o\.?\s?d\.?\b/gi, msg:'"QOD" is unsafe \u2014 use "every other day"'},
+  {re:/\bIU\b/g,                msg:'"IU" is unsafe \u2014 use "International Unit"'},
+  {re:/(\d)\s*[Uu]\b/g,         msg:'"U" is unsafe \u2014 use "unit"'},
+  {re:/\b\d+\.0\s*(mg|mcg|g|mL|L|units?)\b/gi, msg:'trailing zero \u2014 write without the ".0"'},
+  {re:/(?<![\d.])\.\d+\s*(mg|mcg|g|mL|L)\b/gi, msg:'missing leading zero \u2014 write "0.X"'},
+];
+// SCOPE: model-authored, learner-facing text ONLY. Never run this over f.sourceQuote,
+// caseRenderFactPacket output, or any KB source text \u2014 a textbook that says "patient" is
+// quoted correctly, and flagging it would invite a rewrite that breaks the anchor. Also
+// never over Priority Analyzer Stage 1 output, whose rule 2 requires verbatim qualifiers.
+function neiaTerminologyScan(text,where,issues){
+  for(const r of NEIA_TERMINOLOGY_RULES){
+    r.re.lastIndex=0; // module-level literals reused across calls
+    const hits=String(text||'').match(r.re);
+    if(hits&&hits.length)
+      issues.push({sev:'warn',msg:`${where}: terminology \u2014 ${r.msg} (found "${hits[0]}")`});
+  }
+}
+
 // Deterministic post-generation validation.
 // `allowedFactIds` is the packet actually sent to the model. Checking against the whole KB
 // would let a Heart Failure case cite a Diabetes fact and call it grounded, so IDs are graded
@@ -4772,30 +4830,173 @@ function caseNormalizeClinical(t){
     .replace(/[,\u00a0]/g,'')
     .replace(/\s+/g,'');
 }
+// ── v15.6 item 2: instantiated values ──
+// [LATTE-HEURISTIC] structure, [NEIA-DERIVED] motivation. v15.2-15.5 emitted a warn whenever
+// a value was absent from its cited facts, because the legitimate case was indistinguishable
+// from fabrication: source says "<30 mL/hr", the case presents "22 mL/hr". Forbidding
+// instantiation is the wrong fix — a case that can only restate the threshold puts the
+// decision rule verbatim in the stem, and the key then repeats it, which fails NEIA's Answer
+// Integration criterion by construction. Instead the author must SAY it is an instantiation,
+// and the claim is then checked in code.
+// Splits a matched clinical token into a number and a normalized unit. A blood-pressure pair
+// (82/50) reports its systolic value in mmHg — the pair form carries no unit of its own, and
+// the systolic number is what a threshold like "SBP below 90" is about.
+function caseSplitValue(v){
+  const raw=String(v||'').trim();
+  const bp=raw.match(/^(\d{2,3})\s*\/\s*(\d{2,3})$/);
+  if(bp)return{num:parseFloat(bp[1]),unit:'mmhg'};
+  const m=caseNormalizeClinical(raw).match(/^(\d+(?:\.\d+)?)(.*)$/);
+  return m?{num:parseFloat(m[1]),unit:m[2]||''}:null;
+}
+// Compatible when equal, when either side is unknown, or when one is a prefix of the other.
+// The prefix case is load-bearing, not sloppiness: CASE_CLINICAL_TOKEN_RE truncates compound
+// units ("22 mL/hr" tokenizes as "22 mL") while the fact text keeps "30 mL/hr" intact.
+function caseUnitsCompatible(a,b){
+  const x=String(a||''),y=String(b||'');
+  if(!x||!y)return true;
+  return x===y||x.startsWith(y)||y.startsWith(x);
+}
+// [LATTE-HEURISTIC] Parses a comparator + bound out of a KB fact so an instantiated client
+// value can be checked against it. NOT a NEIA construct — the rubric says nothing about
+// thresholds. Deliberately conservative: the number must follow the comparator immediately
+// (after whitespace stripping), and an unparseable fact yields null so the caller errors
+// rather than silently passing the value.
+function caseParseThreshold(factText){
+  const t=caseNormalizeClinical(factText);
+  if(!t)return null;
+  const NUM='(\\d+(?:\\.\\d+)?)',UNIT='([a-z%][a-z%\\/]*)?';
+  const rng=t.match(new RegExp(NUM+'(?:[-–—]|to)'+NUM+UNIT));
+  if(rng){
+    const lo=parseFloat(rng[1]),hi=parseFloat(rng[2]);
+    if(isFinite(lo)&&isFinite(hi)&&hi>lo)return{op:'range',lo,hi,unit:rng[3]||''};
+  }
+  // Longer comparators first: "<=" contains "<", ">=" contains ">".
+  for(const[src,op]of[['(?:<=|≤|nomorethan|atmost)','<='],['(?:>=|≥|atleast)','>='],
+                      ['(?:<|lessthan|below|under)','<'],['(?:>|greaterthan|above|over)','>']]){
+    const m=t.match(new RegExp(src+NUM+UNIT));
+    if(m)return{op,value:parseFloat(m[1]),unit:m[2]||''};
+  }
+  return null;
+}
+function caseThresholdSatisfied(num,th){
+  if(!th||!isFinite(num))return false;
+  if(th.op==='range')return num>=th.lo&&num<=th.hi;
+  if(th.op==='<')return num<th.value;
+  if(th.op==='<=')return num<=th.value;
+  if(th.op==='>')return num>th.value;
+  if(th.op==='>=')return num>=th.value;
+  return false;
+}
 // v15.3: refactored into a text+ids core so rationales share the audit (per-rationale
 // factIds make it a clean drop-in). The datum wrapper preserves v15.2's message shape.
-function caseAuditTextValues(text,factIds,factIndex,where,issues){
+// v15.6: takes supportType and escalates warn -> error. A value absent from its cited facts
+// is now an error for direct/combined/inference, because the one legitimate reason it could
+// be absent — threshold instantiation — has its own declared support type.
+function caseAuditTextValues(text,factIds,factIndex,where,issues,supportType){
+  const st=String(supportType||'');
+  if(st==='neutral-framing')return; // invented detail with no clinical weight, by definition
   if(!(factIds||[]).length)return; // the missing/lacks-fact-ID checks already cover this
   // Reuses CASE_CLINICAL_TOKEN_RE — a second, divergent value regex is exactly how the
   // %\b never-match bug happened the first time.
   const values=String(text||'').match(CASE_CLINICAL_TOKEN_RE);
   if(!values||!values.length)return;
-  const support=caseNormalizeClinical((factIds||[]).map(id=>{
+  const cited=(factIds||[]).map(id=>{
     const e=factIndex.get(String(id||'').toLowerCase());
     return e?`${e.fact.text||''} ${e.fact.sourceQuote||''}`:'';
-  }).join(' '));
+  });
+  const support=caseNormalizeClinical(cited.join(' '));
   for(const v of new Set(values.map(x=>x.trim()))){
-    if(!support.includes(caseNormalizeClinical(v)))
-      issues.push({sev:'warn',msg:`${where}: value "${v}" does not appear in its cited facts' text or source quotes — verify it is not invented (a sourced threshold instantiated as a specific value also trips this)`});
+    if(support.includes(caseNormalizeClinical(v)))continue; // present verbatim in a cited fact
+    if(st==='instantiated'){
+      const parsed=caseSplitValue(v);
+      let applicable=false,ok=false;
+      if(parsed)for(const c of cited){
+        const th=caseParseThreshold(c);
+        if(!th||!caseUnitsCompatible(parsed.unit,th.unit))continue;
+        applicable=true;
+        if(caseThresholdSatisfied(parsed.num,th)){ok=true;break;}
+      }
+      if(ok)continue;
+      issues.push(applicable
+        ?{sev:'error',msg:`${where}: instantiated value "${v}" falls on the wrong side of the threshold stated in its cited fact(s)`}
+        :{sev:'error',msg:`${where}: instantiated value "${v}" has no parseable threshold in its cited fact(s) — "instantiated" requires a cited fact that states the bound`});
+      continue;
+    }
+    issues.push({sev:'error',msg:`${where}: value "${v}" does not appear in its cited facts' text or source quotes — if it is derived from a stated threshold, declare supportType "instantiated"`});
   }
 }
 function caseAuditDatumValues(d,factIndex,where,issues){
-  caseAuditTextValues((d.label||'')+' '+(d.value||''),d.factIds,factIndex,`${where} datum "${d.label||''}"`,issues);
+  caseAuditTextValues((d.label||'')+' '+(d.value||''),d.factIds,factIndex,`${where} datum "${d.label||''}"`,issues,d.supportType);
+}
+// ── v15.6 item 3: deterministic item heuristics ──
+// [LATTE-HEURISTIC], telemetry tier. NOT NEIA-validated: the rubric says distractor lengths
+// fail when they "vary significantly enough to unintentionally reveal the correct answer"
+// and names NO ratio. Every threshold below is ours and provisional until the test-retest
+// harness produces real numbers — do not attribute any of them to NEIA.
+// Motivation, and the only claim made here: the June study's domain-level ICC(2,1) for AI
+// raters was lowest for Distractors (0.524) and Correct Answer (0.575) against Stem (0.770).
+// Those are the two domains with the most mechanizable criteria, so moving the computable
+// parts into code reduces reliance on the model where it is measurably weakest.
+// Every diagnostic carries its measurement so the numbers are reviewable before any cutoff
+// is trusted. All findings are WARN — none of these gate anything.
+const CASE_LEN_RATIO_HI=1.4,CASE_LEN_RATIO_LO=0.71,CASE_JACCARD_DUP=0.8;
+const CASE_STOPWORDS=new Set(['a','an','and','are','as','at','be','but','by','for','from','has','have','in','is','it','its','of','on','or','that','the','to','with','which','what','when','should','would','could','will','nurse','client','patient','first','best','most','next','action','following']);
+function caseContentWords(s){
+  return String(s||'').toLowerCase().replace(/[^a-z0-9\s]/g,' ').split(/\s+/)
+    .filter(w=>w.length>2&&!CASE_STOPWORDS.has(w));
+}
+function caseItemHeuristics(q,issues,where){
+  if((q.type||'')!=='MCQ')return;
+  const opts=(q.options||[]).filter(o=>o&&o.text!=null&&String(o.text).trim());
+  const keyLabels=new Set((q.correctAnswers||[]).map(String));
+  const key=opts.find(o=>keyLabels.has(String(o.label)));
+  // Negative-stem check does not depend on a resolvable key, so it runs first.
+  // v4.2's NCLEX prompt explicitly rules "least restrictive" clinical content rather than a
+  // negative construction; excluded here so the two generators cannot disagree on one item.
+  const negStem=String(q.stem||'').replace(/least\s+restrictive/gi,' ');
+  const neg=negStem.match(/\b(except|not|never|least|all of the following)\b/i);
+  if(neg)issues.push({sev:'warn',msg:`${where}: stem may use a negative construction ("${neg[1]}") — negatively worded stems are a stem-clarity defect`});
+  if(opts.length<3||!key)return;
+  const distractors=opts.filter(o=>o!==key);
+  if(!distractors.length)return;
+
+  // Option length. Flags only when the key is BOTH a unique extreme and outside the ratio
+  // band — uniqueness alone fires on a one-word difference and would be pure noise.
+  const wc=s=>String(s||'').trim().split(/\s+/).filter(Boolean).length;
+  const kw=wc(key.text),dw=distractors.map(o=>wc(o.text)).sort((a,b)=>a-b);
+  const median=dw.length%2?dw[(dw.length-1)/2]:(dw[dw.length/2-1]+dw[dw.length/2])/2;
+  const allw=opts.map(o=>wc(o.text)),maxw=Math.max(...allw),minw=Math.min(...allw);
+  const uniqLong=kw===maxw&&allw.filter(w=>w===maxw).length===1;
+  const uniqShort=kw===minw&&allw.filter(w=>w===minw).length===1;
+  if(median>0){
+    const ratio=kw/median;
+    if((uniqLong&&ratio>=CASE_LEN_RATIO_HI)||(uniqShort&&ratio<=CASE_LEN_RATIO_LO))
+      issues.push({sev:'warn',msg:`${where}: option length — key is the unique ${uniqLong?'longest':'shortest'} option at ${ratio.toFixed(2)}× the median distractor (${kw} vs ${median} words)`});
+  }
+  // Stem/key lexical overlap. A SMOKE DETECTOR for answer integration, not a replacement:
+  // it cannot see a key that stands out by specificity, qualification, or grammatical
+  // structure, all of which the same criterion covers. Absence of this flag proves nothing.
+  const stemWords=new Set(caseContentWords(q.stem));
+  if(stemWords.size){
+    const ov=o=>{const w=caseContentWords(o.text);if(!w.length)return 0;return w.filter(x=>stemWords.has(x)).length/w.length;};
+    const kOv=ov(key),dOv=distractors.map(ov);
+    if(kOv>0&&dOv.every(x=>kOv>x))
+      issues.push({sev:'warn',msg:`${where}: stem overlap — key shares more stem vocabulary than any distractor (${Math.round(kOv*100)}% vs ${Math.round(Math.max(...dOv)*100)}% max) — smoke detector for answer integration, not a verdict`});
+  }
+  // Near-duplicate options — touches distractor distinctiveness.
+  for(let i=0;i<opts.length;i++)for(let j=i+1;j<opts.length;j++){
+    const A=new Set(caseContentWords(opts[i].text)),B=new Set(caseContentWords(opts[j].text));
+    if(!A.size||!B.size)continue;
+    let inter=0;for(const w of A)if(B.has(w))inter++;
+    const jac=inter/(A.size+B.size-inter);
+    if(jac>=CASE_JACCARD_DUP)
+      issues.push({sev:'warn',msg:`${where}: options ${opts[i].label} and ${opts[j].label} are near-duplicates (Jaccard ${jac.toFixed(2)}) — distractors must be meaningfully different choices`});
+  }
 }
 // Enums exactly as caseBuildPrompt defines them. Downstream logic string-matches these
 // (neutral-framing gates the no-factIds allowance; availability drives stage timing), so
 // an off-vocabulary value silently changes behavior — error tier when present-but-invalid.
-const CASE_SUPPORT_TYPES=new Set(['direct','combined','inference','neutral-framing']);
+const CASE_SUPPORT_TYPES=new Set(['direct','combined','inference','instantiated','neutral-framing']);
 const CASE_AVAILABILITY=new Set(['background','revealed']);
 function validateCaseStudy(caseStudy,factIndex,allowedFactIds,expectedCondition){
   const issues=[];
@@ -4826,12 +5027,16 @@ function validateCaseStudy(caseStudy,factIndex,allowedFactIds,expectedCondition)
   // Uncited clinical prose — the field most likely to carry a confident, unsupported claim.
   scanUncitedProse((caseStudy.patient||{}).background,'patient.background',issues);
   scanUncitedProse(caseStudy.title,'title',issues);
+  // v15.6: terminology lint on model-authored prose only (see neiaTerminologyScan scope note).
+  neiaTerminologyScan((caseStudy.patient||{}).background,'patient.background',issues);
+  neiaTerminologyScan(caseStudy.title,'title',issues);
   const seenQIds=new Set(),seenStageNums=new Set();
   for(const stage of caseStudy.stages||[]){
     const sn='Stage '+(stage.stageNumber||'?');
     if(seenStageNums.has(stage.stageNumber))issues.push({sev:'error',msg:`Duplicate stage number ${stage.stageNumber}`});
     seenStageNums.add(stage.stageNumber);
     scanUncitedProse(stage.narrative,`${sn} narrative`,issues);
+    neiaTerminologyScan(stage.narrative,`${sn} narrative`,issues);
     for(const d of stage.data||[]){
       // v15.3: missing fields warn rather than error — absent availability defaults to
       // 'revealed' (the STRICTER timing direction) and absent supportType with no factIds
@@ -4848,6 +5053,7 @@ function validateCaseStudy(caseStudy,factIndex,allowedFactIds,expectedCondition)
         issues.push({sev:'warn',msg:`${sn} datum "${d.label||''}" has no fact ID`});
       checkIds(d.factIds,`${sn} data`);
       caseAuditDatumValues(d,factIndex,sn,issues);
+      neiaTerminologyScan((d.label||'')+' '+(d.value||''),`${sn} datum "${d.label||''}"`,issues);
     }
     for(const q of stage.questions||[]){
       const qn=`${sn} ${q.id||'question'}`;
@@ -4857,6 +5063,9 @@ function validateCaseStudy(caseStudy,factIndex,allowedFactIds,expectedCondition)
       else if(seenQIds.has(qid))issues.push({sev:'error',msg:`Duplicate question ID: ${qid}`});
       if(qid)seenQIds.add(qid);
       if(!(q.correctAnswers||[]).length)issues.push({sev:'error',msg:`${qn}: no correct answer`});
+      neiaTerminologyScan(q.stem,`${qn} stem`,issues);
+      for(const o of q.options||[])neiaTerminologyScan(o.text,`${qn} option ${o.label||'?'}`,issues);
+      caseItemHeuristics(q,issues,qn); // v15.6: MCQ-only telemetry, self-guarded on q.type
       // v15.3: per-type structural contracts. The SATA range is not a convention — the
       // prompt's typeList states it verbatim: "5-6 options, 2-4 correct". v15.2 shipped
       // >4 as a warn on the mistaken belief the prompt named no range; ChatGPT's review
@@ -4893,7 +5102,8 @@ function validateCaseStudy(caseStudy,factIndex,allowedFactIds,expectedCondition)
         checkIds(r.factIds,qn+' rationale');
         // v15.3: the entailment audit runs where fabricated numbers actually live — the
         // rationale text arguing the answer ("...because potassium is 2.4 mEq/L").
-        caseAuditTextValues(r.text,r.factIds,factIndex,`${qn} rationale ${r.option||'?'}`,issues);
+        caseAuditTextValues(r.text,r.factIds,factIndex,`${qn} rationale ${r.option||'?'}`,issues,r.supportType);
+        neiaTerminologyScan(r.text,`${qn} rationale ${r.option||'?'}`,issues);
       }
     }
   }
@@ -4901,6 +5111,9 @@ function validateCaseStudy(caseStudy,factIndex,allowedFactIds,expectedCondition)
   scanUncitedProse(db.priorityProblem,'debrief.priorityProblem',issues);
   scanUncitedProse(db.notes,'debrief.notes',issues);
   for(const k of db.keyDecisions||[])scanUncitedProse(k,'debrief.keyDecisions',issues);
+  neiaTerminologyScan(db.priorityProblem,'debrief.priorityProblem',issues);
+  neiaTerminologyScan(db.notes,'debrief.notes',issues);
+  for(const k of db.keyDecisions||[])neiaTerminologyScan(k,'debrief.keyDecisions',issues);
   checkIds(db.factIds,'debrief');
   return issues;
 }
@@ -5151,7 +5364,7 @@ function CaseStudyGenerator(){
           <button type="button" className={'tier-btn t2'+(includeTier2?' active':'')} onClick={()=>setIncludeTier2(v=>!v)}><b>Tier 2</b> context</button>
           <button type="button" className={'tier-btn t3'+(includeTier3?' active':'')} onClick={()=>setIncludeTier3(v=>!v)}><b>Tier 3</b> distractors</button>
         </div>
-        <div style={{fontSize:10.5,color:'var(--text-dim)',lineHeight:1.5}}>Tier 1 facts drive the critical decisions. Tier 2 adds realistic context; Tier 3 supplies plausible non-urgent distractors. <b style={{color:'var(--text)'}}>{selectedFacts.length}</b> fact(s) selected for this case.</div>
+        <div style={{fontSize:10.5,color:'var(--text-dim)',lineHeight:1.5}}>Tier 1 facts drive the critical decisions. Tier 2 adds realistic context; Tier 3 adds lower-priority background detail. Distractors are built from contextually plausible near-misses at any tier, not from Tier 3. <b style={{color:'var(--text)'}}>{selectedFacts.length}</b> fact(s) selected for this case.</div>
         {sufficiency.warnings.length>0&&<div className="tip-banner" style={{marginTop:10,marginBottom:0,fontSize:10.5,lineHeight:1.5}}>⚠ {sufficiency.warnings.join(' · ')} The generator will not invent to fill these gaps.</div>}
       </div>
 

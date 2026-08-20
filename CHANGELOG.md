@@ -11,6 +11,20 @@ Every release since 15.0 has been verified against three gates before shipping: 
 
 ## [Unreleased]
 
+### v15.6 — in progress (NEIA hardening for the Case Study Generator)
+
+Implements the v15.6 brief. Items 1, 2, 3, 6, and 7 are done; 4, 5, and 8 are not started.
+
+Evidence tiering is enforced in code comments throughout: `[NEIA-VALIDATED]` for anything the rubric states, `[NEIA-DERIVED]` for our operationalization of a validated criterion, `[LATTE-HEURISTIC]` for our own inventions. No published reliability figure is cited as a property of this build — the June study tested five OpenAI and two Anthropic configurations and zero Gemini.
+
+- **Terminology linter (item 1).** `NEIA_TERMINOLOGY_RULES` + `neiaTerminologyScan()` flag `patient`→`client`, `doctor/physician`→`primary health care provider`, and the unsafe abbreviations and decimal forms from Appendix A's Terminology Reference. **WARN tier only** — the rubric's Terminology subcategory carries no stop criterion. Scoped strictly to model-authored text: never runs over `sourceQuote`, the fact packet, or Priority Analyzer Stage 1 output.
+- **`instantiated` support type (item 2).** New enum member plus `caseParseThreshold()`, which parses `<`, `>`, `≤`, `≥`, "less than", "below", "under", "at least", "no more than", and `a–b` ranges out of a cited fact. A value absent from its cited facts is now an **error** for `direct`/`combined`/`inference`, and for `instantiated` it must satisfy a threshold an actual cited fact states. This resolves a standing contradiction where the prompt forbade inventing vital-sign values while the validator only warned about them.
+- **Deterministic item heuristics (item 3).** `caseItemHeuristics()` measures option-length ratio, stem/key lexical overlap, option Jaccard similarity, and negative stem construction on MCQ items. All findings are warn-tier and carry their measurements. **Every threshold is a LATTE heuristic, not a NEIA number** — the rubric names no ratios.
+- **Priority Analyzer Stage 1 carve-out (item 6).** Rule 4 now distinguishes adding content (banned) from classifying content already present (permitted), resolving its conflict with the FLAGS block. CRIT-LAB gains a caveat that its ranges are heuristic buckets, not universal thresholds — a dialysis K+ or a therapeutic INR presented as this client's baseline is not critical.
+- **UI copy fix (item 7).** Tier 3 was described as the distractor pool; distractors are built from contextually plausible near-misses at any tier. No logic change.
+
+Harness 98 → 185 assertions. `Prompts.md` regenerated from live bytes (its `NCLEX_GEN_PROMPT` section was still v4.1 after the v15.5 bump).
+
 ### To do
 - Run the 20-page benchmark in `Nursing-Study-Suite-v16-spec.md` §11 to decide whether v16 multimodal ingestion gets built at all.
 - Confirm against a primary NCSBN source whether the 2026 Test Plan renames *Safety and Infection Control* to *Safety and Infection Prevention and Control*. The v4.2 patch claimed it; it could not be verified. `NCLEX_CATEGORY_LABELS` keeps the long-standing label until then.
