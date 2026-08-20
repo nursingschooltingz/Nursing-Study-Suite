@@ -819,8 +819,8 @@ section('v15.6 — case audit pass');
       A.caseGateItems(mixed).length === 2 && A.caseGateItems(mixed).filter(i => i.eligible).length === 1);
   }
   {
-    const sum = A.itemAuditSummary([{ status: 'PASS', warns: [] }, { status: 'FAIL', warns: [{}] }, { status: 'N/A', warns: [] }, { status: 'REVIEW', warns: [] }]);
-    t('summary counts each status', sum.pass === 1 && sum.fail === 1 && sum.na === 1 && sum.review === 1);
+    const sum = A.itemAuditSummary([{ status: 'PASS', warns: [] }, { status: 'FAIL', warns: [{}] }, { status: 'N/A', warns: [] }, { status: 'REVIEW', warns: [] }, { status: 'REPAIRED', warns: [] }]);
+    t('summary counts each status', sum.pass === 1 && sum.fail === 1 && sum.na === 1 && sum.review === 1 && sum.repaired === 1);
     t('summary counts warnings', sum.warns === 1);
     t('summary reports no score, percentage, or band',
       !('score' in sum) && !('band' in sum) && !('percent' in sum) && !('quality' in sum));
@@ -879,6 +879,16 @@ section('v15.6 — case audit pass');
   t('the audit stops early once quota is gone', S.includes("throw Object.assign(new Error('API quota exhausted'),{name:'QuotaStop'})"));
   t('a QuotaStop is caught, not surfaced as a crash', (S.match(/if\(e\.name!=='QuotaStop'\)throw e;/g) || []).length === 2);
   t('quota exhaustion is explained, not just logged as an error', S.includes('only the optional item review was cut short'));
+  // v15.7, from a real case run: the panel showed "FAIL — DISTRACTOR LENGTH" for an item the
+  // log had already reported as successfully repaired. The verdict described text that no
+  // longer existed. REPAIRED is neither PASS (never re-checked) nor FAIL (already rewritten).
+  t('REPAIRED is a distinct status', S.includes("'PASS','FAIL','REPAIRED','REVIEW','N/A','ERROR'"));
+  t('a repaired case item updates its stored verdict', S.includes("[r.key]:{status:'REPAIRED'"));
+  t('a repaired worksheet item updates its stored verdict', S.includes("row.status='REPAIRED';"));
+  t('REPAIRED admits it was not re-audited',
+    (S.match(/rewritten after failing; not re-audited/g) || []).length === 2);
+  t('REPAIRED renders as neither pass nor fail', S.includes("r.status==='REPAIRED'?'⟳'"));
+  t('the panel counts repaired items separately', S.includes('{auditTotals.repaired} repaired'));
   t('the abort signal is threaded into the pool', S.includes('},ctl.signal);'));
   t('repaired items are re-validated', S.includes('allIssues=revalidate(parsed);'));
   t('answer-accuracy failures are excluded from repair', S.includes('r.status===\'FAIL\'&&!r.autoRepairable'));

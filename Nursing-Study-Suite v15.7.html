@@ -4724,6 +4724,10 @@ GROUNDING ADAPTER — INPUT FORM ONLY:
                   const newP4=ngSpliceBlock(parts.p4,r.num,ngRenderKeyBlock(r.num,fixed,strat,tags));
                   if(newP3===null||newP4===null)throw new Error('could not locate the item unambiguously — worksheet left untouched');
                   workRaw=workRaw.replace(parts.p3,newP3).replace(parts.p4,newP4);
+                  // Same honesty fix as the case generator: the stored FAIL described the
+                  // pre-repair text and would otherwise persist into the audit trail export.
+                  const row=auditRows.find(x=>x.num===r.num);
+                  if(row){row.status='REPAIRED';row.detail='rewritten after failing; not re-audited';}
                   log('    ✓ Q'+r.num+' repaired'+(fixed.repairNote?' — '+fixed.repairNote:''),'ok');
                 }catch(e){
                   if(e.name==='AbortError')throw e;
@@ -5895,7 +5899,12 @@ ${payload}`;
 // Verdict vocabulary. REVIEW exists because the June study measured both rater types
 // misclassifying ~86-88% of moderate-quality items, nearly all by rating them upward —
 // forcing a borderline item into PASS is exactly the failure mode the data predicts.
-const ITEM_AUDIT_STATUS=new Set(['PASS','FAIL','REVIEW','N/A','ERROR']);
+// v15.7: REPAIRED is its own status, and the honesty matters. A repaired item was NOT
+// re-audited (the loop is capped at one round), so claiming PASS would assert a check that
+// never ran. But leaving it FAIL is worse: a real run showed "FAIL — DISTRACTOR LENGTH" in
+// the panel for an item the log had already reported as successfully rewritten, so the panel
+// was describing text that no longer existed. REPAIRED says exactly what happened.
+const ITEM_AUDIT_STATUS=new Set(['PASS','FAIL','REPAIRED','REVIEW','N/A','ERROR']);
 // Criterion 3 is the ONLY one where the auditor overrules a keyed answer with no reference
 // standard, and it sits in the AI's second-weakest measured domain (ICC 0.575). A wrong
 // auto-repair here silently replaces a correct answer with an incorrect one, so an
@@ -6014,7 +6023,7 @@ ${caseRenderFactPacket(conditionName,facts)}`;
 }
 function itemAuditSummary(results){
   const n=s=>results.filter(r=>r.status===s).length;
-  return{pass:n('PASS'),fail:n('FAIL'),review:n('REVIEW'),na:n('N/A'),error:n('ERROR'),
+  return{pass:n('PASS'),fail:n('FAIL'),repaired:n('REPAIRED'),review:n('REVIEW'),na:n('N/A'),error:n('ERROR'),
     total:results.length,
     // Deliberately absent: any score, percentage, or quality band.
     warns:results.reduce((a,r)=>a+((r.warns||[]).length),0)};
@@ -6169,6 +6178,9 @@ function CaseStudyGenerator(){
                 delete fixed.repairNote;
                 st.questions[ix]=fixed;
                 repaired++;
+                // Keep the panel honest: the old FAIL described text that no longer exists.
+                setAudit(p=>({...(p||{}),[r.key]:{status:'REPAIRED',criterion:r.criterion,
+                  detail:'rewritten after failing; not re-audited',warns:[]}}));
                 log('  ✓ Stage '+r.stageNumber+' '+(r.q.id||'')+' repaired'+(note?' — '+note:''),'ok');
               }catch(e){
                 if(e.name==='AbortError')throw e;
@@ -6256,7 +6268,7 @@ function CaseStudyGenerator(){
   },[caseStudy,audit]);
   const auditTotals=useMemo(()=>{
     const n=s=>auditRows.filter(r=>r.status===s).length;
-    return{pass:n('PASS'),fail:n('FAIL'),review:n('REVIEW'),na:n('N/A'),error:n('ERROR'),
+    return{pass:n('PASS'),fail:n('FAIL'),repaired:n('REPAIRED'),review:n('REVIEW'),na:n('N/A'),error:n('ERROR'),
       accuracyFails:auditRows.filter(r=>r.status==='FAIL'&&itemAuditIsAnswerAccuracy(r.criterion)).length};
   },[auditRows]);
 
@@ -6369,15 +6381,16 @@ function CaseStudyGenerator(){
           have never had criterion-validity testing. */}
       {auditRows.length>0&&<div style={{marginTop:12,padding:'11px 13px',borderRadius:8,border:'1px solid '+(auditTotals.fail?'rgba(248,113,113,.35)':auditTotals.review?'rgba(240,168,58,.35)':'rgba(52,211,153,.3)'),background:auditTotals.fail?'rgba(248,113,113,.06)':auditTotals.review?'rgba(240,168,58,.06)':'rgba(52,211,153,.05)'}}>
         <span style={{fontSize:12,fontWeight:600,color:auditTotals.fail?'var(--accent-red)':auditTotals.review?'var(--accent-warm)':'var(--accent-green)'}}>
-          {auditTotals.fail?'⚠':auditTotals.review?'⚑':'✓'} Item quality: {auditTotals.pass} pass · {auditTotals.fail} fail · {auditTotals.review} review
+          {auditTotals.fail?'⚠':auditTotals.review||auditTotals.repaired?'⚑':'✓'} Item quality: {auditTotals.pass} pass · {auditTotals.fail} fail · {auditTotals.review} review
+          {auditTotals.repaired>0&&<span style={{color:'var(--accent-warm)',fontWeight:400}}> · {auditTotals.repaired} repaired</span>}
           {auditTotals.na>0&&<span style={{color:'var(--text-dim)',fontWeight:400}}> · {auditTotals.na} N/A</span>}
           {auditTotals.error>0&&<span style={{color:'var(--text-dim)',fontWeight:400}}> · {auditTotals.error} not scored</span>}
         </span>
         <div style={{fontSize:9.5,color:'var(--text-dim)',marginTop:5,lineHeight:1.5}}>Each MCQ was reviewed against 11 stop criteria adapted from the NEIA scoring tool (Simms, Hensel &amp; Kumar 2026), seeing only what the student sees. <b>N/A means the rubric does not apply</b> to that format — it is not a pass. No total score is computed: the published quality bands have never been criterion-validated.</div>
         <div style={{marginTop:8,maxHeight:190,overflowY:'auto',background:'var(--bg-deep)',border:'1px solid var(--border)',borderRadius:6,padding:8}}>
           {auditRows.map(r=>{
-            const c=r.status==='FAIL'?'var(--accent-red)':r.status==='REVIEW'?'var(--accent-warm)':r.status==='PASS'?'var(--accent-green)':'var(--text-dim)';
-            const mark=r.status==='FAIL'?'✕':r.status==='REVIEW'?'?':r.status==='PASS'?'✓':'–';
+            const c=r.status==='FAIL'?'var(--accent-red)':r.status==='REVIEW'||r.status==='REPAIRED'?'var(--accent-warm)':r.status==='PASS'?'var(--accent-green)':'var(--text-dim)';
+            const mark=r.status==='FAIL'?'✕':r.status==='REPAIRED'?'⟳':r.status==='REVIEW'?'?':r.status==='PASS'?'✓':'–';
             return(<div key={r.key} style={{fontSize:10,fontFamily:'JetBrains Mono',lineHeight:1.6}}>
               <span style={{color:c}}>{mark} {r.label} — {r.status}{r.criterion?': '+r.criterion:''}{r.detail&&r.status!=='PASS'?': '+r.detail:''}</span>
               {(r.warns||[]).map((w,i)=><div key={i} style={{color:'var(--text-dim)',paddingLeft:14}}>⚠ {w.criterion}: {w.detail}</div>)}
