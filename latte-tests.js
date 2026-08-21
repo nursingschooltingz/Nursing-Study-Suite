@@ -1221,6 +1221,34 @@ section('v15.8 — Phase 2 fixes');
   t('abbrev findings never flip keep',!S.includes('next.abbrev.length)next.keep'));
 }
 
+/* ── 20e. v15.8 — Phase 3: numbering cap, PDF document release ── */
+section('v15.8 — Phase 3 hardening');
+{
+  const SN=new Function(spanFrom('function ngSplitNumbered(','\n}')+'\n;return ngSplitNumbered;')();
+  const doc=a=>a.join(String.fromCharCode(10));
+  // The parser no longer encodes the UI's batch-size bound. Question 26+ used to be
+  // appended to question 25's block with no error.
+  {
+    const blocks=SN(doc(['  24. twenty four','  25. twenty five','  26. twenty six','  30. thirty']));
+    t('question 26 is its own block, not merged into 25',blocks.length===4);
+    t('numbers past the old 25 cap are parsed',blocks.map(b=>b.num).join(',')==='24,25,26,30');
+  }
+  t('three-digit numbering parses',SN(doc(['  100. a hundred'])).map(b=>b.num).join(',')==='100');
+  // Guard the other direction: a four-digit token is not a question number.
+  t('a four-digit token is not treated as a question number',
+    SN(doc(['  1234. not a question'])).length===0);
+  t('non-numbered lines still attach to the current block',
+    SN(doc(['  1. stem','     A. option'])).length===1);
+}
+{
+  t('PDF documents are tracked for bulk release',S.includes('const _pdfLiveDocs=new Set();'));
+  t('a release helper exists',S.includes('function destroyAllPdfDocs()'));
+  t('the registry is cleared after release',S.includes('_pdfLiveDocs.clear();'));
+  t('both PDF-opening tools release on unmount',
+    S.split('useEffect(()=>()=>destroyAllPdfDocs(),[]);').length-1===2);
+  t('the cache stays a WeakMap so Files are never pinned',S.includes('const _pdfDocCache=new WeakMap();'));
+}
+
 /* ── 21. v15.7 — provenance stamp + Anki abbreviation lint (B2, B5) ── */
 section('v15.7 — provenance + Anki lint');
 {
