@@ -4241,8 +4241,15 @@ function ngParseConcepts(p1){
   return out;
 }
 function ngParseCited(p2){
-  const ids=new Set();const re=/cites?\s*\[([^\]]+)\]/gi;let m;
-  while((m=re.exec(p2))){m[1].split(/[,\s]+/).forEach(s=>{const h=s.match(/C\d+/i);if(h)ids.add(h[0].toUpperCase());});}
+  const ids=new Set();
+  // v15.8: brackets are now optional. The prompt asks for "cites [C1, C2]" but the model
+  // frequently writes "cites C1, C2" — three of five batches in one run fell through to
+  // stem-based dedup, which silently weakens duplicate detection across batches.
+  // Both forms stop at the first non-citation token, so surrounding prose is not scooped up.
+  const re=/cites?\s*(?:\[([^\]]+)\]|((?:C\d+[,\s]*)+))/gi;let m;
+  while((m=re.exec(p2))){
+    String(m[1]||m[2]||'').split(/[,\s]+/).forEach(s=>{const h=s.match(/^C\d+$/i);if(h)ids.add(h[0].toUpperCase());});
+  }
   return[...ids];
 }
 function ngSplitNumbered(text){
@@ -4653,7 +4660,7 @@ ${kbPacket}`});
       let produced=0;
       for(let b=1;b<=numBatches;b++){
         if(ctl.signal.aborted)break;
-        const size=Math.min(batchSize,targetCount-produced);
+        let size=Math.min(batchSize,targetCount-produced); // v15.8: shrinkable when facts run low
         if(size<=0)break;
         setTrackers(p=>p.map(t=>t.id===b?{...t,status:'active'}:t));
         setLiveKB(0);
@@ -4666,6 +4673,17 @@ ${kbPacket}`});
             log('  ⓘ No unused facts remain — stopping early rather than repeating content.','warn');
             setTrackers(p=>p.map(t=>t.id===b?{...t,status:'pending'}:t));
             break;
+          }
+          // v15.8: shrink the batch to what the remaining facts can actually ground.
+          // The guard above only caught a COMPLETELY empty allocation, so a real run reached
+          // its last batch with 2 target facts, still asked for 10 questions, and got 20 back
+          // — content with no grounding available, which the coverage metric then reported as
+          // 0/2 cited. One question per CASE_FACTS_PER_QUESTION-equivalent is the same
+          // discipline factsPerQ already applies when allocating.
+          const canGround=Math.max(1,Math.floor(alloc.targets.length/Math.max(1,factsPerQ)));
+          if(canGround<size){
+            log('  ⓘ Only '+alloc.targets.length+' unused fact(s) remain — reducing this batch from '+size+' to '+canGround+' question(s) rather than asking the model to invent the difference.','warn');
+            size=canGround;
           }
           // Reserve before the call: a failed batch must not silently release its facts
           // back into the pool and let a later batch duplicate it.
@@ -5079,9 +5097,30 @@ function selectCaseFacts(condition,{includeTier2=true,includeTier3=false,include
 
 // Sufficiency check: warn (in code, before generating) when a condition lacks enough
 // grounded material for a stage, so the model is never tempted to invent it.
-function caseFactSufficiency(facts){
+// v15.8: takes the requested shape, not just the fact list.
+// This checked only that facts EXISTED, never whether there were enough for what was asked.
+// Real runs generated 12 questions from 6, 8, and 13 facts — 0.5 to 1.1 facts per question,
+// against the NCLEX generator's own factsPerQ default of 3. The model then had nothing left
+// to cite and reached forward into unrevealed stages, which validateStageTiming correctly
+// reported as 12, 31, and 21 warnings. Those were not model misbehaviour; they were an
+// impossible request. Two facts per question is deliberately laxer than the NCLEX
+// generator's three, because a case reuses its data across stages.
+const CASE_FACTS_PER_QUESTION=2;
+function caseFactSufficiency(facts,totalQuestions){
   const byBucket={};for(const f of facts){const b=f.latteBucket||'Other';byBucket[b]=(byBucket[b]||0)+1;}
   const warnings=[];
+  const want=Number(totalQuestions)||0;
+  if(want>0){
+    const supports=Math.floor(facts.length/CASE_FACTS_PER_QUESTION);
+    if(supports<want){
+      // Name a shape that actually fits, so the warning is actionable rather than generic.
+      // Two questions per stage once the pool allows it: a one-stage case does not unfold,
+      // which is the whole point of the format.
+      const q=supports>=4?2:1;
+      const st=Math.max(1,Math.min(4,Math.floor(supports/q)))||1;
+      warnings.push(`${facts.length} fact(s) supports about ${supports} grounded question(s), but ${want} were requested. Expect the case to cite facts before they are revealed. Try ${st} stage(s) × ${q} question(s), or include Tier 2/3 facts.`);
+    }
+  }
   if(!(byBucket.Tests>0))warnings.push('No source-grounded diagnostic values — diagnostic-stage questions will be limited.');
   if(!(byBucket.Treatments>0))warnings.push('No source-grounded treatments — intervention-stage questions will be limited.');
   if(!(byBucket.Look>0)&&!(byBucket.Assess>0))warnings.push('No presenting findings or assessments — the initial-presentation stage will be thin.');
@@ -5175,6 +5214,12 @@ You may NOT invent any of the following — every one must trace to a supplied f
   contraindications · treatment responses · discharge restrictions · complications.
 A client age and sex may be chosen freely ONLY if they do not change the clinical reasoning
 (e.g. do not invent "72-year-old with CKD" unless CKD is a supplied fact).
+BODY WEIGHT is the one clinical value you may choose, and ONLY when a weight-based
+calculation requires it and no supplied fact states one. Choose a plainly ordinary adult
+weight, present it in the stage "data" array like any other datum with supportType
+"neutral-framing", and use that same number in every rationale that computes from it.
+Never choose a weight that changes the clinical picture (do not invent obesity or
+cachexia), and never invent any other laboratory or vital-sign value this way.
 Laboratory and vital-sign values must trace to a supplied fact EITHER verbatim OR as a
 bounded instantiation of a threshold that fact states — see supportType "instantiated"
 below. Presenting a concrete value rather than restating the rule is preferred, because a
@@ -6172,7 +6217,9 @@ function CaseStudyGenerator(){
   useEffect(()=>{if(!conditionId&&conditions[0])setConditionId(conditions[0].id);},[conditions,conditionId]);
 
   const selectedFacts=useMemo(()=>activeCondition?selectCaseFacts(activeCondition,{includeTier2,includeTier3,includeCalculation:types.calculation,includeEducation:types.education}):[],[activeCondition,includeTier2,includeTier3,types.calculation,types.education]);
-  const sufficiency=useMemo(()=>caseFactSufficiency(selectedFacts),[selectedFacts]);
+  // v15.8: the requested shape drives the sufficiency check, so the warning updates live as
+  // stages/questions change rather than only describing the fact pool.
+  const sufficiency=useMemo(()=>caseFactSufficiency(selectedFacts,stages*questionsPerStage),[selectedFacts,stages,questionsPerStage]);
   const toggleType=k=>setTypes(p=>({...p,[k]:!p[k]}));
 
   const run=useCallback(async()=>{

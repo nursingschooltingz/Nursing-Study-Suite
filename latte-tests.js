@@ -1178,6 +1178,55 @@ section('v15.8 — live case-run regressions');
   t('the same fact in another question is reported separately', CASE.validateStageTiming(cs3).length === 2);
 }
 
+/* ── 20b4. v15.8 — sizing to the fact pool, citation robustness ── */
+section('v15.8 — grounding capacity');
+{
+  const SF=new Function(spanFrom('const CASE_FACTS_PER_QUESTION=','\n}')+'\n;return caseFactSufficiency;')();
+  const facts=n=>Array.from({length:n},(_,i)=>({latteBucket:['Look','Assess','Tests','Treatments'][i%4]}));
+  const ratio=r=>r.warnings.find(w=>/supports about/.test(w))||'';
+  // The real runs: 6 facts/12 questions, 8/12, 13/12 — all far under the NCLEX generator's
+  // own factsPerQ default of 3.
+  t('8 facts for 12 questions warns about capacity',!!ratio(SF(facts(8),12)));
+  t('the warning names both the supply and the request',
+    ratio(SF(facts(8),12)).includes('8 fact(s) supports about 4 grounded question(s), but 12 were requested'));
+  t('the warning suggests a shape that actually fits',
+    ratio(SF(facts(8),12)).includes('Try 2 stage(s) × 2 question(s)'));
+  t('the warning points at Tier 2/3 as the other lever',ratio(SF(facts(8),12)).includes('Tier 2/3'));
+  t('a sufficient pool raises no capacity warning',!ratio(SF(facts(24),12)));
+  t('one short does warn',!!ratio(SF(facts(22),12)));
+  // Omitting the count keeps the old behaviour, so existing callers are unaffected.
+  t('no requested count means no capacity warning',!ratio(SF(facts(4))));
+  t('the suggested shape is never zero',(()=>{
+    const w=ratio(SF(facts(1),12));
+    return w.includes('Try 1 stage(s) × 1 question(s)');})());
+  t('the thin-pool bucket warnings still fire',
+    SF([{latteBucket:'Look'}],1).warnings.some(w=>/diagnostic/.test(w)));
+}
+{
+  const PC=new Function(spanFrom('function ngParseCited(','\n}')+'\n;return ngParseCited;')();
+  t('bracketed citations still parse',PC('Q1 — cites [C1, C2, C3]').join(',')==='C1,C2,C3');
+  // The recurring fallback: three of five batches in one run could not parse PART 2.
+  t('bracket-less citations now parse',PC('Q1 — cites C1, C2, C3').join(',')==='C1,C2,C3');
+  t('mixed forms across lines both parse',
+    PC('Q1 — cites [C1, C2]'+String.fromCharCode(10)+'Q2 — cites C3, C4').join(',')==='C1,C2,C3,C4');
+  t('surrounding prose is not scooped up',
+    PC('Q1 — cites C1, C2 — one anchor per option, correct AND distractors.').join(',')==='C1,C2');
+  t('a line with no citation yields nothing',PC('Q1 — no anchors logged').length===0);
+  t('duplicates collapse',PC('cites C1, C1, C2').join(',')==='C1,C2');
+}
+{
+  // A starved pool must reduce the ask, not let the model invent the difference.
+  t('the batch size shrinks to what the facts can ground',S.includes('reducing this batch from'));
+  t('batch size is reassignable',S.includes('let size=Math.min(batchSize,targetCount-produced);'));
+  t('the shrink is driven by factsPerQ, not a new constant',
+    S.includes('Math.floor(alloc.targets.length/Math.max(1,factsPerQ))'));
+  const cp=spanFrom('function caseBuildPrompt(','`;\n}','function caseBuildPrompt(');
+  t('the prompt permits a declared body weight',cp.includes('BODY WEIGHT is the one clinical value you may choose'));
+  t('the weight must be presented as cited case data',cp.includes('present it in the stage "data" array'));
+  t('the weight allowance does not open the door to other values',
+    cp.includes('never invent any other laboratory or vital-sign value this way'));
+}
+
 /* ── 20c. v15.8 — the repair path (previously ZERO coverage) ── */
 // This is the code that rewrites the user's worksheet in place. It shipped in v15.7 with no
 // assertions at all; one round-trip test would have caught the $-injection bug fixed in v15.8.
