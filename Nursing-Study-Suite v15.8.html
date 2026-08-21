@@ -5276,7 +5276,11 @@ ${caseRenderFactPacket(conditionName,facts)}`;
 // (or a BP pair) is patient data and belongs in the cited `data` array, not in free narrative
 // where nothing ties it to a source. Plain integers are deliberately NOT matched, so an age,
 // a room number, or a clock time stays legal neutral framing.
-const CASE_CLINICAL_TOKEN_RE=/\b\d+(?:\.\d+)?\s*(?:mg|mcg|g|kg|mL|L|mEq\/L|mg\/dL|mmol\/L|mm\s*Hg|bpm|breaths?\/min|units?)\b|\b\d+(?:\.\d+)?\s*%|\b\d{1,3}\s*\/\s*min\b|\b\d{2,3}\/\d{2,3}\b/gi; // v15: % and bare NN/min get boundary-free alternatives — a \b after "%" sits between two non-word chars and can never match, which exempted exactly the SpO2-style values the prompt names as forbidden
+// v15.8: the numeric part accepts group separators. It was \b\d+, so a real Parkland
+// rationale saying "7,000 mL" tokenized as "000 mL" — a token that cannot match any source
+// text, so a correctly grounded value was reported as fabricated every time. The comma is
+// already stripped by caseNormalizeClinical on both sides, so matching is unaffected.
+const CASE_CLINICAL_TOKEN_RE=/\b\d[\d,]*(?:\.\d+)?\s*(?:mg|mcg|g|kg|mL|L|mEq\/L|mg\/dL|mmol\/L|mm\s*Hg|bpm|breaths?\/min|units?)\b|\b\d[\d,]*(?:\.\d+)?\s*%|\b\d{1,3}\s*\/\s*min\b|\b\d{2,3}\/\d{2,3}\b/gi; // v15: % and bare NN/min get boundary-free alternatives — a \b after "%" sits between two non-word chars and can never match, which exempted exactly the SpO2-style values the prompt names as forbidden
 // v15.1: qualitative findings ("becomes hypotensive", "appears confused") carry no numeric
 // token and sailed past the value scan. Term matches are WARN-tier because a stem scan will
 // false-positive on genuinely neutral phrasing; the numeric scan above stays error-tier.
@@ -5454,8 +5458,14 @@ function caseAuditTextValues(text,factIds,factIndex,where,issues,supportType){
         if(caseThresholdSatisfied(parsed.num,th)){ok=true;break;}
       }
       if(ok)continue;
+      // v15.8: a value on the WRONG side of its cited threshold is a warning, not an error.
+      // v15.6 errored here, which made unfolding cases impossible to write: presenting a
+      // urine output of 22 mL/hr against a cited "maintain 30-50 mL/hr" target is the entire
+      // clinical point of a deterioration stage. That value IS grounded in the threshold —
+      // it is meaningful precisely because it violates it. What actually needs blocking is a
+      // number with no basis in any cited fact at all, which stays an error below.
       issues.push(applicable
-        ?{sev:'error',msg:`${where}: instantiated value "${v}" falls on the wrong side of the threshold stated in its cited fact(s)`}
+        ?{sev:'warn',msg:`${where}: instantiated value "${v}" falls outside the threshold in its cited fact(s) — expected if the case is showing deterioration, wrong if it was meant to be a normal finding`}
         :{sev:'error',msg:`${where}: instantiated value "${v}" has no parseable threshold in its cited fact(s) — "instantiated" requires a cited fact that states the bound`});
       continue;
     }
@@ -5699,7 +5709,10 @@ function validateCaseStudy(caseStudy,factIndex,allowedFactIds,expectedCondition)
         else if(_cc>4)issues.push({sev:'error',msg:`${qn}: SATA with ${_cc} correct answers breaks the prompt's 2–4 contract`});
       }
       const optLabels=new Set((q.options||[]).map(o=>String(o.label)));
-      for(const ca of q.correctAnswers||[])if(optLabels.size&&!optLabels.has(String(ca))&&q.type!=='Ordering')
+      // v15.8: Calculation is exempt alongside Ordering. A calculation answer is the computed
+      // VALUE ("7000"), not an option label, so a real Parkland item whose options carried a
+      // single "Answer" placeholder was errored for a correct answer.
+      for(const ca of q.correctAnswers||[])if(optLabels.size&&!optLabels.has(String(ca))&&q.type!=='Ordering'&&q.type!=='Calculation')
         issues.push({sev:'error',msg:`${qn}: correct answer ${ca} is not among the options`});
       // v15.2: Ordering answers are deterministic — the prompt defines correctAnswers as
       // "the step labels in correct sequence", i.e. a permutation of the option labels.

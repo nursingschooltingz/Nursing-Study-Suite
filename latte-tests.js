@@ -440,15 +440,21 @@ section('v15.6 — instantiated values');
   const audit = (text, ids, st) => { const i = []; CASE.caseAuditTextValues(text, ids, IX, 'X', i, st); return i; };
 
   t('instantiated 22 mL/hr against "below 30" → clean', audit('Urine output 22 mL/hr', ['t-lt'], 'instantiated').length === 0);
-  t('instantiated 45 mL/hr against "below 30" → error', has(audit('Urine output 45 mL/hr', ['t-lt'], 'instantiated'), 'wrong side of the threshold', 'error'));
+  t('instantiated 45 mL/hr against "below 30" → warn, not error',
+    has(audit('Urine output 45 mL/hr', ['t-lt'], 'instantiated'), 'falls outside the threshold', 'warn'));
+  t('an out-of-range instantiation never blocks the case',
+    !audit('Urine output 45 mL/hr', ['t-lt'], 'instantiated').some(i => i.sev === 'error'));
   t('instantiated against a fact with no comparator → error naming the missing threshold',
     has(audit('Potassium 2.4 mEq/L', ['t-none'], 'instantiated'), 'no parseable threshold', 'error'));
   t('range: 7.40 inside 7.35-7.45 → clean', audit('pH 7.40 units', ['t-ph'], 'instantiated').length === 0);
-  t('range: 7.2 outside 7.35-7.45 → error', has(audit('pH 7.2 units', ['t-ph'], 'instantiated'), 'wrong side of the threshold', 'error'));
+  t('range: 7.2 outside 7.35-7.45 → warn', has(audit('pH 7.2 units', ['t-ph'], 'instantiated'), 'falls outside the threshold', 'warn'));
   t('BP pair 82/50 against "systolic below 90" → clean (systolic compared in mmHg)',
     audit('Blood pressure 82/50', ['t-bp'], 'instantiated').length === 0);
-  t('BP pair 120/80 against "systolic below 90" → error',
-    has(audit('Blood pressure 120/80', ['t-bp'], 'instantiated'), 'wrong side of the threshold', 'error'));
+  t('BP pair 120/80 against "systolic below 90" → warn',
+    has(audit('Blood pressure 120/80', ['t-bp'], 'instantiated'), 'falls outside the threshold', 'warn'));
+  // The real fabrication guard: a number with no basis in any cited fact stays an ERROR.
+  t('an instantiation with no threshold anywhere is still an error',
+    has(audit('Potassium 2.4 mEq/L', ['t-none'], 'instantiated'), 'no parseable threshold', 'error'));
 
   // Severity table: everything that is not instantiated or neutral-framing now errors.
   t('direct with an uncited value → error', has(audit('Potassium 2.4 mEq/L', ['t-none'], 'direct'), 'does not appear', 'error'));
@@ -1087,6 +1093,38 @@ section('v15.7 — coverage resolution');
     NG.ngCitedFactIds(p1, 'injury at C7 of the spine', '').size === 0);
   t('coverage uses the resolver, not the raw fact-ID scan',
     S.includes('const mentioned=ngCitedFactIds(P.p1,P.p3,P.p4);'));
+}
+
+/* ── 20b2. v15.8 — regressions found by the first live case run ── */
+section('v15.8 — live-run regressions');
+{
+  // "7,000 mL" tokenized as "000 mL": a token that cannot match any source text, so a
+  // correctly grounded Parkland rationale was reported as fabricated on every run.
+  const tok = s => { CASE.CASE_CLINICAL_TOKEN_RE.lastIndex = 0; return s.match(CASE.CASE_CLINICAL_TOKEN_RE) || []; };
+  t('a comma-grouped value tokenizes whole', tok('Give 7,000 mL over 24h')[0] === '7,000 mL');
+  t('the truncated "000 mL" token is gone', !tok('Give 7,000 mL over 24h').includes('000 mL'));
+  t('plain values are unaffected', tok('Give 7000 mL')[0] === '7000 mL');
+  t('multi-comma values tokenize whole', tok('total 1,234,567 mL')[0] === '1,234,567 mL');
+  t('a comma-grouped value still matches its uncomma-ed source', (() => {
+    const idx = new Map([['f1', { condition: {}, fact: { text: 'Give 7000 mL over 24 hours.', sourceQuote: '' } }]]);
+    const i = []; CASE.caseAuditTextValues('Infuse 7,000 mL total', ['f1'], idx, 'X', i, 'direct');
+    return i.length === 0;
+  })());
+
+  // A Calculation answer is the computed value, not an option label.
+  {
+    const q = { id: 'c1', type: 'Calculation', stem: 'How many mL?',
+      options: [{ label: 'Answer', text: '____ mL' }], correctAnswers: ['7000'],
+      rationales: [{ option: 'Answer', text: 'x', supportType: 'direct', factIds: ['fact-a'] }] };
+    const found = V({ stages: [stage(1, [q])] }, 'HF');
+    t('a Calculation answer is not checked against option labels',
+      !has(found, 'is not among the options'));
+  }
+  // Ordering and MCQ keep the check.
+  t('an MCQ answer outside its options is still an error',
+    has(V({ stages: [stage(1, [q({ type: 'MCQ', options: [{ label: 'A' }], correctAnswers: ['Z'],
+      rationales: [{ option: 'A', text: '', supportType: 'direct', factIds: ['fact-a'] }] })])] }, 'HF'),
+      'is not among the options', 'error'));
 }
 
 /* ── 20c. v15.8 — the repair path (previously ZERO coverage) ── */
