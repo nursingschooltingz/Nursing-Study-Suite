@@ -4247,14 +4247,21 @@ function ngParseCited(p2){
 }
 function ngSplitNumbered(text){
   if(!text)return[];
-  const blocks=[];let cur=null;
+  const blocks=[];let cur=null,last=0;
   for(const line of text.split('\n')){
     const m=line.match(/^\s{0,4}(?:Q)?(\d{1,3})[.)]\s+\S/);
     const n=m?parseInt(m[1]):0;
-    // v15.8: was n<=25, matching the UI bounds exactly. Nothing can exceed that today, but
-    // a wider <select> option added later would silently merge questions into the previous
-    // block rather than fail, so the parser no longer encodes a UI constraint.
-    if(m&&n>=1&&n<=999){if(cur)blocks.push(cur);cur={num:n,lines:[line]};}
+    // v15.8: a new block only where the number ASCENDS.
+    // PART 4's entry for an Ordering question carries its own numbered step list — the
+    // prompt asks for "one line per step" — restarting at 1 at the same indentation. Those
+    // steps parsed as new question blocks, and because the caller builds its lookup with
+    // new Map(blocks.map(...)), which keeps the LAST match for a number, an ordering step
+    // silently replaced question 1's real answer entry: 14 blocks for 10 questions, Q1
+    // reported as having no ANSWER line and no Why lines. Question numbering only ever
+    // ascends, so a number that does not is content inside the current block.
+    // The n<=999 ceiling stays: it no longer encodes the UI's batch bound, but it still
+    // rejects a four-digit figure in prose being read as a question number.
+    if(m&&n>last&&n<=999){if(cur)blocks.push(cur);cur={num:n,lines:[line]};last=n;}
     else if(cur)cur.lines.push(line);
   }
   if(cur)blocks.push(cur);

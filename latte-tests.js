@@ -1185,7 +1185,14 @@ section('v15.8 — worksheet repair path');
       (WS.ngSpliceBlock(sec, 2, '  2. REPLACED') || '').includes('Q one'));
     // Fail closed: the caller leaves the worksheet alone rather than splicing the wrong item.
     t('an absent block number returns null', WS.ngSpliceBlock(sec, 9, 'X') === null);
-    t('a duplicated block number returns null', WS.ngSpliceBlock(['  1. dup', '', '  1. dup'].join(NL), 1, 'X') === null);
+    // v15.8: a repeated number can no longer produce two blocks — ngSplitNumbered only
+    // starts one where the number ascends — so this guard is unreachable via duplicate
+    // NUMBERS. It still protects the indexOf path against two blocks of identical TEXT,
+    // and the absent-number case above still exercises the null return.
+    t('a repeated number now yields one block and splices safely',
+      WS.ngSpliceBlock(['  1. dup', '', '  1. dup'].join(NL), 1, '  1. X') === '  1. X');
+    t('the ambiguity guard is still present in the source',
+      S.includes('if(target.length!==1)return null;'));
   }
 
   {
@@ -1275,6 +1282,35 @@ section('v15.8 — Phase 3 hardening');
   // Guard the other direction: a four-digit token is not a question number.
   t('a four-digit token is not treated as a question number',
     SN(doc(['  1234. not a question'])).length===0);
+  // The live-run regression: PART 4's entry for an Ordering question carries its own
+  // numbered step list (the prompt asks for "one line per step"), restarting at 1 at the
+  // same indentation. Those steps parsed as new question blocks, and the caller's
+  // new Map(blocks.map(...)) keeps the LAST match — so an ordering step replaced question
+  // 1's real answer entry. Reported as 14 entries for 10 questions, Q1 with no ANSWER line.
+  {
+    const p4 = doc([
+      '  1. ANSWER: B', '     Why B is correct: reasoning.',
+      '  2. ANSWER: A', '     Why A is correct: reasoning.',
+      '  9. ANSWER: C, A, D, B',
+      '    1. C — first because airway.', '    2. A — then breathing.',
+      '    3. D — then circulation.', '    4. B — last.',
+      '  10. ANSWER: D', '     Why D is correct: reasoning.']);
+    const blocks = SN(p4);
+    t('an ordering step list does not inflate the block count', blocks.length === 4);
+    t('only real question numbers become blocks', blocks.map(b => b.num).join(',') === '1,2,9,10');
+    const byNum = new Map(blocks.map(k => [k.num, k]));
+    t('question 1 keeps its own ANSWER line', /ANSWER: B/.test(byNum.get(1).text));
+    t('question 1 keeps its Why line', /Why B is correct/.test(byNum.get(1).text));
+    t('the ordering steps stay inside their own entry', /first because airway/.test(byNum.get(9).text));
+    t('the entry after the step list is unaffected', /ANSWER: D/.test(byNum.get(10).text));
+  }
+  // Ascending is the rule, so a repeated or descending number is content, not a new block.
+  t('a repeated question number does not start a new block',
+    SN(doc(['  1. first', '  1. not a new question'])).length === 1);
+  t('a descending number does not start a new block',
+    SN(doc(['  5. fifth', '  2. not a new question'])).length === 1);
+  t('gaps in numbering are still honoured',
+    SN(doc(['  1. one', '  4. four', '  7. seven'])).map(b => b.num).join(',') === '1,4,7');
   t('non-numbered lines still attach to the current block',
     SN(doc(['  1. stem','     A. option'])).length===1);
 }
