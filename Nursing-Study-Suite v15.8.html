@@ -5491,7 +5491,15 @@ function caseThresholdSatisfied(num,th){
 // v15.6: takes supportType and escalates warn -> error. A value absent from its cited facts
 // is now an error for direct/combined/inference, because the one legitimate reason it could
 // be absent — threshold instantiation — has its own declared support type.
-function caseAuditTextValues(text,factIds,factIndex,where,issues,supportType){
+// v15.8: `presentedValues` is the set of values the case itself already presents as
+// VALIDATED data, and it is passed only from the rationale call site.
+// A datum cites the facts that ESTABLISH a value; a rationale cites the facts that support
+// its REASONING. Auditing both against the rationale's own fact subset conflated the two:
+// a hemoglobin accepted as case data was then rejected five times over in the rationales
+// that reasoned about it, and no well-formed case could satisfy it, because the rationale
+// for "why is option B wrong" legitimately cites reasoning facts rather than the lab-value
+// fact. Data grounding is untouched — caseAuditDatumValues never receives this set.
+function caseAuditTextValues(text,factIds,factIndex,where,issues,supportType,presentedValues){
   const st=String(supportType||'');
   if(st==='neutral-framing')return; // invented detail with no clinical weight, by definition
   if(!(factIds||[]).length)return; // the missing/lacks-fact-ID checks already cover this
@@ -5506,6 +5514,9 @@ function caseAuditTextValues(text,factIds,factIndex,where,issues,supportType){
   const support=caseNormalizeClinical(cited.join(' '));
   for(const v of new Set(values.map(x=>x.trim()))){
     if(support.includes(caseNormalizeClinical(v)))continue; // present verbatim in a cited fact
+    // Established elsewhere in this case as validated data — the rationale is reasoning
+    // about a presented finding, not introducing a new one.
+    if(presentedValues&&presentedValues.has(caseNormalizeClinical(v)))continue;
     if(st==='instantiated'){
       const parsed=caseSplitValue(v);
       let applicable=false,ok=false;
@@ -5719,6 +5730,20 @@ function validateCaseStudy(caseStudy,factIndex,allowedFactIds,expectedCondition)
   // v15.6: terminology lint on model-authored prose only (see neiaTerminologyScan scope note).
   neiaTerminologyScan((caseStudy.patient||{}).background,'patient.background',issues);
   neiaTerminologyScan(caseStudy.title,'title',issues);
+  // v15.8: values the case presents as VALIDATED data, gathered across every stage before
+  // the main loop so a rationale is not penalised for referencing a finding presented later.
+  // A datum that fails its own audit contributes nothing — otherwise an invented datum would
+  // launder invented rationale values, which is exactly what the entailment check exists to
+  // stop. Stage ordering is still enforced separately by validateStageTiming.
+  const presentedValues=new Set();
+  for(const stage of caseStudy.stages||[])
+    for(const d of stage.data||[]){
+      const probe=[];
+      caseAuditDatumValues(d,factIndex,'probe',probe);
+      if(probe.some(x=>x.sev==='error'))continue;
+      for(const v of String((d.label||'')+' '+(d.value||'')).match(CASE_CLINICAL_TOKEN_RE)||[])
+        presentedValues.add(caseNormalizeClinical(v.trim()));
+    }
   const seenQIds=new Set(),seenStageNums=new Set();
   for(const stage of caseStudy.stages||[]){
     const sn='Stage '+(stage.stageNumber||'?');
@@ -5794,7 +5819,7 @@ function validateCaseStudy(caseStudy,factIndex,allowedFactIds,expectedCondition)
         checkIds(r.factIds,qn+' rationale');
         // v15.3: the entailment audit runs where fabricated numbers actually live — the
         // rationale text arguing the answer ("...because potassium is 2.4 mEq/L").
-        caseAuditTextValues(r.text,r.factIds,factIndex,`${qn} rationale ${r.option||'?'}`,issues,r.supportType);
+        caseAuditTextValues(r.text,r.factIds,factIndex,`${qn} rationale ${r.option||'?'}`,issues,r.supportType,presentedValues);
         neiaTerminologyScan(r.text,`${qn} rationale ${r.option||'?'}`,issues);
       }
     }

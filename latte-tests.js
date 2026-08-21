@@ -1227,6 +1227,67 @@ section('v15.8 — grounding capacity');
     cp.includes('never invent any other laboratory or vital-sign value this way'));
 }
 
+/* ── 20b5. v15.8 — rationales may reference the case's own presented data ── */
+section('v15.8 — presented-data grounding');
+{
+  // Three consecutive live runs errored on this: a hemoglobin ACCEPTED as case data was
+  // then rejected in every rationale that reasoned about it, because each rationale was
+  // audited against its own fact subset. A datum cites the facts that establish a value;
+  // a rationale cites the facts that support its reasoning.
+  const FI=new Map([
+    ['f-hgb',{condition:{},fact:{text:'Hemoglobin of 8 g/dL indicates severe anemia.',sourceQuote:''}}],
+    ['f-tired',{condition:{},fact:{text:'Fatigue is a hallmark of anemia.',sourceQuote:''}}],
+    ['f-none',{condition:{},fact:{text:'Monitor the client closely.',sourceQuote:''}}]]);
+  const datum=(label,value,ids)=>({label,value,supportType:'direct',availability:'revealed',factIds:ids});
+  const build=(data,ratText,ratIds)=>({condition:'Anemia',title:'t',patient:{background:''},
+    stages:[{stageNumber:1,narrative:'',data,questions:[{id:'s1q1',type:'MCQ',stem:'Which finding is most concerning?',
+      options:[{label:'A',text:'a'},{label:'B',text:'b'}],correctAnswers:['A'],
+      rationales:[{option:'A',text:ratText,supportType:'direct',factIds:ratIds},
+                  {option:'B',text:'Other reasoning.',supportType:'direct',factIds:['f-tired']}],
+      cjmmSkill:'Analyze Cues'}]}],debrief:{}});
+  const run=cs=>CASE.validateCaseStudy(cs,FI,new Set(['f-hgb','f-tired','f-none']),'Anemia');
+
+  // The reported case: the datum is grounded, the rationale reasons about it citing a
+  // DIFFERENT fact. Previously an error; now accepted.
+  {
+    const found=run(build([datum('Hemoglobin','8 g/dL',['f-hgb'])],'Concerning because the hemoglobin is 8 g/dL.',['f-tired']));
+    t('a rationale may reference a validated datum value',!has(found,'does not appear','error'));
+    t('that case has no errors at all',!found.some(i=>i.sev==='error'));
+  }
+  // A value no datum presents is still fabrication.
+  {
+    const found=run(build([datum('Hemoglobin','8 g/dL',['f-hgb'])],'Concerning because potassium is 2.4 mEq/L.',['f-tired']));
+    t('a value no datum presents is still an error',has(found,'does not appear','error'));
+  }
+  // No laundering: a datum that failed its own audit contributes nothing.
+  {
+    const found=run(build([datum('Potassium','2.4 mEq/L',['f-none'])],'Because potassium is 2.4 mEq/L.',['f-tired']));
+    t('an ungrounded datum still errors on its own',has(found,'datum','error'));
+    t('an ungrounded datum cannot launder a rationale value',
+      found.filter(i=>i.sev==='error'&&/rationale/.test(i.msg)).length===1);
+  }
+  // Data grounding itself is unchanged.
+  {
+    const found=run(build([datum('Hemoglobin','8 g/dL',['f-hgb']),datum('Potassium','2.4 mEq/L',['f-none'])],'Fatigue is expected.',['f-tired']));
+    t('a second ungrounded datum still errors even when another datum is valid',
+      has(found,'value "2.4 mEq/L" does not appear','error'));
+  }
+  // Gathered across all stages, so a rationale is not penalised for a later finding.
+  {
+    const cs=build([],'Concerning because the hemoglobin is 8 g/dL.',['f-tired']);
+    cs.stages.push({stageNumber:2,narrative:'',data:[datum('Hemoglobin','8 g/dL',['f-hgb'])],questions:[]});
+    t('a value presented in a later stage still counts as presented',
+      !has(CASE.validateCaseStudy(cs,FI,new Set(['f-hgb','f-tired','f-none']),'Anemia'),'does not appear','error'));
+  }
+  // The direct-call contract: without the set, behaviour is exactly as before.
+  {
+    const i=[];CASE.caseAuditTextValues('Hemoglobin is 8 g/dL',['f-tired'],FI,'X',i,'direct');
+    t('omitting the presented set preserves the old behaviour',has(i,'does not appear','error'));
+    const j=[];CASE.caseAuditTextValues('Hemoglobin is 8 g/dL',['f-tired'],FI,'X',j,'direct',new Set(['8g']));
+    t('supplying the presented set clears it',j.length===0);
+  }
+}
+
 /* ── 20c. v15.8 — the repair path (previously ZERO coverage) ── */
 // This is the code that rewrites the user's worksheet in place. It shipped in v15.7 with no
 // assertions at all; one round-trip test would have caught the $-injection bug fixed in v15.8.
