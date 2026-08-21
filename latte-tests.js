@@ -1127,6 +1127,57 @@ section('v15.8 — live-run regressions');
       'is not among the options', 'error'));
 }
 
+/* ── 20b3. v15.8 — decimal equivalence and timing-warning volume ── */
+section('v15.8 — live case-run regressions');
+{
+  const n = CASE.caseNormalizeClinical;
+  // "8.0 g/dL" vs a source saying "8 g/dL" is the same value. It was reported as fabricated,
+  // while the terminology linter simultaneously asked for the shorter form -- so following
+  // the style rule silently decided whether grounding passed.
+  t('a trailing zero is equivalent to none', n('8.0 g/dL') === n('8 g/dL'));
+  t('a trailing zero on a whole number is equivalent', n('120.0 bpm') === n('120 bpm'));
+  t('a redundant trailing zero on a decimal is equivalent', n('0.50 mg') === n('0.5 mg'));
+  t('a comma-grouped decimal canonicalises too', n('7,000.50 mL') === n('7000.5 mL'));
+  // Genuinely different values must stay different.
+  t('8.5 and 8 remain distinct', n('8.5 g/dL') !== n('8 g/dL'));
+  t('0.5 and 5 remain distinct', n('0.5 mg') !== n('5 mg'));
+  t('10 is not collapsed to 1', n('10 mg') !== n('1 mg'));
+  t('7.35 keeps its precision', n('7.35') === '7.35');
+  {
+    const idx = new Map([['f1', { condition: {}, fact: { text: 'Hemoglobin of 8 g/dL indicates anemia.', sourceQuote: '' } }]]);
+    const i = []; CASE.caseAuditTextValues('Hemoglobin is 8.0 g/dL', ['f1'], idx, 'X', i, 'direct');
+    t('a trailing-zero value now matches its source and does not error', i.length === 0);
+  }
+  {
+    const idx = new Map([['f1', { condition: {}, fact: { text: 'Hemoglobin of 8 g/dL indicates anemia.', sourceQuote: '' } }]]);
+    const i = []; CASE.caseAuditTextValues('Hemoglobin is 9.4 g/dL', ['f1'], idx, 'X', i, 'direct');
+    t('a genuinely different value still errors', has(i, 'does not appear', 'error'));
+  }
+}
+{
+  // One finding per question+fact. A question whose options all cite the same unrevealed
+  // fact reported it once per rationale -- five times for one fact in a real run.
+  const rat = ids => ids.map((f, k) => ({ option: 'ABCD'[k], text: '', supportType: 'direct', factIds: [f] }));
+  const cs = { stages: [
+    { stageNumber: 1, data: [], questions: [{ id: 'q1', rationales: rat(['fact-9', 'fact-9', 'fact-9', 'fact-9']) }] },
+    { stageNumber: 2, data: [{ availability: 'revealed', factIds: ['fact-9'] }], questions: [] }] };
+  const found = CASE.validateStageTiming(cs);
+  t('a fact cited by every option is reported once', found.length === 1);
+  t('the single finding still names the fact', /fact-9/.test(found[0].msg));
+  // Distinct facts must still each be reported.
+  const cs2 = { stages: [
+    { stageNumber: 1, data: [], questions: [{ id: 'q1', rationales: rat(['fact-9', 'fact-8']) }] },
+    { stageNumber: 2, data: [{ availability: 'revealed', factIds: ['fact-9', 'fact-8'] }], questions: [] }] };
+  t('two distinct unrevealed facts are both reported', CASE.validateStageTiming(cs2).length === 2);
+  // The same fact in a different question is a separate finding.
+  const cs3 = { stages: [
+    { stageNumber: 1, data: [], questions: [
+      { id: 'q1', rationales: rat(['fact-9', 'fact-9']) },
+      { id: 'q2', rationales: rat(['fact-9']) }] },
+    { stageNumber: 2, data: [{ availability: 'revealed', factIds: ['fact-9'] }], questions: [] }] };
+  t('the same fact in another question is reported separately', CASE.validateStageTiming(cs3).length === 2);
+}
+
 /* ── 20c. v15.8 — the repair path (previously ZERO coverage) ── */
 // This is the code that rewrites the user's worksheet in place. It shipped in v15.7 with no
 // assertions at all; one round-trip test would have caught the $-injection bug fixed in v15.8.

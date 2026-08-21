@@ -5376,6 +5376,12 @@ function caseNormalizeClinical(t){
     .replace(/per\s+minute/g,'/min')
     .replace(/mm\s*hg/g,'mmhg')
     .replace(/[,\u00a0]/g,'')
+    // v15.8: canonicalise decimal forms so 8.0 == 8 and 0.50 == 0.5. Without this a
+    // hemoglobin of "8.0 g/dL" failed to match a source saying "8 g/dL" and was reported
+    // as fabricated \u2014 while the terminology linter was simultaneously telling the model to
+    // write "8 g", so following the style rule silently decided whether grounding passed.
+    // Runs after comma removal so "7,000.50" canonicalises too.
+    .replace(/\d+\.\d+/g,m=>String(parseFloat(m)))
     .replace(/\s+/g,'');
 }
 // ── v15.6 item 2: instantiated values ──
@@ -5782,15 +5788,23 @@ function validateStageTiming(caseStudy){
     for(const d of stage.data||[])
       if((d.availability||'revealed')!=='background')
         for(const id of d.factIds||[])available.add(String(id).toLowerCase());
-    for(const q of stage.questions||[])
+    for(const q of stage.questions||[]){
+      // v15.8: one finding per question+fact, not one per citation. A question whose
+      // options all cite the same unrevealed fact produced an identical warning for every
+      // rationale — a real run reported fact-82 five times inside one question and 22
+      // timing warnings for what were only 8 distinct facts. Volume that repetitive reads
+      // as noise and buries the findings that differ.
+      const seen=new Set();
       for(const r of q.rationales||[])
         for(const id of r.factIds||[]){
           const lid=String(id).toLowerCase();
-          if(available.has(lid))continue;
+          if(available.has(lid)||seen.has(lid))continue;
+          seen.add(lid);
           issues.push(presented.has(lid)
             ?{sev:'warn',msg:`Stage ${stage.stageNumber} ${q.id||'question'} cites ${id} before it is revealed`}
             :{sev:'warn',msg:`Stage ${stage.stageNumber} ${q.id||'question'} cites ${id}, which is never presented as case data`});
         }
+    }
   }
   return issues;
 }
