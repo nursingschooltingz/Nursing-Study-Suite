@@ -11,7 +11,41 @@ Every release since 15.0 has been verified against three gates before shipping: 
 
 ## [Unreleased]
 
-### v15.7 — item quality for the NCLEX Generator
+### To do
+- Run the 20-page benchmark in `Nursing-Study-Suite-v16-spec.md` §11 to decide whether v16 multimodal ingestion gets built at all.
+- Confirm against a primary NCSBN source whether the 2026 Test Plan renames *Safety and Infection Control* to *Safety and Infection Prevention and Control*. The v4.2 patch claimed it; it could not be verified. `NCLEX_CATEGORY_LABELS` keeps the long-standing label until then.
+- Supply real NCLEX-RN Test Plan activity statements to the generator, then promote Test Plan Alignment from WARN-only to a hard FAIL in the v4.2 gate.
+- **Confirm the v15.8 coverage fix against real output.** `ngCitedFactIds()` has never run on a live batch; if `Coverage: N/30` still reports 0, the fix is wrong.
+- **B3 / B4** from the v15.7 brief are unstarted. B3a needs approval to edit two frozen extractor prompts.
+
+### Under consideration
+- **De-hyphenation** — de-hyphenation and ligature normalization in `kbNormForMatch`, to promote quote-verification misses caused by line-break hyphenation. Cheaper than v16 and may resolve a meaningful share of `quoteMiss`.
+- **v16** — selective multimodal page ingestion. Architecture settled, build blocked pending benchmark data. See `Nursing-Study-Suite-v16-spec.md`.
+
+---
+
+## [15.8] — 2026-08-20
+
+First release driven by real usage rather than fixtures. Every item below was found by running the two generators against a live Knowledge Base; none was reachable from the synthetic tests.
+
+### Fixed
+- **Fact coverage was structurally always zero** (pre-existing since v15). A real 50-question run reported `Fact coverage: 0/122` — arithmetic, not a bad batch. The grounding adapter asks for `[fact-N]` in PART 1 concept names; `NCLEX_GEN_PROMPT` asks for C-numbers in PART 4; nothing asks for fact IDs in Parts 3/4, which is exactly where v15 narrowed the scan. `ngCitedFactIds()` now maps C-number → fact IDs through PART 1 and resolves what Parts 3/4 actually cite. No prompt change.
+- **A malformed `DISTRIBUTION:` line silently disabled its own check.** One batch emitted the distribution as prose instead of the required bracketed shape; both regexes missed, every comparison loop iterated over nothing, and the batch reported 0 errors. The self-report check turned itself off on precisely the output it exists to police. It now warns that the counts could not be checked.
+- **A repaired item kept displaying its pre-repair verdict.** The panel showed `FAIL — DISTRACTOR LENGTH` for an item the log had already reported as rewritten. New `REPAIRED` status, deliberately neither PASS (never re-audited) nor FAIL (no longer the shipped text), in both generators and the audit-trail export.
+
+### Changed
+- **The item audit defaults to Flash**, not Pro. A cost decision, not a quality one, and the comment says so: a real free-tier key exhausted its Pro allowance after ~26 calls, and the audit runs once per MCQ. Thinking stays high. One click restores Pro.
+- **Audit calls are paced for free-tier limits.** Pool width 3 → 2, retry budget 1 → 3, and an early stop after two quota failures that explains the situation in plain language instead of grinding through every remaining item. `neia-retest.js` gains `--rpm` for the same reason. Note this helps a per-minute rate limit; a per-day allowance needs fewer calls or a cheaper tier.
+
+### Notes
+- **The audit gate is now measured, not assumed.** A full test–retest run (10 fixture items × 3, plus a 6-call top-up) produced **zero verdict flips**, zero false fatals on the sound items, and both seeded defects caught and correctly named in all three runs. No criterion warranted demotion, so the cutoffs and severities stand.
+- `neia-retest.js` no longer counts a failed call as a changed verdict, and separates genuine verdict instability from label drift on a stable verdict.
+
+Harness 356 → 386 assertions.
+
+---
+
+## [15.7] — 2026-08-20 — item quality for the NCLEX Generator
 
 The v15.6 work gave the Case Study Generator deterministic checks and an independent audit. The NCLEX Generator — the suite's primary item producer — still had neither: its eleven-criterion gate ran *inside* the authoring call and reported itself on the `DISTRIBUTION:` line. "Never report compliance you have not verified" is unfalsifiable when the only witness is the thing being checked. v15.7 closes that.
 
@@ -35,7 +69,7 @@ Harness 307 → 356 assertions.
 
 ---
 
-### v15.6 — NEIA hardening for the Case Study Generator
+## [15.6] — 2026-08-20 — NEIA hardening for the Case Study Generator
 
 Implements the v15.6 brief in full — all eight items.
 
@@ -61,15 +95,6 @@ Evidence tiering is enforced in code comments throughout: `[NEIA-VALIDATED]` for
   - The runner extracts the real prompt builders from the shipped HTML by anchor, never a copy. Built-ins only, key read from `GEMINI_API_KEY` and never written to the report. It costs live API calls and is deliberately **not** wired into `latte-tests.js` — but the fixture's shape and its compatibility with the shipped audit path *are* asserted there, so it cannot rot silently.
 
 Harness 98 → 307 assertions (356 as of v15.7). `Prompts.md` regenerated from live bytes (its `NCLEX_GEN_PROMPT` section was still v4.1 after the v15.5 bump).
-
-### To do
-- Run the 20-page benchmark in `Nursing-Study-Suite-v16-spec.md` §11 to decide whether v16 multimodal ingestion gets built at all.
-- Confirm against a primary NCSBN source whether the 2026 Test Plan renames *Safety and Infection Control* to *Safety and Infection Prevention and Control*. The v4.2 patch claimed it; it could not be verified. `NCLEX_CATEGORY_LABELS` keeps the long-standing label until then.
-- Supply real NCLEX-RN Test Plan activity statements to the generator, then promote Test Plan Alignment from WARN-only to a hard FAIL in the v4.2 gate.
-
-### Under consideration
-- **De-hyphenation** — de-hyphenation and ligature normalization in `kbNormForMatch`, to promote quote-verification misses caused by line-break hyphenation. Cheaper than v16 and may resolve a meaningful share of `quoteMiss`.
-- **v16** — selective multimodal page ingestion. Architecture settled, build blocked pending benchmark data. See `Nursing-Study-Suite-v16-spec.md`.
 
 ---
 

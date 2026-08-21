@@ -21,7 +21,7 @@ Maintained by one person — a working LPN in an LPN-to-RN bridge program — be
 node latte-tests.js
 ```
 
-Expect **356 passed · 0 failed**. The harness extracts live functions from the shipped HTML by anchor strings — it never copies code, so it fails loudly if a refactor moves an anchor. That failure is signal, not noise: fix the anchor reference, don't weaken the test.
+Expect **386 passed · 0 failed**. The harness extracts live functions from the shipped HTML by anchor strings — it never copies code, so it fails loudly if a refactor moves an anchor. That failure is signal, not noise: fix the anchor reference, don't weaken the test.
 
 Watch for *vacuous* passes as well as failures: an end anchor that matches earlier than intended silently truncates a span, and every assertion about the missing tail then passes for the wrong reason. `caseBuildPrompt` hit exactly this — `'\n}\n'` matched inside its JSON-shape block. Where a span covers a prompt, assert that something near its *end* is present.
 
@@ -59,8 +59,8 @@ Do not "fix" these:
 
 | File | Purpose |
 |---|---|
-| `Nursing-Study-Suite v15.7.html` | The entire application. The filename carries the version — quote it on the command line. Both harnesses auto-detect any `Nursing-Study-Suite*.html`, so a version bump needs no code change. |
-| `latte-tests.js` | Regression harness, 356 assertions |
+| `Nursing-Study-Suite v15.8.html` | The entire application. The filename carries the version — quote it on the command line. Both harnesses auto-detect any `Nursing-Study-Suite*.html`, so a version bump needs no code change. |
+| `latte-tests.js` | Regression harness, 386 assertions |
 | `neia-fixture.json` | 10 fixed MCQs with reference classifications, for the audit test–retest |
 | `neia-retest.js` | Test–retest runner — **costs live API calls**, never part of `latte-tests.js` |
 | `CHANGELOG.md` | Release summary (Keep a Changelog format) |
@@ -70,9 +70,11 @@ Do not "fix" these:
 
 ## Current state
 
-Shipping v15.7. The app file is `Nursing-Study-Suite v15.7.html` — both harnesses auto-detect it, so a rename needs no code change. Open items:
+Shipping v15.8. The app file is `Nursing-Study-Suite v15.8.html` — both harnesses auto-detect it, so a rename needs no code change. Open items:
 
-- **Run `neia-retest.js`** — the audit gate's severities and the item-3 heuristic cutoffs are all provisional until it produces real flip data. This is the highest-value next action; everything else in v15.6 is calibrated on guesses.
+- **The audit gate has been measured.** A full test–retest (10 fixture items × 3, plus a 6-call top-up) produced **zero verdict flips**, zero false fatals on the sound items, and both seeded defects caught and correctly named every run. No criterion was demoted; the cutoffs and severities stand on evidence, not guesses. Re-run `neia-retest.js` after any prompt or model change.
+- **Confirm the v15.8 coverage fix on real output.** `ngCitedFactIds()` has never run on a live batch. If `Coverage: N/30` still reports 0, the fix is wrong.
+- **Real usage finds what fixtures cannot.** Every v15.8 bug came from running the generators against a live Knowledge Base, and none was reachable from the synthetic tests. Run a real batch after any change to the generator pipelines.
 - **Test Plan activity statements** are not supplied to either generator, so Test Plan Alignment is WARN-only in both. Neither source paper reproduces the statements — Appendix A only links to NCSBN.
 - **Unverified:** whether the 2026 Test Plan renames *Safety and Infection Control* to *Safety and Infection Prevention and Control*. `NCLEX_CATEGORY_LABELS` keeps the long-standing label until a primary source confirms.
 - **v16 multimodal ingestion** — architecture settled, build gated on the 20-page benchmark in the spec's §11. Do not start implementing it.

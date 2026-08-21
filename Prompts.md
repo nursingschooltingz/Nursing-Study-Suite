@@ -1,6 +1,6 @@
 # Nursing Study Suite — Prompt Library
 
-The full prompts behind the Anki Generator, Priority Analyzer, NCLEX Generator, Case Study Generator, and the item-quality auditor, **extracted verbatim from the shipped v15.7 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
+The full prompts behind the Anki Generator, Priority Analyzer, NCLEX Generator, Case Study Generator, and the item-quality auditor, **extracted verbatim from the shipped v15.8 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
 
 How to read them: text inside `${...}` is filled in at runtime by the app (your settings, your Knowledge Base, the current chunk). The Priority, Case, and audit prompts are shown as their complete builder functions because the assembly logic is part of the design.
 
