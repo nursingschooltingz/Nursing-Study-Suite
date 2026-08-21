@@ -1171,6 +1171,56 @@ section('v15.8 — worksheet repair path');
   }
 }
 
+/* ── 20d. v15.8 — Phase 2: paParseTiers, pdfLayoutText, Anki edit lint ── */
+section('v15.8 — Phase 2 fixes');
+{
+  const PA=new Function(spanFrom('function paParseTiers(','\n}')+'\n;return paParseTiers;')();
+  const doc=a=>a.join(String.fromCharCode(10));
+  // The regression: `##?` matched 1-2 hashes, so `### TIER 2` broke the lookahead and
+  // TIER 1 swallowed the rest of the document.
+  {
+    const r=PA(doc(['## TIER 1','one','### TIER 2','two','### TIER 3','three']));
+    t('a 3-hash TIER 2 heading no longer lets TIER 1 swallow the document',r.tier1==='one');
+    t('3-hash TIER 2 is captured',r.tier2==='two');
+    t('3-hash TIER 3 is captured',r.tier3==='three');
+  }
+  {
+    const r=PA(doc(['## 🔴 TIER 1','a','## 🟡 TIER 2','b','## 🔵 TIER 3','c','## Study Strategy','s','*Audit: ok*']));
+    t('emoji headings still parse',r.tier1==='a'&&r.tier2==='b'&&r.tier3==='c');
+    t('strategy is captured',r.strategy==='s');
+    t('audit footer is captured and destarred',r.audit==='ok');
+    t('the audit line does not leak into strategy',!r.strategy.includes('Audit'));
+  }
+  t('no tier headings at all returns null',PA(doc(['just prose','more prose']))===null);
+  {
+    const r=PA(doc(['# TIER 1','x','# TIER 2','y']));
+    t('a missing TIER 3 does not corrupt the others',r.tier1==='x'&&r.tier2==='y'&&r.tier3==='');
+  }
+}
+{
+  const PL=new Function(spanFrom('function pdfLayoutText(','\n}')+'\n;return pdfLayoutText;')();
+  // Rotated text: transform[0] is 0, and ?? does not default 0, so fontSize became 0 and
+  // every y-delta beat the 0.5*fontSize line threshold — a newline per glyph.
+  const rotated={items:[
+    {str:'AB',transform:[0,12,-12,0,10,700],width:12},
+    {str:'CD',transform:[0,12,-12,0,10,688],width:12}]};
+  const out=PL(rotated);
+  t('rotated text does not split every glyph onto its own line',out.split(String.fromCharCode(10)).length<=2);
+  t('rotated text keeps its content',out.includes('AB')&&out.includes('CD'));
+  const upright={items:[
+    {str:'Hello',transform:[12,0,0,12,10,700],width:30},
+    {str:'World',transform:[12,0,0,12,10,680],width:30}]};
+  t('upright text still breaks lines on a real y change',PL(upright).split(String.fromCharCode(10)).length===2);
+  t('the layout loop exists in exactly one place',
+    S.split('lastWidth=item.width??').length-1===1);
+}
+{
+  t('Anki edits recompute lint',S.includes('next.lint=lintAnkiCard(next);'));
+  t('Anki edits recompute the abbreviation scan',S.includes("ankiUnsafeAbbrevScan(next.text,'Text',found);"));
+  t('a cleared lint re-enables keep',S.includes('if(hadLint&&!next.lint.length)next.keep=true;'));
+  t('abbrev findings never flip keep',!S.includes('next.abbrev.length)next.keep'));
+}
+
 /* ── 21. v15.7 — provenance stamp + Anki abbreviation lint (B2, B5) ── */
 section('v15.7 — provenance + Anki lint');
 {

@@ -715,7 +715,13 @@ function destroyPdfDoc(file){
 // boxes, and lab-value panels actually carry.
 function pdfLayoutText(tc){
   const items=(tc&&tc.items)||[];let result='';let lastX=-1,lastWidth=0,lastY=-1;
-  for(const item of items){if(!item.str)continue;const x=item.transform?.[4]??0,y=item.transform?.[5]??0,fontSize=item.transform?.[0]??12;
+  for(const item of items){if(!item.str)continue;const x=item.transform?.[4]??0,y=item.transform?.[5]??0;
+    // v15.8: transform[0] alone is the horizontal scale, which is 0 for 90-degree rotated
+    // text. ?? does not default 0, so fontSize became 0 and every y-delta exceeded the
+    // 0.5*fontSize line threshold — one newline per glyph on landscape lab tables.
+    // hypot(a,b) is the rotation-invariant scale.
+    const _a=item.transform?.[0]??12,_b=item.transform?.[1]??0;
+    const fontSize=Math.max(4,Math.hypot(_a,_b))||12;
     if(lastY!==-1&&Math.abs(y-lastY)>fontSize*0.5){result+='\n';lastX=-1;}
     if(lastX!==-1){const gap=x-(lastX+lastWidth);if(gap>fontSize*0.25)result+=' ';else if(gap<-fontSize*2)result+='\n';}
     result+=item.str;lastX=x;lastWidth=item.width??(item.str.length*fontSize*0.5);lastY=y;}
@@ -2071,21 +2077,39 @@ ${combined}
 Produce the ranked analysis now.`;
 }
 
+// v15.8: was four independent regexes, each bounded by a lookahead for the NEXT heading.
+// `##?` matches one or two hashes only, so a model emitting `### TIER 2` failed the
+// lookahead and TIER 1's lazy (.*?) ran to end-of-string under /s — Tier 1 rendered the
+// entire analysis while Tier 2 and 3 also matched separately, duplicating the content.
+// A single line scan cannot over-run: a section ends where the next heading begins, and
+// the heading test accepts 1-4 hashes and an optional emoji.
+// v15.8: was four independent regexes, each bounded by a lookahead for the NEXT heading.
+// `##?` matched one or two hashes only, so a model emitting `### TIER 2` failed the
+// lookahead and TIER 1's lazy (.*?) ran to end-of-string under /s — Tier 1 rendered the
+// whole analysis while Tier 2 and 3 also matched separately, duplicating content.
+// A single line scan cannot over-run: a section ends where the next heading begins.
 function paParseTiers(text){
-  const t1=text.match(/(?:^|\n)##?\s*(?:🔴\s*)?TIER\s*1\b[^\n]*\n(.*?)(?=\n##?\s*(?:🟡\s*)?TIER\s*2|$)/si);
-  const t2=text.match(/(?:^|\n)##?\s*(?:🟡\s*)?TIER\s*2\b[^\n]*\n(.*?)(?=\n##?\s*(?:🔵\s*)?TIER\s*3|$)/si);
-  // T3 now stops at the Study Strategy divider so the strategy and audit footer are not swallowed.
-  const t3=text.match(/(?:^|\n)##?\s*(?:🔵\s*)?TIER\s*3\b[^\n]*\n(.*?)(?=\n\s*-{3,}\s*\n|\n##?\s*Study\s*Strategy|$)/si);
-  const st=text.match(/\n##?\s*Study\s*Strategy[^\n]*\n([\s\S]*?)(?=\n\s*\*?\s*Audit:|$)/i);
-  const au=text.match(/^\s*\*?\s*Audit:\s*(.+)$/mi);
-  if(!t1&&!t2&&!t3)return null;
-  return{
-    tier1:(t1?t1[1]:'').trim(),
-    tier2:(t2?t2[1]:'').trim(),
-    tier3:(t3?t3[1]:'').trim(),
-    strategy:(st?st[1]:'').replace(/\n\s*-{3,}\s*$/,'').trim(),
-    audit:(au?au[1]:'').replace(/\*+\s*$/,'').trim()
-  };
+  const src=String(text||'');
+  const sec={tier1:[],tier2:[],tier3:[],strategy:[]};
+  const HEAD=[
+    [/^#{1,4}\s*(?:🔴\s*)?TIER\s*1\b/i,'tier1'],
+    [/^#{1,4}\s*(?:🟡\s*)?TIER\s*2\b/i,'tier2'],
+    [/^#{1,4}\s*(?:🔵\s*)?TIER\s*3\b/i,'tier3'],
+    [/^#{1,4}\s*Study\s*Strategy\b/i,'strategy'],
+  ];
+  let cur=null,audit='';
+  for(const line of src.split('\n')){
+    const h=HEAD.find(([re])=>re.test(line));
+    if(h){cur=h[1];continue;}
+    const am=line.match(/^\s*\*?\s*Audit:\s*(.+)$/i);
+    if(am){audit=am[1].replace(/\*+\s*$/,'').trim();continue;}
+    if(cur)sec[cur].push(line);
+  }
+  if(!sec.tier1.length&&!sec.tier2.length&&!sec.tier3.length)return null;
+  // The strategy block ends at a horizontal rule when the model emits one.
+  const clean=a=>a.join('\n').replace(/\n\s*-{3,}\s*$/,'').trim();
+  return{tier1:clean(sec.tier1),tier2:clean(sec.tier2),tier3:clean(sec.tier3),
+    strategy:clean(sec.strategy),audit};
 }
 
 function kbForPriority(kb,{tiers=[1,2,3],conditionQuery=""}={}){
@@ -3040,7 +3064,25 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
 
   const toggle=useCallback(id=>setCards(p=>p.map(c=>c.id===id?{...c,keep:!c.keep}:c)),[]);
   const del=useCallback(id=>setCards(p=>p.filter(c=>c.id!==id)),[]);
-  const updateField=useCallback((id,f,v)=>setCards(p=>p.map(c=>c.id===id?{...c,[f]:v}:c)),[]);
+  // v15.8: recompute BOTH lint tiers on edit. They were evaluated once at generation, so a
+  // user who fixed a missing cloze or a bad dose abbreviation kept the badge permanently and
+  // the card stayed unchecked — uncorrectable from the UI, which is where corrections happen.
+  // keep is only re-enabled when lint (which unchecked it) actually clears; abbrev never
+  // unchecks anything, so it must not flip keep either way.
+  const updateField=useCallback((id,f,v)=>setCards(p=>p.map(c=>{
+    if(c.id!==id)return c;
+    const next={...c,[f]:v};
+    if(f==='text'||f==='extra'||f==='tags'){
+      const hadLint=(c.lint||[]).length>0;
+      next.lint=lintAnkiCard(next);
+      const found=[];
+      ankiUnsafeAbbrevScan(next.text,'Text',found);
+      ankiUnsafeAbbrevScan(next.extra,'Extra',found);
+      next.abbrev=found.map(x=>x.msg);
+      if(hadLint&&!next.lint.length)next.keep=true;
+    }
+    return next;
+  })),[]);
 
   const exportTxt=useCallback(()=>{
     const kept=(tierFilter!=='all'?filteredCards:cards).filter(c=>c.keep);if(!kept.length)return;
@@ -3188,12 +3230,10 @@ async function nclexExtractPageRange(file,startPage,endPage,signal){
   for(let i=s;i<=e;i++){
     if(signal?.aborted)throw new DOMException('Aborted','AbortError');
     const p=await pdf.getPage(i);const c=await p.getTextContent();
-    const items=c.items;let result='';let lastX=-1,lastWidth=0,lastY=-1;
-    for(const item of items){if(!item.str)continue;const x=item.transform?.[4]??0,y=item.transform?.[5]??0,fontSize=item.transform?.[0]??12;
-      if(lastY!==-1&&Math.abs(y-lastY)>fontSize*0.5){result+='\n';lastX=-1;}
-      if(lastX!==-1){const gap=x-(lastX+lastWidth);if(gap>fontSize*0.25)result+=' ';else if(gap<-fontSize*2)result+='\n';}
-      result+=item.str;lastX=x;lastWidth=item.width??(item.str.length*fontSize*0.5);lastY=y;}
-    text+=result+'\n\n';
+    // v15.8: was a byte-identical copy of pdfLayoutText's loop. v15.4 moved the KB path onto
+    // the shared helper but missed this third caller, so the rotated-text fix would have had
+    // to be made twice. One implementation, three callers.
+    text+=pdfLayoutText(c)+'\n\n';
   }
   return text;
 }
