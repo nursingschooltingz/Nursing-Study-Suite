@@ -1,6 +1,6 @@
 # Nursing Study Suite — Prompt Library
 
-The full prompts behind the Anki Generator, Priority Analyzer, NCLEX Generator, Case Study Generator, and the item-quality auditor, **extracted verbatim from the shipped v15.8 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
+The full prompts behind the Anki Generator, Priority Analyzer, NCLEX Generator, Case Study Generator, and the item-quality auditor, **extracted verbatim from the shipped v15.9 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
 
 How to read them: text inside `${...}` is filled in at runtime by the app (your settings, your Knowledge Base, the current chunk). The Priority, Case, and audit prompts are shown as their complete builder functions because the assembly logic is part of the design.
 
@@ -1305,7 +1305,7 @@ Either way, the ANCHOR RULE is unchanged: every option must trace to verbatim so
 
 ---
 
-## 4 · Clinical Case Study Generator (`caseBuildPrompt`, 6,871 chars)
+## 4 · Clinical Case Study Generator (`caseBuildPrompt`, 7,373 chars)
 
 Returns JSON, not markdown — every field is re-validated in code against the real Knowledge Base after generation. The fact packet is appended by `caseRenderFactPacket`; the shared question rules come from `CASE_QUESTION_RULES` (see the Appendix).
 
@@ -1335,6 +1335,12 @@ You may NOT invent any of the following — every one must trace to a supplied f
   contraindications · treatment responses · discharge restrictions · complications.
 A client age and sex may be chosen freely ONLY if they do not change the clinical reasoning
 (e.g. do not invent "72-year-old with CKD" unless CKD is a supplied fact).
+BODY WEIGHT is the one clinical value you may choose, and ONLY when a weight-based
+calculation requires it and no supplied fact states one. Choose a plainly ordinary adult
+weight, present it in the stage "data" array like any other datum with supportType
+"neutral-framing", and use that same number in every rationale that computes from it.
+Never choose a weight that changes the clinical picture (do not invent obesity or
+cachexia), and never invent any other laboratory or vital-sign value this way.
 Laboratory and vital-sign values must trace to a supplied fact EITHER verbatim OR as a
 bounded instantiation of a threshold that fact states — see supportType "instantiated"
 below. Presenting a concrete value rather than restating the rule is preferred, because a

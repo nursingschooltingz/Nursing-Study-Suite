@@ -15,12 +15,37 @@ Every release since 15.0 has been verified against three gates before shipping: 
 - Run the 20-page benchmark in `Nursing-Study-Suite-v16-spec.md` §11 to decide whether v16 multimodal ingestion gets built at all.
 - Confirm against a primary NCSBN source whether the 2026 Test Plan renames *Safety and Infection Control* to *Safety and Infection Prevention and Control*. The v4.2 patch claimed it; it could not be verified. `NCLEX_CATEGORY_LABELS` keeps the long-standing label until then.
 - Supply real NCLEX-RN Test Plan activity statements to the generator, then promote Test Plan Alignment from WARN-only to a hard FAIL in the v4.2 gate.
-- **Confirm the v15.8 coverage fix against real output.** `ngCitedFactIds()` has never run on a live batch; if `Coverage: N/30` still reports 0, the fix is wrong.
+- **Run a real batch after any generator change.** Every v15.8 and v15.9 bug came from live output; none was reachable from the synthetic tests.
 - **B3 / B4** from the v15.7 brief are unstarted. B3a needs approval to edit two frozen extractor prompts.
 
 ### Under consideration
 - **De-hyphenation** — de-hyphenation and ligature normalization in `kbNormForMatch`, to promote quote-verification misses caused by line-break hyphenation. Cheaper than v16 and may resolve a meaningful share of `quoteMiss`.
 - **v16** — selective multimodal page ingestion. Architecture settled, build blocked pending benchmark data. See `Nursing-Study-Suite-v16-spec.md`.
+
+---
+
+## [15.9] — 2026-08-20
+
+A correctness release with no new features. Every item came from either a two-reviewer production audit or a real generation run; none was reachable from the synthetic tests.
+
+### Fixed
+- **The worksheet repair splice could corrupt the worksheet.** `String.replace(str,str)` expands `$$`, `$&`, `` $` ``, `$'` and `$n` in the replacement, and the replacement is model-generated text — a repaired item containing `$&` grew a 99-char document to 147 by splicing a section into itself. It also wrote to the first match anywhere in the document. Now an index-based splice bounded to the located section.
+- **A quota stop discarded verdicts already paid for.** When a lane threw `QuotaStop`, `Promise.all` rejected, the caller's assignment never ran, and every audit the other lanes had completed was dropped. Partial results now travel out on the error.
+- **Ordering-step lists destroyed answer-key parsing.** PART 4's entry for an Ordering question carries its own numbered step list — the prompt asks for "one line per step" — restarting at 1 at question indentation. Each step parsed as a new question block, and because the lookup Map keeps the last match, an ordering step silently replaced question 1's real entry. Reported as "14 numbered entries" for 10 questions with Q1 missing its ANSWER line, across multiple runs. A block now starts only where the number ascends.
+- **Comma-grouped and trailing-zero values compared wrongly.** `"7,000 mL"` tokenized as `"000 mL"`, a token that can never match source text, so a correctly grounded Parkland calculation was reported as fabricated every time. Separately `"8.0 g/dL"` did not match a source saying `"8 g/dL"` — while the terminology linter simultaneously asked for the shorter form, so following a style rule silently decided whether grounding passed. Numbers now canonicalise on both axes.
+- **`instantiated` forbade the values an unfolding case exists to show.** A urine output of 22 mL/hr against a cited "maintain 30-50 mL/hr" target is the clinical point of a deterioration stage, and is grounded in the threshold precisely because it violates it. Now a warning naming both readings; a value with no threshold in any cited fact remains an error.
+- **Rationales were double-jeopardied.** A datum accepted as case data was then rejected in every rationale that reasoned about it, because each rationale was audited against its own fact subset. A datum cites the facts that establish a value; a rationale cites the facts that support its reasoning. Rationales may now reference values the case itself presents as validated data — a datum that failed its own audit contributes nothing.
+- **Calculation answers were checked against option labels**, and **rotated PDF text broke per glyph** (`transform[0]` is 0 for 90-degree text and `??` does not default 0). Anki lint and the unsafe-abbreviation scan now **recompute when you edit a card**, which they never did. `paParseTiers` no longer dumps the whole analysis into the Tier 1 box when the model writes `### TIER 2`.
+
+### Changed
+- **Both generators size themselves to the facts they have.** They checked that facts existed, never that there were enough. Three case runs generated 12 questions from 6, 8 and 13 facts — 0.5 to 1.1 per question, against the NCLEX generator's own `factsPerQ` default of 3 — so the model had nothing left to cite and reached forward into unrevealed stages. The case generator now names a shape that fits ("8 fact(s) supports about 4 grounded question(s) … Try 2 stage(s) × 2"), recomputed live. NCLEX batches shrink to what the pool can ground rather than letting the model invent the difference.
+- **Body weight is explicitly permitted** for weight-based calculations with no supplied weight, presented as case data. A Parkland question is impossible without one, so the model had to invent it and was then errored for inventing it.
+- **PDF documents are released on unmount**, and `ngParseCited` accepts bracket-less citations, which had been silently degrading cross-batch dedup.
+
+### Notes
+- **The v15.8 coverage fix is confirmed on real output.** Live runs report 18/30 and 23/30 where the metric had been structurally incapable of anything but 0.
+- A two-reviewer audit produced 12 findings. Five were real and are fixed above; two "Critical" findings were verified as **not bugs** (a claimed `workRaw` race has no `await` between read and write, and the claimed IndexedDB wipe cannot occur — the persist effect early-returns while loading and the KB is set before the status flips), and four proposed fixes would have introduced regressions, including one that would have created the data-loss bug it claimed to prevent.
+- Harness 386 → 505 assertions.
 
 ---
 
