@@ -4372,6 +4372,19 @@ function ngSpliceBlock(sectionText,num,replacement){
   if(idx<0)return null;
   return sectionText.slice(0,idx)+replacement+sectionText.slice(idx+target[0].text.length);
 }
+// v15.8: index-based section splice. The previous line used
+// workRaw.replace(parts.p3,newP3), which had two defects on model-generated text:
+//   1. String.replace(str,str) interprets $$ $& $` $' $n IN THE REPLACEMENT. A repaired
+//      option containing "$&" spliced the whole of PART 3 back into itself.
+//   2. It replaced the FIRST occurrence anywhere in the document, so if PART 2's audit
+//      prose echoed a stem the write landed there and PART 3 was left stale.
+// Slicing by index does neither. An empty oldSec returns the doc untouched, because
+// replace('') would have prepended.
+function ngSpliceSection(doc,oldSec,newSec){
+  if(!oldSec)return doc;
+  const at=String(doc).indexOf(oldSec);
+  return at<0?doc:doc.slice(0,at)+newSec+doc.slice(at+oldSec.length);
+}
 function ngBuildRepairPrompt({item,criterion,keyBlock}){
   return `═══ REPAIR ONE NCLEX ITEM ═══
 
@@ -4699,7 +4712,7 @@ GROUNDING ADAPTER — INPUT FORM ONLY:
             },ctl.signal);
             }catch(e){
               if(e.name!=='QuotaStop')throw e;
-              auditRows=(auditRows||[]).filter(Boolean);
+              auditRows=(e.partial||[]).filter(Boolean); // keep the verdicts already paid for
               log('  ⚠ Audit stopped early — your Gemini API quota is exhausted. The worksheet itself is complete and still passed its structural checks; only the optional item review was cut short. Wait for your quota to reset, switch the "Item quality · audit" profile to Flash, or turn the audit off.','err');
             }
 
@@ -4724,7 +4737,7 @@ GROUNDING ADAPTER — INPUT FORM ONLY:
                   const newP3=ngSpliceBlock(parts.p3,r.num,ngRenderQuestionBlock(r.num,fixed));
                   const newP4=ngSpliceBlock(parts.p4,r.num,ngRenderKeyBlock(r.num,fixed,strat,tags));
                   if(newP3===null||newP4===null)throw new Error('could not locate the item unambiguously — worksheet left untouched');
-                  workRaw=workRaw.replace(parts.p3,newP3).replace(parts.p4,newP4);
+                  workRaw=ngSpliceSection(ngSpliceSection(workRaw,parts.p3,newP3),parts.p4,newP4);
                   // Same honesty fix as the case generator: the stored FAIL described the
                   // pre-repair text and would otherwise persist into the audit trail export.
                   const row=auditRows.find(x=>x.num===r.num);
@@ -5963,7 +5976,12 @@ async function itemRunPool(items,width,worker,signal){
       out[i]=await worker(items[i],i);
     }
   });
-  await Promise.all(lanes);
+  // v15.8: when a lane throws (QuotaStop, abort), Promise.all rejects and the caller's
+  // `rows=await itemRunPool(...)` assignment never happens — so every verdict already
+  // returned by the other lanes was silently discarded, including calls the user had
+  // already paid for. Attach the partial results to the error so the caller can keep them.
+  try{await Promise.all(lanes);}
+  catch(e){e.partial=out.filter(Boolean);throw e;}
   return out;
 }
 // Flattened list of every question with its stage, so the audit and the repair pass agree
@@ -6102,6 +6120,11 @@ function CaseStudyGenerator(){
       let allIssues=revalidate(parsed);
       setIssues(allIssues);
       let errCount=allIssues.filter(x=>x.sev==='error').length;
+      // v15.8: published BEFORE the audit. auditRows short-circuits on !caseStudy, so while
+      // this ran after the pool every setAudit() during the audit rendered nothing and the
+      // panel popped in fully-formed at the end. The object is fully parsed and validated by
+      // this point; the registry below still gates on the post-repair errCount.
+      setCaseStudy(parsed);
 
       // ── v15.6 item 4: NEIA audit pass ──
       // Code validation runs FIRST, deliberately: a structurally broken case must never
@@ -6142,7 +6165,7 @@ function CaseStudyGenerator(){
           },ctl.signal);
           }catch(e){
             if(e.name!=='QuotaStop')throw e;
-            results=(results||[]).filter(Boolean);
+            results=(e.partial||[]).filter(Boolean); // keep the verdicts already paid for
             log('⚠ Audit stopped early — your Gemini API quota is exhausted. The case itself is complete and still passed its grounding checks; only the optional item review was cut short. Wait for your quota to reset, switch the "Item quality · audit" profile to Flash, or turn the audit off.','err');
           }
 
@@ -6210,7 +6233,6 @@ function CaseStudyGenerator(){
       const outOfPacket=[...cited].filter(id=>!allowedFactIds.has(id));
       setCoverage({selected:selectedFacts.length,used:usedSelected.size,outOfPacket,
         uncovered:selectedFacts.filter(f=>!usedSelected.has(String(f.id).toLowerCase()))});
-      setCaseStudy(parsed);
       // A case that failed validation is still shown and exportable (you may want to inspect
       // or hand-correct it), but it must NOT enter the registry: once a fact badge appears in
       // the inspector it reads as verified provenance, and linking an invalid case there would
@@ -6256,8 +6278,11 @@ function CaseStudyGenerator(){
     }finally{setBusy(false);setAbortCtl(null);setLiveKB(0);setAuditPhase('');}
   },[cfg,activeCondition,selectedFacts,sufficiency,difficulty,stages,questionsPerStage,types,K,runAudit]);
 
-  // v15.6: audit verdicts joined back to their items for display. Derived rather than stored
-  // so a repaired case cannot leave a stale verdict on screen.
+  // v15.6: audit verdicts joined back to their items for display.
+  // NOTE: deriving the rows does NOT by itself keep them fresh — the verdict map is written
+  // once during the audit, so a repair must explicitly restamp its entry as REPAIRED. An
+  // earlier comment here claimed staleness was impossible; it was not, and that claim is
+  // what masked the stale-verdict bug fixed in v15.8.
   const auditRows=useMemo(()=>{
     if(!caseStudy||!audit)return[];
     return caseGateItems(caseStudy).map(it=>{

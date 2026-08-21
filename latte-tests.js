@@ -75,7 +75,7 @@ const WS = new Function(
   spanFrom('const CASE_LEN_RATIO_HI=', '\n}\n// Enums exactly as caseBuildPrompt defines them') +
   // Leading newline is load-bearing: the preceding span ends in a line comment, which would
   // otherwise swallow this return and make the whole extraction silently undefined.
-  '\n;return {validateNCLEXWorksheet,ngParseItem,ngParseKeyItem,ngParseDistribution,ngSplitParts};'
+  '\n;return {validateNCLEXWorksheet,ngParseItem,ngParseKeyItem,ngParseDistribution,ngSplitParts,ngSpliceBlock,ngSpliceSection,ngRenderQuestionBlock,ngRenderKeyBlock,nclexGateItems,ngBuildRepairPrompt};'
 )();
 
 const hit = (re, x) => { re.lastIndex = 0; return re.test(x); };
@@ -846,6 +846,15 @@ section('v15.6 — case audit pass');
     global.__abortCheck = A.itemRunPool([1, 2, 3], 3, async x => x, ctl.signal)
       .then(() => 'resolved', e => e.name);
   }
+  // v15.8: a lane that throws must not discard the verdicts other lanes already returned.
+  // Before this, Promise.all rejected, the caller's assignment never ran, and every audit
+  // the user had already paid for in that batch was silently dropped.
+  {
+    global.__partialCheck = A.itemRunPool([1, 2, 3, 4], 1, async (x) => {
+      if (x === 3) throw Object.assign(new Error('API quota exhausted'), { name: 'QuotaStop' });
+      return 'done' + x;
+    }).then(() => 'resolved-unexpectedly', e => ({ name: e.name, partial: e.partial }));
+  }
 
   // ── Repair prompt (4f) ──
   const rp = A.caseBuildRepairPrompt({
@@ -1080,6 +1089,88 @@ section('v15.7 — coverage resolution');
     S.includes('const mentioned=ngCitedFactIds(P.p1,P.p3,P.p4);'));
 }
 
+/* ── 20c. v15.8 — the repair path (previously ZERO coverage) ── */
+// This is the code that rewrites the user's worksheet in place. It shipped in v15.7 with no
+// assertions at all; one round-trip test would have caught the $-injection bug fixed in v15.8.
+section('v15.8 — worksheet repair path');
+{
+  const fixed = {
+    stem: 'A client reports chest pain. Which action is first?',
+    options: [{ label: 'A', text: 'Obtain vital signs' }, { label: 'B', text: 'Offer water' },
+              { label: 'C', text: 'Dim the lights' }, { label: 'D', text: 'Raise the rails' }],
+    correctLabel: 'A',
+    rationales: [{ label: 'A', text: 'Assess first.', source: 'C1' }, { label: 'B', text: 'No.', source: 'C2' }],
+  };
+  const qb = WS.ngRenderQuestionBlock(3, fixed);
+  const kb = WS.ngRenderKeyBlock(3, fixed, '     Strategy: airway first.', '     Tags: NCLEX::RiskReduction | Tier 1 | Take Action');
+
+  t('rendered question block is numbered', /^ {2}3. /.test(qb));
+  t('rendered question block carries every option', ['A','B','C','D'].every(l => qb.includes(l + '. ')));
+  t('rendered key block states the answer', kb.includes('3. ANSWER: A'));
+  t('rendered key block marks the key correct and the rest wrong',
+    kb.includes('Why A is correct:') && kb.includes('Why B is wrong:'));
+  // Carried verbatim so a repair cannot invalidate the DISTRIBUTION line the worksheet
+  // already asserted — tier, CJMM and type all live in the Tags line.
+  t('Strategy line is carried through verbatim', kb.includes('Strategy: airway first.'));
+  t('Tags line is carried through verbatim', kb.includes('Tags: NCLEX::RiskReduction | Tier 1 | Take Action'));
+
+  // ── The v15.8 regression: $-sequences in model-generated text ──
+  const evil = {
+    stem: "Dose costs $& per vial and $' per box",
+    options: [{ label: 'A', text: 'Give $1 tablet' }, { label: 'B', text: 'Hold $$ dose' },
+              { label: 'C', text: 'Offer water' }, { label: 'D', text: 'Dim lights' }],
+    correctLabel: 'A', rationales: [{ label: 'A', text: 'ok', source: 'C1' }],
+  };
+  {
+    const NL = String.fromCharCode(10);
+    const sec3 = ['  1. First question', '', '     A. one', '     B. two'].join(NL);
+    const doc = ['PART 3 — QUESTIONS', sec3, '', 'PART 4 — ANSWER KEY', '  1. ANSWER: A'].join(NL);
+    const spliced = WS.ngSpliceSection(doc, sec3, WS.ngRenderQuestionBlock(1, evil));
+    t('a $& in repaired text is inserted literally, not expanded', spliced.includes('costs $& per vial'));
+    t('a $-quote in repaired text does not duplicate the document tail',
+      spliced.includes("$' per box") && spliced.split('PART 4').length === 2);
+    t('$$ and $1 survive untouched', spliced.includes('Hold $$ dose') && spliced.includes('Give $1 tablet'));
+    t('the splice does not grow the document unboundedly', spliced.length < doc.length * 3);
+  }
+  // Bounded search: an empty section must never prepend, as replace('') would have.
+  t('an empty section leaves the document untouched', WS.ngSpliceSection('abc', '', 'XXX') === 'abc');
+  t('an absent section leaves the document untouched', WS.ngSpliceSection('abc', 'zzz', 'XXX') === 'abc');
+  t('a present section is replaced exactly once',
+    WS.ngSpliceSection('a-MID-b-MID-c', 'MID', 'X') === 'a-X-b-MID-c');
+
+  {
+    const NL = String.fromCharCode(10);
+    const sec = ['  1. Q one', '     A. a', '', '  2. Q two', '     A. b'].join(NL);
+    t('splicing a located block returns modified text',
+      (WS.ngSpliceBlock(sec, 2, '  2. REPLACED') || '').includes('REPLACED'));
+    t('splicing leaves the untouched block intact',
+      (WS.ngSpliceBlock(sec, 2, '  2. REPLACED') || '').includes('Q one'));
+    // Fail closed: the caller leaves the worksheet alone rather than splicing the wrong item.
+    t('an absent block number returns null', WS.ngSpliceBlock(sec, 9, 'X') === null);
+    t('a duplicated block number returns null', WS.ngSpliceBlock(['  1. dup', '', '  1. dup'].join(NL), 1, 'X') === null);
+  }
+
+  {
+    const g = WS.nclexGateItems([
+      { num: 1, type: 'MCQ', options: [{}, {}, {}, {}] },
+      { num: 2, type: 'SATA', options: [{}, {}, {}, {}, {}] },
+      { num: 3, type: 'Ordering', options: [{}, {}, {}] },
+      { num: 4, type: 'MCQ', options: [{}, {}] },
+    ]);
+    t('worksheet gate selects single-best-answer MCQ only',
+      g.filter(x => x.eligible).map(x => x.num).join(',') === '1');
+    t('worksheet gate still enumerates the rest as N/A candidates', g.length === 4);
+  }
+
+  {
+    const rp = WS.ngBuildRepairPrompt({ item: { stem: 's', options: [{ label: 'A', text: 'a' }] },
+      criterion: 'DISTRACTOR LENGTH', keyBlock: '  1. ANSWER: A' });
+    t('repair prompt names the failing criterion', rp.includes('FAILED: DISTRACTOR LENGTH'));
+    t('repair prompt forbids the shortest-key workaround', rp.includes('making the key the shortest option'));
+    t('repair prompt pins the option labels', rp.includes('Keep the same option labels'));
+  }
+}
+
 /* ── 21. v15.7 — provenance stamp + Anki abbreviation lint (B2, B5) ── */
 section('v15.7 — provenance + Anki lint');
 {
@@ -1143,6 +1234,24 @@ section('v15.7 — provenance + Anki lint');
   t('pool actually ran concurrently', peak > 1);
   t('pool processed every item', order.length === 9);
   t('an already-aborted signal rejects with AbortError', (await global.__abortCheck) === 'AbortError');
+  {
+    const r = await global.__partialCheck;
+    t('a QuotaStop still propagates to the caller', r.name === 'QuotaStop');
+    t('work completed before the failure is preserved on the error',
+      Array.isArray(r.partial) && r.partial.length === 2);
+    t('the preserved results are the ones that actually finished',
+      r.partial.join(',') === 'done1,done2');
+    t('callers read the partials rather than dropping them',
+      S.split('=(e.partial||[]).filter(Boolean)').length - 1 === 2);
+  }
+  // v15.8: the case must be published BEFORE the audit pool, or auditRows short-circuits on
+  // !caseStudy and no per-item verdict can render while the audit is running.
+  t('the case is published before the audit runs',
+    S.indexOf('setCaseStudy(parsed);') < S.indexOf('if(runAudit&&errCount===0){'));
+  t('the case is published exactly once',
+    S.split('setCaseStudy(parsed);').length - 1 === 1);
+  t('the misleading "cannot leave a stale verdict" claim is gone',
+    !S.includes('so a repaired case cannot leave a stale verdict on screen'));
 
   console.log('\n════════════════════════════');
   console.log(pass + ' passed · ' + fail + ' failed');
