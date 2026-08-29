@@ -168,8 +168,12 @@ Practical plays: five days out, build a **filtered deck** on `Tier::1` and clear
 
 Different job from the Generator: this one pulls **existing** questions out of question-bank PDFs you already own (review books, instructor-provided practice exams) into a clean, uniform format with answers and rationales attached.
 
-- **Inline mode** — for PDFs where each question is followed by its answer. Just add the PDF and run; **Chunk Size / Overlap** defaults are fine.
+- **Inline mode** — for PDFs where each question is followed by its answer. Just add the PDF and run; **Chunk Size / Overlap** defaults are fine. Tick **Limit to specific pages** to pull a single chapter out of a large book instead of reading the whole file — the same **+ Range** picker Split Q&A uses. With page ranges on, Inline mode processes **one PDF per run**, since the ranges describe a single book.
 - **Split Q&A mode** — for books with questions in one section and an answer key in another. Enter the page **Ranges** for the questions and for the answers (use **+ Range** for multiple spans), and the suite pairs them up by question number — with an AI-assisted fallback when the book's numbering is messy. Split mode processes **one PDF per run**, since the page ranges describe a single book.
+
+Each question's **answer choices** are read out of the extracted text and shown as a list. If a question comes back with no choices attached, the card says so rather than looking complete — in Split Q&A mode the suite first tries to restore them verbatim from the source page.
+
+Every export — **.md**, **.txt**, **Copy** and **PDF** — puts all the questions first and a single **Answer Key** at the end, so you can work through a set without the answers in view. The PDF starts the answer key on a fresh page.
 
 You can **Abort** mid-run and keep everything extracted so far. Results appear as browsable cards with a filter, plus **Copy** and text export.
 

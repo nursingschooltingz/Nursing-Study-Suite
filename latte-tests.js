@@ -53,6 +53,22 @@ const NX = new Function(
   spanFrom('function nclexKey', 'return allQ;\n}') +
   ';return {nclexKey,nclexDedup,nclexAccumulate};')();
 const nclexDedup = NX.nclexDedup;
+// v15.15: the choice-aware question splitter, the stem/choice parser and the split-mode
+// repair all come out as ONE span — they share NCLEX_OPTION_RUN_MIN, and extracting them
+// separately would let the shared constant drift out from under the tests. The span ends on
+// nclexRepairOptions, which is what the repair assertions below exercise: a short end anchor
+// here would truncate the span and let every repair assertion pass vacuously.
+const NXO = new Function(spanFrom('const NCLEX_OPTION_GAP', 'options_repaired:true};\n}') +
+  ';return {nclexDropOptionRuns,nclexSliceByQNum,nclexSplitByQNum,nclexSplitStemOptions,nclexRepairOptions};')();
+// The two exports are closures over component state, so they are extracted with `filtered`
+// and their helpers injected as parameters. exportTxt ends inside downloadBlob, so the
+// capture stub firing is itself proof the span reached its tail.
+const nclexToMd = new Function('filtered', 'nclexSplitStemOptions',
+  spanFrom('const nclexToMd=()=>{', '    return out;\n  };') + ';return nclexToMd();');
+const nclexToTxt = new Function('filtered', 'nclexSplitStemOptions',
+  'let CAP=null;const Blob=function(p){this.p=p;};const downloadBlob=(b)=>{CAP=b.p[0];};' +
+  spanFrom('const nclexQText=q=>', "'nclex_questions.txt');\n  };") + ';exportTxt();return CAP;');
+
 const kbLine = (() => { const i = S.indexOf('contraindicat|'); return S.slice(S.lastIndexOf('\n', i) + 1, S.indexOf('\n', i)); })();
 const KB_RE = new RegExp(kbLine.slice(kbLine.indexOf('||/') + 3, kbLine.indexOf('/i.test')), 'i');
 const pptxSplit = new Function('text', spanFrom("const parts=String(text||'').split(/(?=--- SLIDE", 'text:t};});'));
@@ -130,6 +146,130 @@ section('nclexDedup');
   const b = { question: 'A client with heart failure ' + 'x'.repeat(150) + ' VARIANT TWO?' };
   t('distinct long stems both kept', nclexDedup([a, b]).length === 2);
   t('true duplicate collapses', nclexDedup([a, { question: a.question }]).length === 1); }
+
+/* ── 6b. v15.15: answer choices are not question numbers ── */
+section('nclexSplitByQNum — choice runs');
+{
+  // Davis shape: the stem is "1.", and so is its first choice. Before v15.15 the slice for
+  // question 1 ended at its own first choice, so item 1 was the stem alone, items 2-4 were
+  // single choice lines, and questions 2 and 3 vanished — their numbers had been claimed.
+  const davis = [
+    '1. The nurse is caring for a client with heart failure. Which finding requires immediate action?',
+    '1. Weight gain of 1 kg in 24 hours', '2. Crackles auscultated bilaterally',
+    '3. Serum potassium of 3.9 mEq/L', '4. Blood pressure 128/78 mm Hg', '',
+    '2. A client receives furosemide. Which lab does the nurse monitor?',
+    '1. Sodium', '2. Potassium', '3. Calcium', '4. Magnesium', '',
+    '3. Which client does the nurse assess first?',
+    '1. A client with a temperature of 100.2 F', '2. A client reporting 6/10 incisional pain',
+    '3. A client with new-onset confusion', '4. A client awaiting discharge teaching'
+  ].join('\n');
+  const d = NXO.nclexSplitByQNum(davis);
+  t('three questions, not four choice fragments', Object.keys(d).length === 3);
+  t('question 1 keeps its choices instead of stopping at the stem', /Blood pressure 128\/78/.test(d['1']));
+  t('question 2 survives its predecessor\u2019s choice numbering', /furosemide/.test(d['2']));
+  t('question 3 survives too', /assess first/.test(d['3']));
+  t('every question carries a full four-choice list',
+    [1, 2, 3].every(k => NXO.nclexSplitStemOptions(d[String(k)]).options.length === 4));
+
+  // The guards. A genuine question list must never be mistaken for a choice run.
+  const spaced = [1, 2, 3, 4].map(n => n + '. Question ' + n + ' ' + 'x'.repeat(600)).join('\n');
+  t('a real question list numbered from 1 is left alone', Object.keys(NXO.nclexSplitByQNum(spaced)).length === 4);
+  const many = [];
+  for (let n = 1; n <= 20; n++) many.push({ num: n, index: 50 + n * 120 });
+  t('a 20-entry ascending run is a question list, not a choice list',
+    NXO.nclexDropOptionRuns([{ num: 9, index: 0 }].concat(many)).length === 21);
+  t('a run with nothing before it is never dropped',
+    NXO.nclexDropOptionRuns([{num:1,index:0},{num:2,index:50},{num:3,index:100},{num:4,index:150}]).length === 4);
+
+  // Select-all-that-apply: five choices, still choices.
+  const sata = [{num:1,index:0},{num:1,index:120},{num:2,index:160},{num:3,index:200},{num:4,index:240},
+                {num:5,index:280},{num:2,index:400},{num:1,index:500},{num:2,index:540},{num:3,index:580},
+                {num:4,index:620},{num:5,index:660}];
+  t('a five-choice select-all run is dropped, leaving two questions',
+    NXO.nclexDropOptionRuns(sata).map(p => p.num).join(',') === '1,2');
+}
+
+/* ── 6c. v15.15: stem / choice parsing ── */
+section('nclexSplitStemOptions');
+{
+  const P = NXO.nclexSplitStemOptions;
+  t('choices on their own lines', P('Which action?\n1. Alpha\n2. Beta\n3. Gamma\n4. Delta').options.length === 4);
+  t('choices run inline in one paragraph', P('Which lab? 1. Sodium 2. Potassium 3. Calcium 4. Magnesium').options.length === 4);
+  {
+    const r = P('Who is seen first?\nA. Febrile\nB. Confused\nC. Ambulatory\nD. Discharged');
+    t('lettered choices parse', r.options.length === 4);
+    t('lettered labels are preserved as written', r.options.map(o => o.label).join('') === 'ABCD');
+  }
+  t('parenthesised choices parse', P('Priority:\n(1) Airway\n(2) Breathing\n(3) Circulation\n(4) Disability').options.length === 4);
+  {
+    const r = P('Which finding requires immediate action?');
+    t('a stem with no choices reports none', r.options.length === 0);
+    t('and keeps the whole text as the stem', r.stem === 'Which finding requires immediate action?');
+  }
+  {
+    // A numbered list INSIDE the stem must not be taken for the choice list: the real
+    // choices further down form the longer run, and the longest run wins.
+    const r = P('Vitals: 1. HR 110 2. BP 88/50\nWhich action is first?\n1. Notify\n2. Raise legs\n3. Fluids\n4. Recheck');
+    t('a numbered list inside the stem does not win over the real choices', r.options.length === 4);
+    t('and that list stays in the stem where it belongs', /HR 110/.test(r.stem));
+    t('the first real choice is the one after the question', r.options[0].text === 'Notify');
+  }
+  t('empty input does not throw', P('').options.length === 0);
+  t('null input does not throw', P(null).options.length === 0);
+}
+
+/* ── 6d. v15.15: split-mode choice repair ── */
+section('nclexRepairOptions');
+{
+  const src = '4. Which lab is monitored?\n1. Sodium\n2. Potassium\n3. Calcium\n4. Magnesium';
+  const bare = { question_number: 4, question: 'Which lab is monitored?' };
+  const fixed = NXO.nclexRepairOptions(bare, src);
+  t('a bare stem gets its choices back from the page', NXO.nclexSplitStemOptions(fixed.question).options.length === 4);
+  t('the restored text is the source\u2019s own bytes', /Magnesium/.test(fixed.question));
+  t('the repair is flagged so the UI can say so', fixed.options_repaired === true);
+  t('the original object is not mutated', bare.question === 'Which lab is monitored?');
+  const whole = { question: 'Pick one?\n1. A\n2. B\n3. C' };
+  t('an item that already has choices is returned untouched', NXO.nclexRepairOptions(whole, src) === whole);
+  t('no choices in the source leaves the item alone',
+    NXO.nclexRepairOptions(bare, 'just prose, no numbered list here') === bare);
+}
+
+/* ── 6e. v15.15: answers are grouped at the end of every export ── */
+section('NCLEX extractor export grouping');
+{
+  const fx = [
+    { question: 'Which finding requires immediate action?\n1. Weight gain\n2. Crackles\n3. K 3.9\n4. BP 128/78',
+      correct_answer: '2. Crackles \u2014 the earliest sign of decompensation', rationale: 'Crackles indicate fluid overload.',
+      test_taking_strategy: 'Prioritise airway', diseases_conditions: ['Heart failure'] },
+    { question: 'Which lab is monitored with furosemide?\n1. Sodium\n2. Potassium\n3. Calcium\n4. Magnesium',
+      correct_answer: '2. Potassium \u2014 monitor before each dose', rationale: 'Loop diuretics waste potassium.',
+      priority_nursing_tip: 'Watch for hypokalaemia', diseases_conditions: [] }
+  ];
+  const md = nclexToMd(fx, NXO.nclexSplitStemOptions);
+  const cut = md.indexOf("## Answer Key");
+  t('markdown has a Questions section before the Answer Key', md.indexOf('## Questions') > -1 && md.indexOf('## Questions') < cut);
+  t('the answer key starts on its own printed page', md.indexOf('<div class="pagebreak"></div>') < cut && cut > -1);
+  t('both stems sit in the questions section', md.indexOf('Which lab is monitored') < cut);
+  // The regression this release exists to fix: no rationale, tip or answer may appear
+  // alongside a question. Everything before the Answer Key heading must be answer-free.
+  t('no rationale leaks into the questions section', md.slice(0, cut).indexOf('Loop diuretics') === -1);
+  t('no answer text leaks into the questions section',
+    md.slice(0, cut).indexOf('earliest sign of decompensation') === -1 && md.slice(0, cut).indexOf('monitor before each dose') === -1);
+  t('no nursing tip leaks into the questions section', md.slice(0, cut).indexOf('Watch for hypokalaemia') === -1);
+  t('the answers themselves land in the answer key',
+    md.indexOf('earliest sign of decompensation') > cut && md.indexOf('monitor before each dose') > cut);
+  t('both rationales land in the answer key', md.indexOf('Crackles indicate fluid overload.') > cut && md.indexOf('Loop diuretics waste potassium.') > cut);
+  t('choices are rendered as a list under the stem', /\n1\. Weight gain\n2\. Crackles\n3\. K 3\.9\n4\. BP 128\/78/.test(md.slice(0, cut)));
+
+  const txt = nclexToTxt(fx, NXO.nclexSplitStemOptions);
+  t('exportTxt reached downloadBlob', typeof txt === 'string' && txt.length > 0);
+  const tcut = txt.indexOf("ANSWER KEY");
+  t('plaintext groups its answers at the end too', tcut > txt.indexOf('Which lab is monitored'));
+  t('plaintext rationales are all past the answer key', txt.indexOf('Loop diuretics waste potassium.') > tcut);
+  t('plaintext keeps no answer beside a question',
+    txt.slice(0, tcut).indexOf('Crackles indicate fluid overload.') === -1 && txt.slice(0, tcut).indexOf('earliest sign of decompensation') === -1);
+  t('plaintext indents the choice list', /\n   1\. Weight gain/.test(txt.slice(0, tcut)));
+}
 
 /* ── 7. PPTX slide splitting ── */
 section('kbSourceUnits PPTX split');

@@ -30,7 +30,12 @@
      If this page is ever served over http(s) rather than opened from disk, tighten it there. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net">
 <title>LATTE Study Suite</title>
-<!-- v15.14 (2026-08-29): correctness release driven by a three-way review (Claude Code / ChatGPT / Gemini). Findings were re-verified against the bytes before being acted on; the ones that did not survive verification are recorded in CHANGELOG.md so they are not re-raised.
+<!-- v15.15 (2026-08-29): NCLEX Question Extractor — three fixes found by testing v15.14 against a real question bank. No prompt constant was touched; all three were code faults.
+     (1) ANSWER CHOICES WERE BEING READ AS QUESTION NUMBERS. nclexSplitByQNum matched "1." at a line start, which is the stem marker AND the first-choice marker. The slice for question 1 therefore ended at its own first choice: item 1 was the stem alone, items 2-4 were single choice lines posing as questions, and questions 2 and 3 were dropped outright because their numbers had already been claimed. That is the reported "only the stem is captured" symptom, and it was also deleting most of the section. Choice runs are now identified by SPACING and removed from the candidate starts, behind three guards so a genuine question list is never eaten.
+     (2) CHOICES ARE PARSED, RENDERED AND REPAIRED. nclexSplitStemOptions reads the choice list back out of the question text (numbered, lettered, parenthesised, inline or on its own lines), so cards show choices as a list and an item that arrived WITHOUT choices is visibly flagged instead of looking complete. In split mode the batch still holds each question's verbatim page text, so a bare stem has its choices restored from the source bytes — no extra call, nothing invented.
+     (3) ANSWERS ARE GROUPED AT THE END. Every export (.md, .txt, Copy, PDF) is now Questions first, then one Answer Key, matching the shape the NCLEX Generator worksheet has always used. Answers used to sit under their own question, which made an exported set unusable for actual practice.
+     Also: Inline mode gains the page-range picker Split Q&A has, opt-in so the whole document remains the default. With ranges on it takes the same one-PDF-per-run restriction, because a range describes one file's layout.
+     v15.14 (2026-08-29): correctness release driven by a three-way review (Claude Code / ChatGPT / Gemini). Findings were re-verified against the bytes before being acted on; the ones that did not survive verification are recorded in CHANGELOG.md so they are not re-raised.
      TIER 1 - integrity of the material. kbFactKey kept ASCII < and > but DELETED the Unicode operators and '+', so an up-arrow and a down-arrow fact produced one merge key and mergeLatteParts silently kept the first with the OTHER chunk's source pointer unioned on. kbNormForMatch collapses [^a-z0-9], so an INVERTED comparator verified cleanly against a source saying the opposite - kbQuoteOperatorsAgree now checks that additively, after a quote has already passed, and reports at WARN tier pending measurement. Card transcripts survived removal of their photo and collided on basename; both now key on name+size+lastModified. The flashcard build gate existed only as UI text: Build was clickable mid-transcription, on an unpaired back, on two fronts merged as a pair, and on numbers the app had already flagged unstable.
      TIER 2 - availability and spend. nclexBatchPairs hung the tab on a cleared batch-size field (i+=0). targetCount had no ceiling, so one keystroke could schedule ~99,999 calls. itemRunPool let the sibling lane keep issuing calls after a QuotaStop. No IndexedDB helper handled tx.onabort, so an aborted transaction left persistenceStatus on 'loading' and silently disabled every later save. Backoff read a Retry-After header the v1beta endpoint never sends, ignoring the RetryInfo in the body. Card photos had no size bound against the ~20MB inline ceiling.
      TIER 3 - consolidation. Printable worksheets now carry a validation stamp and failed batches are not registered. Three PDF page walks became one cancellable, page-cleaning primitive. AI pairing walks the whole text instead of its first 12,000 characters. Dedup went from quadratic to linear, logs are capped, condition ids are unique, a single dense page splits rather than being discarded, callGemini takes an options object, and the unreachable PDF cleanup is gone. Narrow CSP added; all eight SRI pins re-hashed against their CDNs.
@@ -4132,23 +4137,110 @@ async function nclexExtractPageRange(file,startPage,endPage,signal){
 }
 
 // Multi-pattern question number detection
+// v15.15: answer CHOICES are numbered too, and every one of them used to be read as a
+// question start. On Davis-style text - stem "1.", then choices "1." "2." "3." "4." - the
+// slice for question 1 ended at its OWN first choice. Item 1 was therefore the stem alone,
+// items 2-4 were single choice lines masquerading as questions, and questions 2 and 3
+// disappeared outright because their numbers had already been claimed by question 1's
+// choices. That is the reported "extractions only capture the question stem" bug, and it was
+// also silently deleting most of the section.
+//
+// The discriminator is SPACING, not the numbers themselves: a choice run ascends 1,2,3(,4,5)
+// with a line between entries, while question starts sit a whole question block apart. Three
+// guards keep a genuine question list from being eaten, and a run is dropped only when all
+// three hold: it must be preceded by something (so a section whose questions genuinely begin
+// at 1 keeps its first question), it may not exceed NCLEX_OPTION_RUN_MAX entries (a
+// 20-question list is not a choice list), and the question sequence must RESUME afterwards -
+// the number following a run continues from the number preceding it.
+const NCLEX_OPTION_GAP=400;    // max chars between two entries of one choice run
+const NCLEX_OPTION_RUN_MIN=3;  // shortest choice list worth trusting
+const NCLEX_OPTION_RUN_MAX=6;  // longest realistic choice list (select-all tops out near 6)
+function nclexDropOptionRuns(positions){
+  if(positions.length<NCLEX_OPTION_RUN_MIN+1)return positions;
+  const runs=[];
+  for(let i=1;i<positions.length;i++){
+    if(positions[i].num!==1)continue;
+    let j=i;
+    while(j+1<positions.length&&j-i+1<NCLEX_OPTION_RUN_MAX&&positions[j+1].num===positions[j].num+1&&positions[j+1].index-positions[j].index<=NCLEX_OPTION_GAP)j++;
+    if(j-i+1>=NCLEX_OPTION_RUN_MIN){runs.push({i,j});i=j;}
+  }
+  if(!runs.length)return positions;
+  const resumes=runs.some(r=>r.j+1<positions.length&&positions[r.j+1].num===positions[r.i-1].num+1);
+  if(!resumes)return positions;
+  const drop=new Set();for(const r of runs)for(let k=r.i;k<=r.j;k++)drop.add(k);
+  const kept=positions.filter((_,i)=>!drop.has(i));
+  return kept.length?kept:positions; // never filter a section down to nothing
+}
+// v15.15: the slice loop was duplicated between the pattern sweep and the loose fallback, so
+// the fix above would otherwise have had to be written twice to hold in both.
+function nclexSliceByQNum(text,positions){
+  const items={};
+  for(let i=0;i<positions.length;i++){const start=positions[i].index;const end=i+1<positions.length?positions[i+1].index:text.length;if(!items[positions[i].num])items[positions[i].num]=text.slice(start,end).trim();}
+  return items;
+}
 function nclexSplitByQNum(text){
   const patterns=[/(?:^|\n)\s*(\d{1,4})\s*\.\s/g,/(?:^|\n)\s*(\d{1,4})\)\s/g,/(?:^|\n)\s*Q(?:uestion)?\s*#?\s*(\d{1,4})[.):;\s]/gi,/(?:^|\n)\s*#\s*(\d{1,4})[.):;\s]/g,/(?:^|\n)\s*\[(\d{1,4})\]/g];
   let bestItems={},bestCount=0;
   for(const bp of patterns){
-    const pattern=new RegExp(bp.source,bp.flags);const items={};const positions=[];let m;
+    const pattern=new RegExp(bp.source,bp.flags);const positions=[];let m;
     while((m=pattern.exec(text))!==null){const num=parseInt(m[1]);if(num>0&&num<5000)positions.push({num,index:m.index});}
-    for(let i=0;i<positions.length;i++){const start=positions[i].index;const end=i+1<positions.length?positions[i+1].index:text.length;if(!items[positions[i].num])items[positions[i].num]=text.slice(start,end).trim();}
+    const items=nclexSliceByQNum(text,nclexDropOptionRuns(positions));
     const count=Object.keys(items).length;if(count>bestCount){bestItems=items;bestCount=count;}
   }
   // Loose fallback
   if(bestCount<3){
-    const loose=/(?:^|\n)\s{0,5}(\d{1,4})\s{0,3}[.):]/g;const items={};const positions=[];let m;
+    const loose=/(?:^|\n)\s{0,5}(\d{1,4})\s{0,3}[.):]/g;const positions=[];let m;
     while((m=loose.exec(text))!==null){const num=parseInt(m[1]);if(num>0&&num<5000)positions.push({num,index:m.index});}
-    for(let i=0;i<positions.length;i++){const start=positions[i].index;const end=i+1<positions.length?positions[i+1].index:text.length;if(!items[positions[i].num])items[positions[i].num]=text.slice(start,end).trim();}
+    const items=nclexSliceByQNum(text,nclexDropOptionRuns(positions));
     if(Object.keys(items).length>bestCount){bestItems=items;bestCount=Object.keys(items).length;}
   }
   return bestItems;
+}
+
+// v15.15: deterministic stem/choice split. Both extraction modes ask the model for "full
+// question text with all choices", and the choices come back as free text inside `question` -
+// so nothing downstream could render them as a list, and nothing could NOTICE when they were
+// missing. This reads them back out with no second API call.
+//
+// The run must ASCEND from 1 (or from a), which is what stops a numbered list inside the stem
+// - "Vitals: 1. HR 110 2. BP 88/50" - from being taken for the choice list: the real choices
+// further down form the longer run, and the longest run wins (latest wins on a tie).
+const NCLEX_OPTION_MARK=/(?:^|\n|\s)\(?([1-9]|[a-eA-E])[.)]\s+/g;
+function nclexOptionRank(lab){return /[0-9]/.test(lab)?parseInt(lab,10):lab.toLowerCase().charCodeAt(0)-96;}
+function nclexSplitStemOptions(text){
+  const s=String(text||'');
+  const marks=[];const re=new RegExp(NCLEX_OPTION_MARK.source,'g');let m;
+  while((m=re.exec(s))!==null){
+    marks.push({label:m[1],rank:nclexOptionRank(m[1]),numeric:/[0-9]/.test(m[1]),at:m.index+m[0].length,from:m.index+(/^[\n\s]/.test(m[0])?1:0)});
+    re.lastIndex=m.index+m[0].length; // adjacent marks must not swallow one another
+  }
+  let best=null;
+  for(let i=0;i<marks.length;i++){
+    if(marks[i].rank!==1)continue;
+    let j=i;
+    while(j+1<marks.length&&marks[j+1].rank===marks[j].rank+1&&marks[j+1].numeric===marks[i].numeric)j++;
+    const len=j-i+1;
+    if(len>=NCLEX_OPTION_RUN_MIN&&(!best||len>best.len||(len===best.len&&marks[i].from>best.start)))best={i,j,len,start:marks[i].from};
+  }
+  if(!best)return{stem:s.trim(),options:[]};
+  const options=[];
+  for(let k=best.i;k<=best.j;k++){
+    const end=k<best.j?marks[k+1].from:s.length;
+    options.push({label:marks[k].label,text:s.slice(marks[k].at,end).trim().replace(/\s+/g,' ')});
+  }
+  return{stem:s.slice(0,best.start).trim(),options};
+}
+// v15.15: split-mode repair. `pairs` still holds the VERBATIM page text for each question,
+// choices included, so when the model hands back a bare stem the choices can be put back from
+// the page rather than cost another call - and nothing is invented, because the text is the
+// book's own bytes. Inline mode has no equivalent source to repair from: there the model
+// itself decides where a question begins, so the chunk overlap is what covers a split.
+function nclexRepairOptions(item,sourceText){
+  if(!item||!item.question)return item;
+  if(nclexSplitStemOptions(item.question).options.length)return item;
+  const src=nclexSplitStemOptions(String(sourceText||''));
+  if(!src.options.length)return item;
+  return{...item,question:item.question.trim()+'\n'+src.options.map(o=>o.label+'. '+o.text).join('\n'),options_repaired:true};
 }
 
 function nclexPairQA(qText,aText){
@@ -4192,15 +4284,21 @@ function PageRangeSection({label:sLabel,ranges,onChange,maxPages}){
 
 function NCLEXQuestionCard({q,index}){
   const [open,setOpen]=useState(false);
+  // v15.15: the choices are parsed out of the question text so they render as a list, and so
+  // an item that arrived WITHOUT choices is visible as such instead of looking complete.
+  const parsed=useMemo(()=>nclexSplitStemOptions(q.question),[q.question]);
   return(
     <div className={`nclex-card ${open?'open':''}`}>
       <button className="nclex-header" onClick={()=>setOpen(!open)}>
         <span className="nclex-qnum">Q{index+1}</span>
-        <span style={{color:'var(--text)',fontSize:12,lineHeight:1.5,flex:1}}>{q.question?.slice(0,180)}{q.question?.length>180?'…':''}</span>
+        <span style={{color:'var(--text)',fontSize:12,lineHeight:1.5,flex:1}}>{parsed.stem.slice(0,180)}{parsed.stem.length>180?'…':''}</span>
         <span style={{color:'var(--text-dim)',fontSize:14,flexShrink:0,transform:open?'rotate(180deg)':'none',transition:'transform .2s'}}>▼</span>
       </button>
       {open&&<div className="nclex-body" style={{animation:'fadeUp .15s'}}>
-        <pre style={{whiteSpace:'pre-wrap',fontFamily:'inherit',fontSize:12,color:'var(--text)',lineHeight:1.6,margin:'0 0 10px',padding:10,background:'var(--bg-deep)',borderRadius:6}}>{q.question}</pre>
+        <pre style={{whiteSpace:'pre-wrap',fontFamily:'inherit',fontSize:12,color:'var(--text)',lineHeight:1.6,margin:'0 0 10px',padding:10,background:'var(--bg-deep)',borderRadius:6}}>{parsed.options.length?parsed.stem:q.question}</pre>
+        {parsed.options.length>0&&<div style={{margin:'0 0 10px',padding:'0 4px'}}>{parsed.options.map((o,j)=><div key={j} style={{display:'flex',gap:8,fontSize:12,color:'var(--text)',lineHeight:1.6,marginBottom:4}}><span style={{color:'var(--accent)',fontWeight:700,flexShrink:0,minWidth:16}}>{o.label}.</span><span>{o.text}</span></div>)}</div>}
+        {parsed.options.length===0&&<div style={{margin:'0 0 10px',padding:'6px 10px',background:'rgba(240,168,58,.08)',borderLeft:'3px solid var(--accent-warm)',borderRadius:'0 6px 6px 0',fontSize:10.5,color:'var(--accent-warm)'}}>⚠ No answer choices detected in this item — check the source pages, or try the other extraction mode.</div>}
+        {q.options_repaired&&<div style={{margin:'0 0 10px',fontSize:10,color:'var(--text-dim)'}}>Choices restored verbatim from the source page.</div>}
         <div style={{background:'rgba(52,211,153,.08)',borderLeft:'3px solid var(--accent-green)',padding:'8px 12px',borderRadius:'0 6px 6px 0',marginBottom:8}}>
           <span style={{fontWeight:700,color:'var(--accent-green)',fontSize:11}}>✔ CORRECT</span>
           <div style={{color:'var(--text-dim)',fontSize:12,marginTop:3}}>{q.correct_answer}</div>
@@ -4222,6 +4320,10 @@ function NCLEXExtractor(){
   const [chunkSize,setChunkSize]=useState(3000);
   const [overlap,setOverlap]=useState(800);
   const [pageCount,setPageCount]=useState(null);
+  // v15.15: inline mode gets the same page-range picker split mode has. OFF by default, so
+  // the whole document stays the norm; a range is opt-in for the chapters you actually want.
+  const [iRangeOn,setIRangeOn]=useState(false);
+  const [iRanges,setIRanges]=useState([{start:1,end:50}]);
   const [qRanges,setQRanges]=useState([{start:1,end:50}]);
   const [aRanges,setARanges]=useState([{start:51,end:100}]);
   const [batchSize,setBatchSize]=useState(8);
@@ -4256,7 +4358,7 @@ function NCLEXExtractor(){
       setPageCount(n);
       if(firstFileRef.current!==id){
         firstFileRef.current=id;
-        const mid=Math.ceil(n/2);setQRanges([{start:1,end:mid}]);setARanges([{start:mid+1,end:n}]);
+        const mid=Math.ceil(n/2);setQRanges([{start:1,end:mid}]);setARanges([{start:mid+1,end:n}]);setIRanges([{start:1,end:n}]);
       }
     }).catch(()=>{if(!stale)setPageCount(null);});
     return()=>{stale=true;};
@@ -4300,7 +4402,14 @@ function NCLEXExtractor(){
     addLog(`📄 Extracting "${file.name}"...`);
     // v15.14: the signal is threaded now, so Cancel works during the local read instead of
     // only between chunks. runInline awaits the whole extraction before its first check.
-    const text=await extractPdfTextSpaced(file,signal);addLog(`  ${text.length.toLocaleString()} chars`);
+    // v15.15: read only the requested pages when the range picker is on. nclexExtractPageRange
+    // is the same cancellable, page-cleaning walk split mode uses.
+    let text;
+    if(iRangeOn&&iRanges.length){
+      text='';
+      for(const r of iRanges){addLog(`  Pages ${r.start}–${r.end}`);text+=await nclexExtractPageRange(file,r.start,r.end,signal);}
+    }else text=await extractPdfTextSpaced(file,signal);
+    addLog(`  ${text.length.toLocaleString()} chars`);
     const chunks=nclexChunkText(text,chunkSize,overlap);addLog(`  ${chunks.length} chunks (size: ${chunkSize}, overlap: ${overlap})`);
     setProgress({current:0,total:chunks.length});
     const allQ=[...existingQ],seen=new Set();for(const q of allQ)if(q&&q.question)seen.add(nclexKey(q)); // v15.14: one Set for the run
@@ -4381,7 +4490,16 @@ function NCLEXExtractor(){
       const batch=batches[i];addLog(`  Batch ${i+1}/${batches.length} (Q#${batch[0].number}–#${batch[batch.length-1].number})...`);
       try{
         const result=await nclexCallGemini(NCLEX_SPLIT_PROMPT+nclexPairsToText(batch),signal);
-        if(Array.isArray(result)&&result.length>0){nclexAccumulate(seen,allQ,result.map(q=>({...q,id:uid()})));setQuestions(allQ.slice());addLog(`    ✓ ${result.length} → ${allQ.length} unique`);}else addLog(`    — No output.`);
+        if(Array.isArray(result)&&result.length>0){
+          // v15.15: put the choices back from the page when the model returned a bare stem.
+          // The batch still holds each question's verbatim source text, so this costs nothing
+          // and invents nothing.
+          const srcByNum=new Map(batch.map(p=>[Number(p.number),p.question]));
+          const fixed=result.map(q=>nclexRepairOptions(q,srcByNum.get(Number(q&&q.question_number))));
+          const nRepaired=fixed.filter(q=>q&&q.options_repaired).length;
+          nclexAccumulate(seen,allQ,fixed.map(q=>({...q,id:uid()})));setQuestions(allQ.slice());
+          addLog(`    ✓ ${result.length} → ${allQ.length} unique${nRepaired?` (${nRepaired} choice list${nRepaired!==1?'s':''} restored from the page)`:''}`);
+        }else addLog(`    — No output.`);
       }catch(e){if(e.name==='AbortError')throw e;addLog(`    ⚠ ${e.message}`);}
       setProgress({current:i+1,total:batches.length});if(i<batches.length-1)await _sleep(500,signal);
     }
@@ -4394,8 +4512,12 @@ function NCLEXExtractor(){
     setError('');setQuestions([]);setLog([]);setStatus('processing');
     try{
       addLog(`Mode: ${mode==='inline'?'Inline (Q+A together)':'Split Q&A (separated sections)'} · ${model} [${toolLevel}]${cfg.autoProfile?' (auto)':''}`);
-      const workFiles=(mode==='split'&&files.length>1)?[files[0]]:files;
-      if(workFiles!==files)addLog(`⚠ Split mode uses one PDF per run — processing "${files[0].name}" only (the page ranges describe a single file). Run the other file(s) separately.`);
+      // v15.15: a page range describes ONE file's layout, so inline mode with ranges enabled
+      // takes the same one-PDF-per-run restriction split mode has always had. Applying page
+      // 1-50 of file A to file B would quietly extract the wrong chapter.
+      const oneFile=files.length>1&&(mode==='split'||iRangeOn);
+      const workFiles=oneFile?[files[0]]:files;
+      if(oneFile)addLog(`⚠ ${mode==='split'?'Split mode':'Inline mode with page ranges'} uses one PDF per run — processing "${files[0].name}" only (the page ranges describe a single file). Run the other file(s) separately.`);
       addLog(`Processing ${workFiles.length} PDF(s)...`);
       let allQ=[];
       for(let fi=0;fi<workFiles.length;fi++){
@@ -4409,18 +4531,33 @@ function NCLEXExtractor(){
       if(e.name==='AbortError'){addLog('⚠ Aborted \u2014 keeping the questions extracted so far.');setStatus('done');}
       else{setError(e.message);setStatus('error');addLog(`❌ ${e.message}`);}
     }finally{abortRef.current=null;}
-  },[cfg,files,mode,chunkSize,overlap,qRanges,aRanges,batchSize,model,toolLevel,addLog]);
+  },[cfg,files,mode,chunkSize,overlap,iRangeOn,iRanges,qRanges,aRanges,batchSize,model,toolLevel,addLog]);
 
+  // v15.15: every export is now QUESTIONS first, then ONE answer key at the end. Answers used
+  // to sit directly under their own question, so an exported file could not be worked through
+  // without the answer already in view — which is the reason to export it at all. This is the
+  // same shape the NCLEX Generator worksheet has always used (## Questions / ## Answer Key).
+  const nclexQText=q=>{const {stem,options}=nclexSplitStemOptions(q.question);return options.length?stem+'\n'+options.map(o=>`   ${o.label}. ${o.text}`).join('\n'):String(q.question||'');};
   const exportTxt=()=>{
-    let out='';filtered.forEach((q,i)=>{out+=`${i+1}. ${q.question}\n\nAnswer: ${q.correct_answer}\nRationale: ${q.rationale}\n${q.test_taking_strategy?'Strategy: '+q.test_taking_strategy+'\n':''}${q.diseases_conditions?.length?'Conditions: '+q.diseases_conditions.join(', ')+'\n':''}\n---\n\n`;});
+    let out='NCLEX PRACTICE QUESTIONS\n\n'+filtered.length+' questions\n\n';
+    filtered.forEach((q,i)=>{out+=`${i+1}. ${nclexQText(q)}\n\n`;});
+    out+='\n============================\nANSWER KEY\n============================\n\n';
+    filtered.forEach((q,i)=>{out+=`${i+1}. Answer: ${q.correct_answer}\nRationale: ${q.rationale}\n${q.priority_nursing_tip?'Tip: '+q.priority_nursing_tip+'\n':''}${q.test_taking_strategy?'Strategy: '+q.test_taking_strategy+'\n':''}${q.clinical_judgment_skill?'CJ: '+q.clinical_judgment_skill+'\n':''}${q.diseases_conditions?.length?'Conditions: '+q.diseases_conditions.join(', ')+'\n':''}\n---\n\n`;});
     downloadBlob(new Blob([out],{type:'text/plain'}),'nclex_questions.txt');
   };
 
   const nclexToMd=()=>{
-    let out='# NCLEX Practice Questions\n\n';
+    let out='# NCLEX Practice Questions\n\n**'+filtered.length+' questions** extracted from source material.\n\n---\n\n## Questions\n\n';
     filtered.forEach((q,i)=>{
-      out+=`**${i+1}.** ${q.question}\n\n`;
-      out+=`**Answer:** ${q.correct_answer}\n\n`;
+      const {stem,options}=nclexSplitStemOptions(q.question);
+      out+=`**${i+1}.** ${options.length?stem:String(q.question||'')}\n\n`;
+      if(options.length)out+=options.map(o=>`${o.label}. ${o.text}`).join('\n')+'\n\n';
+    });
+    // The pagebreak marker starts the answer key on its own printed page and degrades to a
+    // rule in plaintext — the same one the generator worksheet uses.
+    out+='<div class="pagebreak"></div>\n\n## Answer Key\n\n';
+    filtered.forEach((q,i)=>{
+      out+=`**${i+1}.** ${q.correct_answer}\n\n`;
       out+=`${q.rationale}\n\n`;
       if(q.priority_nursing_tip)out+=`> ⚡ **Tip:** ${q.priority_nursing_tip}\n\n`;
       if(q.test_taking_strategy)out+=`> 🎯 **Strategy:** ${q.test_taking_strategy}\n\n`;
@@ -4454,10 +4591,24 @@ function NCLEXExtractor(){
       {/* Config */}
       <div style={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:18,marginBottom:14}}>
         {/* Inline settings */}
-        {mode==='inline'&&<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
+        {mode==='inline'&&<><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
           <div className="sb-field"><label>Chunk Size (chars)</label><input type="number" min={500} max={15000} value={chunkSize} onChange={e=>setChunkSize(Math.max(500,Math.min(15000,Number(e.target.value)||3000)))}/></div>
           <div className="sb-field"><label>Overlap (chars)</label><input type="number" min={0} max={5000} value={overlap} onChange={e=>setOverlap(Math.max(0,Math.min(5000,Number(e.target.value)||0)))}/><div style={{fontSize:10,color:'var(--text-dim)',marginTop:2}}>~800 = 1-2 pages. Duplicates auto-removed.</div></div>
-        </div>}
+        </div>
+        {/* v15.15: page ranges for inline mode, the same picker split mode uses. Opt-in, so
+            the default is still the whole document. */}
+        <div style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:8,padding:12,marginBottom:10}}>
+          <label style={{display:'flex',alignItems:'center',gap:7,cursor:'pointer',fontSize:11.5,color:'var(--text)',fontWeight:600}}>
+            <input type="checkbox" checked={iRangeOn} onChange={e=>setIRangeOn(e.target.checked)} style={{width:14,height:14,cursor:'pointer'}}/>
+            📄 Limit to specific pages
+          </label>
+          <div style={{fontSize:10.5,color:'var(--text-dim)',marginTop:4,lineHeight:1.5}}>Off = the whole PDF. On = only the pages you list, so you can pull one chapter out of a large book.</div>
+          {iRangeOn&&<div style={{marginTop:10}}>
+            {pageCount&&<div style={{fontSize:10,color:'var(--accent)',marginBottom:8}}>📖 This PDF has <b>{pageCount}</b> pages</div>}
+            <div style={{padding:8,background:'var(--bg-card)',borderRadius:6,border:'1px solid var(--border)'}}><PageRangeSection label="📄 Pages to extract" ranges={iRanges} onChange={setIRanges} maxPages={pageCount}/></div>
+            <div style={{fontSize:10,color:'var(--accent-warm)',marginTop:6}}>With page ranges on, inline mode processes one PDF per run — the ranges describe a single file.</div>
+          </div>}
+        </div></>}
 
         {/* Split settings */}
         {mode==='split'&&<div style={{marginBottom:12}}>

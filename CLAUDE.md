@@ -21,7 +21,7 @@ Maintained by one person — a working LPN in an LPN-to-RN bridge program — be
 node latte-tests.js
 ```
 
-Expect **678 passed · 0 failed**. The harness extracts live functions from the shipped HTML by anchor strings — it never copies code, so it fails loudly if a refactor moves an anchor. That failure is signal, not noise: fix the anchor reference, don't weaken the test.
+Expect **719 passed · 0 failed**. The harness extracts live functions from the shipped HTML by anchor strings — it never copies code, so it fails loudly if a refactor moves an anchor. That failure is signal, not noise: fix the anchor reference, don't weaken the test.
 
 Watch for *vacuous* passes as well as failures: an end anchor that matches earlier than intended silently truncates a span, and every assertion about the missing tail then passes for the wrong reason. `caseBuildPrompt` hit exactly this — `'\n}\n'` matched inside its JSON-shape block. Where a span covers a prompt, assert that something near its *end* is present.
 
@@ -59,8 +59,8 @@ Do not "fix" these:
 
 | File | Purpose |
 |---|---|
-| `Nursing-Study-Suite v15.14.html` | The entire application. The filename carries the version — quote it on the command line. Both harnesses auto-detect any `Nursing-Study-Suite*.html`, so a version bump needs no code change. |
-| `latte-tests.js` | Regression harness, 678 assertions |
+| `Nursing-Study-Suite v15.15.html` | The entire application. The filename carries the version — quote it on the command line. Both harnesses auto-detect any `Nursing-Study-Suite*.html`, so a version bump needs no code change. |
+| `latte-tests.js` | Regression harness, 719 assertions |
 | `neia-fixture.json` | 10 fixed MCQs with reference classifications, for the audit test–retest |
 | `neia-retest.js` | Test–retest runner — **costs live API calls**, never part of `latte-tests.js` |
 | `davis-transcribe-test.js` | Flashcard transcription batch runner — **costs live API calls**, never part of `latte-tests.js`. The in-app panel is the normal path; this is for measuring a deck without clicking through it. |
@@ -71,7 +71,12 @@ Do not "fix" these:
 
 ## Current state
 
-Shipping v15.14. The app file is `Nursing-Study-Suite v15.14.html` — all three harnesses auto-detect any `Nursing-Study-Suite*.html`, so a rename needs no code change. Open items:
+Shipping v15.15. The app file is `Nursing-Study-Suite v15.15.html` — all three harnesses auto-detect any `Nursing-Study-Suite*.html`, so a rename needs no code change. Open items:
+
+- **The NCLEX extractor's question splitter had been mistaking answer choices for question numbers, and v15.15 fixes it.** `nclexSplitByQNum` matched `1.` at a line start — which is both the stem marker and the first-choice marker — so a question's slice ended at its own first choice. On a three-question Davis sample it returned the stem of Q1 plus three of Q1's choices as if they were questions, and lost Q2 and Q3 entirely. Choice runs are now detected by SPACING (`nclexDropOptionRuns`) and removed from the candidate starts. Three guards keep a real question list from being eaten and **all three must hold** before anything is dropped: the run must be preceded by something, must not exceed `NCLEX_OPTION_RUN_MAX`, and the question sequence must resume after it. Do not relax any one of them individually — each guards a different false positive, and the harness has a case for each.
+- **`NCLEX_OPTION_GAP` / `_RUN_MIN` / `_RUN_MAX` are layout constants, not preferences.** They encode what a printed choice list looks like (entries a line apart, three to six of them). Widening the gap or raising the max makes a genuine question list start to look like a choice run — the failure mode is silent and deletes questions. Change them only against a real PDF, never to make one book parse.
+- **v15.15 is verified against fixtures, not against a live PDF yet.** The parsing fix, the choice parser, the repair path and the grouped exports all have assertions, and the Davis-shaped fixture reproduces the original bug exactly. What is still unrun: a real Davis PDF through split mode (does the choice-run filter hold on genuine `pdfLayoutText` output, where a choice may wrap across lines?), and a real inline-mode book with the new page range set to one chapter.
+- **One hazard was found and deliberately NOT acted on.** `nclexSplitByQNum` picks whichever pattern yields the most distinct numbers. If a book numbers stems `1.` and choices `1)`, the choice pattern can still win on count while capturing only choice lines. That is speculative — no source is known to do it — and changing the selection rule is a bigger change than the confirmed bug warranted. Measure first: if a book ever extracts as short fragments, this is the thing to look at.
 
 - **v15.14 is unverified against live output.** It is a correctness release from a three-way review (Claude Code / ChatGPT / Gemini), and all three gates pass — but nothing in it has been run against a real Knowledge Base or a real deck yet. The checks that matter, in order: a chapter carrying both `↑` and `↓` of one lab (they must stay separate facts); a hand-corrupted `sourceQuote` comparator (must now be reported); a card transcribed then its photo removed (must NOT build); one full-resolution phone photo through the new downscale path, measured at 2 runs per card; and one split-mode run on a real Davis PDF to confirm windowed pairing recovers questions past the old 12,000-character cliff.
 - **`kbQuoteOperatorsAgree` is WARN tier on purpose, and that is the measure step.** It reports quotes that verified but whose comparator or arrow disagrees with the source. It can false-positive on a column or table span exactly the way `reordered` misses do. Do not promote it to a pass-2 discard until a real corpus shows its false-positive rate — the same measure-then-act sequence that earned de-hyphenation its promotion in v15.11. A non-zero count in the diagnostics panel is worth stopping for, not worth automating on.

@@ -9,6 +9,28 @@ Every release since 15.0 has been verified against three gates before shipping: 
 
 ---
 
+## [15.15] — 2026-08-29
+
+NCLEX Question Extractor. Three faults found by running v15.14 against a real question bank; all three were code, and **no prompt constant was touched**.
+
+### Fixed
+- **Answer choices were being read as question numbers, truncating every question to its stem and deleting most of the section.** `nclexSplitByQNum` matched `1.` at a line start, which is the stem marker *and* the first-choice marker. Question 1's slice therefore ended at its own first choice. On a three-question Davis-shaped sample the parser returned four items: the stem of Q1, and three of Q1's choices posing as questions — Q2 and Q3 were gone, their numbers already claimed. `nclexDropOptionRuns` now identifies choice runs by **spacing** (entries a line apart, ascending from 1, three to six of them) and removes them from the candidate question starts. Three guards must all hold before a run is dropped: it is preceded by something, it does not exceed `NCLEX_OPTION_RUN_MAX`, and the question sequence resumes afterwards. A section whose questions genuinely begin at 1, and a 20-question list, both survive untouched.
+- **Multiple-choice options are now parsed, displayed and repaired.** `nclexSplitStemOptions` reads the choice list back out of the question text — numbered, lettered or parenthesised, on their own lines or inline — so question cards render choices as a list, and an item that arrived *without* choices is flagged on the card instead of looking complete. A numbered list inside the stem ("Vitals: 1. HR 110 2. BP 88/50") does not fool it: the real choices form the longer run and the longest run wins.
+- **Split Q&A restores missing choices from the source page.** The batch still holds each question's verbatim page text, so when the model returns a bare stem `nclexRepairOptions` splices the choices back from the book's own bytes — no extra API call, nothing invented, and the log reports how many were restored. Inline mode has no equivalent source to repair from (the model itself decides where a question begins); the chunk overlap is what covers a split there.
+
+### Changed
+- **Every extractor export groups the answers at the end.** `.md`, `.txt`, **Copy** and **PDF** are now Questions first, then one Answer Key — the same `## Questions` / `## Answer Key` shape the NCLEX Generator worksheet has always used, pagebreak included, so the PDF starts its answer key on a fresh page. Answers previously sat directly beneath their own question, which made an exported set unusable for the thing it is exported for.
+
+### Added
+- **Page ranges on the Inline tab**, using the same `PageRangeSection` picker as Split Q&A, seeded from the detected page count. Opt-in via **Limit to specific pages**, so the default is still the whole document. With ranges on, Inline takes the same one-PDF-per-run restriction Split has always had — page 1–50 of file A applied to file B would quietly extract the wrong chapter.
+- 41 assertions (678 → **719**), covering the Davis-shaped regression, each of the three drop guards, select-all runs, all four choice-label styles, the repair path, and the answer-key grouping in both export formats.
+
+### Notes
+- **Not yet run against a live PDF.** The fixtures reproduce the original bug exactly, but `pdfLayoutText` output is messier than a fixture — a choice that wraps across lines is the case to watch. A real Davis split-mode run and a real inline run with a one-chapter range are the two checks outstanding.
+- **A related hazard was found and deliberately left alone.** The splitter picks whichever pattern yields the most distinct numbers, so a book numbering stems `1.` and choices `1)` could still let the choice pattern win on count. No known source does this, and rewriting the selection rule is a larger change than the confirmed bug justified. If a book ever extracts as short fragments, look here first.
+
+---
+
 ## [Unreleased]
 
 ### To do
