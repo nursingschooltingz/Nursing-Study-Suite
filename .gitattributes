@@ -1,0 +1,10 @@
+# Never convert line endings, in either direction.
+#
+# The repo stores LF. Windows autocrlf was rewriting the working copy to CRLF on any
+# checkout, stash, or merge — which breaks latte-tests.js instantly and silently, because
+# every span anchor it extracts from the HTML is written with '\n'. The failure looks like a
+# wholesale regression (anchor extraction throws) rather than a line-ending problem, which
+# is exactly the wrong signal to hand someone mid-debug.
+#
+# `-text` means the working tree bytes and the repo bytes are always identical.
+* -text
