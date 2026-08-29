@@ -1,5 +1,9 @@
 # Nursing Study Suite
 
+[![Latest release](https://img.shields.io/github/v/release/nursingschooltingz/Nursing-Study-Suite?label=latest%20release&color=4a7ff7)](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/latest)
+[![Download](https://img.shields.io/badge/download-single%20HTML%20file-34d399)](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/latest)
+[![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-a78bfa)](LICENSE)
+
 Turn your lecture PDFs and PowerPoints into a complete, source-cited study system: a structured knowledge base, prioritized study guides, tagged Anki flashcards, NCLEX-style practice questions, and unfolding clinical case studies — all generated from **your own course materials**, with every fact traceable back to the exact page it came from.
 
 The whole suite is **one HTML file**. There is nothing to install, no account to create, and no website collecting your data. You open the file in your web browser, paste in a free Google Gemini API key, upload your study materials, and go.
@@ -16,7 +20,7 @@ The whole suite is **one HTML file**. There is nothing to install, no account to
 
 **The five steps:**
 
-1. **Save the suite file** (the `.html` file) somewhere you can find it — your Desktop or a "Nursing" folder is fine.
+1. **[Download the suite file](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/latest)** — grab the `.html` file from the latest release and save it somewhere you can find it. Your Desktop or a "Nursing" folder is fine.
 2. **Double-click the file.** It opens in your web browser like a webpage. That's the whole "installation."
 3. **Get a free Gemini API key** (5 minutes, instructions in the next section) and paste it into the **API Key** box in the left sidebar. The key is like a library card that lets the app talk to Google's AI.
 4. **Go to the first tab ("Knowledge")**, add the PDF or PowerPoint for your *current exam only* — just the relevant chapters, not the whole textbook — and click **Build Knowledge Base**. Wait a few minutes while it reads your material and extracts every testable fact, each one stamped with where it came from.

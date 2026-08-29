@@ -26,7 +26,7 @@ NCLEX Question Extractor. Three faults found by running v15.14 against a real qu
 - 41 assertions (678 → **719**), covering the Davis-shaped regression, each of the three drop guards, select-all runs, all four choice-label styles, the repair path, and the answer-key grouping in both export formats.
 
 ### Notes
-- **Not yet run against a live PDF.** The fixtures reproduce the original bug exactly, but `pdfLayoutText` output is messier than a fixture — a choice that wraps across lines is the case to watch. A real Davis split-mode run and a real inline run with a one-chapter range are the two checks outstanding.
+- **Confirmed against a live PDF.** The maintainer ran this build on real source material after release and reports the extractor working as intended. That closes the check this release shipped with outstanding: the choice-run filter holds on genuine `pdfLayoutText` output, not only on fixtures.
 - **A related hazard was found and deliberately left alone.** The splitter picks whichever pattern yields the most distinct numbers, so a book numbering stems `1.` and choices `1)` could still let the choice pattern win on count. No known source does this, and rewriting the selection rule is a larger change than the confirmed bug justified. If a book ever extracts as short fragments, look here first.
 
 ---
