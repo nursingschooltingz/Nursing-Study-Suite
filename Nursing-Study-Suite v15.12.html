@@ -12,7 +12,7 @@
      v15.10 is measurement, not behavior. quoteMiss was a bare count, which could not answer the question the v16 build decision turns on: whether a failed quote is line-break hyphenation (fixable by normalizing the matcher, no vision needed) or column-major reading-order scrambling (which only seeing the page fixes). Misses are now retained and classified, kbTextQuality names which pages are sparse, an opt-in probe counts raster/vector/text ops per page, and the diagnostics panel exports to JSON. kbQuoteInSource is byte-identical: no fact's fate changed.
      v15.11 acts on what v15.10 measured. A real cardiovascular chapter produced 190 failed quotes: 83 line-break hyphenation/ligature, 107 column reading order, and zero 'partial' or 'absent' — not one fabricated quote in the run. De-hyphenation is therefore promoted into kbQuoteInSource as a strictly additive fallback (plain match first; the fallback can only turn a FAIL into a PASS), recovering the 83 without loosening anything. Reading-order failures are left alone by design: the fact is sound, only its proof fails. The same run exposed a reporting bug — pass-1 misses and pass-2 discards shared one rollup printed beneath the first-pass count, so a breakdown summing to 190 sat under a sentence saying 182. They now roll up separately.
      v15.12 adds flashcard ingestion. Photographs of printed cards have no text layer at all, so they take a two-pass path: pass 1 transcribes the image to structured verbatim text, pass 2 is the EXISTING frozen extractor reading that text. Because pass 2 reads text, kbQuoteInSource verifies its quotes with no new machinery — which is why none of the v16 spec's evidence states, routers or visual safety gates were needed. The transcript is therefore the trust boundary: a number misread in pass 1 is verified flawlessly against the wrong transcript by everything downstream, so transcripts are reviewed before use and every clinical number is surfaced for an eye check. Front and back pair on category + card number, because a Davis back face carries no condition name.
-     Full history: LATTE-v15-changelog.md · regression harness: latte-tests.js (568 assertions) · test-retest: neia-retest.js -->
+     Full history: LATTE-v15-changelog.md · regression harness: latte-tests.js (611 assertions) · test-retest: neia-retest.js -->
 <!-- v15.3: crossorigin added (SRI-ready — paste the verified sha384 integrity attrs from
      the changelog after a local hash check; applying unverified hashes would hard-block
      every script). DOMPurify 3.4.12 loads through a no-downgrade chain: cdnjs, then the
@@ -1318,7 +1318,17 @@ function kbBucketGaps(kb){
 
 
 function kbSlug(s){return String(s||'item').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');}
-function kbFactKey(f){return [f.latteBucket||'',f.subtype||'',String(f.text||'').toLowerCase().replace(/[^a-z0-9.%/<>-]+/g,' ').trim()].join('|');}
+// v15.13: the class kept ASCII < and > but DELETED the Unicode operators and '+', so "↑ BUN"
+// and "↓ BUN" produced an IDENTICAL key and mergeLatteParts silently merged two opposite
+// facts — first one wins, sources unioned, so the survivor cites the chunk that said the
+// reverse. CARD_TRANSCRIBE_PROMPT rule 3 is built entirely around preserving arrows ("an up
+// arrow before a lab value means increased, and dropping it silently reverses the fact");
+// this key threw them away one step later. Widening the class is the minimal fix: nothing
+// that keys distinctly today starts colliding. The '-' must stay LAST or it forms a range.
+// Deliberately NOT canonicalising ≤ into <=: that would make the two spellings merge, a
+// second behaviour change with no measured need. Two copies of one fact is the safe
+// direction — a near-duplicate is deletable in the UI, a silently reversed fact is not.
+function kbFactKey(f){return [f.latteBucket||'',f.subtype||'',String(f.text||'').toLowerCase().replace(/[^a-z0-9.%/<>≤≥↑↓+-]+/g,' ').trim()].join('|');}
 function mergeLatteParts(parts,course='',exam=''){
   const map=new Map();let factN=0;
   for(const part of parts){
@@ -1601,6 +1611,46 @@ function kbQuoteInSource(quote,sourceNorm,sourceDehyphNorm){
   if(sourceNorm.includes(q))return true;
   return !!sourceDehyphNorm&&sourceDehyphNorm.includes(kbDehyphNormForMatch(quote));
 }
+// ── v15.13: operator agreement — a STRICTLY ADDITIVE check layered on the matcher above ──
+// kbNormForMatch replaces [^a-z0-9]+ with a space, so "HR < 60" and "HR > 60" BOTH normalize
+// to "hr 60" and a quote carrying an INVERTED comparator verifies cleanly against a source
+// saying the opposite. That is the one class of quote corruption the verbatim check is
+// structurally blind to, and it is the highest-consequence class in this domain: the arrow
+// or the comparator IS the fact.
+//
+// kbNormForMatch is deliberately NOT touched. Editing it would move which quotes pass in
+// BOTH directions and silently alter the pass-2 discard set — the same reasoning that keeps
+// the v15.11 de-hyphenation fallback additive. This runs only AFTER a quote has already been
+// accepted, so it can never turn a PASS into a FAIL; it can only add a finding beside it.
+//
+// WARN TIER ON PURPOSE. This is the measure step, not the act step. The check can
+// false-positive: a quote drawn across a multi-column or tabular span can carry an operator
+// that sits elsewhere in the text stream, exactly like the 107 'reordered' quote misses.
+// De-hyphenation earned its promotion by being measured first (83 of 190 misses; classifier
+// predicted 43.7% fixable, fallback recovered 43.5%). This gets the same treatment: report,
+// measure on a real corpus, and only then decide whether pass 2 should discard on it.
+const KB_OPERATOR_RE=/[<>≤⩽≥⩾↑⇑⬆↓⇓⬇%]/;
+// Rewrite operators as ASCII words so they survive kbNormForMatch's [^a-z0-9] strip. Word
+// tokens rather than preserved symbols, because that leaves both existing normalizers
+// byte-identical — and "lte"/"gte"/"uparrow"/"downarrow"/"pct" do not occur in clinical prose.
+function kbCanonOperators(s){
+  return String(s||'')
+    .replace(/[≤⩽]/g,' lte ').replace(/[≥⩾]/g,' gte ')
+    .replace(/</g,' lt ').replace(/>/g,' gt ')
+    .replace(/[↑⇑⬆]/g,' uparrow ').replace(/[↓⇓⬇]/g,' downarrow ')
+    .replace(/%/g,' pct ');
+}
+// True when the quote carries no operator at all (nothing to disagree about), or when its
+// operator-preserving form still occurs in the operator-preserving source. Callers reach this
+// ONLY for quotes kbQuoteInSource has already accepted, which is what makes it additive.
+function kbQuoteOperatorsAgree(quote,sourceOpNorm,sourceOpDehyphNorm){
+  const raw=String(quote||'');
+  if(!KB_OPERATOR_RE.test(raw))return true;
+  const q=kbNormForMatch(kbCanonOperators(raw));
+  if(q.length<10)return true;
+  if(String(sourceOpNorm||'').includes(q))return true;
+  return !!sourceOpDehyphNorm&&sourceOpDehyphNorm.includes(kbDehyphNormForMatch(kbCanonOperators(raw)));
+}
 // v15.10: quoteMiss has always been a bare count, and a bare count cannot answer the one
 // question the v16 build decision turns on. A failed quote is either a line-break
 // hyphenation artifact — fixable by normalizing kbNormForMatch, no vision needed — or
@@ -1717,6 +1767,12 @@ function kbCompositionSummary(units){
 const CARD_IMAGE_RE=/\.(jpe?g|png|webp|heic|heif)$/i;
 const CARD_MIME={jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',webp:'image/webp',heic:'image/heic',heif:'image/heif'};
 function cardIsImage(f){return !!f&&CARD_IMAGE_RE.test(f.name||'');}
+// v15.13: stable per-source identity. Transcripts were keyed on f.name alone while addFiles
+// dedupes on name+size+lastModified, so two photos sharing a basename — routine when a phone
+// restarts its numbering, or when two folders are dropped — both entered `files` and the
+// SECOND silently overwrote the first's transcript. The same key drives the file-chip React
+// key and the removal prune, so all three now agree on what one source file is.
+function cardFileId(f){return f?String(f.name||'')+'|'+String(f.size||'')+'|'+String(f.lastModified||''):'';}
 // FileReader rather than arrayBuffer+btoa: btoa on a multi-megabyte photo builds a huge
 // intermediate string and blows the call stack via String.fromCharCode(...chunk).
 function cardFileToBase64(file){
@@ -1827,11 +1883,51 @@ function cardMergeFaces(transcripts){
     const ordered=[...faces].sort((a,b)=>(a.face==='front'?0:1)-(b.face==='front'?0:1));
     const title=(ordered.find(f=>f.title)||{}).title||key;
     return{key,title,faces:ordered.map(f=>f.face||'?'),
+      // v15.13: faces.length was the only composition signal, so the UI's "only one face"
+      // warning (faces.length<2) was cleared by front+front — two DIFFERENT cards colliding
+      // on category+cardNumber, merged into one corrupt chunk. Count the faces by kind.
+      fronts:ordered.filter(f=>f.face==='front').length,
+      backs:ordered.filter(f=>f.face==='back').length,
+      // v15.13: which photo(s) this card came from. The transcript is the trust boundary and
+      // every number has to be eye-checked against the card — on a 60-card deck that is only
+      // tractable if a fact can name the image it came from. Tagged by the caller as _srcFile.
+      sources:[...new Set(ordered.map(f=>f._srcFile).filter(Boolean))],
       text:'--- CARD: '+key+' ---\n'+ordered.map(cardTranscriptToText).filter(Boolean).join('\n\n'),
       numerics:ordered.flatMap(f=>f.numerics||[]),
       legibility:ordered.some(f=>f.overallLegibility==='unreadable')?'unreadable'
         :ordered.some(f=>f.overallLegibility==='uncertain')?'uncertain':'clean'};
   });
+}
+// v15.13: the build gate, as code rather than as a paragraph of UI text.
+// CLAUDE.md states the intent plainly — transcripts are reviewed before use, and a number
+// misread in pass 1 is verified flawlessly against the wrong transcript by everything
+// downstream. Nothing enforced it: Build was disabled only on busy/apiKey/files, so a user
+// could build mid-transcription, build an unpaired back (which carries no condition name at
+// all), build two fronts as though they were a pair, or build numbers the app had already
+// flagged as unstable between identical runs.
+//
+// BLOCK vs WARN. A back-only card yields facts with nothing to attach them to; duplicate
+// faces mean two different cards were merged; unreadable and unstable are the app's own
+// verdicts. Those are structural, so they block. A front-only card is incomplete but sound —
+// it has its condition name — so it warns and still builds. Returning reasons rather than a
+// boolean is deliberate: 'blocked' with no cause is not actionable at the sink.
+function cardChunkBlockers(c,unstableNumerics){
+  if(!c)return['no transcript'];
+  const out=[];
+  if(c.fronts===0)out.push('no front face — a back carries the card number but no condition name, so its facts have nothing to attach to');
+  else if(c.fronts>1)out.push(c.fronts+' front faces share this card number — two different cards have been merged into one');
+  if(c.backs>1)out.push(c.backs+' back faces share this card number — two different cards have been merged into one');
+  if(c.legibility==='unreadable')out.push('a face was transcribed as unreadable');
+  if(unstableNumerics>0)out.push(unstableNumerics+' number(s) changed between identical transcription runs');
+  return out;
+}
+// Sound but incomplete. Kept separate from the blockers so an honest gap does not read as a defect.
+function cardChunkWarnings(c){
+  if(!c)return[];
+  const out=[];
+  if(c.fronts===1&&c.backs===0)out.push('front only — the back of this card was not transcribed');
+  if(c.legibility==='uncertain')out.push('a face was transcribed as uncertain');
+  return out;
 }
 // Self-agreement across identical runs. A field that changes between two identical calls
 // cannot be trusted whatever it says. Numerics are diffed separately because they are the
@@ -1909,6 +2005,10 @@ function KnowledgeBaseBuilder(){
   const [txBusy,setTxBusy]=useState(false);
   const [txRuns,setTxRuns]=useState(1);
   const [txErr,setTxErr]=useState('');
+  // v15.13: the review acknowledgement. CLAUDE.md says transcripts are reviewed before use;
+  // nothing enforced it. Cleared by anything that invalidates the review — a new
+  // transcription run, or a removed source.
+  const [txReviewed,setTxReviewed]=useState(false);
   const txAbortRef=useRef(null);
   const [kbOutcomes,setKbOutcomes]=useState('');
   const [kbPoints,setKbPoints]=useState('');
@@ -1965,7 +2065,7 @@ function KnowledgeBaseBuilder(){
   const transcribeCards=async()=>{
     const imgs=files.filter(cardIsImage);
     if(!cfg.apiKey||!imgs.length)return;
-    setTxBusy(true);setTxErr('');
+    setTxBusy(true);setTxErr('');setTxReviewed(false);
     const controller=new AbortController();txAbortRef.current=controller;
     const {model,level}=cfg.forTool('cardTranscribe');
     const out={...transcripts};
@@ -1978,9 +2078,9 @@ function KnowledgeBaseBuilder(){
           try{runs.push(await cardTranscribe(cfg.apiKey,model,level,f,{signal:controller.signal,retries:1}));}
           catch(e){if(e.name==='AbortError')throw e;err=e.message||String(e);}
         }
-        if(!runs.length){out[f.name]={file:f.name,error:err||'transcription failed'};addLog('✕ '+f.name+': '+err,'err');continue;}
+        if(!runs.length){out[cardFileId(f)]={file:f.name,error:err||'transcription failed'};addLog('✕ '+f.name+': '+err,'err');continue;}
         const agreement=runs.length>1?cardCompareRuns(runs):null;
-        out[f.name]={file:f.name,transcript:runs[0],runs,agreement,error:err||''};
+        out[cardFileId(f)]={file:f.name,transcript:runs[0],runs,agreement,error:err||''};
         const t=runs[0];
         addLog('✓ '+f.name+' — '+cardKey(t)+' ('+(t.face||'?')+'), '+(t.sections||[]).length+' section(s), '+((t.numerics||[]).length)+' number(s), legibility '+(t.overallLegibility||'?'),
           t.overallLegibility==='clean'?'ok':'warn');
@@ -1990,10 +2090,33 @@ function KnowledgeBaseBuilder(){
     }catch(e){if(e.name==='AbortError')setTxErr('Transcription cancelled. Completed cards were kept.');else setTxErr(e.message||String(e));}
     finally{txAbortRef.current=null;setTxBusy(false);}
   };
-  const cardChunks=useMemo(()=>cardMergeFaces(Object.values(transcripts).map(x=>x&&x.transcript).filter(Boolean)),[transcripts]);
+  // v15.13: tag each transcript with the photo it came from so cardMergeFaces can carry
+  // `sources` into the source pointer. Shallow copy — the stored transcript is untouched.
+  const cardChunks=useMemo(()=>cardMergeFaces(
+    Object.values(transcripts).filter(x=>x&&x.transcript).map(x=>({...x.transcript,_srcFile:x.file}))
+  ),[transcripts]);
+  // Instability is a property of the RUN, not of the transcript, so it is joined here on the
+  // card key rather than threaded through cardMergeFaces.
+  const cardUnstable=useMemo(()=>{
+    const m=new Map();
+    for(const e of Object.values(transcripts)){
+      if(!e||!e.transcript||!e.agreement)continue;
+      const n=(e.agreement.numericsUnstable||[]).length+(e.agreement.bulletsUnstable||[]).length;
+      if(n){const k=cardKey(e.transcript);m.set(k,(m.get(k)||0)+n);}
+    }
+    return m;
+  },[transcripts]);
+  // Partition ONCE. The review list, the Build gate and build()'s queue all read this, so the
+  // panel can never disagree with what is actually extracted.
+  const cardGate=useMemo(()=>{
+    const rows=cardChunks.map(c=>({card:c,blockers:cardChunkBlockers(c,cardUnstable.get(c.key)||0),warnings:cardChunkWarnings(c)}));
+    return{rows,buildable:rows.filter(r=>!r.blockers.length).map(r=>r.card),blocked:rows.filter(r=>r.blockers.length)};
+  },[cardChunks,cardUnstable]);
   const exportTranscripts=()=>{
     const payload={kind:'latte-card-transcripts',schemaVersion:1,exportedAt:new Date().toISOString(),
-      cards:cardChunks,raw:Object.values(transcripts)};
+      cards:cardChunks,raw:Object.values(transcripts),
+      // v15.13: an artifact that cannot say whether a human looked at it is not an audit trail.
+      reviewed:txReviewed,blocked:cardGate.blocked.map(r=>({key:r.card.key,blockers:r.blockers}))};
     downloadBlob(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),'card-transcripts-'+new Date().toISOString().slice(0,10)+'.json');
   };
   const build=async()=>{
@@ -2016,10 +2139,18 @@ function KnowledgeBaseBuilder(){
       // extracting one unpaired would produce facts with nothing to attach them to.
       // units:[] is deliberate: kbSplitChunk returns null for it, and a single card is far
       // too small to need splitting anyway.
-      for(const c of cardChunks){
-        queue.push({file:{name:'flashcards'},chunk:{text:c.text,label:c.title,units:[]},depth:0});
+      // v15.13: only cards that clear cardChunkBlockers are queued, and each carries its card
+      // number and source photo(s) into the pointer. A bare 'flashcards' was untraceable: a
+      // misread number could not be walked back to the image it came from, which is precisely
+      // the check the transcript-as-trust-boundary design depends on a human being able to do.
+      for(const c of cardGate.buildable){
+        queue.push({file:{name:'flashcards · '+c.key},chunk:{text:c.text,label:c.title+(c.sources.length?' ['+c.sources.join(', ')+']':''),units:[]},depth:0});
       }
-      if(cardChunks.length)addLog(cardChunks.length+' transcribed card(s) queued as source text.','');
+      if(cardGate.buildable.length)addLog(cardGate.buildable.length+' transcribed card(s) queued as source text.','');
+      for(const r of cardGate.blocked){
+        const msg=r.card.key+' ('+r.card.title+') was NOT built: '+r.blockers.join('; ');
+        addLog('⚑ '+msg,'err');problems.push(msg);
+      }
       for(const f of files.filter(x=>!cardIsImage(x))){
         try{const chunks=await kbBuildSourceChunks(f,chunkChars,overlapUnits,{signal:controller.signal,onProgress:(p,tot)=>addLog(`Reading ${f.name} — page ${p}/${tot}`),
           composition:probeComposition,
@@ -2045,6 +2176,9 @@ function KnowledgeBaseBuilder(){
         const srcNorm=kbNormForMatch(chunk.text);
         // v15.11: srcDehyph now feeds kbQuoteInSource as well as the classifier.
         const srcDehyph=kbDehyphNormForMatch(chunk.text),srcToks=new Set(srcNorm.split(' '));
+        // v15.13: operator-preserving twins of the two sources above. Built once per chunk;
+        // consulted only for quotes kbQuoteInSource has already accepted.
+        const srcOpNorm=kbNormForMatch(kbCanonOperators(chunk.text)),srcOpDehyph=kbDehyphNormForMatch(kbCanonOperators(chunk.text));
         // v15.11: pass-1 misses and pass-2 discards are counted SEPARATELY. v15.10 merged
         // them under one "By reason" heading printed directly beneath a sentence about the
         // first-pass count, so a real build read "182 first-pass quotes" and then a
@@ -2059,6 +2193,15 @@ function KnowledgeBaseBuilder(){
           bucket[reason]=(bucket[reason]||0)+1;
           // Capped: a pathological chunk should not put thousands of textbook quotes in memory.
           if(missDetail.length<25)missDetail.push({pass,reason,quote:String(f.sourceQuote||'').slice(0,240),fact:String(f.text||'').slice(0,160),latteBucket:f.latteBucket||null});
+        };
+        // v15.13: operator disagreements are counted SEPARATELY from quote misses. These are
+        // quotes that VERIFIED — every word is present — but whose comparator or arrow does not
+        // survive the check. Folding them into quoteMiss would bury them inside a number the
+        // panel already explains away as typesetting, which is the opposite of what they mean.
+        const opDetail=[];let opMismatch=0;
+        const noteOp=(pass,f)=>{
+          opMismatch++;
+          if(opDetail.length<25)opDetail.push({pass,quote:String(f.sourceQuote||'').slice(0,240),fact:String(f.text||'').slice(0,160),latteBucket:f.latteBucket||null});
         };
         let meta=null,parsed=null;
         // ---- Pass 1: extraction ----
@@ -2081,7 +2224,7 @@ function KnowledgeBaseBuilder(){
         }catch(e){
           if(e.name==='AbortError')throw e;
           problems.push(tag+': '+(e.message||String(e)));
-          stats.push({tag,file:file.name,label:chunk.label,chars:chunk.text.length,facts:0,recovered:0,discarded:0,quoteMiss:0,quoteMissDetail:[],quoteMissByReason:{},discardByReason:{},dehyphSaved:0,failed:true});
+          stats.push({tag,file:file.name,label:chunk.label,chars:chunk.text.length,facts:0,recovered:0,discarded:0,quoteMiss:0,quoteMissDetail:[],quoteMissByReason:{},discardByReason:{},dehyphSaved:0,opMismatch:0,opDetail:[],failed:true});
           addLog(`✕ ${tag}: ${e.message||e}`,'err');bump(verifyPass?2:1);continue;
         }
         let nFacts=(parsed.conditions||[]).reduce((n,c)=>n+((c.facts||[]).length),0);
@@ -2096,6 +2239,7 @@ function KnowledgeBaseBuilder(){
           if(!String(f.sourceQuote||'').trim())continue;
           if(!kbQuoteInSource(f.sourceQuote,srcNorm,srcDehyph)){quoteMiss++;noteMiss(1,f);continue;}
           if(!kbQuoteInSource(f.sourceQuote,srcNorm))dehyphSaved++;
+          if(!kbQuoteOperatorsAgree(f.sourceQuote,srcOpNorm,srcOpDehyph))noteOp(1,f);
         }
         parts.push(Object.assign(parsed,{source:Object.assign({},parsed.source,{filename:file.name,range:chunk.label})}));
         bump(1);
@@ -2119,6 +2263,7 @@ function KnowledgeBaseBuilder(){
                 if(!String(f.text||'').trim())continue;
                 if(!kbQuoteInSource(f.sourceQuote,srcNorm,srcDehyph)){discarded++;noteMiss(2,f);continue;}
                 if(!kbQuoteInSource(f.sourceQuote,srcNorm))dehyphSaved++;
+                if(!kbQuoteOperatorsAgree(f.sourceQuote,srcOpNorm,srcOpDehyph))noteOp(2,f);
                 const cn=String(f.conditionName||'').trim()||'Unsorted';
                 if(!byCond.has(cn))byCond.set(cn,[]);
                 const{conditionName,...rest}=f;
@@ -2136,7 +2281,8 @@ function KnowledgeBaseBuilder(){
           }
           bump(1);
         }
-        stats.push({tag,file:file.name,label:chunk.label,chars:chunk.text.length,facts:nFacts,recovered,discarded,quoteMiss,quoteMissDetail:missDetail,quoteMissByReason:missByReason,discardByReason,dehyphSaved,failed:false});
+        if(opMismatch)addLog(`  ⚠ ${tag}: ${opMismatch} verified quote(s) disagree with the source on a comparator or arrow — check these by eye`,'err');
+        stats.push({tag,file:file.name,label:chunk.label,chars:chunk.text.length,facts:nFacts,recovered,discarded,quoteMiss,quoteMissDetail:missDetail,quoteMissByReason:missByReason,discardByReason,dehyphSaved,opMismatch,opDetail,failed:false});
       }
       if(!parts.length)throw new Error('No source chunk completed successfully. '+problems.join(' | '));
       const kb=mergeLatteParts(parts,course,exam);
@@ -2155,6 +2301,8 @@ function KnowledgeBaseBuilder(){
         discarded:stats.reduce((n,s)=>n+s.discarded,0),
         quoteMiss:stats.reduce((n,s)=>n+s.quoteMiss,0),
         byReason,discardByReason,dehyphSaved:stats.reduce((n,s)=>n+(s.dehyphSaved||0),0),
+        opMismatch:stats.reduce((n,s)=>n+(s.opMismatch||0),0),
+        opDetail:stats.flatMap(s=>(s.opDetail||[]).map(d=>({...d,tag:s.tag}))).slice(0,60),
         quality,composition,chunkChars,overlapUnits,
         model,level,auto:cfg.autoProfile,verified:verifyPass,focus:focusBlock?(scoped?'scope':'prioritize'):null});
       setProg(100);
@@ -2171,16 +2319,31 @@ function KnowledgeBaseBuilder(){
     const payload={
       kind:'latte-extraction-diagnostics',schemaVersion:1,exportedAt:new Date().toISOString(),
       run:{model:diag.model,level:diag.level,autoProfile:diag.auto,auditPass:diag.verified,focus:diag.focus,chunkChars:diag.chunkChars,overlap:diag.overlapUnits,course,exam},
-      totals:{chunks:diag.chunks.length,flagged:diag.chunks.filter(c=>c.flag).length,recovered:diag.recovered,discarded:diag.discarded,quoteMiss:diag.quoteMiss,quoteMissByReason:diag.byReason,discardByReason:diag.discardByReason,dehyphSaved:diag.dehyphSaved},
+      totals:{chunks:diag.chunks.length,flagged:diag.chunks.filter(c=>c.flag).length,recovered:diag.recovered,discarded:diag.discarded,quoteMiss:diag.quoteMiss,quoteMissByReason:diag.byReason,discardByReason:diag.discardByReason,dehyphSaved:diag.dehyphSaved,opMismatch:diag.opMismatch},
+      operatorMismatches:diag.opDetail,
       textQuality:diag.quality,pageComposition:diag.composition,
       chunks:diag.chunks,bucketGaps:diag.gaps
     };
     downloadBlob(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),'LATTE-Extraction-Diagnostics-'+new Date().toISOString().slice(0,10)+'.json');
   };
+  // v15.13: Build was gated only on busy/apiKey/files, so it was clickable mid-transcription
+  // and clickable on cards nobody had looked at. Named conditions rather than one long
+  // boolean, so the disabled button can say WHICH one is stopping it.
+  const cardsNeedReview=cardChunks.length>0&&!txReviewed;
+  const onlyCardSources=files.length>0&&!files.some(x=>!cardIsImage(x));
+  // Covers both shapes: images loaded but not yet transcribed, and images transcribed but
+  // none clearing the gate. Previously the first fell through to a thrown 'no readable source
+  // chunks' after the click, which is a worse way to learn the same thing.
+  const nothingToBuild=onlyCardSources&&!cardGate.buildable.length;
+  const buildBlocked=busy||txBusy||!cfg.apiKey||!files.length||cardsNeedReview||nothingToBuild;
+  const buildLabel=busy?'Extracting…':txBusy?'Transcribing…':!cfg.apiKey?'Enter API Key'
+    :!files.length?'Add Sources':cardsNeedReview?'Confirm the card numbers first'
+    :nothingToBuild?(cardChunks.length?'No card clears the gate':'Transcribe the cards first')
+    :'Build Knowledge Base';
   const kb=K.knowledgeBase,md=useMemo(()=>renderKBMarkdown(kb),[kb]),validation=useMemo(()=>validateLatteKnowledgeBase(kb),[kb]),facts=(kb.conditions||[]).reduce((n,c)=>n+(c.facts||[]).length,0),sel=(kb.conditions||[]).find(c=>c.id===selected);
   return <div className="tool-panel"><h2 className="tool-title">🧠 LATTE Knowledge Base</h2><p className="tool-desc">Upload once, extract source-grounded LATTE facts once, then reuse them for Anki, priority analysis, and NCLEX generation.</p>{K.persistenceError&&<div className="error-banner"><span>⚠</span><div>{K.persistenceError}</div></div>}
     <div role="button" tabIndex={0} aria-label="Add PDF, PPTX, or flashcard image source files" onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fileRef.current?.click();}}} className="upload-zone" onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();addFiles(e.dataTransfer.files)}}><h3>Drop PDF, PPTX, or flashcard photos</h3><p>Large sources are processed in page or slide chunks; successful chunks are retained even if another chunk fails. Flashcard photos are transcribed first, and you review the transcript before it becomes facts.</p><input ref={fileRef} type="file" multiple accept=".pdf,.pptx,.jpg,.jpeg,.png,.webp,.heic,.heif" style={{display:'none'}} onChange={e=>{addFiles(e.target.files);e.target.value=''}}/></div>
-    {files.length>0&&<div style={{marginTop:8}}>{files.map((f,i)=><div className="file-chip" key={f.name+f.size}><div className={'f-icon '+getExt(f.name)}>{getExt(f.name)}</div><span className="f-name">{f.name}</span><span className="f-size">{formatSize(f.size)}</span><button className="f-rm" onClick={()=>{destroyPdfDoc(f);setFiles(p=>p.filter((_,j)=>j!==i));}}>×</button></div>)}</div>}
+    {files.length>0&&<div style={{marginTop:8}}>{files.map((f,i)=><div className="file-chip" key={cardFileId(f)}><div className={'f-icon '+getExt(f.name)}>{getExt(f.name)}</div><span className="f-name">{f.name}</span><span className="f-size">{formatSize(f.size)}</span><button className="f-rm" onClick={()=>{destroyPdfDoc(f);setTranscripts(p=>{const n={...p};delete n[cardFileId(f)];return n;});setTxReviewed(false);setFiles(p=>p.filter((_,j)=>j!==i));}}>×</button></div>)}</div>}
     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,margin:'14px 0'}}><input type="text" value={course} onChange={e=>setCourse(e.target.value)} placeholder="Course (optional)"/><input type="text" value={exam} onChange={e=>setExam(e.target.value)} placeholder="Exam/unit (optional)"/></div>
     {files.some(cardIsImage)&&<div style={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:16,marginBottom:12}}>
       <div style={{fontSize:10,fontWeight:600,textTransform:'uppercase',letterSpacing:1,color:'var(--accent)',marginBottom:4}}>Pass 1 · Flashcard transcription</div>
@@ -2226,6 +2389,22 @@ function KnowledgeBaseBuilder(){
           </div>
         </div>}
         {Object.values(transcripts).some(t=>t&&t.error)&&<div className="tip-banner" style={{marginTop:4}}>Some images failed: {Object.values(transcripts).filter(t=>t&&t.error).map(t=>t.file).join(', ')}</div>}
+        {cardGate.blocked.length>0&&<div className="error-banner" style={{marginTop:6,display:'block'}}>
+          <div style={{fontWeight:700,marginBottom:5}}>⚑ {cardGate.blocked.length} card(s) will NOT be built</div>
+          {cardGate.blocked.map(r=><div key={r.card.key} style={{fontSize:10.5,lineHeight:1.6,marginBottom:3}}>
+            <b>{r.card.key}</b>{r.card.title!==r.card.key?' — '+r.card.title:''}: {r.blockers.join('; ')}
+          </div>)}
+          <div style={{fontSize:10,opacity:.85,marginTop:5,lineHeight:1.5}}>Re-shoot or re-transcribe these, or remove the photos. The other {cardGate.buildable.length} card(s) still build.</div>
+        </div>}
+        {cardGate.rows.some(r=>!r.blockers.length&&r.warnings.length)&&<div className="tip-banner" style={{marginTop:4,display:'block'}}>
+          {cardGate.rows.filter(r=>!r.blockers.length&&r.warnings.length).map(r=><div key={r.card.key} style={{fontSize:10.5,lineHeight:1.6}}><b>{r.card.key}</b>: {r.warnings.join('; ')} — still built</div>)}
+        </div>}
+        <label style={{display:'flex',alignItems:'flex-start',gap:8,fontSize:11.5,color:'var(--text)',cursor:'pointer',marginTop:8,padding:'9px 11px',borderRadius:8,border:'1px solid '+(txReviewed?'rgba(52,211,153,.35)':'rgba(240,168,58,.4)'),background:txReviewed?'rgba(52,211,153,.05)':'rgba(240,168,58,.07)'}}>
+          <input type="checkbox" checked={txReviewed} onChange={e=>setTxReviewed(e.target.checked)} style={{accentColor:'var(--accent)',marginTop:2}}/>
+          <span><b>I have checked the numbers above against the physical cards.</b>
+            <div style={{fontSize:10,color:'var(--text-dim)',marginTop:3,lineHeight:1.5}}>Required before Build. Nothing downstream can catch a number misread here — the extractor, the auditor and every numeric check all verify against this transcript, so they will agree with each other and all be wrong together. Re-transcribing, or removing a source, clears this box.</div>
+          </span>
+        </label>
         <div style={{fontSize:9.5,color:'var(--text-dim)',marginTop:6,lineHeight:1.5}}>Running twice checks the model against itself, which is weaker than checking it against the card: it can misread the same digit the same way every time and look perfectly stable. The eye check is the one that counts.</div>
       </div>}
     </div>}
@@ -2273,7 +2452,7 @@ function KnowledgeBaseBuilder(){
       </div>
       <div style={{fontSize:10,color:'var(--accent)',marginTop:9}}>Extract: {cfg.forTool('knowledge').model} · {cfg.forTool('knowledge').level}{verifyPass?` — Audit: ${cfg.forTool('knowledgeAudit').model} · ${cfg.forTool('knowledgeAudit').level}`:''} <span style={{color:'var(--text-dim)'}}>({cfg.autoProfile?'auto profile':'sidebar toggle'})</span></div>
     </div>
-    <div style={{display:'flex',gap:8,flexWrap:'wrap'}}><button className="btn-primary" style={{flex:1}} disabled={busy||!cfg.apiKey||!files.length} onClick={build}>{busy?'Extracting…':!cfg.apiKey?'Enter API Key':!files.length?'Add Sources':'Build Knowledge Base'}</button>{busy&&<button className="btn-danger" onClick={()=>abortRef.current?.abort()}>Cancel</button>}<button className="btn-secondary" onClick={()=>importRef.current?.click()}>Import JSON</button><input ref={importRef} type="file" accept=".json,application/json" style={{display:'none'}} onChange={e=>{const f=e.target.files?.[0];if(f)importJSON(f);e.target.value='';}}/></div>
+    <div style={{display:'flex',gap:8,flexWrap:'wrap'}}><button className="btn-primary" style={{flex:1}} disabled={buildBlocked} onClick={build}>{buildLabel}</button>{busy&&<button className="btn-danger" onClick={()=>abortRef.current?.abort()}>Cancel</button>}<button className="btn-secondary" onClick={()=>importRef.current?.click()}>Import JSON</button><input ref={importRef} type="file" accept=".json,application/json" style={{display:'none'}} onChange={e=>{const f=e.target.files?.[0];if(f)importJSON(f);e.target.value='';}}/></div>
     {busy&&<div style={{marginTop:10}}><div className="progress-bar"><div className="progress-fill" style={{width:prog+'%'}}/></div></div>}
     {logs.length>0&&<div style={{marginTop:10,maxHeight:150,overflowY:'auto',fontFamily:'JetBrains Mono',fontSize:10.5,background:'var(--bg-deep)',border:'1px solid var(--border)',borderRadius:6,padding:8,lineHeight:1.7}}>
       {logs.map((l,i)=><div key={i} style={{color:l.t==='ok'?'var(--accent-green)':l.t==='err'?'var(--accent-red)':l.t==='warn'?'var(--accent-warm)':'var(--text-dim)'}}>[{l.ts}] {l.m}</div>)}
@@ -2285,6 +2464,7 @@ function KnowledgeBaseBuilder(){
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap'}}>
           <span style={{fontSize:12,fontWeight:600,color:diag.chunks.some(c=>c.flag)?'var(--accent-warm)':'var(--accent-green)'}}>
             {diag.chunks.some(c=>c.flag)?'⚑':'✓'} Extraction diagnostics — {diag.chunks.filter(c=>c.flag).length} of {diag.chunks.length} chunk(s) flagged
+            {diag.opMismatch>0&&<span style={{color:'var(--accent-red)',fontWeight:700}}> · {diag.opMismatch} operator mismatch(es)</span>}
             {diag.verified&&<span style={{color:'var(--text-dim)',fontWeight:400}}> · audit recovered {diag.recovered}{diag.discarded?`, discarded ${diag.discarded} ungrounded`:''}</span>}
             {diag.focus==='scope'&&<span style={{color:'var(--accent-warm)',fontWeight:400}}> · SCOPE mode — off-topic content was skipped</span>}
             {diag.focus==='prioritize'&&<span style={{color:'var(--text-dim)',fontWeight:400}}> · focus: prioritize</span>}
@@ -2317,6 +2497,19 @@ function KnowledgeBaseBuilder(){
           </div>}
           {diag.dehyphSaved>0&&<div style={{fontSize:10,color:'var(--accent-green)',marginTop:5,lineHeight:1.5}}>
             ✓ {diag.dehyphSaved} quote(s) verified only after de-hyphenation — line-break hyphens and ligatures that would have counted as unverified before v15.11.
+          </div>}
+          {/* v15.13: these quotes PASSED verification. Every word is present; only the
+              comparator or arrow disagrees. Rendered in red and above the fold because a
+              reversed threshold is the worst thing this pipeline can produce, and because
+              the count is expected to be zero — a non-zero value is worth stopping for. */}
+          {diag.opMismatch>0&&<div style={{fontSize:10,color:'var(--accent-red)',marginTop:7,lineHeight:1.5,padding:'7px 9px',borderRadius:6,border:'1px solid rgba(248,113,113,.3)',background:'rgba(248,113,113,.06)'}}>
+            ⚠ {diag.opMismatch} verified quote(s) disagree with the source on a comparator or arrow (&lt; &gt; ≤ ≥ ↑ ↓ %). The words all matched — only the operator did not, and the operator is usually the fact. <b>Check each of these against the source by eye before using the Knowledge Base.</b>
+            <div style={{marginTop:5,maxHeight:150,overflowY:'auto'}}>
+              {(diag.opDetail||[]).map((d,i)=><div key={i} style={{fontFamily:'JetBrains Mono',fontSize:9.5,lineHeight:1.55,marginBottom:4,color:'var(--text-dim)'}}>
+                <span style={{color:'var(--accent-red)'}}>pass {d.pass}</span> · {d.tag} — “{d.quote}”
+              </div>)}
+            </div>
+            <div style={{marginTop:4,opacity:.85}}>Warn tier by design: a quote spanning columns or a table can carry an operator that sits elsewhere in the text stream, the same way reading-order quote misses do. Measure the rate on a real corpus before this becomes a discard.</div>
           </div>}
           {diag.gaps.length>0&&<div style={{marginTop:9}}>
             <div style={{fontSize:10,fontWeight:600,textTransform:'uppercase',letterSpacing:1,color:'var(--text-dim)',marginBottom:5}}>LATTE bucket gaps ({diag.gaps.length} condition{diag.gaps.length===1?'':'s'})</div>

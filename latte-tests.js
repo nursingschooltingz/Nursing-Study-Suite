@@ -267,7 +267,7 @@ section('v15.10 — quote-miss classification');
 // on the NCLEX heuristics' stopword list, and threading it through says so out loud.
 const QM = new Function('caseContentWords',
   spanFrom('function kbNormForMatch', "\n  return 'absent';\n}") +
-  ';return {kbNormForMatch,kbQuoteInSource,kbDehyphNormForMatch,kbClassifyQuoteMiss,KB_QUOTE_MISS_REASONS,KB_QUOTE_MISS_LABEL};'
+  ';return {kbNormForMatch,kbQuoteInSource,kbDehyphNormForMatch,kbClassifyQuoteMiss,KB_QUOTE_MISS_REASONS,KB_QUOTE_MISS_LABEL,kbCanonOperators,kbQuoteOperatorsAgree,KB_OPERATOR_RE};'
 )(CASE.caseContentWords);
 const classify = (quote, source) => QM.kbClassifyQuoteMiss(quote, QM.kbNormForMatch(source), QM.kbDehyphNormForMatch(source));
 
@@ -386,6 +386,70 @@ t('diagnostics export exists and is not a Knowledge Base', S.includes("kind:'lat
 t('the panel no longer claims diagnostics never reach any export',
   !S.includes('never written into the Knowledge Base or any export.'));
 
+/* ── 10d-bis. v15.13: clinical operators survive the fact-merge key ── */
+section('v15.13 — fact key preserves clinical operators');
+// One line, so the span cannot truncate early — evaluating the function IS the end-anchor check.
+const FK = new Function(spanFrom('function kbFactKey', "].join('|');}") + ';return {kbFactKey};')();
+{
+  const key = text => FK.kbFactKey({ latteBucket: 'Tests', subtype: null, text });
+  // The defect: [^a-z0-9.%/<>-] kept ASCII < and > but DELETED ≤ ≥ ↑ ↓ +, so two opposite
+  // facts produced one key, mergeLatteParts kept only the first, and unioned the OTHER
+  // chunk's source pointer onto it — a fact citing the page that said the reverse.
+  t('an up arrow and a down arrow do not share a key',
+    key('↑ BUN and creatinine') !== key('↓ BUN and creatinine'));
+  t('≤ and ≥ do not share a key', key('SpO2 ≤ 90%') !== key('SpO2 ≥ 90%'));
+  t('a trailing + is not erased', key('K+ 6.6 mEq/L') !== key('K 6.6 mEq/L'));
+  t('ASCII < and > still key apart (regression)', key('Hold if HR < 60') !== key('Hold if HR > 60'));
+  t('whitespace runs still collapse, so identical text keys identically',
+    key('Monitor daily weights') === key('Monitor  daily   weights'));
+  t('bucket and subtype still lead the key',
+    FK.kbFactKey({ latteBucket: 'Look', subtype: 'early', text: 'x y z' }).startsWith('Look|early|'));
+  // A '-' anywhere but last in a character class silently becomes a range.
+  t("the '-' stays last in the class, so it is a literal and not a range",
+    S.includes("replace(/[^a-z0-9.%/<>≤≥↑↓+-]+/g,' ')"));
+}
+
+/* ── 10d-ter. v15.13: operator agreement on already-verified quotes ── */
+section('v15.13 — operator agreement');
+{
+  const src = 'Hold digoxin if the apical heart rate is < 60 beats per minute and notify the provider.';
+  const n = QM.kbNormForMatch(src), d = QM.kbDehyphNormForMatch(src);
+  const on = QM.kbNormForMatch(QM.kbCanonOperators(src)), od = QM.kbDehyphNormForMatch(QM.kbCanonOperators(src));
+  const faithful = 'Hold digoxin if the apical heart rate is < 60 beats per minute';
+  const inverted = 'Hold digoxin if the apical heart rate is > 60 beats per minute';
+  // THE PREMISE. If this ever starts failing, kbNormForMatch has changed and the whole
+  // additive argument for this check has to be re-derived rather than assumed.
+  t('the verbatim matcher genuinely cannot tell < from > (the reason this check exists)',
+    QM.kbQuoteInSource(faithful, n, d) === true && QM.kbQuoteInSource(inverted, n, d) === true);
+  t('operator agreement accepts the faithful quote', QM.kbQuoteOperatorsAgree(faithful, on, od) === true);
+  t('operator agreement rejects the inverted quote', QM.kbQuoteOperatorsAgree(inverted, on, od) === false);
+  t('a quote carrying no operator is never flagged',
+    QM.kbQuoteOperatorsAgree('notify the provider', on, od) === true);
+
+  const arrowSrc = 'Expect ↑ BUN and ↑ creatinine in prerenal azotemia with worsening oliguria.';
+  const an = QM.kbNormForMatch(QM.kbCanonOperators(arrowSrc));
+  const ad = QM.kbDehyphNormForMatch(QM.kbCanonOperators(arrowSrc));
+  t('the same arrows pass', QM.kbQuoteOperatorsAgree('Expect ↑ BUN and ↑ creatinine', an, ad) === true);
+  t('a reversed arrow is caught', QM.kbQuoteOperatorsAgree('Expect ↓ BUN and ↓ creatinine', an, ad) === false);
+  t('≤ against a ≥ source is caught',
+    QM.kbQuoteOperatorsAgree('maintain SpO2 ≥ 92 percent on room air',
+      QM.kbNormForMatch(QM.kbCanonOperators('maintain SpO2 ≤ 92 percent on room air at all times')), '') === false);
+
+  // The safety property: this can only ever ADD a finding beside a quote that already passed.
+  t('pass 1 reaches the operator check only after kbQuoteInSource has accepted the quote',
+    S.includes("if(!kbQuoteInSource(f.sourceQuote,srcNorm))dehyphSaved++;\n          if(!kbQuoteOperatorsAgree(f.sourceQuote,srcOpNorm,srcOpDehyph))noteOp(1,f);"));
+  t('pass 2 records an operator mismatch but does NOT discard on it (warn tier, measure first)',
+    S.includes('if(!kbQuoteOperatorsAgree(f.sourceQuote,srcOpNorm,srcOpDehyph))noteOp(2,f);') &&
+    !S.includes('noteOp(2,f);continue;'));
+  t('operator mismatches roll up separately from quote misses and from discards',
+    S.includes('opMismatch:stats.reduce((n,s)=>n+(s.opMismatch||0),0),') &&
+    S.includes('const opDetail=[];let opMismatch=0;'));
+  t('a non-zero count is surfaced without opening the Details pane',
+    S.includes('{diag.opMismatch>0&&<span'));
+  t('kbNormForMatch itself is untouched, so no existing quote changes verdict',
+    S.includes(String.raw`function kbNormForMatch(s){return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();}`));
+}
+
 /* ── 10e. v15.12: flashcard transcription (pass 1) ── */
 section('v15.12 — flashcard transcription');
 // Span runs from the image regex through the end of cardCompareRuns. The end anchor is
@@ -393,7 +457,7 @@ section('v15.12 — flashcard transcription');
 // silently passing every assertion below.
 const CARD = new Function(
   spanFrom('const CARD_IMAGE_RE', 'idsDisagree:new Set(runs.map(cardKey)).size>1};\n}') +
-  ';return {cardIsImage,cardKey,cardTranscriptToText,cardMergeFaces,cardCompareRuns,CARD_TRANSCRIBE_PROMPT};'
+  ';return {cardIsImage,cardFileId,cardKey,cardTranscriptToText,cardMergeFaces,cardChunkBlockers,cardChunkWarnings,cardCompareRuns,CARD_TRANSCRIBE_PROMPT};'
 )();
 
 t('image types are recognised, documents are not',
@@ -460,7 +524,85 @@ t('the transcription prompt requires symbols be preserved', /PRESERVE SYMBOLS EX
 t('the transcription prompt keeps an open enum for unknown headings', /"other"/.test(CARD.CARD_TRANSCRIBE_PROMPT));
 t('the transcription prompt demands a separate numerics list', /"numerics" must list EVERY number/.test(CARD.CARD_TRANSCRIBE_PROMPT));
 t('pass 2 never receives the image — cards enter the queue as text only',
-  S.includes('queue.push({file:{name:\'flashcards\'},chunk:{text:c.text,label:c.title,units:[]},depth:0});'));
+  S.includes("queue.push({file:{name:'flashcards · '+c.key},chunk:{text:c.text,") &&
+  !/queue\.push\(\{file:\{name:'flashcards[^\n]*inlineData/.test(S));
+
+/* ── v15.13: flashcard identity, provenance, and the build gate ── */
+section('v15.13 — flashcard trust boundary');
+// Transcripts were keyed on the basename while addFiles dedupes on name+size+lastModified,
+// so two photos sharing a basename both entered the file list and the second silently
+// overwrote the first's transcript.
+t('same-basename photos get distinct source identities',
+  CARD.cardFileId({ name: 'IMG_0001.jpg', size: 100, lastModified: 1 }) !==
+  CARD.cardFileId({ name: 'IMG_0001.jpg', size: 200, lastModified: 2 }));
+t('the same file always yields the same identity',
+  CARD.cardFileId({ name: 'a.jpg', size: 1, lastModified: 2 }) ===
+  CARD.cardFileId({ name: 'a.jpg', size: 1, lastModified: 2 }));
+t('transcripts are keyed on that identity, not on the basename',
+  S.includes('out[cardFileId(f)]={file:f.name,transcript:runs[0]') &&
+  S.includes('out[cardFileId(f)]={file:f.name,error:'));
+t('removing a source deletes its transcript and clears the review',
+  S.includes('setTranscripts(p=>{const n={...p};delete n[cardFileId(f)];return n;});setTxReviewed(false);'));
+t('the file-chip key matches the transcript key, so neither can collide alone',
+  S.includes('className="file-chip" key={cardFileId(f)}'));
+
+// faces.length was the only composition signal, so front+front cleared the "only one face"
+// warning — two DIFFERENT cards merged into one corrupt chunk.
+{
+  const pair = CARD.cardMergeFaces([cBack, cFront])[0];
+  t('a merged card reports its faces by kind, not just by count',
+    pair.fronts === 1 && pair.backs === 1);
+  t('a clean front+back pair has no blockers',
+    CARD.cardChunkBlockers(pair, 0).length === 0);
+  t('a back-only card is blocked — its facts would have no condition to attach to',
+    CARD.cardChunkBlockers(CARD.cardMergeFaces([cBack])[0], 0).length === 1);
+  const twoFronts = CARD.cardMergeFaces([cFront, { ...cFront, title: 'Something Else' }])[0];
+  t('front+front is blocked rather than silently merged',
+    twoFronts.fronts === 2 && CARD.cardChunkBlockers(twoFronts, 0).some(b => /two different cards/.test(b)));
+  t('an unreadable face is blocked',
+    CARD.cardChunkBlockers(CARD.cardMergeFaces([cFront, { ...cBack, overallLegibility: 'unreadable' }])[0], 0).length === 1);
+  t('numbers that changed between identical runs are blocked',
+    CARD.cardChunkBlockers(pair, 3).some(b => /changed between identical/.test(b)));
+  // Sound but incomplete: a front-only card still carries its condition name.
+  t('a front-only card warns but is NOT blocked',
+    CARD.cardChunkBlockers(CARD.cardMergeFaces([cFront])[0], 0).length === 0 &&
+    CARD.cardChunkWarnings(CARD.cardMergeFaces([cFront])[0]).length === 1);
+  t('an uncertain face warns but is not blocked',
+    CARD.cardChunkBlockers(CARD.cardMergeFaces([cFront, { ...cBack, overallLegibility: 'uncertain' }])[0], 0).length === 0);
+}
+
+// Provenance: a misread number has to be walkable back to the photo it came from.
+{
+  const withSrc = CARD.cardMergeFaces([
+    { ...cFront, _srcFile: 'IMG_0001.jpg' }, { ...cBack, _srcFile: 'IMG_0002.jpg' }])[0];
+  t('a merged card names every photo it came from',
+    withSrc.sources.length === 2 && withSrc.sources.includes('IMG_0001.jpg'));
+  t('sources de-duplicate when both faces came from one photo',
+    CARD.cardMergeFaces([{ ...cFront, _srcFile: 'a.jpg' }, { ...cBack, _srcFile: 'a.jpg' }])[0].sources.length === 1);
+  t('an untagged transcript yields no sources rather than undefined',
+    Array.isArray(CARD.cardMergeFaces([cFront])[0].sources));
+}
+t('a queued card carries its card number and its source photo(s) into the pointer',
+  S.includes("'flashcards · '+c.key") &&
+  S.includes("c.sources.length?' ['+c.sources.join(', ')+']':''"));
+t('only cards that clear the gate are queued',
+  S.includes('for(const c of cardGate.buildable){'));
+t('blocked cards are reported rather than dropped in silence',
+  S.includes("was NOT built: '+r.blockers.join('; ')") && S.includes('problems.push(msg)'));
+
+// The gate itself. Build was clickable mid-transcription and on unreviewed cards.
+t('Build is gated on transcription finishing and on an explicit review',
+  S.includes('const buildBlocked=busy||txBusy||!cfg.apiKey||!files.length||cardsNeedReview||nothingToBuild;') &&
+  S.includes('const cardsNeedReview=cardChunks.length>0&&!txReviewed;'));
+t('the disabled button says which condition is stopping it',
+  S.includes("cardsNeedReview?'Confirm the card numbers first'") &&
+  S.includes("cardChunks.length?'No card clears the gate':'Transcribe the cards first'"));
+t('a new transcription run clears a previous review',
+  S.includes("setTxBusy(true);setTxErr('');setTxReviewed(false);"));
+t('the review acknowledgement is recorded in the exported transcript',
+  S.includes('reviewed:txReviewed'));
+t('the panel and the queue read one partition, so they cannot disagree',
+  S.includes('return{rows,buildable:rows.filter(r=>!r.blockers.length).map(r=>r.card),blocked:rows.filter(r=>r.blockers.length)};'));
 t('card images are filtered out of the PDF/PPTX path', S.includes('for(const f of files.filter(x=>!cardIsImage(x))){'));
 
 /* ── 11. stage timing (pre-existing, pinned) ── */
