@@ -12,7 +12,7 @@
      v15.10 is measurement, not behavior. quoteMiss was a bare count, which could not answer the question the v16 build decision turns on: whether a failed quote is line-break hyphenation (fixable by normalizing the matcher, no vision needed) or column-major reading-order scrambling (which only seeing the page fixes). Misses are now retained and classified, kbTextQuality names which pages are sparse, an opt-in probe counts raster/vector/text ops per page, and the diagnostics panel exports to JSON. kbQuoteInSource is byte-identical: no fact's fate changed.
      v15.11 acts on what v15.10 measured. A real cardiovascular chapter produced 190 failed quotes: 83 line-break hyphenation/ligature, 107 column reading order, and zero 'partial' or 'absent' — not one fabricated quote in the run. De-hyphenation is therefore promoted into kbQuoteInSource as a strictly additive fallback (plain match first; the fallback can only turn a FAIL into a PASS), recovering the 83 without loosening anything. Reading-order failures are left alone by design: the fact is sound, only its proof fails. The same run exposed a reporting bug — pass-1 misses and pass-2 discards shared one rollup printed beneath the first-pass count, so a breakdown summing to 190 sat under a sentence saying 182. They now roll up separately.
      v15.12 adds flashcard ingestion. Photographs of printed cards have no text layer at all, so they take a two-pass path: pass 1 transcribes the image to structured verbatim text, pass 2 is the EXISTING frozen extractor reading that text. Because pass 2 reads text, kbQuoteInSource verifies its quotes with no new machinery — which is why none of the v16 spec's evidence states, routers or visual safety gates were needed. The transcript is therefore the trust boundary: a number misread in pass 1 is verified flawlessly against the wrong transcript by everything downstream, so transcripts are reviewed before use and every clinical number is surfaced for an eye check. Front and back pair on category + card number, because a Davis back face carries no condition name.
-     Full history: LATTE-v15-changelog.md · regression harness: latte-tests.js (611 assertions) · test-retest: neia-retest.js -->
+     Full history: LATTE-v15-changelog.md · regression harness: latte-tests.js (642 assertions) · test-retest: neia-retest.js -->
 <!-- v15.3: crossorigin added (SRI-ready — paste the verified sha384 integrity attrs from
      the changelog after a local hash check; applying unverified hashes would hard-block
      every script). DOMPurify 3.4.12 loads through a no-downgrade chain: cdnjs, then the
@@ -574,6 +574,29 @@ const _sleep=(ms,signal)=>new Promise((resolve,reject)=>{
   const timer=setTimeout(finish,ms);
   if(signal){onAbort=done(()=>reject(new DOMException('Aborted','AbortError')));signal.addEventListener('abort',onAbort,{once:true});}
 });
+// v15.13: how long to wait after a retryable failure. Named and lifted out of geminiRequest
+// so it can be exercised against real 429 bodies instead of only in production.
+//
+// The Retry-After branch had never once fired. The generativelanguage v1beta endpoint does
+// not send that header — it returns the wait inside the error BODY as a google.rpc.RetryInfo
+// detail ("retryDelay":"37s"). So every 429 fell through to blind exponential backoff, which
+// either over-waits or retries inside a still-closed per-minute window. The number was
+// already in hand: the caller parses `err` three lines earlier and then discards it. Free-tier
+// per-minute limits are the constraint this whole build is paced around (see the
+// AUDIT_POOL_WIDTH note), so honouring the figure the API actually supplies is not cosmetic.
+//
+// The server hint is a FLOOR, not a licence to retry sooner than our own curve would, so the
+// two are combined with max(). Capped at 60s so a pathological value cannot hang a run.
+function geminiRetryDelayMs(err,headers,attempt){
+  const exp=Math.pow(2,attempt+1)*1000+Math.random()*1000;
+  let ra=NaN;
+  try{ra=parseInt(headers&&headers.get?headers.get('retry-after'):NaN,10);}catch(e){}
+  const details=(err&&err.error&&err.error.details)||[];
+  const ri=Array.isArray(details)?details.find(d=>d&&/RetryInfo$/.test(String(d['@type']||''))):null;
+  const riSec=ri?parseFloat(String(ri.retryDelay||'').replace(/s$/,'')):NaN;
+  const hintSec=Number.isFinite(riSec)&&riSec>0?riSec:(Number.isFinite(ra)&&ra>0?ra:0);
+  return Math.max(hintSec?Math.min(hintSec,60)*1000:0,exp);
+}
 async function geminiRequest(apiKey,model,body,{signal,retries=2,onUpdate,onMeta,timeoutMs=600000}={}){
   body.safetySettings=SAFETY_SETTINGS;
   const streaming=typeof onUpdate==='function';
@@ -599,9 +622,7 @@ async function geminiRequest(apiKey,model,body,{signal,retries=2,onUpdate,onMeta
         const retryable=resp.status===429||resp.status===408||resp.status>=500;
         if(!retryable){const e=new Error(msg);e.isFatal=true;throw e;}
         if(attempt<retries){
-          const ra=parseInt(resp.headers.get('retry-after'),10);
-          const raMs=Number.isFinite(ra)&&ra>0?Math.min(ra,60)*1000:0;
-          await _sleep(Math.max(raMs,Math.pow(2,attempt+1)*1000+Math.random()*1000),signal);
+          await _sleep(geminiRetryDelayMs(err,resp.headers,attempt),signal);
           continue;
         }
         throw new Error(msg);
@@ -1428,17 +1449,44 @@ function kbOpenDB(){
     req.onerror=()=>reject(req.error||new Error('Could not open IndexedDB.'));
   });
 }
+// v15.13: one transaction runner, so every path settles AND closes.
+// Three defects, all in the same shape. kbLoadPersisted resolved inside req.onsuccess —
+// ahead of tx.oncomplete — and never called db.close() on the req.onerror path. And none of
+// the three handled tx.onabort, which is the one that matters: an aborted transaction left
+// the promise PENDING FOREVER. That is not a leak, it is a silent functional failure. App's
+// load effect awaits kbLoadPersisted, so it never reaches setPersistenceStatus('ready') or
+// 'fallback'; persistenceStatus stays 'loading'; and the save effect early-returns on
+// 'loading'. The Knowledge Base then quietly stops persisting for the rest of the session,
+// with no error anywhere, and the user finds out on reload.
+function kbRunTx(db,mode,body){
+  return new Promise((resolve,reject)=>{
+    let tx,result=null;
+    const settle=fn=>()=>{try{db.close();}catch(e){}fn();};
+    try{tx=db.transaction(KB_DB_STORE,mode);}
+    catch(e){try{db.close();}catch(e2){}return reject(e);}
+    tx.oncomplete=settle(()=>resolve(result));
+    tx.onerror=settle(()=>reject(tx.error||new Error('IndexedDB transaction failed.')));
+    tx.onabort=settle(()=>reject(tx.error||new Error('IndexedDB transaction aborted.')));
+    // A synchronous throw here (a non-cloneable value reaching put, a missing store) would
+    // otherwise escape before any handler is armed, leaving the promise pending.
+    try{body(tx.objectStore(KB_DB_STORE),v=>{result=v;});}
+    catch(e){try{tx.abort();}catch(e2){}}
+  });
+}
 async function kbLoadPersisted(){
   const db=await kbOpenDB();
-  return new Promise((resolve,reject)=>{const tx=db.transaction(KB_DB_STORE,'readonly');const req=tx.objectStore(KB_DB_STORE).get(KB_DB_KEY);req.onsuccess=()=>resolve(req.result||null);req.onerror=()=>reject(req.error);tx.oncomplete=()=>db.close();});
+  // Resolves on tx.oncomplete rather than req.onsuccess: the read is not settled until the
+  // transaction is, and resolving early let a caller open the next transaction against a
+  // connection this one had not finished with.
+  return kbRunTx(db,'readonly',(store,set)=>{const req=store.get(KB_DB_KEY);req.onsuccess=()=>set(req.result||null);});
 }
 async function kbSavePersisted(kb){
   const db=await kbOpenDB();
-  return new Promise((resolve,reject)=>{const tx=db.transaction(KB_DB_STORE,'readwrite');tx.objectStore(KB_DB_STORE).put(kb,KB_DB_KEY);tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>{db.close();reject(tx.error||new Error('IndexedDB write failed.'));};});
+  return kbRunTx(db,'readwrite',store=>{store.put(kb,KB_DB_KEY);});
 }
 async function kbDeletePersisted(){
   const db=await kbOpenDB();
-  return new Promise((resolve,reject)=>{const tx=db.transaction(KB_DB_STORE,'readwrite');tx.objectStore(KB_DB_STORE).delete(KB_DB_KEY);tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>{db.close();reject(tx.error);};});
+  return kbRunTx(db,'readwrite',store=>{store.delete(KB_DB_KEY);});
 }
 
 function validateLatteKnowledgeBase(kb){
@@ -1783,6 +1831,49 @@ function cardFileToBase64(file){
     r.readAsDataURL(file);
   });
 }
+// ── v15.13: bound the upload before it leaves the browser ────────────────────
+// A 12MP phone photo is roughly 7-11 MB once base64-encoded, against Gemini's ~20 MB
+// inline-data ceiling; a large HEIC exceeds it outright. That lands on the exact workflow
+// v15.12 exists for — photographing a Davis deck — as an HTTP 413 or a tab that spikes memory
+// on a phone.
+//
+// THE CONSTRAINT THAT SETS THE NUMBERS. This is an OCR path whose prompt says NEVER GUESS A
+// NUMBER, and the transcript is the trust boundary for everything downstream. An aggressive
+// resize would trade a 413 for the precise failure the two-pass design exists to prevent: a
+// digit that is still legible enough to be read, and read wrong. So nothing below the
+// threshold is touched at all, and above it the long edge lands at 3000px — still well over
+// the resolution a 3.5-inch card needs — at a quality that keeps small print crisp.
+//
+// Treat any edit to these three numbers as a CARD_TRANSCRIBE_PROMPT-class change and
+// re-measure with 2 runs per card. Legibility is the thing being traded here.
+const CARD_MAX_EDGE=3000, CARD_JPEG_QUALITY=0.92, CARD_RESIZE_ABOVE_BYTES=3*1024*1024;
+// Returns {mimeType,data,resized?} ready for inlineData. Falls back to the original bytes on
+// ANY failure, deliberately: HEIC decodes in Safari but not in Chrome, and passing the
+// original through to Gemini (which accepts image/heic) is strictly better than a canvas step
+// that throws. Every early return is a passthrough, never an error.
+async function cardFilePayload(file){
+  const ext=getExt(file&&file.name||''),mimeType=CARD_MIME[ext]||'image/jpeg';
+  const original=async()=>({mimeType,data:await cardFileToBase64(file)});
+  if(!file||!(file.size>CARD_RESIZE_ABOVE_BYTES))return original();
+  try{
+    if(typeof createImageBitmap!=='function'||typeof document==='undefined')return original();
+    const bmp=await createImageBitmap(file);
+    const ow=bmp.width,oh=bmp.height;                       // read BEFORE close(); a closed bitmap reports 0
+    const scale=Math.min(1,CARD_MAX_EDGE/Math.max(ow||1,oh||1));
+    if(!(scale<1)){try{bmp.close();}catch(e){}return original();}
+    const w=Math.max(1,Math.round(ow*scale)),h=Math.max(1,Math.round(oh*scale));
+    const cv=document.createElement('canvas');cv.width=w;cv.height=h;
+    const ctx=cv.getContext('2d');
+    if(!ctx){try{bmp.close();}catch(e){}return original();}
+    ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+    ctx.drawImage(bmp,0,0,w,h);
+    try{bmp.close();}catch(e){}
+    const url=cv.toDataURL('image/jpeg',CARD_JPEG_QUALITY);
+    const i=url.indexOf(',');
+    if(i<0||url.slice(0,15)!=='data:image/jpeg')return original();
+    return{mimeType:'image/jpeg',data:url.slice(i+1),resized:{from:ow+'x'+oh,to:w+'x'+h}};
+  }catch(e){return original();}
+}
 // NOT one of the 11 frozen constants. This is new surface and may be tuned freely — but
 // every rule below exists to stop the model doing what it otherwise does, which is tidy
 // the content up in transit. Loosen them only against measured output.
@@ -1842,10 +1933,12 @@ Return ONLY this JSON object, with no commentary:
 
 "numerics" must list EVERY number carrying clinical meaning — thresholds, doses, sizes, times, lab values — even though those numbers also appear inside the bullets. The duplication is deliberate: it is the list a human checks against the card by eye, and it is what the safety gate keys on.`;
 async function cardTranscribe(apiKey,model,level,file,opts){
-  const ext=getExt(file.name),mimeType=CARD_MIME[ext];
-  if(!mimeType)throw new Error('unsupported image type: '+ext);
-  const data=await cardFileToBase64(file);
-  const raw=await geminiRequest(apiKey,model,{contents:[{parts:[{inlineData:{mimeType,data}},{text:CARD_TRANSCRIBE_PROMPT}]}],
+  const ext=getExt(file.name);
+  if(!CARD_MIME[ext])throw new Error('unsupported image type: '+ext);
+  // v15.13: bounded payload, with the resize reported so the log can say it happened.
+  const payload=await cardFilePayload(file);
+  if(opts&&typeof opts.onPayload==='function'){try{opts.onPayload(payload);}catch(e){}}
+  const raw=await geminiRequest(apiKey,model,{contents:[{parts:[{inlineData:{mimeType:payload.mimeType,data:payload.data}},{text:CARD_TRANSCRIBE_PROMPT}]}],
     generationConfig:{responseMimeType:'application/json',maxOutputTokens:65536,thinkingConfig:{thinkingLevel:level}}},opts);
   const p=extractJSON(raw);
   if(!p||!Array.isArray(p.sections))throw new Error('response was not a card transcript');
@@ -2075,7 +2168,8 @@ function KnowledgeBaseBuilder(){
         addLog('Transcribing '+f.name+(txRuns>1?' ('+txRuns+' runs)':'')+'…','');
         const runs=[];let err='';
         for(let r=0;r<txRuns;r++){
-          try{runs.push(await cardTranscribe(cfg.apiKey,model,level,f,{signal:controller.signal,retries:1}));}
+          try{runs.push(await cardTranscribe(cfg.apiKey,model,level,f,{signal:controller.signal,retries:1,
+            onPayload:p=>{if(p.resized&&r===0)addLog('  ⓘ '+f.name+' resized '+p.resized.from+' → '+p.resized.to+' to stay under the request ceiling','');}}));}
           catch(e){if(e.name==='AbortError')throw e;err=e.message||String(e);}
         }
         if(!runs.length){out[cardFileId(f)]={file:f.name,error:err||'transcription failed'};addLog('✕ '+f.name+': '+err,'err');continue;}
@@ -2447,7 +2541,7 @@ function KnowledgeBaseBuilder(){
         </span>
       </label>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-        <div className="field-block"><label style={{fontSize:11}}>Chunk size (characters)</label><input type="number" min={6000} max={120000} step={1000} value={chunkChars} onChange={e=>setChunkChars(Math.max(6000,Number(e.target.value)||30000))}/><div style={{fontSize:9.5,color:'var(--text-dim)',marginTop:3}}>Smaller = more thorough per page, more calls. Oversized chunks split automatically on truncation.</div></div>
+        <div className="field-block"><label style={{fontSize:11}}>Chunk size (characters)</label><input type="number" min={6000} max={120000} step={1000} value={chunkChars} onChange={e=>setChunkChars(Math.max(6000,Math.min(120000,Number(e.target.value)||30000)))}/><div style={{fontSize:9.5,color:'var(--text-dim)',marginTop:3}}>Smaller = more thorough per page, more calls. Oversized chunks split automatically on truncation.</div></div>
         <div className="field-block"><label style={{fontSize:11}}>Overlap (pages/slides)</label><input type="number" min={0} max={5} step={1} value={overlapUnits} onChange={e=>setOverlapUnits(Math.max(0,Math.min(5,Number(e.target.value)||0)))}/><div style={{fontSize:9.5,color:'var(--text-dim)',marginTop:3}}>Carries trailing pages into the next chunk so content on a seam keeps its context. Duplicates are merged.</div></div>
       </div>
       <div style={{fontSize:10,color:'var(--accent)',marginTop:9}}>Extract: {cfg.forTool('knowledge').model} · {cfg.forTool('knowledge').level}{verifyPass?` — Audit: ${cfg.forTool('knowledgeAudit').model} · ${cfg.forTool('knowledgeAudit').level}`:''} <span style={{color:'var(--text-dim)'}}>({cfg.autoProfile?'auto profile':'sidebar toggle'})</span></div>
@@ -3941,7 +4035,16 @@ function nclexPairQA(qText,aText){
   return Object.keys(questions).map(Number).sort((a,b)=>a-b).map(num=>({number:num,question:questions[num]||'',answer:answers[num]||'',matched:!!answers[num]}));
 }
 
-function nclexBatchPairs(pairs,batchSize=8){const batches=[];for(let i=0;i<pairs.length;i+=batchSize)batches.push(pairs.slice(i,i+batchSize));return batches;}
+// v15.13: hard clamp on the stride, the same fix v15 made for nclexChunkText and missed
+// here. A cleared "Questions per batch" field yields Number('')===0, and i+=0 is an INFINITE
+// loop pushing empty arrays until the tab dies — taking all six tools' unsaved state with it,
+// since they share one mount. A typed letter yields NaN, where i+=NaN exits immediately and
+// silently produces ZERO batches, so the run reports success and extracts nothing. The input
+// is clamped too; this is the half that does not depend on caller discipline.
+function nclexBatchPairs(pairs,batchSize=8){
+  const n=Math.max(1,Math.floor(Number(batchSize)||8));
+  const batches=[];for(let i=0;i<pairs.length;i+=n)batches.push(pairs.slice(i,i+n));return batches;
+}
 function nclexPairsToText(pairs){return pairs.map(p=>{let s=`── Question #${p.number} ──\n${p.question}\n`;if(p.answer)s+=`\n── Answer #${p.number} ──\n${p.answer}\n`;return s;}).join('\n\n');}
 
 // Page range picker sub-component
@@ -4192,7 +4295,7 @@ function NCLEXExtractor(){
               <div style={{padding:8,background:'var(--bg-card)',borderRadius:6,border:'1px solid var(--border)'}}><PageRangeSection label="✅ Answer Pages" ranges={aRanges} onChange={setARanges} maxPages={pageCount}/></div>
             </div>
             <div style={{marginTop:8}}>
-              <div className="sb-field"><label>Questions per batch</label><input type="number" min={2} max={25} value={batchSize} onChange={e=>setBatchSize(Number(e.target.value))} style={{width:90}}/><span style={{fontSize:10,color:'var(--text-dim)',marginLeft:6}}>Lower = more reliable</span></div>
+              <div className="sb-field"><label>Questions per batch</label><input type="number" min={2} max={25} value={batchSize} onChange={e=>setBatchSize(Math.max(2,Math.min(25,Math.floor(Number(e.target.value))||8)))} style={{width:90}}/><span style={{fontSize:10,color:'var(--text-dim)',marginLeft:6}}>Lower = more reliable</span></div>
               <div style={{fontSize:10,color:'var(--accent-warm)',marginTop:6}}>Split mode processes one PDF per run — these page ranges describe a single file.</div>
             </div>
           </div>
@@ -5602,7 +5705,7 @@ GROUNDING ADAPTER — INPUT FORM ONLY:
         <div style={{fontSize:10,fontWeight:600,textTransform:'uppercase',letterSpacing:1,color:'var(--accent)',marginBottom:10}}>Batch Settings</div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:10}}>
           <div className="field-block" style={{margin:0}}><label>Total Questions</label>
-            <input type="number" min={5} max={200} step={5} value={targetCount} onChange={e=>setTargetCount(Math.max(5,parseInt(e.target.value)||50))}/></div>
+            <input type="number" min={5} max={200} step={5} value={targetCount} onChange={e=>setTargetCount(Math.max(5,Math.min(200,parseInt(e.target.value)||50)))}/></div>
           <div className="field-block" style={{margin:0}}><label>Questions per Batch</label>
             <select value={batchSize} onChange={e=>setBatchSize(parseInt(e.target.value))}>
               <option value={5}>5 — highest accuracy</option>
@@ -6793,21 +6896,34 @@ const AUDIT_POOL_WIDTH=2,AUDIT_RETRIES=3;
 // allowance quickly. Two lanes still overlap the waiting without spiking the rate.
 async function itemRunPool(items,width,worker,signal){
   const out=new Array(items.length);
-  let next=0;
-  const lanes=Array.from({length:Math.max(1,Math.min(width,items.length||1))},async()=>{
+  let next=0,fatal=null;
+  // v15.13: a lane that throws no longer leaves its sibling running.
+  // v15.8 attached partial results to the error, which fixed HALF the problem. The other
+  // half survived: Promise.all rejects the instant ONE lane throws, but the other lane is
+  // still inside its own for(;;) and keeps pulling items and issuing Gemini calls. That
+  // defeats the entire point of the QuotaStop path above — "stop after two quota failures
+  // rather than grinding through every remaining item, because each failure is SLOW" — since
+  // only one of the two lanes actually stopped. With AUDIT_RETRIES=3 and exponential backoff
+  // on every doomed call, the surviving lane can run for minutes after the user has been told
+  // the audit stopped. Worse, e.partial was snapshotted at rejection time, so anything that
+  // lane finished afterwards was written into out[] and never surfaced: paid for twice over.
+  //
+  // The fix is to stop SCHEDULING on the first fatal, then let the in-flight lanes settle
+  // before throwing. Lanes return rather than throw, so Promise.all always resolves and
+  // `fatal.partial` is complete — every result that finished is represented, including ones
+  // the sibling completed after the failure.
+  const lane=async()=>{
     for(;;){
+      if(fatal)return;
+      if(signal&&signal.aborted){fatal=fatal||Object.assign(new Error('Aborted'),{name:'AbortError'});return;}
       const i=next++;
       if(i>=items.length)return;
-      if(signal&&signal.aborted)throw Object.assign(new Error('Aborted'),{name:'AbortError'});
-      out[i]=await worker(items[i],i);
+      try{out[i]=await worker(items[i],i);}
+      catch(err){fatal=fatal||err;return;}
     }
-  });
-  // v15.8: when a lane throws (QuotaStop, abort), Promise.all rejects and the caller's
-  // `rows=await itemRunPool(...)` assignment never happens — so every verdict already
-  // returned by the other lanes was silently discarded, including calls the user had
-  // already paid for. Attach the partial results to the error so the caller can keep them.
-  try{await Promise.all(lanes);}
-  catch(e){e.partial=out.filter(Boolean);throw e;}
+  };
+  await Promise.all(Array.from({length:Math.max(1,Math.min(width,items.length||1))},lane));
+  if(fatal){fatal.partial=out.filter(Boolean);throw fatal;}
   return out;
 }
 // Flattened list of every question with its stage, so the audit and the repair pass agree
@@ -7023,12 +7139,22 @@ function CaseStudyGenerator(){
                   null,null,{responseMimeType:'application/json'});
                 const fixed=extractJSON(out);
                 if(!fixed||!fixed.stem||!Array.isArray(fixed.options))throw new Error('repair returned no usable item');
-                const st=(parsed.stages||[]).find(s=>Number(s.stageNumber)===Number(r.stageNumber));
+                // v15.13: rebuild rather than mutate. `parsed` is the SAME object already
+                // handed to setCaseStudy above, so st.questions[ix]=fixed wrote straight into
+                // React state. caseMd/casePrintMd are useMemo'd on [caseStudy,...] and cannot
+                // see a mutation; today they recompute only because setIssues happens to fire
+                // afterwards and happens to be in their dependency list. Reorder that, or add
+                // a React.memo, and the EXPORT silently ships pre-repair item text while the
+                // screen shows the repaired one. There is no await between the read and the
+                // write below, so the swap stays atomic across the pool's lanes.
+                const stIx=(parsed.stages||[]).findIndex(s=>Number(s.stageNumber)===Number(r.stageNumber));
+                const st=stIx>=0?parsed.stages[stIx]:null;
                 const ix=(st&&st.questions||[]).findIndex(x=>String(x.id||'')===String(r.q.id||''));
                 if(!st||ix<0)throw new Error('could not locate the item to replace');
                 const note=fixed.repairNote||'';
                 delete fixed.repairNote;
-                st.questions[ix]=fixed;
+                parsed={...parsed,stages:parsed.stages.map((s,si)=>si!==stIx?s:{...s,questions:s.questions.map((q,qi)=>qi!==ix?q:fixed)})};
+                setCaseStudy(parsed);
                 repaired++;
                 // Keep the panel honest: the old FAIL described text that no longer exists.
                 setAudit(p=>({...(p||{}),[r.key]:{status:'REPAIRED',criterion:r.criterion,

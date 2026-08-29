@@ -455,10 +455,13 @@ section('v15.12 — flashcard transcription');
 // Span runs from the image regex through the end of cardCompareRuns. The end anchor is
 // that function's last statement, so a truncated span fails extraction rather than
 // silently passing every assertion below.
-const CARD = new Function(
+// cardFilePayload reads the extension through the shared getExt, so it is extracted live
+// and injected rather than re-implemented here — a local copy would be free to drift.
+const getExtLive = new Function(spanFrom('function getExt', "toLowerCase();}") + ';return getExt;')();
+const CARD = new Function('getExt',
   spanFrom('const CARD_IMAGE_RE', 'idsDisagree:new Set(runs.map(cardKey)).size>1};\n}') +
-  ';return {cardIsImage,cardFileId,cardKey,cardTranscriptToText,cardMergeFaces,cardChunkBlockers,cardChunkWarnings,cardCompareRuns,CARD_TRANSCRIBE_PROMPT};'
-)();
+  ';return {cardIsImage,cardFileId,cardFilePayload,cardKey,cardTranscriptToText,cardMergeFaces,cardChunkBlockers,cardChunkWarnings,cardCompareRuns,CARD_TRANSCRIBE_PROMPT};'
+)(getExtLive);
 
 t('image types are recognised, documents are not',
   CARD.cardIsImage({ name: 'card.JPG' }) && CARD.cardIsImage({ name: 'a.heic' }) &&
@@ -603,6 +606,35 @@ t('the review acknowledgement is recorded in the exported transcript',
   S.includes('reviewed:txReviewed'));
 t('the panel and the queue read one partition, so they cannot disagree',
   S.includes('return{rows,buildable:rows.filter(r=>!r.blockers.length).map(r=>r.card),blocked:rows.filter(r=>r.blockers.length)};'));
+
+// v15.13: the upload payload. Every failure path must PASS THROUGH the original bytes rather
+// than error — HEIC decodes in Safari but not Chrome, and Gemini accepts image/heic directly.
+{
+  const mkFile = (name, size) => ({ name, size, type: 'image/jpeg', _b64: 'ORIGINALBYTES' });
+  global.FileReader = class {
+    readAsDataURL(f) { this.result = 'data:image/jpeg;base64,' + f._b64; if (this.onload) this.onload(); }
+  };
+  const withGlobals = async (bitmap, dataUrl, fn) => {
+    const hadCIB = 'createImageBitmap' in global, hadDoc = 'document' in global;
+    if (bitmap === 'throw') global.createImageBitmap = async () => { throw new Error('decode failed'); };
+    else if (bitmap) global.createImageBitmap = async () => ({ width: bitmap[0], height: bitmap[1], close() {} });
+    if (bitmap) global.document = { createElement: () => ({ width: 0, height: 0,
+      getContext: () => ({ drawImage() {}, imageSmoothingEnabled: false, imageSmoothingQuality: '' }),
+      toDataURL: () => dataUrl }) };
+    try { return await fn(); }
+    finally { if (!hadCIB) delete global.createImageBitmap; if (!hadDoc) delete global.document; }
+  };
+  global.__imgChecks = (async () => {
+    const small = await CARD.cardFilePayload(mkFile('c.jpg', 500 * 1024));
+    const noCanvas = await CARD.cardFilePayload(mkFile('c.jpg', 9 * 1024 * 1024));
+    const threw = await withGlobals('throw', null, () => CARD.cardFilePayload(mkFile('c.heic', 9 * 1024 * 1024)));
+    const big = await withGlobals([4032, 3024], 'data:image/jpeg;base64,SMALLER',
+      () => CARD.cardFilePayload(mkFile('c.jpg', 9 * 1024 * 1024)));
+    const alreadySmall = await withGlobals([1200, 900], 'data:image/jpeg;base64,SMALLER',
+      () => CARD.cardFilePayload(mkFile('c.jpg', 9 * 1024 * 1024)));
+    return { small, noCanvas, threw, big, alreadySmall };
+  })();
+}
 t('card images are filtered out of the PDF/PPTX path', S.includes('for(const f of files.filter(x=>!cardIsImage(x))){'));
 
 /* ── 11. stage timing (pre-existing, pinned) ── */
@@ -1212,6 +1244,29 @@ section('v15.6 — case audit pass');
       if (x === 3) throw Object.assign(new Error('API quota exhausted'), { name: 'QuotaStop' });
       return 'done' + x;
     }).then(() => 'resolved-unexpectedly', e => ({ name: e.name, partial: e.partial }));
+  }
+  // v15.13: a lane that throws must also stop the OTHER lane. Promise.all rejected on the
+  // first throw, but the sibling stayed inside its own for(;;) and kept pulling items and
+  // issuing calls — which defeated the QuotaStop path entirely, since only one of the two
+  // lanes ever actually stopped.
+  {
+    let started = 0;
+    global.__poolStopCheck = A.itemRunPool([0, 1, 2, 3, 4, 5, 6, 7], 2, async (x) => {
+      started++;
+      await new Promise(r => setTimeout(r, 5));
+      if (x === 1) throw Object.assign(new Error('API quota exhausted'), { name: 'QuotaStop' });
+      return 'ok' + x;
+    }).then(() => ({ started: -1 }), e => ({ started, partial: e.partial, name: e.name }));
+  }
+  // The converse: work in flight when the fatal lands must still reach the caller. e.partial
+  // was snapshotted at rejection time, so a slow sibling's result was written into out[] and
+  // never surfaced — paid for and discarded.
+  {
+    global.__poolLateCheck = A.itemRunPool([0, 1, 2, 3], 2, async (x) => {
+      await new Promise(r => setTimeout(r, x === 0 ? 40 : 1));
+      if (x === 1) throw Object.assign(new Error('q'), { name: 'QuotaStop' });
+      return 'ok' + x;
+    }).then(() => null, e => e.partial);
   }
 
   // ── Repair prompt (4f) ──
@@ -1892,6 +1947,73 @@ section('v15.7 — provenance + Anki lint');
     S.includes('Do NOT claim NEIA validates flashcards'));
 }
 
+/* ── v15.13 tier 2: input clamps, backoff, and storage lifecycle ── */
+section('v15.13 — clamps, backoff, storage');
+{
+  const bp = new Function(spanFrom('function nclexBatchPairs', '\n}') + ';return nclexBatchPairs;')();
+  const pairs = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  // A cleared number input yields Number('')===0 and i+=0 never terminates: an infinite loop
+  // pushing empty arrays until the tab dies, taking all six tools' unsaved state with it.
+  // A typed letter yields NaN, where i+=NaN exits at once and produces ZERO batches, so the
+  // run reports success and extracts nothing.
+  for (const bad of [0, NaN, '', null, -3, 'abc', undefined]) {
+    const r = bp(pairs, bad);
+    t('nclexBatchPairs terminates and covers every pair for batchSize=' + JSON.stringify(bad),
+      Array.isArray(r) && r.length > 0 && r.flat().length === pairs.length);
+  }
+  t('a sane batch size is unaffected', bp(pairs, 3).length === 4 && bp(pairs, 8).length === 2);
+  t('the batch-size input is clamped at both ends, not just the floor',
+    S.includes('setBatchSize(Math.max(2,Math.min(25,Math.floor(Number(e.target.value))||8)))'));
+  // numBatches = ceil(targetCount/batchSize), so a floor-only clamp let one keystroke
+  // schedule ~99,999 generation calls.
+  t('targetCount has the ceiling its own markup already declares',
+    S.includes('setTargetCount(Math.max(5,Math.min(200,parseInt(e.target.value)||50)))'));
+  t('chunkChars has the ceiling its own markup already declares',
+    S.includes('setChunkChars(Math.max(6000,Math.min(120000,Number(e.target.value)||30000)))'));
+}
+{
+  const RD = new Function(spanFrom('function geminiRetryDelayMs', 'return Math.max(hintSec?Math.min(hintSec,60)*1000:0,exp);\n}') + ';return geminiRetryDelayMs;')();
+  const hdr = v => ({ get: () => v });
+  // The v1beta endpoint does not send Retry-After; it returns the wait as a
+  // google.rpc.RetryInfo detail in the error body, which the old code parsed and discarded.
+  const body37 = { error: { details: [{ '@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay: '37s' }] } };
+  t('a RetryInfo detail is honoured', RD(body37, hdr(null), 0) === 37000);
+  t('a Retry-After header still works when present', RD({}, hdr('12'), 0) === 12000);
+  t('RetryInfo wins over the header when both are present', RD(body37, hdr('2'), 0) === 37000);
+  t('with no hint at all it falls back to the exponential curve',
+    RD({}, hdr(null), 0) >= 2000 && RD({}, hdr(null), 0) < 3000);
+  // A hint is a floor for how long to wait, never a licence to retry sooner than our curve.
+  t('a short hint never shortens the backoff below the curve',
+    RD({ error: { details: [{ '@type': 'google.rpc.RetryInfo', retryDelay: '1s' }] } }, hdr(null), 3) > 8000);
+  t('a pathological hint is capped at 60s',
+    RD({ error: { details: [{ '@type': 'google.rpc.RetryInfo', retryDelay: '99999s' }] } }, hdr(null), 0) === 60000);
+  t('a malformed body cannot throw',
+    typeof RD(null, null, 0) === 'number' && typeof RD({ error: { details: 'nope' } }, hdr(null), 0) === 'number');
+}
+{
+  // Fake IDB. The real failure mode is a transaction that ABORTS: no handler fired at all,
+  // so the promise stayed pending forever.
+  const IDB = new Function('KB_DB_STORE', spanFrom('function kbRunTx', '\n  });\n}') + ';return {kbRunTx};')('knowledge');
+  const mk = which => {
+    const stats = { closed: 0 };
+    const store = { get: () => ({}), put() {}, delete() {} };
+    const tx = { objectStore: () => store, error: new Error('boom') };
+    const db = { close() { stats.closed++; }, transaction() { setTimeout(() => { const h = tx['on' + which]; if (h) h(); }, 0); return tx; } };
+    return { db, stats };
+  };
+  global.__idbChecks = (async () => {
+    const out = {};
+    for (const w of ['complete', 'error', 'abort']) {
+      const { db, stats } = mk(w);
+      const r = await IDB.kbRunTx(db, 'readonly', () => {}).then(() => 'resolved', e => 'rejected:' + e.message);
+      out[w] = { r, closed: stats.closed };
+    }
+    return out;
+  })();
+  t('all three storage helpers route through one transaction runner',
+    S.split('return kbRunTx(db,').length - 1 === 3);
+}
+
 (async () => {
   const { r, peak, order } = await global.__poolCheck;
   t('pool returns results in input order, not completion order', r.join(',') === '0,2,4,6,8,10,12,14,16');
@@ -1913,8 +2035,52 @@ section('v15.7 — provenance + Anki lint');
   // !caseStudy and no per-item verdict can render while the audit is running.
   t('the case is published before the audit runs',
     S.indexOf('setCaseStudy(parsed);') < S.indexOf('if(runAudit&&errCount===0){'));
-  t('the case is published exactly once',
-    S.split('setCaseStudy(parsed);').length - 1 === 1);
+  // v15.13: a SECOND publish is now correct and required. The repair rebuilds the case
+  // immutably rather than mutating React state, so the new object has to be handed back or
+  // the memoized exports keep serving pre-repair text. Exactly two: the publish before the
+  // audit, and the republish inside the repair worker.
+  t('the case is published twice: once up front, once per successful repair',
+    S.split('setCaseStudy(parsed);').length - 1 === 2);
+  t('the second publish is inside the repair path, after the audit gate',
+    S.indexOf('setCaseStudy(parsed);', S.indexOf('if(runAudit&&errCount===0){')) > 0);
+  t('the repair rebuilds the case instead of writing into React state',
+    !S.includes('st.questions[ix]=fixed;') && S.includes('parsed={...parsed,stages:parsed.stages.map('));
+
+  {
+    const im = await global.__imgChecks;
+    t('a small photo is passed through untouched',
+      im.small.data === 'ORIGINALBYTES' && im.small.mimeType === 'image/jpeg' && !im.small.resized);
+    t('no canvas available falls back to the original bytes rather than erroring',
+      im.noCanvas.data === 'ORIGINALBYTES' && !im.noCanvas.resized);
+    // HEIC: Chrome cannot decode it, and Gemini accepts it directly. A throw here must never
+    // become a failed transcription.
+    t('a decode failure falls back to the original bytes',
+      im.threw.data === 'ORIGINALBYTES' && im.threw.mimeType === 'image/heic');
+    t('an oversized photo is downscaled on its long edge and re-encoded as JPEG',
+      im.big.data === 'SMALLER' && im.big.mimeType === 'image/jpeg' &&
+      im.big.resized.from === '4032x3024' && im.big.resized.to === '3000x2250');
+    t('a large FILE whose pixels are already small is not re-encoded',
+      im.alreadySmall.data === 'ORIGINALBYTES' && !im.alreadySmall.resized);
+  }
+  {
+    const s = await global.__poolStopCheck;
+    t('a fatal stops the sibling lane from scheduling more work',
+      s.name === 'QuotaStop' && s.started >= 2 && s.started <= 4);
+    const late = await global.__poolLateCheck;
+    t('a result finishing after the fatal still reaches the caller',
+      Array.isArray(late) && late.includes('ok0'));
+  }
+  {
+    const idb = await global.__idbChecks;
+    t('a completed transaction resolves and closes the connection',
+      idb.complete.r === 'resolved' && idb.complete.closed === 1);
+    t('a failed transaction rejects and still closes the connection',
+      /^rejected/.test(idb.error.r) && idb.error.closed === 1);
+    // THE one that mattered: an unhandled onabort left the promise pending forever, which
+    // pinned persistenceStatus on 'loading' and silently disabled every later KB save.
+    t('an ABORTED transaction rejects rather than hanging forever',
+      /^rejected/.test(idb.abort.r) && idb.abort.closed === 1);
+  }
   t('the misleading "cannot leave a stale verdict" claim is gone',
     !S.includes('so a repaired case cannot leave a stale verdict on screen'));
 
