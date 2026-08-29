@@ -4,14 +4,15 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>LATTE Study Suite</title>
-<!-- v15.11 (2026-08-28): v15 series — crash/PPTX/CVE fixes, DOMPurify no-downgrade chain, KB replace guards, layout-aware PDF extraction + scanned-file detection, SRI integrity pins on every CDN script.
+<!-- v15.12 (2026-08-29): v15 series — crash/PPTX/CVE fixes, DOMPurify no-downgrade chain, KB replace guards, layout-aware PDF extraction + scanned-file detection, SRI integrity pins on every CDN script.
      v15.6 added NEIA-derived item quality to the Case Study Generator: terminology linting (warn), `instantiated` value provenance with numeric entailment at ERROR tier, deterministic MCQ heuristics, operationalized difficulty, and an independent per-item audit pass whose auditor sees only what the student sees.
      v15.7 extends that to the NCLEX Generator: `validateNCLEXWorksheet` checks the worksheet's self-reported DISTRIBUTION against what it actually produced, the audit profile is now a single tool-agnostic `itemAudit` row, worksheet MCQs route through the same auditor and repair path, artifacts carry a provenance stamp naming the configuration that made them, and Anki cards are linted for error-prone dose abbreviations.
      v15.8 is the first release driven by real usage rather than fixtures: fact coverage had been structurally always zero since v15 (the adapter cites fact IDs in PART 1, the prompt cites C-numbers in PART 4, and the scan counted the wrong token in Parts 3/4), a malformed DISTRIBUTION line silently disabled its own self-report check, and a repaired item kept showing its pre-repair verdict. The item audit now defaults to Flash and paces itself for free-tier limits. The audit gate's reliability is measured, not assumed — a full test-retest produced zero verdict flips.
      v15.9 is a correctness release driven entirely by real runs and a two-reviewer audit: the worksheet repair splice no longer expands $-sequences in model text, a quota stop no longer discards verdicts already paid for, ordering-step lists no longer destroy answer-key parsing, comma-grouped and trailing-zero values compare correctly, and both generators now size themselves to the facts they actually have instead of asking the model to invent the difference. Rationales may reference values the case itself presents as validated data.
      v15.10 is measurement, not behavior. quoteMiss was a bare count, which could not answer the question the v16 build decision turns on: whether a failed quote is line-break hyphenation (fixable by normalizing the matcher, no vision needed) or column-major reading-order scrambling (which only seeing the page fixes). Misses are now retained and classified, kbTextQuality names which pages are sparse, an opt-in probe counts raster/vector/text ops per page, and the diagnostics panel exports to JSON. kbQuoteInSource is byte-identical: no fact's fate changed.
      v15.11 acts on what v15.10 measured. A real cardiovascular chapter produced 190 failed quotes: 83 line-break hyphenation/ligature, 107 column reading order, and zero 'partial' or 'absent' — not one fabricated quote in the run. De-hyphenation is therefore promoted into kbQuoteInSource as a strictly additive fallback (plain match first; the fallback can only turn a FAIL into a PASS), recovering the 83 without loosening anything. Reading-order failures are left alone by design: the fact is sound, only its proof fails. The same run exposed a reporting bug — pass-1 misses and pass-2 discards shared one rollup printed beneath the first-pass count, so a breakdown summing to 190 sat under a sentence saying 182. They now roll up separately.
-     Full history: LATTE-v15-changelog.md · regression harness: latte-tests.js (547 assertions) · test-retest: neia-retest.js -->
+     v15.12 adds flashcard ingestion. Photographs of printed cards have no text layer at all, so they take a two-pass path: pass 1 transcribes the image to structured verbatim text, pass 2 is the EXISTING frozen extractor reading that text. Because pass 2 reads text, kbQuoteInSource verifies its quotes with no new machinery — which is why none of the v16 spec's evidence states, routers or visual safety gates were needed. The transcript is therefore the trust boundary: a number misread in pass 1 is verified flawlessly against the wrong transcript by everything downstream, so transcripts are reviewed before use and every clinical number is surfaced for an eye check. Front and back pair on category + card number, because a Davis back face carries no condition name.
+     Full history: LATTE-v15-changelog.md · regression harness: latte-tests.js (568 assertions) · test-retest: neia-retest.js -->
 <!-- v15.3: crossorigin added (SRI-ready — paste the verified sha384 integrity attrs from
      the changelog after a local hash check; applying unverified hashes would hard-block
      every script). DOMPurify 3.4.12 loads through a no-downgrade chain: cdnjs, then the
@@ -340,6 +341,10 @@ const {useState,useRef,useCallback,useEffect,useMemo,createContext,useContext}=R
 const TOOL_PROFILE_DEFAULTS={
   knowledge:{m:'flash',lv:'medium'},      // extraction — completeness-critical; pending A/B
   knowledgeAudit:{m:'flash',lv:'medium'}, // omission audit — comparison task
+  // v15.12: reading printed text off a photograph is transcription, not reasoning. Low
+  // thinking, and Flash — the constraint is legibility, which more deliberation does not
+  // improve. Raise it only if measured output drifts between identical runs.
+  cardTranscribe:{m:'flash',lv:'low'},    // flashcard photo -> verbatim transcript
   priorityHarvest:{m:'flash',lv:'low'},   // stage-1 inventory — same default v14 hardcoded
   priority:{m:'flash',lv:'medium'},       // stage-2 R1–R9 cascade, needs rule evaluation
   anki:{m:'flash',lv:'low'},              // transformation of already-atomized facts
@@ -361,6 +366,7 @@ const TOOL_PROFILE_DEFAULTS={
 const PROFILE_ROWS=[
   {id:'knowledge',label:'Knowledge · extract'},
   {id:'knowledgeAudit',label:'Knowledge · audit'},
+  {id:'cardTranscribe',label:'Knowledge · card OCR'},
   {id:'priorityHarvest',label:'Priority · harvest'},
   {id:'priority',label:'Priority · synthesis'},
   {id:'anki',label:'Anki'},
@@ -1691,6 +1697,163 @@ function kbCompositionSummary(units){
   return{medianPath,medianRaster,pages:withComp.map(u=>({n:u.n,raster:u.composition.raster,path:u.composition.path,paint:u.composition.paint,text:u.composition.text,
     excessPath:u.composition.path-medianPath,excessRaster:u.composition.raster-medianRaster}))};
 }
+// ── v15.12: flashcard ingestion, pass 1 of 2 ────────────────────────────────
+// Davis-style flashcards arrive as PHOTOGRAPHS of physical cards: rotated, mildly
+// keystoned, shot on patterned backgrounds. There is no text layer to extract, so the
+// pipeline is split in two:
+//   pass 1  image  -> structured transcript, verbatim, no interpretation   (this block)
+//   pass 2  transcript -> LATTE facts, via the EXISTING frozen extractor   (unchanged)
+//
+// The split is the whole design. Because pass 2 never sees the image, the transcript is
+// the artifact everything downstream grounds against — kbQuoteInSource verifies quotes
+// against transcript text exactly as it does against PDF text, so no new evidence model
+// is needed. It also means iterating on extraction costs zero image calls.
+//
+// The cost of that split, stated plainly: THE TRANSCRIPT IS THE TRUST BOUNDARY. If pass 1
+// misreads "small bowel >3 cm" as ">8 cm", pass 2 grounds against the wrong transcript
+// flawlessly and every downstream check agrees. Nothing after pass 1 can catch it. That is
+// why the transcript is shown for review, why numerics are pulled into their own list, and
+// why running twice and diffing is offered rather than buried.
+const CARD_IMAGE_RE=/\.(jpe?g|png|webp|heic|heif)$/i;
+const CARD_MIME={jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',webp:'image/webp',heic:'image/heic',heif:'image/heif'};
+function cardIsImage(f){return !!f&&CARD_IMAGE_RE.test(f.name||'');}
+// FileReader rather than arrayBuffer+btoa: btoa on a multi-megabyte photo builds a huge
+// intermediate string and blows the call stack via String.fromCharCode(...chunk).
+function cardFileToBase64(file){
+  return new Promise((resolve,reject)=>{
+    const r=new FileReader();
+    r.onerror=()=>reject(new Error('could not read '+file.name));
+    r.onload=()=>{const s=String(r.result||'');const i=s.indexOf(',');resolve(i<0?s:s.slice(i+1));};
+    r.readAsDataURL(file);
+  });
+}
+// NOT one of the 11 frozen constants. This is new surface and may be tuned freely — but
+// every rule below exists to stop the model doing what it otherwise does, which is tidy
+// the content up in transit. Loosen them only against measured output.
+const CARD_TRANSCRIBE_PROMPT=`You are transcribing ONE face of a printed nursing flashcard from a photograph.
+
+Your ONLY job is to reproduce what is printed. You are not summarizing, teaching, correcting, or organizing. A later step does all of that, and it will only ever see your output — never this image. If you improve the wording here, the improvement becomes indistinguishable from the source and nobody downstream can catch it.
+
+ORIENTATION
+The photograph may be rotated by any amount, shot at an angle, or sit on a patterned background. Read the card in whatever orientation it appears. Ignore everything outside the card's edges.
+
+ABSOLUTE RULES
+1. VERBATIM. Reproduce the printed wording exactly, including punctuation and capitalization. Do not rephrase, condense, join, or split.
+2. DO NOT EXPAND ABBREVIATIONS. "NGT" stays "NGT". "F and E" stays "F and E". "H&H" stays "H&H". Never write the expansion, not even in parentheses.
+3. PRESERVE SYMBOLS EXACTLY. Arrows carry clinical meaning: an up arrow before a lab value means "increased", and dropping it silently reverses the fact. Reproduce every arrow, inequality, degree sign, and unit exactly as printed.
+4. NEVER GUESS A NUMBER. If any digit, unit, or inequality is not certain, mark it unreadable rather than reporting your best guess. A missing number is recoverable; a wrong number is not.
+5. NO OUTSIDE KNOWLEDGE. If the card says something you believe is incomplete or outdated, transcribe it as printed anyway. Do not add what you know should be there.
+6. ONE PRINTED BULLET = ONE ARRAY ENTRY. Do not merge bullets, and do not break one bullet into several.
+
+SECTION KEYS
+Use these keys where the printed heading matches. Headings vary between cards and editions, so ALWAYS also record the heading exactly as printed.
+  pathophysiology | assessmentAndDiagnosticFindings | complications
+  medicalCareAndSurgicalTreatment | keepInMind | makeTheConnection
+  clue          (the front's cue or clue block, whatever it is titled)
+  other         (ANY heading that does not clearly match the above)
+Never force a heading into a key that does not fit. "other" plus the verbatim heading is always correct and always better than a wrong key.
+
+LEGIBILITY
+Report legibility per section: "clean", "uncertain", or "unreadable". Use "uncertain" whenever glare, blur, curvature, or the angle of the shot leaves you less than fully confident about any character.
+
+Return ONLY this JSON object, with no commentary:
+
+{
+  "face": "front" or "back",
+  "category": "the running header, verbatim",
+  "cardNumber": "the printed card number, as a string",
+  "title": "front only; the condition name, verbatim; null on a back face",
+  "pronunciation": "front only; the parenthesized pronunciation, verbatim, or null",
+  "sections": [
+    {
+      "key": "one of the keys above",
+      "heading": "the heading exactly as printed",
+      "bullets": ["one entry per printed bullet, verbatim"],
+      "legibility": "clean or uncertain or unreadable"
+    }
+  ],
+  "numerics": [
+    {
+      "value": "the number exactly as printed, with unit and any inequality",
+      "context": "the few printed words it modifies",
+      "legibility": "clean or uncertain or unreadable"
+    }
+  ],
+  "symbols": ["every non-ASCII symbol appearing on the card"],
+  "unreadable": ["a short description of each thing you could not read"],
+  "overallLegibility": "clean or uncertain or unreadable"
+}
+
+"numerics" must list EVERY number carrying clinical meaning — thresholds, doses, sizes, times, lab values — even though those numbers also appear inside the bullets. The duplication is deliberate: it is the list a human checks against the card by eye, and it is what the safety gate keys on.`;
+async function cardTranscribe(apiKey,model,level,file,opts){
+  const ext=getExt(file.name),mimeType=CARD_MIME[ext];
+  if(!mimeType)throw new Error('unsupported image type: '+ext);
+  const data=await cardFileToBase64(file);
+  const raw=await geminiRequest(apiKey,model,{contents:[{parts:[{inlineData:{mimeType,data}},{text:CARD_TRANSCRIBE_PROMPT}]}],
+    generationConfig:{responseMimeType:'application/json',maxOutputTokens:65536,thinkingConfig:{thinkingLevel:level}}},opts);
+  const p=extractJSON(raw);
+  if(!p||!Array.isArray(p.sections))throw new Error('response was not a card transcript');
+  return p;
+}
+// Pairing key. A BACK face does not carry the condition name — only the running header and
+// the card number — so a back transcribed alone yields facts with nothing to attach them
+// to. Front and back must be merged before extraction, and this is the join.
+function cardKey(t){return String((t&&t.category)||'?').trim()+' #'+String((t&&t.cardNumber)||'?').trim();}
+// Render a transcript to plain text for pass 2. Deliberately flat: kbQuoteInSource needs
+// each bullet to survive as a contiguous, quotable run of characters.
+//
+// Known and accepted: kbNormForMatch collapses the newlines, so a quote spanning two
+// ADJACENT bullets also verifies. That is not new and not specific to cards — consecutive
+// lines of a PDF have always behaved the same way, because the matcher has never been
+// line-aware. Fixing it would mean changing kbNormForMatch, which would move which quotes
+// pass on every existing source. Out of scope here; noted so it is not mistaken for a
+// property cards introduced.
+function cardTranscriptToText(t){
+  if(!t)return '';
+  const L=[];
+  if(t.title)L.push(String(t.title)+(t.pronunciation?' ('+t.pronunciation+')':''));
+  for(const s of t.sections||[]){
+    L.push('');L.push(String(s.heading||s.key||'').trim());
+    for(const b of s.bullets||[])if(String(b||'').trim())L.push(String(b).trim());
+  }
+  return L.join('\n').trim();
+}
+// Merge every transcribed face of one card into a single source chunk, front first so the
+// condition name leads.
+function cardMergeFaces(transcripts){
+  const byKey=new Map();
+  for(const t of transcripts||[]){if(!t)continue;const k=cardKey(t);if(!byKey.has(k))byKey.set(k,[]);byKey.get(k).push(t);}
+  return [...byKey.entries()].map(([key,faces])=>{
+    const ordered=[...faces].sort((a,b)=>(a.face==='front'?0:1)-(b.face==='front'?0:1));
+    const title=(ordered.find(f=>f.title)||{}).title||key;
+    return{key,title,faces:ordered.map(f=>f.face||'?'),
+      text:'--- CARD: '+key+' ---\n'+ordered.map(cardTranscriptToText).filter(Boolean).join('\n\n'),
+      numerics:ordered.flatMap(f=>f.numerics||[]),
+      legibility:ordered.some(f=>f.overallLegibility==='unreadable')?'unreadable'
+        :ordered.some(f=>f.overallLegibility==='uncertain')?'uncertain':'clean'};
+  });
+}
+// Self-agreement across identical runs. A field that changes between two identical calls
+// cannot be trusted whatever it says. Numerics are diffed separately because they are the
+// ones that turn a study aid into a wrong dose.
+//
+// This is NOT accuracy: a model can misread the same digit identically every time, and
+// this check will call that stable. It narrows what a human has to eyeball; it does not
+// replace the eyeballing.
+function cardCompareRuns(runs){
+  const bul=t=>(t.sections||[]).flatMap(s=>(s.bullets||[]).map(b=>String(s.key||'')+' :: '+String(b||'')));
+  const num=t=>(t.numerics||[]).map(n=>String(n.value||'').trim()+' ('+String(n.context||'').trim()+')');
+  const B=runs.map(bul),N=runs.map(num);
+  const allB=[...new Set(B.flat())],allN=[...new Set(N.flat())];
+  return{runs:runs.length,
+    bulletCounts:B.map(x=>x.length),
+    bulletsUnstable:allB.filter(b=>!B.every(s=>s.includes(b))),
+    numericCounts:N.map(x=>x.length),
+    numericsUnstable:allN.filter(n=>!N.every(s=>s.includes(n))),
+    numericsAgreed:allN.filter(n=>N.every(s=>s.includes(n))),
+    facesDisagree:new Set(runs.map(r=>r.face)).size>1,
+    idsDisagree:new Set(runs.map(cardKey)).size>1};
+}
 
 // Compact, inspectable fact rows for one condition. Every row's ID is a FactTag, so any
 // fact opens the read-only inspector with its verbatim anchor and source pointer.
@@ -1740,6 +1903,13 @@ function KnowledgeBaseBuilder(){
   const [logs,setLogs]=useState([]);
   const [showDiag,setShowDiag]=useState(false);
   const [probeComposition,setProbeComposition]=useState(false);
+  // v15.12: card transcripts are kept in component state keyed by filename, NOT written
+  // into the Knowledge Base. They are pass-1 output awaiting review.
+  const [transcripts,setTranscripts]=useState({});
+  const [txBusy,setTxBusy]=useState(false);
+  const [txRuns,setTxRuns]=useState(1);
+  const [txErr,setTxErr]=useState('');
+  const txAbortRef=useRef(null);
   const [kbOutcomes,setKbOutcomes]=useState('');
   const [kbPoints,setKbPoints]=useState('');
   const [kbExtra,setKbExtra]=useState('');
@@ -1752,7 +1922,10 @@ function KnowledgeBaseBuilder(){
     const conds=K.knowledgeBase.conditions||[];
     if(conds.length&&!conds.some(c=>c.id===selected))setSelected(conds[0].id);
   },[K.knowledgeBase,selected]);
-  const addFiles=fl=>setFiles(p=>[...p,...Array.from(fl).filter(f=>/\.(pdf|pptx)$/i.test(f.name)).filter(f=>!p.some(x=>x.name===f.name&&x.size===f.size&&x.lastModified===f.lastModified))]);
+  // v15.12: flashcard photos join PDFs and decks as a source type. They take a different
+  // path — transcription first, then the same extractor — so they are filtered apart below
+  // rather than handed to kbBuildSourceChunks, which would throw on them.
+  const addFiles=fl=>setFiles(p=>[...p,...Array.from(fl).filter(f=>/\.(pdf|pptx|jpe?g|png|webp|heic|heif)$/i.test(f.name)).filter(f=>!p.some(x=>x.name===f.name&&x.size===f.size&&x.lastModified===f.lastModified))]);
   const importJSON=async file=>{
     if(!kbConfirmReplace('Importing this file'))return;
     try{
@@ -1783,6 +1956,46 @@ function KnowledgeBaseBuilder(){
     const nFacts=K.knowledgeBase.conditions.reduce((n,c)=>n+((c.facts||[]).length),0);
     return window.confirm(action+' will REPLACE the current Knowledge Base ('+conds+' condition'+(conds!==1?'s':'')+', '+nFacts+' fact'+(nFacts!==1?'s':'')+').\n\nExport it first if you want to keep it. Continue?');
   };
+  // v15.12: hoisted out of build() — pass 1 logs to the same panel, and two copies would
+  // drift. Identical behaviour, wider scope.
+  const addLog=(m,t='')=>setLogs(p=>[...p.slice(-200),{m,t,ts:new Date().toLocaleTimeString()}]);
+  // v15.12 pass 1. Deliberately a separate button from Build: transcription is the trust
+  // boundary for everything downstream, so it gets its own step with its own review, rather
+  // than disappearing inside a build that reports only fact counts.
+  const transcribeCards=async()=>{
+    const imgs=files.filter(cardIsImage);
+    if(!cfg.apiKey||!imgs.length)return;
+    setTxBusy(true);setTxErr('');
+    const controller=new AbortController();txAbortRef.current=controller;
+    const {model,level}=cfg.forTool('cardTranscribe');
+    const out={...transcripts};
+    try{
+      for(const f of imgs){
+        if(controller.signal.aborted)throw new DOMException('Aborted','AbortError');
+        addLog('Transcribing '+f.name+(txRuns>1?' ('+txRuns+' runs)':'')+'…','');
+        const runs=[];let err='';
+        for(let r=0;r<txRuns;r++){
+          try{runs.push(await cardTranscribe(cfg.apiKey,model,level,f,{signal:controller.signal,retries:1}));}
+          catch(e){if(e.name==='AbortError')throw e;err=e.message||String(e);}
+        }
+        if(!runs.length){out[f.name]={file:f.name,error:err||'transcription failed'};addLog('✕ '+f.name+': '+err,'err');continue;}
+        const agreement=runs.length>1?cardCompareRuns(runs):null;
+        out[f.name]={file:f.name,transcript:runs[0],runs,agreement,error:err||''};
+        const t=runs[0];
+        addLog('✓ '+f.name+' — '+cardKey(t)+' ('+(t.face||'?')+'), '+(t.sections||[]).length+' section(s), '+((t.numerics||[]).length)+' number(s), legibility '+(t.overallLegibility||'?'),
+          t.overallLegibility==='clean'?'ok':'warn');
+        if(agreement&&agreement.numericsUnstable.length)addLog('  ⚠ '+agreement.numericsUnstable.length+' number(s) changed between identical runs — do not trust them','err');
+        setTranscripts({...out});
+      }
+    }catch(e){if(e.name==='AbortError')setTxErr('Transcription cancelled. Completed cards were kept.');else setTxErr(e.message||String(e));}
+    finally{txAbortRef.current=null;setTxBusy(false);}
+  };
+  const cardChunks=useMemo(()=>cardMergeFaces(Object.values(transcripts).map(x=>x&&x.transcript).filter(Boolean)),[transcripts]);
+  const exportTranscripts=()=>{
+    const payload={kind:'latte-card-transcripts',schemaVersion:1,exportedAt:new Date().toISOString(),
+      cards:cardChunks,raw:Object.values(transcripts)};
+    downloadBlob(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),'card-transcripts-'+new Date().toISOString().slice(0,10)+'.json');
+  };
   const build=async()=>{
     if(!cfg.apiKey||!files.length)return;
     if(!kbConfirmReplace('Building from the loaded files'))return;
@@ -1794,12 +2007,20 @@ function KnowledgeBaseBuilder(){
     // Honor the sidebar toggle, exactly like every other tool in the suite.
     const {model,level}=cfg.forTool('knowledge');
     const auditCfg=cfg.forTool('knowledgeAudit');
-    const addLog=(m,t='')=>setLogs(p=>[...p.slice(-200),{m,t,ts:new Date().toLocaleTimeString()}]);
     const focusBlock=kbBuildFocusBlock(kbOutcomes,kbPoints,kbExtra,focusMode);
     const scoped=!!focusBlock&&focusMode==='scope';
     try{
       const queue=[];
-      for(const f of files){
+      // v15.12: merged card transcripts enter as ordinary source chunks. Front and back are
+      // already joined by cardMergeFaces — a back face alone has no condition name on it, so
+      // extracting one unpaired would produce facts with nothing to attach them to.
+      // units:[] is deliberate: kbSplitChunk returns null for it, and a single card is far
+      // too small to need splitting anyway.
+      for(const c of cardChunks){
+        queue.push({file:{name:'flashcards'},chunk:{text:c.text,label:c.title,units:[]},depth:0});
+      }
+      if(cardChunks.length)addLog(cardChunks.length+' transcribed card(s) queued as source text.','');
+      for(const f of files.filter(x=>!cardIsImage(x))){
         try{const chunks=await kbBuildSourceChunks(f,chunkChars,overlapUnits,{signal:controller.signal,onProgress:(p,tot)=>addLog(`Reading ${f.name} — page ${p}/${tot}`),
           composition:probeComposition,
           onComposition:c=>{composition[f.name]=c;},
@@ -1958,9 +2179,56 @@ function KnowledgeBaseBuilder(){
   };
   const kb=K.knowledgeBase,md=useMemo(()=>renderKBMarkdown(kb),[kb]),validation=useMemo(()=>validateLatteKnowledgeBase(kb),[kb]),facts=(kb.conditions||[]).reduce((n,c)=>n+(c.facts||[]).length,0),sel=(kb.conditions||[]).find(c=>c.id===selected);
   return <div className="tool-panel"><h2 className="tool-title">🧠 LATTE Knowledge Base</h2><p className="tool-desc">Upload once, extract source-grounded LATTE facts once, then reuse them for Anki, priority analysis, and NCLEX generation.</p>{K.persistenceError&&<div className="error-banner"><span>⚠</span><div>{K.persistenceError}</div></div>}
-    <div role="button" tabIndex={0} aria-label="Add PDF or PPTX source files" onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fileRef.current?.click();}}} className="upload-zone" onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();addFiles(e.dataTransfer.files)}}><h3>Drop PDF or PPTX sources</h3><p>Large sources are processed in page or slide chunks; successful chunks are retained even if another chunk fails.</p><input ref={fileRef} type="file" multiple accept=".pdf,.pptx" style={{display:'none'}} onChange={e=>{addFiles(e.target.files);e.target.value=''}}/></div>
+    <div role="button" tabIndex={0} aria-label="Add PDF, PPTX, or flashcard image source files" onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fileRef.current?.click();}}} className="upload-zone" onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();addFiles(e.dataTransfer.files)}}><h3>Drop PDF, PPTX, or flashcard photos</h3><p>Large sources are processed in page or slide chunks; successful chunks are retained even if another chunk fails. Flashcard photos are transcribed first, and you review the transcript before it becomes facts.</p><input ref={fileRef} type="file" multiple accept=".pdf,.pptx,.jpg,.jpeg,.png,.webp,.heic,.heif" style={{display:'none'}} onChange={e=>{addFiles(e.target.files);e.target.value=''}}/></div>
     {files.length>0&&<div style={{marginTop:8}}>{files.map((f,i)=><div className="file-chip" key={f.name+f.size}><div className={'f-icon '+getExt(f.name)}>{getExt(f.name)}</div><span className="f-name">{f.name}</span><span className="f-size">{formatSize(f.size)}</span><button className="f-rm" onClick={()=>{destroyPdfDoc(f);setFiles(p=>p.filter((_,j)=>j!==i));}}>×</button></div>)}</div>}
     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,margin:'14px 0'}}><input type="text" value={course} onChange={e=>setCourse(e.target.value)} placeholder="Course (optional)"/><input type="text" value={exam} onChange={e=>setExam(e.target.value)} placeholder="Exam/unit (optional)"/></div>
+    {files.some(cardIsImage)&&<div style={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:16,marginBottom:12}}>
+      <div style={{fontSize:10,fontWeight:600,textTransform:'uppercase',letterSpacing:1,color:'var(--accent)',marginBottom:4}}>Pass 1 · Flashcard transcription</div>
+      <div style={{fontSize:10,color:'var(--text-dim)',lineHeight:1.5,marginBottom:11}}>Reads each card photo into verbatim text. Nothing downstream ever sees the photo again — every fact, quote and citation is grounded against this transcript, so <strong style={{color:'var(--accent-warm)'}}>a misread number here cannot be caught later</strong>. Check the numbers against the card before building.</div>
+      <div style={{display:'flex',gap:8,alignItems:'flex-end',flexWrap:'wrap',marginBottom:10}}>
+        <div className="field-block" style={{marginBottom:0}}>
+          <label style={{fontSize:11}}>Runs per card</label>
+          <input type="number" min={1} max={3} step={1} value={txRuns} onChange={e=>setTxRuns(Math.max(1,Math.min(3,Number(e.target.value)||1)))} style={{width:80}}/>
+          <div style={{fontSize:9.5,color:'var(--text-dim)',marginTop:3}}>2+ transcribes each card twice and flags anything that changed between identical runs. Costs a call per run.</div>
+        </div>
+        <button className="btn-primary" style={{flex:1,minWidth:160}} disabled={txBusy||!cfg.apiKey} onClick={transcribeCards}>
+          {txBusy?'Transcribing…':'Transcribe '+files.filter(cardIsImage).length+' card image(s)'}
+        </button>
+        {txBusy&&<button className="btn-danger" onClick={()=>txAbortRef.current?.abort()}>Cancel</button>}
+        {cardChunks.length>0&&<button className="btn-secondary" onClick={exportTranscripts}>Export JSON</button>}
+      </div>
+      <div style={{fontSize:10,color:'var(--accent)'}}>Transcribe: {cfg.forTool('cardTranscribe').model} · {cfg.forTool('cardTranscribe').level}</div>
+      {txErr&&<div className="error-banner" style={{marginTop:10}}>⚠ {txErr}</div>}
+      {cardChunks.length>0&&<div style={{marginTop:12}}>
+        <div style={{fontSize:11,fontWeight:600,color:'var(--text-bright)',marginBottom:6}}>{cardChunks.length} card(s) transcribed — review before building</div>
+        {cardChunks.map((c,i)=><div key={c.key} style={{marginBottom:9,padding:'9px 11px',borderRadius:8,background:'var(--bg-deep)',border:'1px solid '+(c.legibility==='clean'?'var(--border)':'rgba(240,168,58,.35)')}}>
+          <div style={{fontSize:11.5,fontWeight:600,color:'var(--text-bright)'}}>{c.title}
+            <span style={{fontWeight:400,color:'var(--text-dim)'}}> · {c.key} · {c.faces.join(' + ')}</span>
+            {c.legibility!=='clean'&&<span style={{color:'var(--accent-warm)',fontWeight:400}}> · legibility {c.legibility}</span>}
+            {c.faces.length<2&&<span style={{color:'var(--accent-warm)',fontWeight:400}}> · only one face — the back has no condition name on it, so pair it before building</span>}
+          </div>
+          {c.numerics.length>0
+            ?<div style={{marginTop:6}}>
+              <div style={{fontSize:10,fontWeight:600,color:'var(--accent-warm)',marginBottom:3}}>⚑ Check these {c.numerics.length} number(s) against the card by eye</div>
+              {c.numerics.map((n,j)=><div key={j} style={{fontSize:10.5,fontFamily:'JetBrains Mono',lineHeight:1.6,color:n.legibility==='clean'?'var(--text)':'var(--accent-warm)'}}>
+                {n.value} <span style={{color:'var(--text-dim)'}}>— {n.context}</span>{n.legibility!=='clean'&&<span style={{color:'var(--accent-warm)'}}> [{n.legibility}]</span>}
+              </div>)}
+            </div>
+            :<div style={{fontSize:10,color:'var(--text-dim)',marginTop:5}}>No clinically-meaningful numbers found on this card.</div>}
+          <details style={{marginTop:7}}>
+            <summary style={{fontSize:10,color:'var(--text-dim)',cursor:'pointer'}}>Transcript text ({c.text.length.toLocaleString()} chars) — this is what pass 2 will read</summary>
+            <pre style={{whiteSpace:'pre-wrap',fontSize:10,fontFamily:'JetBrains Mono',lineHeight:1.55,color:'var(--text-dim)',marginTop:6,maxHeight:260,overflowY:'auto'}}>{c.text}</pre>
+          </details>
+        </div>)}
+        {Object.values(transcripts).some(t=>t&&t.agreement&&(t.agreement.numericsUnstable.length||t.agreement.bulletsUnstable.length))&&<div className="error-banner" style={{marginTop:4}}>
+          <span>⚠</span><div>Some text changed between identical transcription runs. Anything unstable is untrustworthy whatever it says — the numbers especially. Try a stronger model or higher thinking in the sidebar profiles before building on this.
+            {Object.values(transcripts).filter(t=>t&&t.agreement&&t.agreement.numericsUnstable.length).map((t,i)=><div key={i} style={{fontFamily:'JetBrains Mono',fontSize:10,marginTop:4}}>{t.file}: {t.agreement.numericsUnstable.join(' · ')}</div>)}
+          </div>
+        </div>}
+        {Object.values(transcripts).some(t=>t&&t.error)&&<div className="tip-banner" style={{marginTop:4}}>Some images failed: {Object.values(transcripts).filter(t=>t&&t.error).map(t=>t.file).join(', ')}</div>}
+        <div style={{fontSize:9.5,color:'var(--text-dim)',marginTop:6,lineHeight:1.5}}>Running twice checks the model against itself, which is weaker than checking it against the card: it can misread the same digit the same way every time and look perfectly stable. The eye check is the one that counts.</div>
+      </div>}
+    </div>}
     <div style={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:16,marginBottom:12}}>
       <div style={{fontSize:10,fontWeight:600,textTransform:'uppercase',letterSpacing:1,color:'var(--accent)',marginBottom:4}}>Focus Context <span className="badge-opt">optional</span></div>
       <div style={{fontSize:10,color:'var(--text-dim)',lineHeight:1.5,marginBottom:11}}>Tailors extraction when a source covers more than your exam does. Leave blank to extract everything at normal priority.</div>

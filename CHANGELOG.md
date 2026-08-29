@@ -13,6 +13,7 @@ Every release since 15.0 has been verified against three gates before shipping: 
 
 ### To do
 - **Spot-check the 2 `partial` quotes** that appeared in the v15.11 rebuild (0 in the previous run). Most likely a chunk-seam artifact or a light paraphrase; 2 out of ~180 is noise, but `partial` is the one bucket that can indicate a genuine quoting problem rather than a layout one.
+- **Watch transcription accuracy as card volume grows.** One deck transcribed clean at a single pass. That is one sample of one card type in good light; a drug card with dose columns is the harder case. Re-run with 2 runs per card after any change to `CARD_TRANSCRIBE_PROMPT`, and eye-check numbers on any card whose legibility is not `clean`.
 - Confirm against a primary NCSBN source whether the 2026 Test Plan renames *Safety and Infection Control* to *Safety and Infection Prevention and Control*. The v4.2 patch claimed it; it could not be verified. `NCLEX_CATEGORY_LABELS` keeps the long-standing label until then.
 - Supply real NCLEX-RN Test Plan activity statements to the generator, then promote Test Plan Alignment from WARN-only to a hard FAIL in the v4.2 gate.
 - **Run a real batch after any generator change.** Every v15.8 and v15.9 bug came from live output; none was reachable from the synthetic tests.
@@ -22,11 +23,51 @@ Every release since 15.0 has been verified against three gates before shipping: 
 - *(nothing open)*
 
 ### Decided against
-- **v16 — selective multimodal page ingestion. Not being built (2026-08-28).** The §11 benchmark was never run and is not needed. Its decisive row is "facts visible on the page but absent from the KB," and the sources this suite is actually fed — specialized, text-first nursing material rather than publisher textbook chapters — contain essentially no drug tables rendered as images, ECG strips, flowcharts or raster figures. §2's premise does not hold for that material, so vision has nothing to recover. "Build nothing" is one of the three outcomes §11 names, reached on better evidence than a 20-page pilot would have produced.
+- **v16 — selective multimodal page ingestion. Still not being built.** Decided 2026-08-28; unchanged by v15.12. The cancellation's stated trigger — "a change of source material re-opens it" — fired one day later when flashcards entered, but it fired *narrowly*: cards needed a transcriber, not this spec's page-vision architecture. Sections 4–7 (evidence states, dual-track propagation, visual safety gate, two-signal router) remain unbuilt and unneeded. The original reasoning, preserved:
+
+- **v16 — the original cancellation (2026-08-28).** The §11 benchmark was never run and is not needed. Its decisive row is "facts visible on the page but absent from the KB," and the sources this suite is actually fed — specialized, text-first nursing material rather than publisher textbook chapters — contain essentially no drug tables rendered as images, ECG strips, flowcharts or raster figures. §2's premise does not hold for that material, so vision has nothing to recover. "Build nothing" is one of the three outcomes §11 names, reached on better evidence than a 20-page pilot would have produced.
 
   Two notes so this does not get re-opened by accident. **A high `reordered` count is not a reason to revisit it** — two-column layouts scramble the text stream and inflate that bucket, but the model still receives the full text and still extracts the fact; only the verbatim quote fails, so the fact is marked unverified rather than lost. **A change of source material is** — if the inputs ever become real textbook chapters, the premise returns and §11 becomes the right first step again. The spec is kept for that case; nothing in it is approved.
 
   v15.10's instrumentation is not wasted: it was built to answer this question and it still answers the cheaper one (de-hyphenation) on every ordinary build. The opt-in composition probe stays in the app, off by default, as the cheap way to re-check the source-profile assumption.
+
+---
+
+## [15.12] — 2026-08-29
+
+Flashcard ingestion. Photographs of printed nursing flashcards become LATTE facts, through a transcription pass that the rest of the pipeline never has to know about.
+
+### Why this is not v16
+
+v16 was cancelled on 2026-08-28 because text-first specialized PDFs lose nothing to a text-only parser. **That is still true and v16 is still not built.** What changed is not the verdict — it is that a *new source type* entered the picture. Davis-style flashcards are photographs: no text layer at all, so there is nothing for `pdfLayoutText` to extract and nothing for the v16 debate to be about.
+
+The cancellation record named exactly this trigger — "a change of source material re-opens it" — and it fired as written. It also fired *narrowly*: this release is a card transcriber, not the spec's selective page-vision architecture. No router, no five-state evidence model, no `visualGrounded`, no dual-track propagation, no deterministic visual safety gate. None of that was needed, for one reason given below.
+
+### Added
+
+- **Flashcard photos are a source type.** The Knowledge tab accepts `.jpg/.jpeg/.png/.webp/.heic/.heif` beside PDFs and decks.
+- **Pass 1 — transcription.** Each card image becomes a structured, verbatim transcript: enumerated section keys with the printed heading kept alongside, one array entry per printed bullet, and a separate list of every clinically-meaningful number. `CARD_TRANSCRIBE_PROMPT` is new surface and freely tunable — it is *not* one of the 11 frozen constants — but its rules are load-bearing and pinned by the harness: never guess a number, never expand an abbreviation, preserve symbols exactly, keep an open enum for unrecognised headings.
+- **Pass 2 is the extractor you already had.** The transcript enters the queue as ordinary source text, so `KB_EXTRACTION_PROMPT` runs unchanged and byte-frozen.
+- **A review step between them.** Transcripts are shown before anything is built, with the numbers pulled into their own list to be checked against the card by eye, and legibility flagged per section. Optional repeat runs diff a card against itself and report anything that changed.
+- **Front/back pairing on category + card number.** Not cosmetic: a Davis back face carries the running header and card number but **no condition name**. A back extracted alone produces facts with nothing to attach them to. Faces merge front-first so the condition name leads.
+- **`cardTranscribe` profile row** — Flash at low thinking. Reading printed text off a photograph is transcription, not reasoning.
+
+### Why this stayed small
+
+Because pass 2 reads text, **the existing matcher verifies its quotes with no new machinery.** A quote taken from a transcript passes `kbQuoteInSource` exactly as a quote from a PDF does — verified in the live app, along with a fabricated quote correctly failing. That single property is what let sections 4 through 7 of the v16 spec stay unbuilt.
+
+### The cost of the design, stated plainly
+
+**The transcript is the trust boundary.** If pass 1 misreads `>3 cm` as `>8 cm`, pass 2 grounds against the wrong transcript flawlessly, the auditor agrees, and every downstream check passes. Nothing after pass 1 can catch it.
+
+Repeat runs measure *self-agreement*, which is not accuracy — a model can misread the same digit identically every time and look perfectly stable. That is why the numbers are surfaced for a human eye check rather than a green tick, and why the panel says so on screen.
+
+### Notes
+
+- **First real cards transcribed clean on a single pass**, including a rotated photograph on a patterned background, a two-column back face, dilation thresholds in cm, and an `↑` before a lab value.
+- **Vision fixes the reading-order problem here.** A two-column card back is the layout that produced v15.11's 107 `reordered` quote misses on PDFs. A model reading the image follows column order correctly, so that failure mode does not carry over to card sources.
+- **Known and inherited, not new:** `kbNormForMatch` collapses newlines, so a quote spanning two *adjacent* bullets also verifies. Consecutive PDF lines have always behaved this way; the matcher was never line-aware. Fixing it would move which quotes pass on every existing source, so it is documented rather than changed.
+- Harness 547 → 568 assertions. No prompt constant was touched.
 
 ---
 

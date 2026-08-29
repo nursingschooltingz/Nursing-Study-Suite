@@ -1,12 +1,18 @@
 # v16 — Selective Multimodal Ingestion (design spec)
 
+> ## ⚠ Update 2026-08-29 — vision shipped, but not this
+>
+> **v15.12 added flashcard ingestion, and it is not this architecture.** Photographed Davis-style cards have no text layer, so they take a two-pass path: transcribe the image to verbatim structured text, then run the existing frozen extractor over that text. Because pass 2 reads text, `kbQuoteInSource` verifies its quotes with no new machinery — so **§4 (five evidence states), §5 (dual-track propagation), §6 (visual safety gate) and §7 (two-signal router) were not needed and are not built.**
+>
+> The cancellation below named "a change of source material" as its re-open trigger, and that trigger fired the very next day. It is worth being precise about how narrowly: a new source type arrived that has *no text layer at all*, which is a different problem from the one this spec addresses — selectively recovering visual content from PDF pages that *do* have text. **Everything below still stands for the PDF sources.**
+>
 > ## ⛔ NOT BEING BUILT — decided 2026-08-28
 >
 > **This document is retained as a design record, not a plan.** Nothing in it is approved, and no part of it should be implemented without first re-opening the decision below.
 >
 > The spec always rested on one unmeasured assumption: that text-layer extraction is losing clinically meaningful content *in the sources this suite is actually fed*, at a rate worth this complexity. §11 was written to measure it. **It was never run, and does not need to be.** §11's decisive row is "facts visible on the page but absent from the KB," and the maintainer's material — specialized, text-first nursing sources rather than publisher textbook chapters — contains essentially no drug tables rendered as images, ECG strips, ACLS or triage flowcharts, or raster figures. §2's premise does not hold for it. Vision has nothing to recover, so the honest outcome is §11's first branch: **build nothing.**
 >
-> **What would re-open this:** a change in source material. If the inputs ever become real textbook chapters or scanned material, the premise returns and §11 becomes the right first step again. v15.10's opt-in page composition probe exists to make that re-check cheap, which is why it stays in the app even though this feature is cancelled.
+> **What would re-open this:** a change in **PDF** source material. (Flashcards arriving in v15.12 did not — see the update block above.) If the inputs ever become real textbook chapters or scanned material, the premise returns and §11 becomes the right first step again. v15.10's opt-in page composition probe exists to make that re-check cheap, which is why it stays in the app even though this feature is cancelled.
 >
 > **What would *not* re-open this:** a high `reordered` count in the quote-miss diagnostics. Two-column layouts are common in specialized sources and inflate that bucket, but the model still receives the full chunk text and still extracts the fact correctly — only the verbatim quote fails, so the fact is marked unverified rather than lost. That is a provenance cost, not content loss, and it does not justify this build. See §4.
 >

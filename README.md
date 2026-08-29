@@ -98,13 +98,31 @@ The **focus box** helps here too — tell it things like *"Only Ch. 61–63 are 
 **How to use it:**
 
 1. Optionally fill in **Course** and **Exam/unit** — these become organizational tags on your Anki cards later.
-2. Add your PDF/PPTX file(s).
+2. Add your PDF/PPTX file(s) — or photos of flashcards (see below).
 3. Click **Build Knowledge Base**. Watch the log: it runs an extraction pass and then a second **audit pass** that re-reads each chunk hunting for facts the first pass missed. Recovered facts are only kept if their quoted text is actually found in your source — the suite verifies this in code, not on the AI's word.
 4. Browse the result: conditions on the left, facts (with tiers, buckets, and source pointers) on the right. **⬇ Study View** exports the whole thing as a readable markdown study guide.
 
 **Extraction diagnostics.** After a build, a panel summarizes how the run went: which chunks came back thin, which quotes could not be found word-for-word in your source, and why. That last part is the useful one — an unverified quote is usually just a word broken across a line break, not a made-up fact, and the panel now says which kind each one was. **Export JSON** saves the whole report if you want to compare runs. It quotes your source material, so treat that file like the source itself.
 
 **Page composition probe** (checkbox, off by default) counts the pictures, diagrams and text on each page while the file is read. It is there for development work on handling images, it measures only, and nothing is sent anywhere. Leave it off unless asked — it makes reading long books slower.
+
+### Flashcards
+
+You can also feed it **photographs of printed flashcards** (Davis-style and similar) — drop `.jpg`, `.png`, or `.heic` files in with everything else. A phone photo is fine; it can be rotated, at an angle, or sitting on a patterned tablecloth.
+
+Cards go through an extra step first, and it's worth understanding why. The suite **transcribes** each card into plain text, and everything after that reads the transcript — never the photo again. That's what lets a card's facts be quoted and verified the same way a textbook's are.
+
+It also means the transcript is the one thing nothing else can double-check. If a photo is blurry and "3 cm" is read as "8 cm", every later step will confirm that number perfectly, because every later step is reading the transcript. So:
+
+1. Click **Transcribe**, and the cards are read.
+2. **Check the numbers.** Every dose, threshold, and measurement is listed in its own box with a flag asking you to compare it against the card. This takes a few seconds per card and it's the only check that catches a misread digit.
+3. Then **Build Knowledge Base** as usual.
+
+Two other things worth knowing:
+
+**Photograph both sides.** The back of a card doesn't have the condition's name printed on it — only the running header and the card number. The suite pairs the two faces automatically using those, but a back on its own has nothing to attach its facts to.
+
+**Set "Runs per card" to 2** if you want a second opinion. Each card gets transcribed twice and anything that differs between the two is flagged. It costs a second call per card, and it catches wobbly reads — but it can't catch a card that gets misread the same way twice. The eye check in step 2 is still the one that counts.
 
 **Saving and backups.** The KB auto-saves in your browser and survives closing it — but it lives *in that browser on that computer*. **Export JSON** regularly (before exams, before rebuilding) — that file is your backup and your way to move between computers via **Import JSON**. Clearing your browser data deletes the KB; your exported JSON is the safety net.
 

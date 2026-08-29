@@ -386,6 +386,83 @@ t('diagnostics export exists and is not a Knowledge Base', S.includes("kind:'lat
 t('the panel no longer claims diagnostics never reach any export',
   !S.includes('never written into the Knowledge Base or any export.'));
 
+/* ── 10e. v15.12: flashcard transcription (pass 1) ── */
+section('v15.12 — flashcard transcription');
+// Span runs from the image regex through the end of cardCompareRuns. The end anchor is
+// that function's last statement, so a truncated span fails extraction rather than
+// silently passing every assertion below.
+const CARD = new Function(
+  spanFrom('const CARD_IMAGE_RE', 'idsDisagree:new Set(runs.map(cardKey)).size>1};\n}') +
+  ';return {cardIsImage,cardKey,cardTranscriptToText,cardMergeFaces,cardCompareRuns,CARD_TRANSCRIBE_PROMPT};'
+)();
+
+t('image types are recognised, documents are not',
+  CARD.cardIsImage({ name: 'card.JPG' }) && CARD.cardIsImage({ name: 'a.heic' }) &&
+  !CARD.cardIsImage({ name: 'chapter.pdf' }) && !CARD.cardIsImage({ name: 'deck.pptx' }));
+
+// Real card shapes: the FRONT carries the condition name, the BACK carries only the
+// running header and number. Pairing is not cosmetic — a back extracted alone produces
+// facts with no condition to attach to.
+const cFront = { face: 'front', category: 'Gastrointestinal System Disorders', cardNumber: '1',
+  title: 'Bowel Obstruction', pronunciation: 'bow-el ob-struk-shun',
+  sections: [{ key: 'clue', heading: 'Common Cues and Findings', bullets: [
+    'U/S, CT, MRI shows dilated small bowel >3 cm, large bowel >12 cm, cecum >15 cm.'], legibility: 'clean' }],
+  numerics: [{ value: '>3 cm', context: 'small bowel dilated', legibility: 'clean' }],
+  symbols: [], overallLegibility: 'clean' };
+const cBack = { face: 'back', category: 'Gastrointestinal System Disorders', cardNumber: '1',
+  title: null, pronunciation: null,
+  sections: [{ key: 'assessmentAndDiagnosticFindings', heading: 'Assessment and Diagnostic Findings',
+    bullets: ['↑WBC and H&H.'], legibility: 'clean' }],
+  numerics: [], symbols: ['↑'], overallLegibility: 'clean' };
+
+t('front and back share a join key', CARD.cardKey(cFront) === CARD.cardKey(cBack));
+{
+  const merged = CARD.cardMergeFaces([cBack, cFront]); // deliberately out of order
+  t('both faces merge into one source chunk', merged.length === 1 && merged[0].faces.length === 2);
+  t('the title comes from the front, which is the only face that has one', merged[0].title === 'Bowel Obstruction');
+  t('the front is placed first so the condition name leads',
+    merged[0].text.indexOf('Bowel Obstruction') < merged[0].text.indexOf('Assessment and Diagnostic Findings'));
+  t('numerics from every face are carried onto the merged card', merged[0].numerics.length === 1);
+  // An up arrow before a lab IS the fact. Losing it silently reverses the meaning.
+  t('arrow glyphs survive rendering to text', merged[0].text.includes('↑WBC'));
+  t('an unpaired back face is still surfaced rather than dropped',
+    CARD.cardMergeFaces([cBack])[0].faces.length === 1);
+  t('legibility rolls up pessimistically across faces',
+    CARD.cardMergeFaces([cFront, { ...cBack, overallLegibility: 'uncertain' }])[0].legibility === 'uncertain');
+}
+
+// The load-bearing claim of the whole two-pass design: because pass 2 reads text, the
+// EXISTING matcher verifies its quotes with no new evidence model.
+{
+  const text = CARD.cardMergeFaces([cFront])[0].text;
+  const n = QM.kbNormForMatch(text), d = QM.kbDehyphNormForMatch(text);
+  t('a quote taken from the transcript verifies with the existing matcher',
+    QM.kbQuoteInSource('dilated small bowel >3 cm, large bowel >12 cm', n, d) === true);
+  t('a fabricated quote still fails against the transcript',
+    QM.kbQuoteInSource('dilated small bowel greater than eight centimeters', n, d) === false);
+}
+
+{
+  const stable = CARD.cardCompareRuns([cFront, cFront]);
+  t('identical runs report no drift', stable.numericsUnstable.length === 0 && stable.bulletsUnstable.length === 0);
+  const drifted = CARD.cardCompareRuns([cFront,
+    { ...cFront, numerics: [{ value: '>8 cm', context: 'small bowel dilated', legibility: 'clean' }] }]);
+  t('a number that changes between identical runs is caught', drifted.numericsUnstable.length > 0);
+  t('a card identity that changes between runs is caught',
+    CARD.cardCompareRuns([cFront, { ...cFront, cardNumber: '2' }]).idsDisagree === true);
+}
+
+// Not one of the 11 frozen constants, but these rules are why the transcript can be
+// trusted as the source of truth. Losing one is a silent correctness regression.
+t('the transcription prompt forbids guessing numbers', /NEVER GUESS A NUMBER/.test(CARD.CARD_TRANSCRIBE_PROMPT));
+t('the transcription prompt forbids expanding abbreviations', /DO NOT EXPAND ABBREVIATIONS/.test(CARD.CARD_TRANSCRIBE_PROMPT));
+t('the transcription prompt requires symbols be preserved', /PRESERVE SYMBOLS EXACTLY/.test(CARD.CARD_TRANSCRIBE_PROMPT));
+t('the transcription prompt keeps an open enum for unknown headings', /"other"/.test(CARD.CARD_TRANSCRIBE_PROMPT));
+t('the transcription prompt demands a separate numerics list', /"numerics" must list EVERY number/.test(CARD.CARD_TRANSCRIBE_PROMPT));
+t('pass 2 never receives the image — cards enter the queue as text only',
+  S.includes('queue.push({file:{name:\'flashcards\'},chunk:{text:c.text,label:c.title,units:[]},depth:0});'));
+t('card images are filtered out of the PDF/PPTX path', S.includes('for(const f of files.filter(x=>!cardIsImage(x))){'));
+
 /* ── 11. stage timing (pre-existing, pinned) ── */
 section('validateStageTiming');
 t('citing a fact before its reveal → warn',
