@@ -21,7 +21,7 @@ Maintained by one person — a working LPN in an LPN-to-RN bridge program — be
 node latte-tests.js
 ```
 
-Expect **505 passed · 0 failed**. The harness extracts live functions from the shipped HTML by anchor strings — it never copies code, so it fails loudly if a refactor moves an anchor. That failure is signal, not noise: fix the anchor reference, don't weaken the test.
+Expect **547 passed · 0 failed**. The harness extracts live functions from the shipped HTML by anchor strings — it never copies code, so it fails loudly if a refactor moves an anchor. That failure is signal, not noise: fix the anchor reference, don't weaken the test.
 
 Watch for *vacuous* passes as well as failures: an end anchor that matches earlier than intended silently truncates a span, and every assertion about the missing tail then passes for the wrong reason. `caseBuildPrompt` hit exactly this — `'\n}\n'` matched inside its JSON-shape block. Where a span covers a prompt, assert that something near its *end* is present.
 
@@ -59,8 +59,8 @@ Do not "fix" these:
 
 | File | Purpose |
 |---|---|
-| `Nursing-Study-Suite v15.9.html` | The entire application. The filename carries the version — quote it on the command line. Both harnesses auto-detect any `Nursing-Study-Suite*.html`, so a version bump needs no code change. |
-| `latte-tests.js` | Regression harness, 505 assertions |
+| `Nursing-Study-Suite v15.11.html` | The entire application. The filename carries the version — quote it on the command line. Both harnesses auto-detect any `Nursing-Study-Suite*.html`, so a version bump needs no code change. |
+| `latte-tests.js` | Regression harness, 547 assertions |
 | `neia-fixture.json` | 10 fixed MCQs with reference classifications, for the audit test–retest |
 | `neia-retest.js` | Test–retest runner — **costs live API calls**, never part of `latte-tests.js` |
 | `CHANGELOG.md` | Release summary (Keep a Changelog format) |
@@ -70,7 +70,7 @@ Do not "fix" these:
 
 ## Current state
 
-Shipping v15.9. The app file is `Nursing-Study-Suite v15.9.html` — both harnesses auto-detect it, so a rename needs no code change. Open items:
+Shipping v15.11. The app file is `Nursing-Study-Suite v15.11.html` — both harnesses auto-detect it, so a rename needs no code change. Open items:
 
 - **The audit gate has been measured.** A full test–retest (10 fixture items × 3, plus a 6-call top-up) produced **zero verdict flips**, zero false fatals on the sound items, and both seeded defects caught and correctly named every run. No criterion was demoted; the cutoffs and severities stand on evidence, not guesses. Re-run `neia-retest.js` after any prompt or model change.
 - **Fact coverage is confirmed working.** Live runs report 18/30 and 23/30 where the metric had been structurally incapable of anything but 0.
@@ -78,8 +78,15 @@ Shipping v15.9. The app file is `Nursing-Study-Suite v15.9.html` — both harnes
 - **Beware Proton Drive name clashes.** This repo lives in a synced folder. During v15.9 the client forked the app file mid-edit into `... (# Name clash ... #).html`; three of four edits landed in the fork while the working copy kept only the first, so an edit reported success and was not in the file under test. If a clash file appears, diff both before deleting either — the fork may hold the newer work.
 - **Test Plan activity statements** are not supplied to either generator, so Test Plan Alignment is WARN-only in both. Neither source paper reproduces the statements — Appendix A only links to NCSBN.
 - **Unverified:** whether the 2026 Test Plan renames *Safety and Infection Control* to *Safety and Infection Prevention and Control*. `NCLEX_CATEGORY_LABELS` keeps the long-standing label until a primary source confirms.
-- **v16 multimodal ingestion** — architecture settled, build gated on the 20-page benchmark in the spec's §11. Do not start implementing it.
-- **De-hyphenation candidate** — de-hyphenation and ligature normalization in `kbNormForMatch`, to promote quote-verification misses caused by line-break hyphenation. Cheap, may resolve much of `quoteMiss` without vision.
+- **v16 multimodal ingestion is NOT being built. Decided 2026-08-28 — do not re-open it without new information about the sources.** The §11 benchmark was not run, and does not need to be: its decisive row is "facts visible on the page but absent from the KB," and the maintainer's actual sources make that row zero by construction. See *Source profile* below. "Build nothing" is one of the three outcomes §11 names, reached early on better evidence than a 20-page pilot would have produced. The architecture in `Nursing-Study-Suite-v16-spec.md` remains sound and is kept for the day the source profile changes; nothing in it is approved.
+- **Source profile — the fact that decided v16.** The maintainer feeds the suite specialized, text-first nursing material, not publisher textbook chapters. There are essentially no drug tables rendered as images, ECG strips, ACLS or triage flowcharts, or raster figures. §2's premise — that extraction is structurally blind to high-yield *visual* content — does not hold for this material, so vision has nothing to recover. This is not visible anywhere in the code or the git history, and it is the single most load-bearing assumption in the roadmap: **if the sources ever change to real textbook chapters, v16 goes back on the table and the §11 benchmark becomes the right first step again.**
+- **A two-column layout is not an argument for v16 here.** Specialized sources are often two-column, which scrambles the text stream and inflates `quoteMiss` via the `reordered` bucket. That is a *provenance* failure, not content loss: the model still receives the full chunk text and still extracts the fact correctly — it just cannot produce a quote that survives the verbatim check, so the fact is silently marked unverified rather than lost. Do not let a high `reordered` count on text-only sources reopen the vision question.
+- **The composition probe stays, deliberately.** Off by default, zero cost when off, fully tested. It is the cheap way to re-check the source-profile assumption above if the material ever changes. Keep it even though the feature it was built for is cancelled.
+- **De-hyphenation shipped in v15.11 and is confirmed working on live output.** The measurement that justified it: a cardiovascular chapter (6 chunks, 362 facts) produced 190 failed quotes — **83 hyphenation/ligature · 107 reading order · 0 partial · 0 absent · 0 tooShort.** The rebuild after the change: **hyphenation 0, dehyphSaved 77, first-pass misses 182 → 97, audit discards 8 → 3.** The classifier predicted 43.7% of failures were hyphenation-fixable; the fallback rescued 43.5% on an independently generated quote set. Measure-then-act worked as intended — do not skip that sequence on the next candidate.
+- **Zero fabricated quotes across both runs** (~370 quotes). Every verification failure to date has been typesetting or layout, never invention. That is a real property of this extraction pipeline and a useful baseline: a future run showing meaningful `absent` counts is a signal worth chasing, not noise.
+- **The fallback's safety rests on being strictly additive.** `kbQuoteInSource` tries the plain normalized match first and returns on success; the de-hyphenated match is consulted only after a failure, so it can turn a FAIL into a PASS and never the reverse. That is what makes it safe in pass 2, where a failed match *discards* the fact. Do not "simplify" it into a single de-hyphenated comparison — that would change which quotes pass in both directions and silently alter the pass-2 discard set.
+- **A non-zero `hyphenation` count in the diagnostics panel is now a bug signal.** `kbClassifyQuoteMiss` still diagnoses the *plain* match, and since v15.11 it is only reached for quotes that failed plain **and** de-hyphenated. The bucket therefore cannot fire unless the matcher and the classifier have come apart. Free regression detector; don't "fix" it by pointing the classifier at the promoted matcher.
+- **Reading-order failures are deliberately not addressed.** 107 of the 190 come from multi-column layout: the words are all present but hundreds of characters apart in the text stream. The fact is extracted correctly and only its verbatim proof fails. No matcher loose enough to accept those is safe for doses — see the v16 spec §4. This is a provenance cost, accepted knowingly.
 
 ## Conventions
 

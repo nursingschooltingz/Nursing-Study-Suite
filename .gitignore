@@ -12,6 +12,7 @@
 # problem as the sources themselves.
 LATTE-Knowledge-Base.json
 LATTE-Knowledge-Base*.json
+LATTE-Extraction-Diagnostics*.json
 kb-*.json
 
 # ── Generated study artifacts ─────────────────────────────────────────

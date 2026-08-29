@@ -248,10 +248,143 @@ t('undefined textContent is survivable', pdfLayoutText(undefined) === '');
   t('text PDF: not flagged', g.avg >= 100 && g.empty === 0);
   t('page marker excluded from the char count', g.avg === 2000);
   t('no pages → null (no false warning)', kbTextQuality([]) === null);
+  // v15.10: perPage is additive — the four aggregates above are still asserted verbatim.
+  t('perPage names every page', g.perPage.length === 2 && g.perPage[0].n === 1 && g.perPage[1].n === 2);
+  t('perPage carries the same char count the aggregate used', g.perPage.every(p => p.chars === 2000));
+  t('perPage says WHICH pages are empty, not just how many',
+    q.perPage.filter(p => p.chars < 50).map(p => p.n).join(',') === '1,2,3');
 }
 t('KB path uses pdfLayoutText, not the naive join',
   S.includes("'\\n--- PAGE '+i+' ---\\n'+pdfLayoutText(tc)") && !S.includes("+tc.items.map(x=>x.str).join(' ')"));
 t('default Flash model is gemini-3.7-flash', /useState\('gemini-3\.7-flash'\)/.test(S));
+
+/* ── 10d. v15.10: quote-miss classification + benchmark instrumentation ── */
+section('v15.10 — quote-miss classification');
+// One span covers kbNormForMatch through kbClassifyQuoteMiss. The end anchor is the
+// classifier's LAST statement, so a span that truncated early would fail extraction
+// rather than silently pass every assertion below it.
+// caseContentWords is injected rather than re-extracted: the classifier genuinely depends
+// on the NCLEX heuristics' stopword list, and threading it through says so out loud.
+const QM = new Function('caseContentWords',
+  spanFrom('function kbNormForMatch', "\n  return 'absent';\n}") +
+  ';return {kbNormForMatch,kbQuoteInSource,kbDehyphNormForMatch,kbClassifyQuoteMiss,KB_QUOTE_MISS_REASONS,KB_QUOTE_MISS_LABEL};'
+)(CASE.caseContentWords);
+const classify = (quote, source) => QM.kbClassifyQuoteMiss(quote, QM.kbNormForMatch(source), QM.kbDehyphNormForMatch(source));
+
+// v15.11 promotes de-hyphenation into the matcher. The property that has to hold is no
+// longer "unchanged" but "strictly additive": the fallback may only turn a FAIL into a
+// PASS, never the reverse. Everything downstream — including pass 2, where a failed match
+// discards the fact — rests on that.
+{
+  const src = 'The patient developed hypo-\nkalemia after aggressive diuresis and required replacement.';
+  const n = QM.kbNormForMatch(src), d = QM.kbDehyphNormForMatch(src);
+  t('the plain match still works exactly as before',
+    QM.kbQuoteInSource('developed hypokalemia', n) === false &&
+    QM.kbQuoteInSource('after aggressive diuresis', n) === true);
+  t('the fallback rescues the hyphenated quote',
+    QM.kbQuoteInSource('developed hypokalemia after aggressive diuresis', n, d) === true);
+  t('the fallback never turns a passing quote into a failing one',
+    QM.kbQuoteInSource('after aggressive diuresis', n, d) === true);
+  t('the fallback cannot rescue a quote that is genuinely absent',
+    QM.kbQuoteInSource('administer warfarin and check the INR weekly', n, d) === false);
+  t('the sub-10-char floor still short-circuits before any fallback work',
+    QM.kbQuoteInSource('K+ low', n, d) === false);
+  // De-hyphenation rejoins tokens; it must never bridge two rows of a table into one match.
+  const table = 'Digoxin 0.125 mg hold if HR below 60\nFurosemide 20 mg hold if SBP below 90';
+  const tn = QM.kbNormForMatch(table), td = QM.kbDehyphNormForMatch(table);
+  t('the fallback does not splice across a row boundary',
+    QM.kbQuoteInSource('digoxin 0.125 mg furosemide 20 mg', tn, td) === false);
+}
+t('pass 1 checks with the fallback, then re-tests the plain matcher to count rescues',
+  S.includes('if(!kbQuoteInSource(f.sourceQuote,srcNorm,srcDehyph)){quoteMiss++;noteMiss(1,f);continue;}') &&
+  S.includes('if(!kbQuoteInSource(f.sourceQuote,srcNorm))dehyphSaved++;'));
+t('pass 2 still discards on a failed match, now including the fallback',
+  S.includes('if(!kbQuoteInSource(f.sourceQuote,srcNorm,srcDehyph)){discarded++;noteMiss(2,f);continue;}'));
+// v15.10 merged pass-1 misses and pass-2 discards into one rollup printed under a sentence
+// about the first-pass count. A real build read "182 first-pass" then a breakdown summing
+// to 190 — the extra 8 were that run's audit discards.
+t('pass-1 misses and pass-2 discards roll up separately',
+  S.includes('const bucket=pass===1?missByReason:discardByReason;') &&
+  S.includes('const byReason={},discardByReason={};'));
+t('each breakdown is labelled with the number it reconciles against',
+  S.includes('Those {diag.quoteMiss} by reason:') && S.includes('The {diag.discarded} audit discard(s) by reason:'));
+t('a clean run says so instead of rendering nothing',
+  S.includes('Every first-pass quote was located verbatim in the source.'));
+
+t('a quote that IS present returns null, never a reason code',
+  classify('developed hypokalemia after diuresis', 'The patient developed hypokalemia after diuresis.') === null);
+t('a sub-10-char quote is bucketed, not dropped — the rollup has to reconcile with quoteMiss',
+  classify('K+ low', 'The patient developed hypokalemia.') === 'tooShort');
+t('line-break hyphenation is recognised as normalization-fixable',
+  classify('developed hypokalemia after diuresis', 'The patient developed hypo-\nkalemia after diuresis.') === 'hyphenation');
+t('an em-dash line break counts too', classify('preoperative teaching reduces anxiety', 'Careful preoperative teaching reduces anxiety.'.replace('preoperative', 'preop—\nerative')) === 'hyphenation');
+t('a ligature glyph is recognised as normalization-fixable',
+  classify('inflammation of the pleura', 'Chronic inﬂammation of the pleura is common.') === 'hyphenation');
+t('a soft hyphen mid-token is normalization-fixable',
+  classify('bradycardia requires holding the dose', 'Documented brady­cardia requires holding the dose today.') === 'hyphenation');
+t('scattered-but-present tokens read as reading order — the column-major case v16 exists for',
+  classify('apical pulse less than sixty hold digoxin', 'digoxin metoprolol hold hold apical pulse rate less than sixty beats') === 'reordered');
+t('about half the tokens present reads as partial',
+  classify('apical pulse less than sixty hold digoxin', 'apical pulse rate documented and the dose held when the patient is less alert than usual') === 'partial');
+t('almost nothing present reads as absent',
+  classify('apical pulse less than sixty hold digoxin', 'The wound bed was pink with moderate serosanguineous drainage.') === 'absent');
+// Substring containment would score this 4/4 and call it 'reordered'; word membership
+// scores it 0/4. "ate" lives inside "moderate" and would inflate every classification.
+t('token matching respects word boundaries, not substrings',
+  classify('ate lant sive tens', 'moderate anticoagulant hypertensive extension') === 'absent');
+// Found by running the classifier against real drug text: scoring function words rated a
+// wholly fabricated warfarin quote 'partial' against a digoxin paragraph, on "and"/"the".
+t('function words do not prop up a fabricated quote',
+  classify('administer warfarin 5 mg PO daily and check the INR weekly',
+    'Administer digoxin 0.125 mg PO daily and assess the apical pulse for one full minute.') === 'absent');
+t('clinical terms are still scored — the stopword list must not swallow them',
+  CASE.caseContentWords('administer warfarin daily and check the INR').join(' ') === 'administer warfarin daily check inr');
+t('every reason the classifier can emit has a display label',
+  QM.KB_QUOTE_MISS_REASONS.every(r => typeof QM.KB_QUOTE_MISS_LABEL[r] === 'string' && QM.KB_QUOTE_MISS_LABEL[r].length));
+{
+  const emitted = ['tooShort', 'hyphenation', 'reordered', 'partial', 'absent'];
+  t('the reason list matches what the classifier actually returns',
+    emitted.every(r => QM.KB_QUOTE_MISS_REASONS.includes(r)) && QM.KB_QUOTE_MISS_REASONS.length === emitted.length);
+}
+// v15.11: the classifier deliberately keeps diagnosing the PLAIN match. Because the caller
+// now only reaches it for quotes that failed plain AND de-hyphenated, 'hyphenation' can no
+// longer fire in the app — which makes a non-zero count there a regression signal.
+t('the classifier still diagnoses the plain match, not the promoted matcher',
+  classify('developed hypokalemia after diuresis', 'The patient developed hypo-\nkalemia after diuresis.') === 'hyphenation');
+t('a quote the promoted matcher accepts is never sent to the classifier as a miss', (() => {
+  const src = 'The patient developed hypo-\nkalemia after diuresis.';
+  const n = QM.kbNormForMatch(src), d = QM.kbDehyphNormForMatch(src);
+  const q = 'developed hypokalemia after diuresis';
+  return QM.kbQuoteInSource(q, n, d) === true;
+})());
+
+section('v15.10 — page composition probe');
+const kbCompositionSummary = new Function(
+  spanFrom('function kbCompositionSummary', 'excessRaster:u.composition.raster-medianRaster}))};\n}') +
+  ';return kbCompositionSummary;')();
+{
+  const u = (n, raster, path, text) => ({ n, composition: { raster, path, paint: 4, text } });
+  const sum = kbCompositionSummary([u(1, 0, 10, 900), u(2, 0, 12, 880), u(3, 4, 180, 40)]);
+  t('median path count is the document baseline', sum.medianPath === 12);
+  t('page furniture cancels itself out', sum.pages[0].excessPath <= 0);
+  t('a diagram page stands out against that baseline', sum.pages[2].excessPath > 100);
+  t('raster excess is tracked separately from vector', sum.pages[2].excessRaster === 4);
+  t('a text-rich page carrying a figure is still visible — the router blind spot in §7',
+    kbCompositionSummary([u(1, 0, 8, 900), u(2, 0, 9, 950), u(3, 6, 9, 900)]).pages[2].excessRaster > 0);
+}
+t('no probe data → null, never an empty summary', kbCompositionSummary([{ n: 1, kind: 'page' }]) === null);
+// The v16 spec §7 lists paintJpegXObject as verified-present in pdf.js 3.11.174. It is
+// not in the OPS table; JPEGs arrive as paintImageXObject. Naming it in the source would
+// be a silent no-op, so the probe must not depend on it.
+t('the probe does not depend on the non-existent paintJpegXObject', !S.includes('OPS.paintJpegXObject'));
+t('tiled and grouped raster variants are counted — a scanned page paints via those',
+  S.includes('OPS.paintImageXObjectRepeat') && S.includes('OPS.paintImageMaskXObjectGroup'));
+t('the probe is opt-in', S.includes('const [probeComposition,setProbeComposition]=useState(false);'));
+t('the probe runs before cleanup() releases the operator list',
+  S.indexOf('kbPageComposition(pg)') < S.indexOf('try{pg.cleanup();}catch(e){}\n      if(onProgress'));
+t('diagnostics export exists and is not a Knowledge Base', S.includes("kind:'latte-extraction-diagnostics'"));
+t('the panel no longer claims diagnostics never reach any export',
+  !S.includes('never written into the Knowledge Base or any export.'));
 
 /* ── 11. stage timing (pre-existing, pinned) ── */
 section('validateStageTiming');

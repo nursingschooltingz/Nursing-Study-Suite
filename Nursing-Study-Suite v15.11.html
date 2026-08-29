@@ -4,12 +4,14 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>LATTE Study Suite</title>
-<!-- v15.9 (2026-08-20): v15 series — crash/PPTX/CVE fixes, DOMPurify no-downgrade chain, KB replace guards, layout-aware PDF extraction + scanned-file detection, SRI integrity pins on every CDN script.
+<!-- v15.11 (2026-08-28): v15 series — crash/PPTX/CVE fixes, DOMPurify no-downgrade chain, KB replace guards, layout-aware PDF extraction + scanned-file detection, SRI integrity pins on every CDN script.
      v15.6 added NEIA-derived item quality to the Case Study Generator: terminology linting (warn), `instantiated` value provenance with numeric entailment at ERROR tier, deterministic MCQ heuristics, operationalized difficulty, and an independent per-item audit pass whose auditor sees only what the student sees.
      v15.7 extends that to the NCLEX Generator: `validateNCLEXWorksheet` checks the worksheet's self-reported DISTRIBUTION against what it actually produced, the audit profile is now a single tool-agnostic `itemAudit` row, worksheet MCQs route through the same auditor and repair path, artifacts carry a provenance stamp naming the configuration that made them, and Anki cards are linted for error-prone dose abbreviations.
      v15.8 is the first release driven by real usage rather than fixtures: fact coverage had been structurally always zero since v15 (the adapter cites fact IDs in PART 1, the prompt cites C-numbers in PART 4, and the scan counted the wrong token in Parts 3/4), a malformed DISTRIBUTION line silently disabled its own self-report check, and a repaired item kept showing its pre-repair verdict. The item audit now defaults to Flash and paces itself for free-tier limits. The audit gate's reliability is measured, not assumed — a full test-retest produced zero verdict flips.
      v15.9 is a correctness release driven entirely by real runs and a two-reviewer audit: the worksheet repair splice no longer expands $-sequences in model text, a quota stop no longer discards verdicts already paid for, ordering-step lists no longer destroy answer-key parsing, comma-grouped and trailing-zero values compare correctly, and both generators now size themselves to the facts they actually have instead of asking the model to invent the difference. Rationales may reference values the case itself presents as validated data.
-     Full history: LATTE-v15-changelog.md · regression harness: latte-tests.js (386 assertions) · test-retest: neia-retest.js -->
+     v15.10 is measurement, not behavior. quoteMiss was a bare count, which could not answer the question the v16 build decision turns on: whether a failed quote is line-break hyphenation (fixable by normalizing the matcher, no vision needed) or column-major reading-order scrambling (which only seeing the page fixes). Misses are now retained and classified, kbTextQuality names which pages are sparse, an opt-in probe counts raster/vector/text ops per page, and the diagnostics panel exports to JSON. kbQuoteInSource is byte-identical: no fact's fate changed.
+     v15.11 acts on what v15.10 measured. A real cardiovascular chapter produced 190 failed quotes: 83 line-break hyphenation/ligature, 107 column reading order, and zero 'partial' or 'absent' — not one fabricated quote in the run. De-hyphenation is therefore promoted into kbQuoteInSource as a strictly additive fallback (plain match first; the fallback can only turn a FAIL into a PASS), recovering the 83 without loosening anything. Reading-order failures are left alone by design: the fact is sound, only its proof fails. The same run exposed a reporting bug — pass-1 misses and pass-2 discards shared one rollup printed beneath the first-pass count, so a breakdown summing to 190 sat under a sentence saying 182. They now roll up separately.
+     Full history: LATTE-v15-changelog.md · regression harness: latte-tests.js (547 assertions) · test-retest: neia-retest.js -->
 <!-- v15.3: crossorigin added (SRI-ready — paste the verified sha384 integrity attrs from
      the changelog after a local hash check; applying unverified hashes would hard-block
      every script). DOMPurify 3.4.12 loads through a no-downgrade chain: cdnjs, then the
@@ -748,7 +750,11 @@ function kbTextQuality(units){
   if(!pages.length)return null;
   const chars=pages.map(u=>String(u.text||'').replace(/^\s*---\s*(?:PAGE|SLIDE)\s*\d+\s*---/i,'').trim().length);
   const total=chars.reduce((a,b)=>a+b,0);
-  return{pages:pages.length,empty:chars.filter(c=>c<50).length,total,avg:Math.round(total/pages.length)};
+  // v15.10: perPage is purely additive. The four aggregate fields are load-bearing for the
+  // scanned-source warning and must not move — but "3 pages nearly empty" does not say
+  // WHICH, and naming them is what the v16 benchmark's sparse-page row needs.
+  const perPage=pages.map((u,i)=>({n:u.n,kind:u.kind,chars:chars[i]}));
+  return{pages:pages.length,empty:chars.filter(c=>c<50).length,total,avg:Math.round(total/pages.length),perPage};
 }
 async function extractPdfTextSpaced(file){
   const pdf=await getPdfDoc(file);let text='';
@@ -1490,7 +1496,7 @@ function kbUnitLabel(units){
   const a=units[0],b=units[units.length-1];
   return a.n===b.n?`${a.kind} ${a.n}`:`${a.kind}s ${a.n}–${b.n}`;
 }
-async function kbSourceUnits(file,{signal,onProgress}={}){
+async function kbSourceUnits(file,{signal,onProgress,composition}={}){
   const name=(file.name||'').toLowerCase();
   if(name.endsWith('.pptx')){
     const text=await extractPptxText(file);
@@ -1515,6 +1521,9 @@ async function kbSourceUnits(file,{signal,onProgress}={}){
       units.push({kind:'page',n:i,text:'\n--- PAGE '+i+' ---\n'+pdfLayoutText(tc)});
       // Release the page's operator list / font data instead of holding every page
       // object alive until the whole document is scanned.
+      // v15.10: opt-in benchmark probe, before cleanup() — the operator list is exactly
+      // what cleanup() releases. A probe failure must never fail the build.
+      if(composition){try{units[units.length-1].composition=await kbPageComposition(pg);}catch(e){}}
       try{pg.cleanup();}catch(e){}
       if(onProgress&&(i%10===0||i===pdf.numPages))onProgress(i,pdf.numPages);
     }
@@ -1558,15 +1567,129 @@ async function kbBuildSourceChunks(file,maxChars=45000,overlap=1,opts){
   // v15.4: report text-layer quality before grouping, so the caller can warn the user
   // rather than billing them for a run over a page of nothing.
   if(opts&&opts.onQuality){try{const q=kbTextQuality(units);if(q)opts.onQuality(q);}catch(e){}}
+  // v15.10: composition is reported the same way quality is — measured during the scan,
+  // handed to the caller, never consulted by the extraction path itself.
+  if(opts&&opts.onComposition){try{const c=kbCompositionSummary(units);if(c)opts.onComposition(c);}catch(e){}}
   return kbGroupUnits(units,maxChars,overlap);
 }
 // Verify a model-supplied verbatim quote actually occurs in the source chunk.
 // Normalized comparison because PDF text extraction mangles whitespace and ligatures.
 function kbNormForMatch(s){return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();}
-function kbQuoteInSource(quote,sourceNorm){
+// v15.11: de-hyphenation promoted into the matcher, on measured evidence. A real build of
+// a cardiovascular chapter produced 190 failed quotes: 83 line-break hyphenation/ligature,
+// 107 column reading order, and — the number that mattered — ZERO 'partial' and ZERO
+// 'absent'. Not one quote was fabricated; every failure was a typesetting artifact. The 83
+// are safely recoverable, so they are now recovered.
+//
+// The fallback is STRICTLY ADDITIVE: the plain normalized match is tried first and its
+// result is returned unchanged when it succeeds. No quote that verified before this change
+// can begin failing because of it. That property is what makes this safe to apply to pass 2,
+// where a failed match discards the fact.
+//
+// It also cannot manufacture a false match across records. De-hyphenation only rejoins a
+// token broken by a line break; it never reorders, and it never bridges two rows of a table.
+// The 107 reading-order failures are untouched by design — see kbClassifyQuoteMiss.
+function kbQuoteInSource(quote,sourceNorm,sourceDehyphNorm){
   const q=kbNormForMatch(quote);
   if(q.length<10)return false;
-  return sourceNorm.includes(q);
+  if(sourceNorm.includes(q))return true;
+  return !!sourceDehyphNorm&&sourceDehyphNorm.includes(kbDehyphNormForMatch(quote));
+}
+// v15.10: quoteMiss has always been a bare count, and a bare count cannot answer the one
+// question the v16 build decision turns on. A failed quote is either a line-break
+// hyphenation artifact — fixable by normalizing kbNormForMatch, no vision needed — or
+// column-major reading-order scrambling, which only seeing the rendered page can fix.
+// Those two populations argue in opposite directions, and the strings were being thrown
+// away before anyone could tell them apart.
+//
+// kbDehyphNormForMatch is a CANDIDATE normalizer used ONLY for classification.
+// kbQuoteInSource is deliberately left alone: this release measures what de-hyphenation
+// would buy without changing which facts are kept.
+function kbDehyphNormForMatch(s){
+  return kbNormForMatch(String(s||'')
+    // soft hyphens and zero-width joiners the typesetter injected mid-token
+    .replace(/[­​‌‍⁠﻿]/g,'')
+    // ligatures: pdf.js emits these as single glyphs, so "inflammation" arrives as "in<fl>ammation"
+    .replace(/ﬀ/g,'ff').replace(/ﬁ/g,'fi').replace(/ﬂ/g,'fl').replace(/ﬃ/g,'ffi').replace(/ﬄ/g,'ffl')
+    // superscript footnote/reference marks interrupting a token run
+    .replace(/[¹²³⁰⁴-⁹†‡∗]/g,'')
+    // the actual de-hyphenation: join a hyphen ending a line to the word starting the next
+    .replace(/[-‐‑‒–—][ \t]*\r?\n[ \t]*/g,''));
+}
+// Reason codes, ordered cheapest-to-fix first. 'tooShort' exists so the rollup reconciles
+// with quoteMiss: kbQuoteInSource fails a sub-10-char quote outright, and a reason bucket
+// that silently dropped those would not sum to the count shown beside it.
+const KB_QUOTE_MISS_REASONS=['tooShort','hyphenation','reordered','partial','absent'];
+const KB_QUOTE_MISS_LABEL={tooShort:'too short to verify',hyphenation:'line-break hyphenation or ligature',reordered:'reading order (columns/tables)',partial:'partly present — paraphrase or seam',absent:'not present in this chunk'};
+// Diagnostics only. Returns null when the quote is NOT a miss, so a reason code can never
+// be mistaken for a verification result. sourceTokens is an optional prebuilt Set; without
+// it the token bag is rebuilt per call, which is fine at the volume misses occur in.
+//
+// v15.11: this deliberately still diagnoses the PLAIN normalized match, not kbQuoteInSource.
+// Since v15.11 the caller only reaches it for quotes that failed BOTH the plain and the
+// de-hyphenated match, so 'hyphenation' can no longer fire in the app — and that turns this
+// bucket into a free regression detector. A non-zero 'hyphenation' count in the diagnostics
+// panel means the matcher's fallback and this function have come apart, which is a bug.
+function kbClassifyQuoteMiss(quote,sourceNorm,sourceDehyphNorm,sourceTokens){
+  const q=kbNormForMatch(quote);
+  if(q.length<10)return 'tooShort';
+  if(String(sourceNorm||'').includes(q))return null;
+  if(sourceDehyphNorm&&sourceDehyphNorm.includes(kbDehyphNormForMatch(quote)))return 'hyphenation';
+  // Two things this must get right, both found by running it against real drug text:
+  // 1. Word-boundary membership, not substring containment — "ate" lives inside
+  //    "moderate" and would push every score toward 'reordered'.
+  // 2. Content words only. Function words occur in every source, so scoring them rated a
+  //    wholly fabricated warfarin quote 'partial' against a digoxin paragraph on the
+  //    strength of "and", "the" and "daily".
+  // caseContentWords/CASE_STOPWORDS are shared with the NCLEX item heuristics. That is a
+  // real coupling: widening that stopword list to tune distractor overlap would also
+  // change classification here. latte-tests.js pins the behavior this side needs.
+  const toks=caseContentWords(quote);
+  if(!toks.length)return 'absent';
+  const bag=sourceTokens||new Set(String(sourceNorm||'').split(' '));
+  let hit=0;for(const t of toks)if(bag.has(t))hit++;
+  const frac=hit/toks.length;
+  if(frac>=0.9)return 'reordered';
+  if(frac>=0.5)return 'partial';
+  return 'absent';
+}
+// v15.10: page composition, measured and recorded — never routed on. §7 of the v16 spec
+// wants a two-signal router; nothing here routes anything, and no threshold is applied.
+// Opt-in, because getOperatorList() on a 900-page textbook is not free.
+async function kbPageComposition(pg){
+  const OPS=(typeof pdfjsLib!=='undefined'&&pdfjsLib.OPS)||{};
+  const ol=await pg.getOperatorList();
+  const fns=ol.fnArray||[];
+  // The v16 spec's §7 named four raster operators as "verified present" in the pinned
+  // 3.11.174 build. paintJpegXObject is NOT among them — checked against the live OPS
+  // table, not recalled — and JPEGs arrive as paintImageXObject. The spec also omitted the
+  // Repeat and Group variants, which is how a tiled figure or a scanned page gets its
+  // bitmap on screen; counting only the singular forms would undercount exactly the pages
+  // this probe exists to find. The null filter keeps the set tolerant of a version bump
+  // in either direction.
+  const RASTER=new Set([OPS.paintImageXObject,OPS.paintImageXObjectRepeat,OPS.paintInlineImageXObject,OPS.paintInlineImageXObjectGroup,
+    OPS.paintImageMaskXObject,OPS.paintImageMaskXObjectGroup,OPS.paintImageMaskXObjectRepeat,OPS.paintSolidColorImageMask].filter(v=>v!=null));
+  const PAINT=new Set([OPS.stroke,OPS.closeStroke,OPS.fill,OPS.eoFill,OPS.fillStroke,OPS.eoFillStroke,OPS.closeFillStroke,OPS.closeEOFillStroke,OPS.shadingFill].filter(v=>v!=null));
+  let raster=0,path=0,paint=0,text=0;
+  for(const fn of fns){
+    if(RASTER.has(fn))raster++;
+    else if(fn===OPS.constructPath)path++;
+    else if(PAINT.has(fn))paint++;
+    else if(fn===OPS.showText||fn===OPS.showSpacedText)text++;
+  }
+  return{raster,path,paint,text,ops:fns.length};
+}
+// Page furniture — running heads, rules, borders, logos — repeats across every page, so
+// the document's own median is a better zero than 0 is. That is §7's repetitiveDecoration
+// term, computed here and used by nobody yet.
+function kbCompositionSummary(units){
+  const withComp=(units||[]).filter(u=>u&&u.composition);
+  if(!withComp.length)return null;
+  const med=a=>{const s=a.slice().sort((x,y)=>x-y);return s.length?s[Math.floor(s.length/2)]:0;};
+  const medianPath=med(withComp.map(u=>u.composition.path));
+  const medianRaster=med(withComp.map(u=>u.composition.raster));
+  return{medianPath,medianRaster,pages:withComp.map(u=>({n:u.n,raster:u.composition.raster,path:u.composition.path,paint:u.composition.paint,text:u.composition.text,
+    excessPath:u.composition.path-medianPath,excessRaster:u.composition.raster-medianRaster}))};
 }
 
 // Compact, inspectable fact rows for one condition. Every row's ID is a FactTag, so any
@@ -1616,6 +1739,7 @@ function KnowledgeBaseBuilder(){
   const [diag,setDiag]=useState(null);
   const [logs,setLogs]=useState([]);
   const [showDiag,setShowDiag]=useState(false);
+  const [probeComposition,setProbeComposition]=useState(false);
   const [kbOutcomes,setKbOutcomes]=useState('');
   const [kbPoints,setKbPoints]=useState('');
   const [kbExtra,setKbExtra]=useState('');
@@ -1664,6 +1788,9 @@ function KnowledgeBaseBuilder(){
     if(!kbConfirmReplace('Building from the loaded files'))return;
     setBusy(true);setError('');setWarnings([]);setProg(0);setDiag(null);setLogs([]);
     const parts=[];const problems=[];const stats=[];const controller=new AbortController();abortRef.current=controller;
+    // v15.10: build-time QA collectors for the v16 §11 benchmark. Keyed by filename so a
+    // multi-file run stays attributable. Never written into the Knowledge Base.
+    const quality={},composition={};
     // Honor the sidebar toggle, exactly like every other tool in the suite.
     const {model,level}=cfg.forTool('knowledge');
     const auditCfg=cfg.forTool('knowledgeAudit');
@@ -1674,7 +1801,10 @@ function KnowledgeBaseBuilder(){
       const queue=[];
       for(const f of files){
         try{const chunks=await kbBuildSourceChunks(f,chunkChars,overlapUnits,{signal:controller.signal,onProgress:(p,tot)=>addLog(`Reading ${f.name} — page ${p}/${tot}`),
+          composition:probeComposition,
+          onComposition:c=>{composition[f.name]=c;},
           onQuality:q=>{
+            quality[f.name]=q;
             if(q.avg<100||q.empty>=Math.ceil(q.pages*0.6)){
               const msg=`${f.name}: little or no text layer — ${q.total.toLocaleString()} character(s) across ${q.pages} page(s)${q.empty?`, ${q.empty} nearly empty`:''}. This is usually a scanned or photographed PDF. Only extracted text reaches the model, so this file will yield few or no facts. Use a text-based PDF (or OCR it first).`;
               addLog('⚠ '+msg,'err');problems.push(msg);
@@ -1692,6 +1822,23 @@ function KnowledgeBaseBuilder(){
         const job=queue.shift();
         const{file,chunk}=job;const tag=file.name+' ('+chunk.label+')';
         const srcNorm=kbNormForMatch(chunk.text);
+        // v15.11: srcDehyph now feeds kbQuoteInSource as well as the classifier.
+        const srcDehyph=kbDehyphNormForMatch(chunk.text),srcToks=new Set(srcNorm.split(' '));
+        // v15.11: pass-1 misses and pass-2 discards are counted SEPARATELY. v15.10 merged
+        // them under one "By reason" heading printed directly beneath a sentence about the
+        // first-pass count, so a real build read "182 first-pass quotes" and then a
+        // breakdown summing to 190 — the extra 8 being that run's audit discards. The
+        // numbers were right and the label was wrong.
+        const missDetail=[],missByReason={},discardByReason={};
+        let dehyphSaved=0;
+        const noteMiss=(pass,f)=>{
+          const reason=kbClassifyQuoteMiss(f.sourceQuote,srcNorm,srcDehyph,srcToks);
+          if(!reason)return;
+          const bucket=pass===1?missByReason:discardByReason;
+          bucket[reason]=(bucket[reason]||0)+1;
+          // Capped: a pathological chunk should not put thousands of textbook quotes in memory.
+          if(missDetail.length<25)missDetail.push({pass,reason,quote:String(f.sourceQuote||'').slice(0,240),fact:String(f.text||'').slice(0,160),latteBucket:f.latteBucket||null});
+        };
         let meta=null,parsed=null;
         // ---- Pass 1: extraction ----
         try{
@@ -1713,7 +1860,7 @@ function KnowledgeBaseBuilder(){
         }catch(e){
           if(e.name==='AbortError')throw e;
           problems.push(tag+': '+(e.message||String(e)));
-          stats.push({tag,file:file.name,label:chunk.label,chars:chunk.text.length,facts:0,recovered:0,discarded:0,quoteMiss:0,failed:true});
+          stats.push({tag,file:file.name,label:chunk.label,chars:chunk.text.length,facts:0,recovered:0,discarded:0,quoteMiss:0,quoteMissDetail:[],quoteMissByReason:{},discardByReason:{},dehyphSaved:0,failed:true});
           addLog(`✕ ${tag}: ${e.message||e}`,'err');bump(verifyPass?2:1);continue;
         }
         let nFacts=(parsed.conditions||[]).reduce((n,c)=>n+((c.facts||[]).length),0);
@@ -1721,7 +1868,14 @@ function KnowledgeBaseBuilder(){
         // match is weak evidence — and dropping a primary fact would cause the very
         // omission this whole feature exists to prevent.
         let quoteMiss=0;
-        for(const c of parsed.conditions||[])for(const f of c.facts||[]){if(String(f.sourceQuote||'').trim()&&!kbQuoteInSource(f.sourceQuote,srcNorm))quoteMiss++;}
+        // v15.11: the authoritative check now includes the de-hyphenated fallback. The
+        // second call re-tests the plain matcher purely to count what the fallback rescued,
+        // so the panel can show the fix earning its keep — and show it stop, if it ever does.
+        for(const c of parsed.conditions||[])for(const f of c.facts||[]){
+          if(!String(f.sourceQuote||'').trim())continue;
+          if(!kbQuoteInSource(f.sourceQuote,srcNorm,srcDehyph)){quoteMiss++;noteMiss(1,f);continue;}
+          if(!kbQuoteInSource(f.sourceQuote,srcNorm))dehyphSaved++;
+        }
         parts.push(Object.assign(parsed,{source:Object.assign({},parsed.source,{filename:file.name,range:chunk.label})}));
         bump(1);
         addLog(`✓ ${tag} — ${nFacts} fact(s)`,'ok');
@@ -1742,7 +1896,8 @@ function KnowledgeBaseBuilder(){
               const byCond=new Map();
               for(const f of missed){
                 if(!String(f.text||'').trim())continue;
-                if(!kbQuoteInSource(f.sourceQuote,srcNorm)){discarded++;continue;}
+                if(!kbQuoteInSource(f.sourceQuote,srcNorm,srcDehyph)){discarded++;noteMiss(2,f);continue;}
+                if(!kbQuoteInSource(f.sourceQuote,srcNorm))dehyphSaved++;
                 const cn=String(f.conditionName||'').trim()||'Unsorted';
                 if(!byCond.has(cn))byCond.set(cn,[]);
                 const{conditionName,...rest}=f;
@@ -1760,21 +1915,46 @@ function KnowledgeBaseBuilder(){
           }
           bump(1);
         }
-        stats.push({tag,file:file.name,label:chunk.label,chars:chunk.text.length,facts:nFacts,recovered,discarded,quoteMiss,failed:false});
+        stats.push({tag,file:file.name,label:chunk.label,chars:chunk.text.length,facts:nFacts,recovered,discarded,quoteMiss,quoteMissDetail:missDetail,quoteMissByReason:missByReason,discardByReason,dehyphSaved,failed:false});
       }
       if(!parts.length)throw new Error('No source chunk completed successfully. '+problems.join(' | '));
       const kb=mergeLatteParts(parts,course,exam);
       K.setKnowledgeBase(kb);setSelected(kb.conditions[0]?.id||null);setWarnings(problems);
       const flagged=kbFlagUnderextraction(stats,scoped);
+      // v15.11: two independent rollups. byReason sums to quoteMiss and discardByReason
+      // sums to discarded — each reconciles against the number printed next to it, which
+      // the single merged rollup in v15.10 did not.
+      const byReason={},discardByReason={};
+      for(const s of stats){
+        for(const k of Object.keys(s.quoteMissByReason||{}))byReason[k]=(byReason[k]||0)+s.quoteMissByReason[k];
+        for(const k of Object.keys(s.discardByReason||{}))discardByReason[k]=(discardByReason[k]||0)+s.discardByReason[k];
+      }
       setDiag({chunks:flagged,gaps:kbBucketGaps(kb),
         recovered:stats.reduce((n,s)=>n+s.recovered,0),
         discarded:stats.reduce((n,s)=>n+s.discarded,0),
         quoteMiss:stats.reduce((n,s)=>n+s.quoteMiss,0),
+        byReason,discardByReason,dehyphSaved:stats.reduce((n,s)=>n+(s.dehyphSaved||0),0),
+        quality,composition,chunkChars,overlapUnits,
         model,level,auto:cfg.autoProfile,verified:verifyPass,focus:focusBlock?(scoped?'scope':'prioritize'):null});
       setProg(100);
       addLog(`Knowledge Base built: ${kb.conditions.length} condition(s), ${(kb.conditions||[]).reduce((n,c)=>n+(c.facts||[]).length,0)} fact(s).`,'ok');
     }catch(e){if(e.name==='AbortError')setError('Knowledge Base extraction cancelled. Completed chunks were not committed.');else setError(e.message||String(e));}
     finally{abortRef.current=null;setBusy(false);}
+  };
+  // v15.10: the diagnostics panel is a scroll box that the next build discards, and the
+  // v16 §11 benchmark needs its numbers to outlive the session — §11 explicitly stages
+  // this run into a 50-100 page calibration set later. Build-time QA only: this file is
+  // NOT a Knowledge Base, and it carries verbatim source quotes, so it stays out of git.
+  const exportDiag=()=>{
+    if(!diag)return;
+    const payload={
+      kind:'latte-extraction-diagnostics',schemaVersion:1,exportedAt:new Date().toISOString(),
+      run:{model:diag.model,level:diag.level,autoProfile:diag.auto,auditPass:diag.verified,focus:diag.focus,chunkChars:diag.chunkChars,overlap:diag.overlapUnits,course,exam},
+      totals:{chunks:diag.chunks.length,flagged:diag.chunks.filter(c=>c.flag).length,recovered:diag.recovered,discarded:diag.discarded,quoteMiss:diag.quoteMiss,quoteMissByReason:diag.byReason,discardByReason:diag.discardByReason,dehyphSaved:diag.dehyphSaved},
+      textQuality:diag.quality,pageComposition:diag.composition,
+      chunks:diag.chunks,bucketGaps:diag.gaps
+    };
+    downloadBlob(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),'LATTE-Extraction-Diagnostics-'+new Date().toISOString().slice(0,10)+'.json');
   };
   const kb=K.knowledgeBase,md=useMemo(()=>renderKBMarkdown(kb),[kb]),validation=useMemo(()=>validateLatteKnowledgeBase(kb),[kb]),facts=(kb.conditions||[]).reduce((n,c)=>n+(c.facts||[]).length,0),sel=(kb.conditions||[]).find(c=>c.id===selected);
   return <div className="tool-panel"><h2 className="tool-title">🧠 LATTE Knowledge Base</h2><p className="tool-desc">Upload once, extract source-grounded LATTE facts once, then reuse them for Anki, priority analysis, and NCLEX generation.</p>{K.persistenceError&&<div className="error-banner"><span>⚠</span><div>{K.persistenceError}</div></div>}
@@ -1813,6 +1993,12 @@ function KnowledgeBaseBuilder(){
           <div style={{fontSize:10,color:'var(--text-dim)',marginTop:2,lineHeight:1.5}}>Re-reads each chunk against what was extracted and recovers what the first pass missed. Roughly doubles build time and token use. Recovered facts are discarded automatically unless their verbatim quote is found in the source.</div>
         </span>
       </label>
+      <label style={{display:'flex',alignItems:'flex-start',gap:8,fontSize:12,color:'var(--text)',cursor:'pointer',marginBottom:10}}>
+        <input type="checkbox" checked={probeComposition} onChange={e=>setProbeComposition(e.target.checked)} style={{accentColor:'var(--accent)',marginTop:2}}/>
+        <span>Page composition probe <span className="badge-opt">benchmark</span>
+          <div style={{fontSize:10,color:'var(--text-dim)',marginTop:2,lineHeight:1.5}}>Counts images, vector paths and text runs per page while the file is read, for the v16 multimodal benchmark. Measurement only — nothing routes on it and no page is sent anywhere. It adds a pass over each page's operator list, so leave it off for routine builds of long books.</div>
+        </span>
+      </label>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
         <div className="field-block"><label style={{fontSize:11}}>Chunk size (characters)</label><input type="number" min={6000} max={120000} step={1000} value={chunkChars} onChange={e=>setChunkChars(Math.max(6000,Number(e.target.value)||30000))}/><div style={{fontSize:9.5,color:'var(--text-dim)',marginTop:3}}>Smaller = more thorough per page, more calls. Oversized chunks split automatically on truncation.</div></div>
         <div className="field-block"><label style={{fontSize:11}}>Overlap (pages/slides)</label><input type="number" min={0} max={5} step={1} value={overlapUnits} onChange={e=>setOverlapUnits(Math.max(0,Math.min(5,Number(e.target.value)||0)))}/><div style={{fontSize:9.5,color:'var(--text-dim)',marginTop:3}}>Carries trailing pages into the next chunk so content on a seam keeps its context. Duplicates are merged.</div></div>
@@ -1835,9 +2021,12 @@ function KnowledgeBaseBuilder(){
             {diag.focus==='scope'&&<span style={{color:'var(--accent-warm)',fontWeight:400}}> · SCOPE mode — off-topic content was skipped</span>}
             {diag.focus==='prioritize'&&<span style={{color:'var(--text-dim)',fontWeight:400}}> · focus: prioritize</span>}
           </span>
-          <button className="btn-secondary" style={{padding:'3px 10px',fontSize:11}} onClick={()=>setShowDiag(s=>!s)}>{showDiag?'Hide':'Details'}</button>
+          <span style={{display:'flex',gap:6}}>
+            <button className="btn-secondary" style={{padding:'3px 10px',fontSize:11}} onClick={exportDiag}>Export JSON</button>
+            <button className="btn-secondary" style={{padding:'3px 10px',fontSize:11}} onClick={()=>setShowDiag(s=>!s)}>{showDiag?'Hide':'Details'}</button>
+          </span>
         </div>
-        <div style={{fontSize:9.5,color:'var(--text-dim)',marginTop:5}}>Build-time QA only — never written into the Knowledge Base or any export.</div>
+        <div style={{fontSize:9.5,color:'var(--text-dim)',marginTop:5}}>Build-time QA only — never written into the Knowledge Base or any study artifact. Export JSON writes these numbers to a separate file; it quotes the source, so keep it out of shared repos.</div>
         {showDiag&&<div style={{marginTop:9}}>
           <div style={{maxHeight:210,overflowY:'auto',background:'var(--bg-deep)',border:'1px solid var(--border)',borderRadius:6,padding:8}}>
             {diag.chunks.map((c,i)=><div key={i} style={{fontSize:10,fontFamily:'JetBrains Mono',lineHeight:1.6,marginBottom:3,color:c.flag?'var(--accent-warm)':'var(--text-dim)'}}>
@@ -1848,7 +2037,19 @@ function KnowledgeBaseBuilder(){
               {c.flag&&<span style={{color:'var(--accent-warm)'}}> — {KB_FLAG_LABEL[c.flag]}</span>}
             </div>)}
           </div>
-          {diag.quoteMiss>0&&<div style={{fontSize:10,color:'var(--text-dim)',marginTop:7,lineHeight:1.5}}>{diag.quoteMiss} first-pass quote(s) could not be located verbatim in the source. Often just PDF spacing artifacts — these facts are kept, not dropped, but they are the ones worth spot-checking.</div>}
+          {diag.quoteMiss>0
+            ?<div style={{fontSize:10,color:'var(--text-dim)',marginTop:7,lineHeight:1.5}}>{diag.quoteMiss} first-pass quote(s) could not be located verbatim in the source. Often just PDF spacing artifacts — these facts are kept, not dropped, but they are the ones worth spot-checking.</div>
+            :<div style={{fontSize:10,color:'var(--accent-green)',marginTop:7,lineHeight:1.5}}>✓ Every first-pass quote was located verbatim in the source.</div>}
+          {diag.byReason&&Object.keys(diag.byReason).length>0&&<div style={{fontSize:10,color:'var(--text-dim)',marginTop:5,lineHeight:1.5}}>
+            Those {diag.quoteMiss} by reason: {KB_QUOTE_MISS_REASONS.filter(r=>diag.byReason[r]).map(r=>diag.byReason[r]+' ' + KB_QUOTE_MISS_LABEL[r]).join(' · ')}
+            <div style={{marginTop:3,opacity:.85}}>Reading-order misses come from multi-column or tabular layout: the words are all there, but hundreds of characters apart in the text stream, so the fact is sound and only its proof fails. A non-zero hyphenation count here would mean the de-hyphenation fallback has regressed.</div>
+          </div>}
+          {diag.discarded>0&&diag.discardByReason&&Object.keys(diag.discardByReason).length>0&&<div style={{fontSize:10,color:'var(--text-dim)',marginTop:5,lineHeight:1.5}}>
+            The {diag.discarded} audit discard(s) by reason: {KB_QUOTE_MISS_REASONS.filter(r=>diag.discardByReason[r]).map(r=>diag.discardByReason[r]+' ' + KB_QUOTE_MISS_LABEL[r]).join(' · ')}
+          </div>}
+          {diag.dehyphSaved>0&&<div style={{fontSize:10,color:'var(--accent-green)',marginTop:5,lineHeight:1.5}}>
+            ✓ {diag.dehyphSaved} quote(s) verified only after de-hyphenation — line-break hyphens and ligatures that would have counted as unverified before v15.11.
+          </div>}
           {diag.gaps.length>0&&<div style={{marginTop:9}}>
             <div style={{fontSize:10,fontWeight:600,textTransform:'uppercase',letterSpacing:1,color:'var(--text-dim)',marginBottom:5}}>LATTE bucket gaps ({diag.gaps.length} condition{diag.gaps.length===1?'':'s'})</div>
             <div style={{maxHeight:150,overflowY:'auto',background:'var(--bg-deep)',border:'1px solid var(--border)',borderRadius:6,padding:8}}>

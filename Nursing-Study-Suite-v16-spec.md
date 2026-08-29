@@ -1,6 +1,16 @@
 # v16 — Selective Multimodal Ingestion (design spec)
 
-**Status: NOT APPROVED FOR BUILD.** This architecture is settled but rests on an assumption nobody has measured — that text-layer extraction is losing clinically meaningful content in *your* textbooks at a rate worth this complexity. Run the benchmark in §11 first. If the numbers don't justify it, the correct outcome is to build nothing, or to build only §10's v16a subset.
+> ## ⛔ NOT BEING BUILT — decided 2026-08-28
+>
+> **This document is retained as a design record, not a plan.** Nothing in it is approved, and no part of it should be implemented without first re-opening the decision below.
+>
+> The spec always rested on one unmeasured assumption: that text-layer extraction is losing clinically meaningful content *in the sources this suite is actually fed*, at a rate worth this complexity. §11 was written to measure it. **It was never run, and does not need to be.** §11's decisive row is "facts visible on the page but absent from the KB," and the maintainer's material — specialized, text-first nursing sources rather than publisher textbook chapters — contains essentially no drug tables rendered as images, ECG strips, ACLS or triage flowcharts, or raster figures. §2's premise does not hold for it. Vision has nothing to recover, so the honest outcome is §11's first branch: **build nothing.**
+>
+> **What would re-open this:** a change in source material. If the inputs ever become real textbook chapters or scanned material, the premise returns and §11 becomes the right first step again. v15.10's opt-in page composition probe exists to make that re-check cheap, which is why it stays in the app even though this feature is cancelled.
+>
+> **What would *not* re-open this:** a high `reordered` count in the quote-miss diagnostics. Two-column layouts are common in specialized sources and inflate that bucket, but the model still receives the full chunk text and still extracts the fact correctly — only the verbatim quote fails, so the fact is marked unverified rather than lost. That is a provenance cost, not content loss, and it does not justify this build. See §4.
+>
+> **What survived.** v15.10 shipped this spec's instrumentation — classified quote misses (§4's two populations), per-page text quality, the composition probe (§7's signals, measured but never routed on), and a diagnostics export. It still earns its keep on the cheaper question §4 raises: whether to promote de-hyphenation into the matcher. §7's raster-operator claim was found to be **wrong** and has been corrected against the live build.
 
 Baseline: v15.4 (`Nursing-Study-Suite-7-24-26_v15.4.html`). Every claim about current behavior below was verified against that file, not recalled.
 
@@ -100,12 +110,12 @@ Allowed at 🔵: *"Atrial fibrillation shows irregular R-R intervals."* Blocked 
 A sparse-text probe alone is insufficient. A page with 500 words of prose **and** a full-width ECG strip passes `kbTextQuality` cleanly while the rhythm stays invisible forever. Trigger vision on any of:
 
 - sparse or empty text layer (existing `kbTextQuality` thresholds)
-- **significant raster content** — `page.getOperatorList()`, count `OPS.paintImageXObject`, `paintJpegXObject`, `paintImageMaskXObject`, `paintInlineImageXObject`
+- **significant raster content** — `page.getOperatorList()`, count the image-paint operators. **Corrected in v15.10 against the live `pdfjsLib.OPS` table:** `paintJpegXObject` **does not exist** in 3.11.174 — JPEGs arrive as `paintImageXObject` — and the singular forms alone undercount, because tiled figures and scanned pages paint through `paintImageXObjectRepeat`, `paintImageMaskXObjectGroup`, `paintImageMaskXObjectRepeat`, `paintInlineImageXObjectGroup` and `paintSolidColorImageMask`. See `kbPageComposition`.
 - **significant vector content** — path-op density (`OPS.constructPath` and stroke/fill) relative to text density. **This signal is not optional:** ACLS algorithms, triage trees, and sepsis pathways are typically drawn as vector paths with zero raster images, and a raster-only probe calls those pages clean.
 - audit trouble on that chunk (high `recovered` or `quoteMiss`)
 - **manual override** — an "Analyze this page visually" control, which ships regardless of router quality. No heuristic catches every meaningful diagram.
 
-API surface verified present in the pinned pdf.js 3.11.174 build: `getOperatorList`, `OPS`, `fnArray`, `argsArray`, and all four paint operators above.
+API surface verified present in the pinned pdf.js 3.11.174 build: `getOperatorList`, `OPS`, `fnArray`, `argsArray`. **The original claim that "all four paint operators" were verified was wrong** — it was written from recall, and `paintJpegXObject` is absent from the OPS table. v15.10's `kbPageComposition` enumerates the operators that actually exist and filters out any that do not, so a version bump degrades quietly in either direction rather than silently counting zero.
 
 **Route on a visual-complexity score, not a binary op count.** `if (constructPathCount > 25) useVision()` will fire on decorative borders, table rules, background shapes, and publisher ornamentation. Frame it as a weighted score instead:
 
@@ -165,6 +175,8 @@ The v16a/v16b boundary is an experiment: if you press the manual button on every
 
 ## 11. Decision gate — the 20-page benchmark
 
+> **Resolved 2026-08-28 without running it.** The gate asked whether meaningful content is being lost to text-only extraction. Direct knowledge of the source material answered the decisive row — see the status block at the top. The procedure below is kept because it is the right procedure if the sources ever change; `v16-benchmark-worksheet.md` holds the fill-in version.
+
 Run one dense pharmacology or cardiac chapter through v15.4 and read the Extraction diagnostics panel. Inspect 20 representative pages: **5 prose, 5 drug/lab tables, 5 diagram/ECG-heavy, 5 mixed-layout with callout boxes.**
 
 | Measurement | Source | Tells you |
@@ -211,6 +223,12 @@ Recorded so they don't get re-imported later:
 - *"Quote-match failure means the fact is ungrounded."* — Would invert the deliberate pass-1 policy and reintroduce omissions. See §4.
 - *"Artifact evidence = min(all cited facts)."* — Over-taints; use dual-track (§5).
 
-## 13. Provenance
+## 13. Outcome
+
+Not built. The architecture is sound and the review that produced it was worth doing; the premise simply does not hold for the material this suite is used on. Recording that plainly is more useful than leaving the document open-ended, because an unresolved spec invites re-litigation every time someone reads it.
+
+The general lesson, worth keeping: **the benchmark's job was to answer a question about the sources, and the maintainer already knew the answer.** Measuring would have cost a chapter of API calls to confirm a zero. A gate is there to prevent building on an assumption — not to be run for its own sake once the assumption is settled by better evidence.
+
+## 14. Provenance
 
 Derived from a multi-model design review (Claude, ChatGPT, Gemini) across several sessions, with every disputed claim adjudicated against the v15.4 source rather than against consensus. The corrections that most shaped this spec: the pass-1/pass-2 quote asymmetry and the ⚪ state; the router's blind spot for text-rich pages containing figures; dual-track evidence instead of `min()`; and per-page client-side rendering instead of document upload.

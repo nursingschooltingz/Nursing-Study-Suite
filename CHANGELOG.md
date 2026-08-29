@@ -12,15 +12,103 @@ Every release since 15.0 has been verified against three gates before shipping: 
 ## [Unreleased]
 
 ### To do
-- Run the 20-page benchmark in `Nursing-Study-Suite-v16-spec.md` §11 to decide whether v16 multimodal ingestion gets built at all.
+- **Spot-check the 2 `partial` quotes** that appeared in the v15.11 rebuild (0 in the previous run). Most likely a chunk-seam artifact or a light paraphrase; 2 out of ~180 is noise, but `partial` is the one bucket that can indicate a genuine quoting problem rather than a layout one.
 - Confirm against a primary NCSBN source whether the 2026 Test Plan renames *Safety and Infection Control* to *Safety and Infection Prevention and Control*. The v4.2 patch claimed it; it could not be verified. `NCLEX_CATEGORY_LABELS` keeps the long-standing label until then.
 - Supply real NCLEX-RN Test Plan activity statements to the generator, then promote Test Plan Alignment from WARN-only to a hard FAIL in the v4.2 gate.
 - **Run a real batch after any generator change.** Every v15.8 and v15.9 bug came from live output; none was reachable from the synthetic tests.
 - **B3 / B4** from the v15.7 brief are unstarted. B3a needs approval to edit two frozen extractor prompts.
 
 ### Under consideration
-- **De-hyphenation** — de-hyphenation and ligature normalization in `kbNormForMatch`, to promote quote-verification misses caused by line-break hyphenation. Cheaper than v16 and may resolve a meaningful share of `quoteMiss`.
-- **v16** — selective multimodal page ingestion. Architecture settled, build blocked pending benchmark data. See `Nursing-Study-Suite-v16-spec.md`.
+- *(nothing open)*
+
+### Decided against
+- **v16 — selective multimodal page ingestion. Not being built (2026-08-28).** The §11 benchmark was never run and is not needed. Its decisive row is "facts visible on the page but absent from the KB," and the sources this suite is actually fed — specialized, text-first nursing material rather than publisher textbook chapters — contain essentially no drug tables rendered as images, ECG strips, flowcharts or raster figures. §2's premise does not hold for that material, so vision has nothing to recover. "Build nothing" is one of the three outcomes §11 names, reached on better evidence than a 20-page pilot would have produced.
+
+  Two notes so this does not get re-opened by accident. **A high `reordered` count is not a reason to revisit it** — two-column layouts scramble the text stream and inflate that bucket, but the model still receives the full text and still extracts the fact; only the verbatim quote fails, so the fact is marked unverified rather than lost. **A change of source material is** — if the inputs ever become real textbook chapters, the premise returns and §11 becomes the right first step again. The spec is kept for that case; nothing in it is approved.
+
+  v15.10's instrumentation is not wasted: it was built to answer this question and it still answers the cheaper one (de-hyphenation) on every ordinary build. The opt-in composition probe stays in the app, off by default, as the cheap way to re-check the source-profile assumption.
+
+---
+
+## [15.11] — 2026-08-28
+
+Acts on what v15.10 measured. One release cycle, one number, one decision.
+
+### The measurement
+
+A real cardiovascular chapter — 6 chunks, 362 facts, audit pass on — produced **190 failed quotes**:
+
+| Reason | Count |
+|---|---|
+| line-break hyphenation / ligature | **83** |
+| reading order (columns / tables) | **107** |
+| partial | 0 |
+| absent | 0 |
+| too short | 0 |
+
+**The zero row is the finding.** Across 190 verification failures, not one quote was fabricated or paraphrased. Every single failure was a typesetting artifact — a hyphen at a line break, or a two-column text stream. The extraction was never the problem; the matcher was reading a mangled source.
+
+### Changed
+
+- **De-hyphenation promoted into `kbQuoteInSource`.** `kbDehyphNormForMatch` shipped in v15.10 wired only to the classifier, precisely so the payoff could be measured before the policy moved. It has been, so it moves: 83 quotes per chapter stop being reported as unverified.
+
+  The fallback is **strictly additive** — the plain normalized match runs first and returns on success; the de-hyphenated comparison is consulted only after a failure. It can turn a FAIL into a PASS and never the reverse. That property is load-bearing, because pass 2 *discards* a fact whose quote fails, and a matcher that could newly fail a previously passing quote would silently shrink the knowledge base. Do not collapse it into a single de-hyphenated comparison.
+
+  It also cannot fabricate a match across records: de-hyphenation rejoins a token broken by a line break, never reorders, and never bridges two rows of a table. Asserted in the harness against a two-drug table.
+
+- **Reading-order failures are left alone, deliberately.** The remaining 107 come from multi-column layout — all the words are present, hundreds of characters apart in the stream. Those facts are extracted correctly; only the verbatim proof fails. No matcher loose enough to accept them is safe for doses (v16 spec §4). Accepted as a known provenance cost, not a defect.
+
+### Fixed
+
+- **The diagnostics rollup mixed two populations under one label.** Pass-1 misses and pass-2 audit discards were counted into a single `byReason` object, rendered directly beneath the sentence reporting the *first-pass* count. A real build read "182 first-pass quote(s) could not be located" and then a breakdown summing to **190** — the extra 8 being that run's audit discards. The numbers were correct; the label was wrong, and the discrepancy was only visible on a build that had both misses and discards. They now roll up separately, each printed under the number it reconciles against.
+
+- **A clean run rendered nothing at all.** Zero unverified quotes produced no line, which is indistinguishable from the panel being broken. It now says so explicitly.
+
+### Added
+
+- **`dehyphSaved`** — a count of quotes that verified *only* via the fallback, shown in the panel and included in the diagnostics export. It makes the fix visibly earn its keep, and would make it visible if it ever stopped working.
+
+### Notes
+
+- **The `hyphenation` bucket is now a regression detector.** `kbClassifyQuoteMiss` still diagnoses the *plain* match, and since this release it is only reached for quotes that failed plain **and** de-hyphenated. The bucket therefore cannot fire unless the matcher and the classifier have come apart. Do not "fix" a future non-zero reading by pointing the classifier at the promoted matcher — that would delete the signal.
+- Harness 538 → 547 assertions. The v15.10 assertion pinning `kbQuoteInSource` as byte-identical was replaced, not deleted: the property under test is now "strictly additive" rather than "unchanged."
+- No prompt constant was touched.
+- **Confirmed on a live rebuild of the same chapter.** `hyphenation` collapsed to **0**, the regression detector stayed silent, and **77 quotes verified only via the fallback**. First-pass misses fell **182 → 97**; audit discards fell **8 → 3**, meaning five recovered facts that had been thrown away for a line-break hyphen are now retained — the fix recovered content, not just reporting.
+
+  The cross-run agreement is the part worth keeping. v15.10's classifier predicted 83 of 190 failures (43.7%) were hyphenation-fixable; v15.11's fallback rescued 77 of 177 (43.5%) on an independently generated set of quotes. The diagnostic was an accurate predictor of the repair, which is the evidence that the measure-then-act sequence worked rather than got lucky.
+
+  Both rollups reconciled against their own headline (97 = 95 reading order + 2 partial; 3 = 3 reading order), confirming the mislabelled-rollup fix.
+- **Still zero `absent` across both runs.** Roughly 370 quotes over two independent builds, no fabricated citation in either. The residual 95 reading-order misses are the accepted structural cost of a two-column source.
+
+---
+
+## [15.10] — 2026-08-20
+
+Instrumentation for the v16 decision. No behavior changed: `kbQuoteInSource` is byte-identical, the pass-1/pass-2 quote asymmetry is untouched, and no prompt constant was edited. This release only retains and labels what was previously counted and discarded.
+
+### Why
+
+v16 has been blocked on the 20-page benchmark in `Nursing-Study-Suite-v16-spec.md` §11, and v15.9 could not answer its two most decision-relevant rows.
+
+The spec's §4 splits quote-verification failures into two populations that argue in opposite directions. *Hyphenation and ligature* failures are fixable by normalizing the matcher — cheap, no vision. *Column-major reading-order* failures are the ones the spec says only seeing the rendered page can fix. Which population dominates decides whether v16 gets built at all. `quoteMiss` was a single integer, and the quote strings were thrown away, so the split could not be measured.
+
+### Added
+
+- **Quote misses are retained and classified** into `tooShort · hyphenation · reordered · partial · absent`. `kbClassifyQuoteMiss` labels every pass-1 miss and every pass-2 discard; the panel shows the rollup under the existing unverified-quote line. `tooShort` is a bucket rather than a silent drop specifically so the reasons reconcile with the count printed beside them.
+- **`kbDehyphNormForMatch`** — the de-hyphenation candidate (line-break hyphen joining, ligature folding, soft-hyphen and superscript stripping), implemented but wired **only** to the classifier. This measures what promoting it would buy without moving the pass/fail line. Promotion is a one-line change once the numbers justify it.
+- **`kbTextQuality` now names which pages are sparse** via an additive `perPage`. The four aggregate fields are unchanged — they are load-bearing for the scanned-source warning.
+- **Opt-in page composition probe**, off by default. Counts raster ops, vector path ops, paint ops and text runs per page, and subtracts the document's own median so running heads, borders and logos cancel themselves out. This is §7's `repetitiveDecoration` term, and nothing routes on it — no thresholds, no vision, no page leaves the machine.
+- **Diagnostics export (JSON)** — run config, per-chunk stats with page ranges, classified misses, per-page text quality, and the composition probe. The panel is a scroll box the next build discards, and §11 stages this run into a 50–100 page calibration set later, so the numbers have to outlive the session.
+
+### Changed
+
+- The diagnostics panel's note said diagnostics are "never written into … any export." A diagnostics export now exists, so it reads "any study artifact" and warns that the file quotes the source. `LATTE-Extraction-Diagnostics*.json` is gitignored — it carries verbatim copyrighted text.
+
+### Notes
+
+- Harness 505 → 538 assertions.
+- **The v16 spec's §7 was wrong about the pinned build, and is corrected.** It listed `paintJpegXObject` among four raster operators "verified present" in pdf.js 3.11.174. It is not in the OPS table — JPEGs arrive as `paintImageXObject` — and the claim was evidently written from recall rather than checked. The spec also omitted the Repeat, Group and SolidColorImageMask variants, which is how tiled figures and scanned pages actually paint; counting only the singular forms would have undercounted precisely the pages the probe exists to find. Found by exercising `kbPageComposition` against the live `pdfjsLib.OPS` table in the browser.
+- **The benchmark has not been run.** This release makes it answerable; it does not answer it. Next step is one dense pharmacology or cardiac chapter with the audit pass on and **chunk size at or near the 6,000-char floor** — at the 30,000 default a chunk spans 10–15 pages and averages prose, tables and diagrams into one number that means nothing.
 
 ---
 

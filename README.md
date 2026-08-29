@@ -102,6 +102,10 @@ The **focus box** helps here too — tell it things like *"Only Ch. 61–63 are 
 3. Click **Build Knowledge Base**. Watch the log: it runs an extraction pass and then a second **audit pass** that re-reads each chunk hunting for facts the first pass missed. Recovered facts are only kept if their quoted text is actually found in your source — the suite verifies this in code, not on the AI's word.
 4. Browse the result: conditions on the left, facts (with tiers, buckets, and source pointers) on the right. **⬇ Study View** exports the whole thing as a readable markdown study guide.
 
+**Extraction diagnostics.** After a build, a panel summarizes how the run went: which chunks came back thin, which quotes could not be found word-for-word in your source, and why. That last part is the useful one — an unverified quote is usually just a word broken across a line break, not a made-up fact, and the panel now says which kind each one was. **Export JSON** saves the whole report if you want to compare runs. It quotes your source material, so treat that file like the source itself.
+
+**Page composition probe** (checkbox, off by default) counts the pictures, diagrams and text on each page while the file is read. It is there for development work on handling images, it measures only, and nothing is sent anywhere. Leave it off unless asked — it makes reading long books slower.
+
 **Saving and backups.** The KB auto-saves in your browser and survives closing it — but it lives *in that browser on that computer*. **Export JSON** regularly (before exams, before rebuilding) — that file is your backup and your way to move between computers via **Import JSON**. Clearing your browser data deletes the KB; your exported JSON is the safety net.
 
 **Rebuilding replaces.** Building or importing over an existing KB *replaces* it — the suite will show you exactly what you're about to lose ("3 conditions, 147 facts") and ask you to confirm. When in doubt: export first.
