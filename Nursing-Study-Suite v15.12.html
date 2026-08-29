@@ -3,6 +3,32 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<!-- v15.13: a DELIBERATELY NARROW CSP. Defence in depth behind the DOMPurify boundary, not
+     a replacement for it.
+     What is set, and why each one is provably safe here:
+       connect-src  the only one with real value - it pins where this page can send data. The
+                    whole file makes exactly ONE network call, to generativelanguage. If model
+                    output ever escaped sanitisation, this is what stops it phoning home.
+                    The two CDN origins are listed because pdf.js may pull its worker script
+                    cross-origin; they are already fully trusted script sources and accept no
+                    uploads, so listing them costs nothing and removes a breakage risk.
+       object-src   no object, embed or applet elements anywhere in the file.
+       base-uri     none present; blocks a base-tag hijack of every relative URL.
+       form-action  no form elements anywhere in the file.
+     What is deliberately NOT set, and why:
+       default-src  under file:// - which is the PRIMARY way this file is opened - 'self'
+                    resolves inconsistently across browsers, and default-src is the fallback
+                    for worker-src. pdf.js loads its worker from cdnjs, so a default-src that
+                    failed to match would kill PDF reading, i.e. the main workflow, on the
+                    one platform hardest to test. Not worth it for a page whose scripts are
+                    all SRI-pinned already.
+       script-src   would need 'unsafe-inline' (boot shims) and 'unsafe-eval' (in-browser
+                    Babel), which leaves almost nothing to enforce. Removing that need means
+                    a build step, which is an explicit non-goal for this project.
+       style-src / font-src / img-src / worker-src  all unrestricted on purpose, for the same
+                    file:// reason. None of them is an exfiltration path.
+     If this page is ever served over http(s) rather than opened from disk, tighten it there. -->
+<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net">
 <title>LATTE Study Suite</title>
 <!-- v15.12 (2026-08-29): v15 series — crash/PPTX/CVE fixes, DOMPurify no-downgrade chain, KB replace guards, layout-aware PDF extraction + scanned-file detection, SRI integrity pins on every CDN script.
      v15.6 added NEIA-derived item quality to the Case Study Generator: terminology linting (warn), `instantiated` value provenance with numeric entailment at ERROR tier, deterministic MCQ heuristics, operationalized difficulty, and an independent per-item audit pass whose auditor sees only what the student sees.
@@ -12,14 +38,20 @@
      v15.10 is measurement, not behavior. quoteMiss was a bare count, which could not answer the question the v16 build decision turns on: whether a failed quote is line-break hyphenation (fixable by normalizing the matcher, no vision needed) or column-major reading-order scrambling (which only seeing the page fixes). Misses are now retained and classified, kbTextQuality names which pages are sparse, an opt-in probe counts raster/vector/text ops per page, and the diagnostics panel exports to JSON. kbQuoteInSource is byte-identical: no fact's fate changed.
      v15.11 acts on what v15.10 measured. A real cardiovascular chapter produced 190 failed quotes: 83 line-break hyphenation/ligature, 107 column reading order, and zero 'partial' or 'absent' — not one fabricated quote in the run. De-hyphenation is therefore promoted into kbQuoteInSource as a strictly additive fallback (plain match first; the fallback can only turn a FAIL into a PASS), recovering the 83 without loosening anything. Reading-order failures are left alone by design: the fact is sound, only its proof fails. The same run exposed a reporting bug — pass-1 misses and pass-2 discards shared one rollup printed beneath the first-pass count, so a breakdown summing to 190 sat under a sentence saying 182. They now roll up separately.
      v15.12 adds flashcard ingestion. Photographs of printed cards have no text layer at all, so they take a two-pass path: pass 1 transcribes the image to structured verbatim text, pass 2 is the EXISTING frozen extractor reading that text. Because pass 2 reads text, kbQuoteInSource verifies its quotes with no new machinery — which is why none of the v16 spec's evidence states, routers or visual safety gates were needed. The transcript is therefore the trust boundary: a number misread in pass 1 is verified flawlessly against the wrong transcript by everything downstream, so transcripts are reviewed before use and every clinical number is surfaced for an eye check. Front and back pair on category + card number, because a Davis back face carries no condition name.
-     Full history: LATTE-v15-changelog.md · regression harness: latte-tests.js (642 assertions) · test-retest: neia-retest.js -->
+     Full history: LATTE-v15-changelog.md · regression harness: latte-tests.js (678 assertions) · test-retest: neia-retest.js -->
 <!-- v15.3: crossorigin added (SRI-ready — paste the verified sha384 integrity attrs from
      the changelog after a local hash check; applying unverified hashes would hard-block
      every script). DOMPurify 3.4.12 loads through a no-downgrade chain: cdnjs, then the
      SAME version from jsDelivr (which serves npm dist bytes verbatim, so one sha384 covers
      both tags), and if both fail the page halts with a visible error via window.stop()
      BEFORE the app can render anything unsanitized. v15's fallback-to-3.0.8 is gone: a
-     failed secure pin must never silently downgrade the XSS boundary. -->
+     failed secure pin must never silently downgrade the XSS boundary.
+     v15.13: the "one sha384 covers both tags" claim was an ASSUMPTION and the fallback is
+     dead code if it is wrong — a failed cdnjs would then hit an SRI-blocked jsDelivr tag and
+     halt the app, in exactly the outage the fallback exists for. Measured 2026-08-29: both
+     URLs serve 29,209 identical bytes, sha384-piCcpDdJ7qVeK4Tv8Z6Hpcr3ZBIgP16TxQTPVfsLFdZ5uDgwc3Y8Ho7oUnqf12qu.
+     All eight pins on this page were re-hashed against their CDNs in the same pass and all
+     eight match. Re-run that check on any version bump; a wrong pin hard-blocks the script. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" integrity="sha384-tMH8h3BGESGckSAVGZ82T9n90ztNXxvdwvdM6UoR56cYcf+0iGXBliJ29D+wZ/x8" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" integrity="sha384-bm7MnzvK++ykSwVJ2tynSE5TRdN+xL418osEVF2DE/L/gfWHj91J2Sphe582B1Bh" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js" integrity="sha384-ku9eM40vVDsFUiERorrdlHlF0LIhdfn716M7TntM72Uo98T7LWiogD3hNenPx8Q0" crossorigin="anonymous"></script>
@@ -598,7 +630,7 @@ function geminiRetryDelayMs(err,headers,attempt){
   return Math.max(hintSec?Math.min(hintSec,60)*1000:0,exp);
 }
 async function geminiRequest(apiKey,model,body,{signal,retries=2,onUpdate,onMeta,timeoutMs=600000}={}){
-  body.safetySettings=SAFETY_SETTINGS;
+  body=Object.assign({},body,{safetySettings:SAFETY_SETTINGS}); // v15.13: was a mutation of the caller's object
   const streaming=typeof onUpdate==='function';
   const url=`https://generativelanguage.googleapis.com/v1beta/models/${model}:${streaming?'streamGenerateContent?alt=sse':'generateContent'}`;
   for(let attempt=0;attempt<=retries;attempt++){
@@ -660,7 +692,11 @@ async function geminiRequest(apiKey,model,body,{signal,retries=2,onUpdate,onMeta
       // Retrying identical content against the safety filter wastes the retry budget —
       // the same input gets the same verdict.
       if(finish==='SAFETY'||blocked){const e=new Error('Response blocked by safety filters'+(blocked?` (prompt: ${blocked})`:'.'));e.isFatal=true;throw e;}
-      if(!text.trim()){if(attempt<retries){await _sleep(2000,signal);continue;}throw new Error('Empty response from API.');}
+      if(!text.trim()){
+        if(finish==='MAX_TOKENS'){const e=new Error('The model spent its whole output budget on thinking and returned nothing. Lower the Thinking Level for this tool, or reduce the input size.');e.isFatal=true;throw e;} // v15.13: deterministic, so retrying it twice only costs calls
+        if(attempt<retries){await _sleep(2000,signal);continue;}
+        throw new Error('Empty response from API.');
+      }
       // finishReason is already in every response; it was previously discarded.
       // MAX_TOKENS means the model ran out of room mid-document, NOT that it finished.
       // usageMetadata.thoughtsTokenCount matters because on Gemini 3 thinking tokens
@@ -685,17 +721,22 @@ async function geminiRequest(apiKey,model,body,{signal,retries=2,onUpdate,onMeta
   }
 }
 
-async function callGemini(apiKey,model,parts,useThinking,thinkingLevel,signal,retries=2,onUpdate,onMeta,genCfg){
-  // genCfg (v15): optional generationConfig overrides (e.g. responseMimeType) so a call
-  // site can opt in per-request without forking the wrapper. useThinking is inert and is
-  // kept only so existing positional call sites stay valid until the options-object
-  // refactor. NOTE: never set a JSON mime here globally — Priority/Anki/NCLEXgen consume
-  // markdown / code-block / plain-text output from this same wrapper.
-  const body={contents:[{parts}],generationConfig:Object.assign({maxOutputTokens:65536},genCfg||{})};
-  // The level is applied as given — it is no longer forced to 'low' when the Pro
-  // toggle is off. cfg.thinkingLevel already resolves to the active model's level,
-  // so Flash+medium/high is now expressible. useThinking is kept in the signature
-  // for call-site compatibility but no longer gates the level.
+async function callGemini(apiKey,model,parts,opts={}){
+  // v15.13: options object. The old signature was TEN positional parameters, one of them
+  // (useThinking) inert since v15 and kept only so existing call sites stayed valid — so
+  // passing an onMeta meant filling three earlier slots with true/null/null placeholders.
+  // The guard below makes a missed migration fail loudly and immediately instead of binding
+  // a stray boolean to opts and silently losing every option after it.
+  if(typeof opts!=='object'||opts===null||Array.isArray(opts))
+    throw new Error('callGemini: pass an options object - the positional signature was removed in v15.13');
+  const {thinkingLevel,signal,retries=2,onUpdate,onMeta,generationConfig}=opts;
+  // generationConfig: optional per-request overrides (e.g. responseMimeType) so a call site
+  // can opt in without forking the wrapper. NOTE: never set a JSON mime here globally —
+  // Priority/Anki/NCLEXgen consume markdown / code-block / plain-text from this same wrapper.
+  const body={contents:[{parts}],generationConfig:Object.assign({maxOutputTokens:65536},generationConfig||{})};
+  // The level is applied as given — it is no longer forced to 'low' when the Pro toggle is
+  // off. cfg.thinkingLevel already resolves to the active model's level, so Flash+medium/high
+  // is expressible.
   body.generationConfig.thinkingConfig={thinkingLevel:thinkingLevel||'low'};
   return geminiRequest(apiKey,model,body,{signal,retries,onUpdate,onMeta});
 }
@@ -733,11 +774,6 @@ function getPdfDoc(file){
     .then(doc=>{_pdfLiveDocs.add(doc);return doc;}));
   return _pdfDocCache.get(file);
 }
-// Release every open document. Safe to call repeatedly and on an empty set.
-function destroyAllPdfDocs(){
-  for(const doc of _pdfLiveDocs){try{doc.destroy();}catch(e){}}
-  _pdfLiveDocs.clear();
-}
 // Release a cached document's worker-side memory when its file leaves the UI. GC of the
 // main-thread proxy never tells the pdf.js worker to drop its parsed structures, so long
 // multi-book sessions grew until page unload. Fire-and-forget: callers are click handlers.
@@ -745,7 +781,10 @@ function destroyPdfDoc(file){
   const p=file&&_pdfDocCache.get(file);
   if(!p)return;
   _pdfDocCache.delete(file);
-  p.then(pdf=>pdf.destroy()).catch(()=>{});
+  // v15.13: drop the proxy from the live set too. It was added on load and never removed
+  // here, so the Set held a strong reference to every destroyed document for the whole
+  // session - undermining the one thing it was introduced to make possible.
+  p.then(pdf=>{_pdfLiveDocs.delete(pdf);return pdf.destroy();}).catch(()=>{});
 }
 // v15.4: coordinate-aware page assembly, lifted out of extractPdfTextSpaced so the
 // Knowledge Base can share it. pdf.js returns text as positioned runs in no guaranteed
@@ -783,13 +822,37 @@ function kbTextQuality(units){
   const perPage=pages.map((u,i)=>({n:u.n,kind:u.kind,chars:chars[i]}));
   return{pages:pages.length,empty:chars.filter(c=>c<50).length,total,avg:Math.round(total/pages.length),perPage};
 }
-async function extractPdfTextSpaced(file){
-  const pdf=await getPdfDoc(file);let text='';
-  for(let i=1;i<=pdf.numPages;i++){
-    const p=await pdf.getPage(i);const c=await p.getTextContent();
-    text+=pdfLayoutText(c)+'\n\n';
+// v15.13: ONE page walk. There were three, with three different levels of hygiene:
+// kbSourceUnits checked the abort signal AND called page.cleanup() on every page;
+// nclexExtractPageRange checked the signal but never cleaned up; extractPdfTextSpaced did
+// neither — so Cancel was dead for the entire local read of a 900-page book (runInline
+// awaits the whole extraction before its first abort check) and every page's operator list
+// stayed alive until it finished. v15.8 consolidated pdfLayoutText across these same three
+// callers with the note "One implementation, three callers"; this finishes the job for the
+// walk itself.
+//
+// cleanup() sits in a finally AFTER onPage is awaited, which is what keeps the v15.10
+// composition probe working: the operator list is exactly what cleanup() releases.
+async function pdfWalkPages(file,{signal,from=1,to=Infinity,onPage}={}){
+  const pdf=await getPdfDoc(file);
+  const first=Math.max(1,Math.floor(from)||1);
+  const last=Math.min(pdf.numPages,to===Infinity?pdf.numPages:Math.floor(to)||0);
+  for(let i=first;i<=last;i++){
+    if(signal&&signal.aborted)throw new DOMException('Aborted','AbortError');
+    const pg=await pdf.getPage(i);
+    try{
+      const text=pdfLayoutText(await pg.getTextContent());
+      if(onPage)await onPage(text,i,pg,pdf.numPages);
+    }finally{
+      try{pg.cleanup();}catch(e){}
+    }
   }
-  return text;
+  return pdf.numPages;
+}
+async function extractPdfTextSpaced(file,signal){
+  const out=[];
+  await pdfWalkPages(file,{signal,onPage:t=>{out.push(t);}});
+  return out.length?out.join('\n\n')+'\n\n':'';
 }
 
 async function getPdfPageCount(file){const pdf=await getPdfDoc(file);return pdf.numPages;}
@@ -1025,14 +1088,25 @@ function FactText({text}){
 function FactInspectorDrawer(){
   const K=useKnowledge();const FI=useFactInspector();
   const factId=FI&&FI.inspectedFactId;
-  const closeRef=useRef(null),returnFocusRef=useRef(null);
+  const closeRef=useRef(null),returnFocusRef=useRef(null),drawerRef=useRef(null);
   const found=useMemo(()=>factId?findFactById(K.factIndex,factId):null,[factId,K.factIndex]);
   const usage=useMemo(()=>factId&&K.artifactRegistry?getFactUsage(K.artifactRegistry,factId):{anki:[],nclex:[],cases:[]},[factId,K.artifactRegistry]);
 
   useEffect(()=>{
     if(!factId)return;
     returnFocusRef.current=document.activeElement;
-    const onKey=e=>{if(e.key==='Escape'){e.preventDefault();FI.closeFactInspector();}};
+    const onKey=e=>{
+      if(e.key==='Escape'){e.preventDefault();FI.closeFactInspector();return;}
+      if(e.key!=='Tab')return;
+      // v15.13: the dialog declared aria-modal but never trapped focus, so Tab left it.
+      const root=drawerRef.current;if(!root)return;
+      const f=[...root.querySelectorAll('a[href],button:not([disabled]),textarea,input:not([disabled]),select,[tabindex]:not([tabindex="-1"])')].filter(el=>el.offsetParent!==null);
+      if(!f.length)return;
+      const first=f[0],last=f[f.length-1],here=document.activeElement;
+      if(!root.contains(here)){e.preventDefault();first.focus();}
+      else if(e.shiftKey&&here===first){e.preventDefault();last.focus();}
+      else if(!e.shiftKey&&here===last){e.preventDefault();first.focus();}
+    };
     document.addEventListener('keydown',onKey);
     const prevOverflow=document.body.style.overflow;document.body.style.overflow='hidden';
     const t=setTimeout(()=>{try{closeRef.current&&closeRef.current.focus();}catch(e){}},30);
@@ -1050,7 +1124,7 @@ function FactInspectorDrawer(){
 
   return <>
     <div className="fact-drawer-scrim" onClick={()=>FI.closeFactInspector()}/>
-    <div className="fact-drawer" role="dialog" aria-modal="true" aria-labelledby="fact-inspector-title">
+    <div ref={drawerRef} className="fact-drawer" role="dialog" aria-modal="true" aria-labelledby="fact-inspector-title">
       <div className="fact-drawer-head">
         <span className="fd-id" id="fact-inspector-title">{String(factId).toUpperCase()}</span>
         <button ref={closeRef} className="fact-drawer-close" aria-label="Close fact inspector" onClick={()=>FI.closeFactInspector()}>×</button>
@@ -1351,14 +1425,20 @@ function kbSlug(s){return String(s||'item').toLowerCase().replace(/[^a-z0-9]+/g,
 // direction — a near-duplicate is deletable in the UI, a silently reversed fact is not.
 function kbFactKey(f){return [f.latteBucket||'',f.subtype||'',String(f.text||'').toLowerCase().replace(/[^a-z0-9.%/<>≤≥↑↓+-]+/g,' ').trim()].join('|');}
 function mergeLatteParts(parts,course='',exam=''){
-  const map=new Map();let factN=0;
+  const map=new Map();let factN=0;const usedCondIds=new Set(); // v15.13: see below
   for(const part of parts){
     for(const c of part.conditions||[]){
       const aliases=(c.aliases||[]).map(x=>String(x).trim()).filter(Boolean);
       const names=[c.name,...aliases].map(x=>String(x||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()).filter(Boolean);
       let target=null,key=null;
       for(const [k,v] of map){const known=[v.name,...v.aliases].map(x=>String(x).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim());if(names.some(n=>known.includes(n))){target=v;key=k;break;}}
-      if(!target){key=names[0]||('condition-'+map.size);target={id:kbSlug(c.name),name:c.name||'Unnamed Condition',aliases:[],facts:[]};map.set(key,target);}
+      if(!target){
+        key=names[0]||('condition-'+map.size);
+        // v15.13: was id:kbSlug(c.name) with no uniqueness check.
+        let cid=kbSlug(c.name),cn=2;while(usedCondIds.has(cid))cid=kbSlug(c.name)+'-'+(cn++);
+        usedCondIds.add(cid);
+        target={id:cid,name:c.name||'Unnamed Condition',aliases:[],facts:[]};map.set(key,target);
+      }
       target.aliases=[...new Set([...target.aliases,...aliases])];
       const existing=new Map(target.facts.map(f=>[kbFactKey(f),f]));
       for(const raw of c.facts||[]){
@@ -1416,13 +1496,19 @@ function kbNormalizeImported(raw){
         sources:Array.isArray(f.sources)?f.sources.slice(0,50).filter(s=>s&&typeof s==='object').map(s=>{const x=_kbSafeKeys(s);return{filename:_kbStr(x.filename,300),location:_kbStr(x.location,300)};}):[],
       });
     }
-    if(!Array.isArray(c.facts))dropped.conditions++;
+    // v15.13: was dropped.conditions++, which counted a condition the loop then KEPT.
+    if(!Array.isArray(c.facts)&&c.facts!=null)dropped.facts++;
     conditions.push({id:_kbStr(c.id,80)||kbSlug(name),name,aliases:Array.isArray(c.aliases)?c.aliases.slice(0,50).map(a=>_kbStr(a,200)).filter(Boolean):[],facts});
   }
   if(!conditions.length)throw new Error('No usable conditions were found in this file.');
   // Re-key fact ids so downstream fact-id diffing (Anki coverage) stays sound even if
   // the imported file had duplicates, gaps, or none at all.
   let n=0;for(const c of conditions)for(const f of c.facts)f.id='fact-'+(++n);
+  // v15.13: and the same for condition ids, which an imported file is free to duplicate or
+  // omit. They are React keys and the selection handle, so a collision makes one condition
+  // unreachable in the UI.
+  const seenCondIds=new Set();
+  for(const c of conditions){let id=c.id,k=2;while(seenCondIds.has(id))id=c.id+'-'+(k++);seenCondIds.add(id);c.id=id;}
   const meta=_kbSafeKeys(src.metadata||{});
   // v15: side arrays (medications, diagnostics, …) now get the same proto-key strip as
   // conditions/facts — they enter state and IndexedDB, so sanitize before they grow a UI.
@@ -1574,23 +1660,16 @@ async function kbSourceUnits(file,{signal,onProgress,composition}={}){
     return parts.map((t,i)=>{const m=t.match(/--- SLIDE (\d+) ---/);return{kind:'slide',n:m?parseInt(m[1],10):i+1,text:t};});
   }
   if(name.endsWith('.pdf')){
-    const pdf=await getPdfDoc(file),units=[];
-    for(let i=1;i<=pdf.numPages;i++){
-      // Cancel used to be dead during this pre-scan: a 900-page book had to finish
-      // being read before the button did anything.
-      if(signal?.aborted)throw new DOMException('Aborted','AbortError');
-      const pg=await pdf.getPage(i),tc=await pg.getTextContent();
-      // v15.4: was tc.items.map(x=>x.str).join(' ') — the app's best extractor already
-      // existed 40 lines away and only the NCLEX tab used it.
-      units.push({kind:'page',n:i,text:'\n--- PAGE '+i+' ---\n'+pdfLayoutText(tc)});
-      // Release the page's operator list / font data instead of holding every page
-      // object alive until the whole document is scanned.
-      // v15.10: opt-in benchmark probe, before cleanup() — the operator list is exactly
-      // what cleanup() releases. A probe failure must never fail the build.
+    // v15.13: the walk, the abort check and the cleanup now live in pdfWalkPages. Text still
+    // comes from pdfLayoutText (v15.4: was tc.items.map(x=>x.str).join(' ')), and the v15.10
+    // probe still runs before cleanup, because pdfWalkPages cleans up in a finally AFTER
+    // awaiting onPage — the operator list is exactly what cleanup() releases.
+    const units=[];
+    await pdfWalkPages(file,{signal,onPage:async(text,i,pg,total)=>{
+      units.push({kind:'page',n:i,text:'\n--- PAGE '+i+' ---\n'+text});
       if(composition){try{units[units.length-1].composition=await kbPageComposition(pg);}catch(e){}}
-      try{pg.cleanup();}catch(e){}
-      if(onProgress&&(i%10===0||i===pdf.numPages))onProgress(i,pdf.numPages);
-    }
+      if(onProgress&&(i%10===0||i===total))onProgress(i,total);
+    }});
     return units;
   }
   throw new Error('Unsupported Knowledge Base source: '+file.name);
@@ -1622,9 +1701,39 @@ function kbGroupUnits(units,maxChars,overlap){
 // instead of discarded. Returns null when the chunk is a single indivisible unit.
 function kbSplitChunk(chunk){
   const u=(chunk&&chunk.units)||[];
-  if(u.length<2)return null;
-  const mid=Math.ceil(u.length/2);
-  return[u.slice(0,mid),u.slice(mid)].map(part=>({text:part.map(x=>x.text).join('\n'),label:kbUnitLabel(part),units:part}));
+  if(u.length>=2){
+    const mid=Math.ceil(u.length/2);
+    return[u.slice(0,mid),u.slice(mid)].map(part=>({text:part.map(x=>x.text).join('\n'),label:kbUnitLabel(part),units:part}));
+  }
+  // v15.13: SECOND level. This used to return null for any chunk of fewer than two units,
+  // and the caller then threw 'cannot be split further' and discarded the chunk entirely —
+  // so one unusually dense page, one table-heavy slide, or one slide carrying long speaker
+  // notes took all of its content with it. Splitting the TEXT is a strictly better outcome
+  // than losing the page: both halves keep the original unit's page/slide pointer, so the
+  // source label stays truthful, and a half that truncates again recurses through here
+  // (the caller's depth<4 cap still bounds it).
+  const only=u[0]||null;
+  const text=String((chunk&&chunk.text)||'');
+  if(text.length<2000)return null; // nothing useful left to divide
+  const target=Math.floor(text.length/2);
+  // Prefer a paragraph break near the midpoint, then a line break, then a hard cut. The
+  // 20-80% band stops a break near one end producing a useless 5%/95% split.
+  const cutAt=(()=>{
+    for(const re of [/\n\s*\n/g,/\n/g]){
+      let best=-1,m;re.lastIndex=0;
+      while((m=re.exec(text))!==null){
+        if(best<0||Math.abs(m.index-target)<Math.abs(best-target))best=m.index;
+        if(m.index>target)break;
+      }
+      if(best>text.length*0.2&&best<text.length*0.8)return best;
+    }
+    return target;
+  })();
+  const halves=[text.slice(0,cutAt),text.slice(cutAt)].map(t=>t.trim()).filter(Boolean);
+  if(halves.length<2)return null;
+  const base=only?kbUnitLabel([only]):String((chunk&&chunk.label)||'chunk');
+  return halves.map((t,i)=>({text:t,label:base+' ('+(i?'second':'first')+' half)',
+    units:only?[{...only,text:t}]:[]}));
 }
 async function kbBuildSourceChunks(file,maxChars=45000,overlap=1,opts){
   const units=await kbSourceUnits(file,opts);
@@ -2083,7 +2192,6 @@ function KnowledgeBaseBuilder(){
   const cfg=useConfig();const K=useKnowledge();
   // v15.8: release worker-side PDF documents on unmount. Collecting the File does not free
   // them; pdf.js holds each document in the worker until destroy() is called.
-  useEffect(()=>()=>destroyAllPdfDocs(),[]);
   const [files,setFiles]=useState([]),[course,setCourse]=useState(''),[exam,setExam]=useState(''),[busy,setBusy]=useState(false),[prog,setProg]=useState(0),[error,setError]=useState(''),[warnings,setWarnings]=useState([]),[selected,setSelected]=useState(null);const fileRef=useRef(null),importRef=useRef(null),abortRef=useRef(null);
   const [verifyPass,setVerifyPass]=useState(true);
   const [chunkChars,setChunkChars]=useState(30000);
@@ -2231,8 +2339,8 @@ function KnowledgeBaseBuilder(){
       // v15.12: merged card transcripts enter as ordinary source chunks. Front and back are
       // already joined by cardMergeFaces — a back face alone has no condition name on it, so
       // extracting one unpaired would produce facts with nothing to attach them to.
-      // units:[] is deliberate: kbSplitChunk returns null for it, and a single card is far
-      // too small to need splitting anyway.
+      // units:[] is deliberate: a card has no page structure to split on. Since v15.13
+      // kbSplitChunk can still halve it on text if it ever truncates, rather than dropping it.
       // v15.13: only cards that clear cardChunkBlockers are queued, and each carries its card
       // number and source photo(s) into the pointer. A bare 'flashcards' was untraceable: a
       // misread number could not be walked back to the image it came from, which is precisely
@@ -2945,7 +3053,7 @@ function PriorityAnalyzer(){
           // v15: harvest resolves through the profile table like every other stage,
           // instead of a hardcoded flashModel + forced 'low' the UI could not express.
           const hCfg=cfg.forTool('priorityHarvest');
-          const result=await callGemini(cfg.apiKey,hCfg.model,[{text:prompt}],true,hCfg.level,controller.signal);
+          const result=await callGemini(cfg.apiKey,hCfg.model,[{text:prompt}],{thinkingLevel:hCfg.level,signal:controller.signal});
           extractions.push(result);setChunks(p=>p.map(c=>c.id===`ext-${i}`?{...c,status:'done'}:c));
         }catch(err){if(err.name==='AbortError')throw err;setChunks(p=>p.map(c=>c.id===`ext-${i}`?{...c,status:'error'}:c));extractions.push(`[ERROR: ${err.message}]`);}
         completed++;setProgress(Math.floor(completed/totalSteps*90));
@@ -2954,7 +3062,7 @@ function PriorityAnalyzer(){
       const synthPrompt=paBuildSynthPrompt(extractions,context);
       const {model:synthModel,level:synthLevel}=cfg.forTool('priority');
       setIsStreaming(true);
-      const full=await callGemini(cfg.apiKey,synthModel,[{text:synthPrompt}],true,synthLevel,controller.signal,2,t=>{gotOutput=true;setOutput(t);setStep('results');},setMeta);
+      const full=await callGemini(cfg.apiKey,synthModel,[{text:synthPrompt}],{thinkingLevel:synthLevel,signal:controller.signal,onUpdate:t=>{gotOutput=true;setOutput(t);setStep('results');},onMeta:setMeta});
       setIsStreaming(false);
       setOutput(full);setParsedTiers(paParseTiers(full));setChunks(p=>p.map(c=>c.id==='synthesis'?{...c,status:'done'}:c));setProgress(100);setStep('results');
     }catch(e){
@@ -3727,8 +3835,8 @@ function AnkiGenerator(){
   const [liveKB,setLiveKB]=useState(0);
   const cfg=useConfig();
   const K=useKnowledge();
-  const [chunkSz,setChunkSz]=useState(12000);
-  const [overlapPg,setOverlapPg]=useState(2);
+  // v15.13: was useState with no UI and no setter call anywhere. Inlined; values unchanged.
+  const ANKI_CHUNK_CHARS=12000,ANKI_OVERLAP_PAGES=2;
   const [focusContext,setFocusContext]=useState('');
   const [outcomes,setOutcomes]=useState('');
   const [points,setPoints]=useState('');
@@ -3749,7 +3857,7 @@ function AnkiGenerator(){
   const filteredCards=useMemo(()=>tierFilter==='all'?cards:cards.filter(c=>getTier(c.tags)===tierFilter),[cards,tierFilter,getTier]);
   const tierCounts=useMemo(()=>{const ct={'1':0,'2':0,'3':0,'?':0};cards.forEach(c=>{const t=getTier(c.tags);ct[t]=(ct[t]||0)+1;});return ct;},[cards,getTier]);
 
-  const log=useCallback((msg,t='')=>setLogs(p=>[...p,{msg,t,ts:new Date().toLocaleTimeString()}]),[]);
+  const log=useCallback((msg,t='')=>setLogs(p=>[...p.slice(-200),{msg,t,ts:new Date().toLocaleTimeString()}]),[]); // v15.13: capped, like the KB builder
 
   // Build optional focus context block
   function buildFocusBlock(){
@@ -3774,7 +3882,7 @@ function AnkiGenerator(){
       const errors=validation.filter(x=>x.severity==='error').length;
       if(errors)log(`Knowledge Base has ${errors} validation error(s). Cards will be generated, but source issues should be reviewed.`,'warn');
       log(`Knowledge Base ready: ${K.knowledgeBase.conditions.length} conditions, ${(K.knowledgeBase.conditions||[]).reduce((n,c)=>n+(c.facts||[]).length,0)} facts.`,'ok');
-      const chunks=allTxt.trim()?ankiChunkText(allTxt,chunkSz,overlapPg):[''];const n=chunks.length||1;
+      const chunks=allTxt.trim()?ankiChunkText(allTxt,ANKI_CHUNK_CHARS,ANKI_OVERLAP_PAGES):[''];const n=chunks.length||1;
       log(`${n} chunk(s) — Knowledge Base — Model: ${model} [Thinking: ${toolLevel}]${cfg.autoProfile?' (auto)':''}${focusBlock?' — with focus context':''}`, 'warn');
       let all=[],allLedg='';
       for(let i=0;i<n;i++){
@@ -3797,7 +3905,7 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
 - The Phase 4/5 zero-skip and "every indexed item appears in the coverage map" requirements still apply, measured against this fact-id map.
 `;
         parts.push({text:ANKI_MASTER_PROMPT+focusBlock+kbAdapter+'\n\n'+sourceLabel+'\n\n'+(chunks[i]||'')+ctx});
-        const resp=await callGemini(cfg.apiKey,model,parts,true,toolLevel,ctl.signal,2,t=>setLiveKB(Math.round(t.length/102.4)/10),m=>{if(m.truncated){const th=m.usage?.thoughtsTokenCount||0;log(`  \u26a0 Chunk ${i+1} hit the 65,536-token ceiling \u2014 cards are missing from the end.`+(th?` Thinking used ${th.toLocaleString()} tok of that budget.`:' Lower the chunk size.'),'err');}});
+        const resp=await callGemini(cfg.apiKey,model,parts,{thinkingLevel:toolLevel,signal:ctl.signal,onUpdate:t=>setLiveKB(Math.round(t.length/102.4)/10),onMeta:m=>{if(m.truncated){const th=m.usage?.thoughtsTokenCount||0;log(`  \u26a0 Chunk ${i+1} hit the 65,536-token ceiling \u2014 cards are missing from the end.`+(th?` Thinking used ${th.toLocaleString()} tok of that budget.`:' Lower the chunk size.'),'err');}}});
         const{cards:cc,ledger:cl}=ankiParseCards(resp,i+1);all=[...all,...cc];allLedg+=cl?'\n--- Chunk '+(i+1)+' ---\n'+cl:'';
         setProg(((i+1)/n)*100);log(`Chunk ${i+1} done — ${cc.length} cards`,'ok');
       }
@@ -3832,7 +3940,7 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
       if(allFacts.length)log(`Coverage: ${allFacts.length-uncovered.length}/${allFacts.length} facts mapped to a card${uncovered.length?` — ${uncovered.length} uncovered`:''}.`,uncovered.length?'err':'ok');
       if(lintCount)log(`${lintCount} card(s) flagged by lint (missing cloze/tier or >3 clozes).`,'warn');
     }catch(e){if(e.name==='AbortError')log('Cancelled.','warn');else log('Error: '+e.message,'err');}finally{setBusy(false);setAbortCtl(null);setLiveKB(0);}
-  },[cfg,chunkSz,overlapPg,model,toolLevel,log,K.knowledgeBase,focusContext,outcomes,points]);
+  },[cfg,model,toolLevel,log,K.knowledgeBase,focusContext,outcomes,points]);
 
   const toggle=useCallback(id=>setCards(p=>p.map(c=>c.id===id?{...c,keep:!c.keep}:c)),[]);
   const del=useCallback(id=>setCards(p=>p.filter(c=>c.id!==id)),[]);
@@ -3991,23 +4099,32 @@ function nclexChunkText(text,size,overlap){
   return chunks;
 }
 
+// v15: full-text key — the 120-char prefix collapsed distinct long stems (same fix Anki got).
+// v15.13: lifted so the batch dedup and the incremental accumulator cannot drift apart.
+function nclexKey(q){return String(q&&q.question||'').replace(/\s+/g,' ').trim().toLowerCase();}
 function nclexDedup(questions){
-  const seen=new Set();return questions.filter(q=>{if(!q.question)return false;const k=q.question.replace(/\s+/g,' ').trim().toLowerCase()/* v15: full-text key — the 120-char prefix collapsed distinct long stems (same fix Anki got) */;if(seen.has(k))return false;seen.add(k);return true;});
+  const seen=new Set();return questions.filter(q=>{if(!q.question)return false;const k=nclexKey(q);if(seen.has(k))return false;seen.add(k);return true;});
+}
+// v15.13: incremental form. Callers keep one Set for the whole run instead of rebuilding it
+// per chunk over everything collected so far. Mutates and returns allQ.
+function nclexAccumulate(seen,allQ,incoming){
+  for(const q of incoming||[]){
+    if(!q||!q.question)continue;
+    const k=nclexKey(q);
+    if(seen.has(k))continue;
+    seen.add(k);allQ.push(q);
+  }
+  return allQ;
 }
 
 // Split-mode: extract text from specific page ranges
+// v15.8 moved this onto the shared pdfLayoutText. v15.13 moves the walk itself: this used
+// to check the abort signal but never call page.cleanup(), so a long range held every page's
+// operator list until the run finished.
 async function nclexExtractPageRange(file,startPage,endPage,signal){
-  const pdf=await getPdfDoc(file);
-  const s=Math.max(1,startPage),e=Math.min(pdf.numPages,endPage);let text='';
-  for(let i=s;i<=e;i++){
-    if(signal?.aborted)throw new DOMException('Aborted','AbortError');
-    const p=await pdf.getPage(i);const c=await p.getTextContent();
-    // v15.8: was a byte-identical copy of pdfLayoutText's loop. v15.4 moved the KB path onto
-    // the shared helper but missed this third caller, so the rotated-text fix would have had
-    // to be made twice. One implementation, three callers.
-    text+=pdfLayoutText(c)+'\n\n';
-  }
-  return text;
+  const out=[];
+  await pdfWalkPages(file,{signal,from:startPage,to:endPage,onPage:t=>{out.push(t);}});
+  return out.length?out.join('\n\n')+'\n\n':'';
 }
 
 // Multi-pattern question number detection
@@ -4064,6 +4181,7 @@ function PageRangeSection({label:sLabel,ranges,onChange,maxPages}){
       <span style={{fontSize:10,color:'var(--text-dim)'}}>to</span>
       <input type="number" min={1} max={maxPages||9999} value={r.end} onChange={e=>updateRange(i,'end',e.target.value)} style={{width:65,textAlign:'center',padding:'5px 6px'}}/>
       {ranges.length>1&&<span onClick={()=>removeRange(i)} style={{color:'var(--accent-red)',cursor:'pointer',fontSize:13,fontWeight:700}}>×</span>}
+      {r.start>r.end&&<span style={{fontSize:9.5,color:'var(--accent-warm)'}}>start is after end — this range yields nothing</span>}
     </div>)}
   </div>;
 }
@@ -4095,7 +4213,6 @@ function NCLEXQuestionCard({q,index}){
 
 function NCLEXExtractor(){
   const cfg=useConfig();
-  useEffect(()=>()=>destroyAllPdfDocs(),[]); // v15.8: see the KB builder
   const [files,setFiles]=useState([]);
   const [mode,setMode]=useState('inline'); // 'inline' or 'split'
   const [chunkSize,setChunkSize]=useState(3000);
@@ -4115,11 +4232,30 @@ function NCLEXExtractor(){
   const fRef=useRef(null);
 
   const {model,level:toolLevel}=cfg.forTool('nclex');
+  // v15.13: one intake path, filtering and de-duplicating on the same rule as the KB builder.
+  const addPdfs=fl=>setFiles(p=>[...p,...Array.from(fl||[])
+    .filter(f=>/.pdf$/i.test(f.name||'')||f.type==='application/pdf')
+    .filter(f=>!p.some(x=>x.name===f.name&&x.size===f.size&&x.lastModified===f.lastModified))]);
 
   // Auto-detect page count when files change
+  const firstFileRef=useRef('');
   useEffect(()=>{
-    if(!files.length){setPageCount(null);return;}
-    getPdfPageCount(files[0]).then(n=>{setPageCount(n);const mid=Math.ceil(n/2);setQRanges([{start:1,end:mid}]);setARanges([{start:mid+1,end:n}]);}).catch(()=>setPageCount(null));
+    const f=files[0];
+    if(!f){setPageCount(null);firstFileRef.current='';return;}
+    // v15.13: stale-guard the resolve, and only seed the ranges when the file in slot 0 has
+    // actually CHANGED identity. cardFileId is the same name+size+lastModified key the rest
+    // of the suite uses for "is this the same file".
+    let stale=false;
+    const id=cardFileId(f);
+    getPdfPageCount(f).then(n=>{
+      if(stale)return;
+      setPageCount(n);
+      if(firstFileRef.current!==id){
+        firstFileRef.current=id;
+        const mid=Math.ceil(n/2);setQRanges([{start:1,end:mid}]);setARanges([{start:mid+1,end:n}]);
+      }
+    }).catch(()=>{if(!stale)setPageCount(null);});
+    return()=>{stale=true;};
   },[files]);
 
   const allStrategies=useMemo(()=>[...new Set(questions.map(q=>q.test_taking_strategy).filter(Boolean))].sort(),[questions]);
@@ -4129,15 +4265,15 @@ function NCLEXExtractor(){
     return true;
   }),[questions,filterStrategy,filterDisease]);
 
-  const addLog=useCallback(msg=>setLog(p=>[...p,`[${new Date().toLocaleTimeString()}] ${msg}`]),[]);
+  const addLog=useCallback(msg=>setLog(p=>[...p.slice(-200),`[${new Date().toLocaleTimeString()}] ${msg}`]),[]); // v15.13: capped, like the KB builder
 
   // ── v15: the run pipeline threads a real AbortController through every request and
   // inter-chunk sleep (the old boolean flag only skipped FUTURE chunks — an in-flight
   // request kept streaming and billing until it finished). Questions are tagged with
   // stable ids at extraction so React keys survive filtering, and split mode processes
   // one PDF per run because the page-range fields describe exactly one file's layout.
-  const nclexSleep=(ms,signal)=>new Promise((res,rej)=>{const t=setTimeout(res,ms);if(signal)signal.addEventListener('abort',()=>{clearTimeout(t);rej(new DOMException('Aborted','AbortError'));},{once:true});});
-  const nclexId=()=>'q_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8);
+  // v15.13: nclexSleep and nclexId were local re-implementations of _sleep and uid. The
+  // sleep copy leaked one abort listener per chunk; _sleep has always detached its own.
 
   // Gemini call for NCLEX (with retry)
   async function nclexCallGemini(prompt,signal){
@@ -4158,17 +4294,20 @@ function NCLEXExtractor(){
   // ── Inline mode runner ──
   async function runInline(file,existingQ,signal){
     addLog(`📄 Extracting "${file.name}"...`);
-    const text=await extractPdfTextSpaced(file);addLog(`  ${text.length.toLocaleString()} chars`);
+    // v15.13: the signal is threaded now, so Cancel works during the local read instead of
+    // only between chunks. runInline awaits the whole extraction before its first check.
+    const text=await extractPdfTextSpaced(file,signal);addLog(`  ${text.length.toLocaleString()} chars`);
     const chunks=nclexChunkText(text,chunkSize,overlap);addLog(`  ${chunks.length} chunks (size: ${chunkSize}, overlap: ${overlap})`);
-    setProgress({current:0,total:chunks.length});let allQ=[...existingQ];
+    setProgress({current:0,total:chunks.length});
+    const allQ=[...existingQ],seen=new Set();for(const q of allQ)if(q&&q.question)seen.add(nclexKey(q)); // v15.13: one Set for the run
     for(let i=0;i<chunks.length;i++){
       if(signal.aborted)throw new DOMException('Aborted','AbortError');
       addLog(`  Chunk ${i+1}/${chunks.length}...`);
       try{
         const result=await nclexCallGemini(NCLEX_INLINE_PROMPT+chunks[i],signal);
-        if(Array.isArray(result)&&result.length>0){const tagged=result.map(q=>({...q,id:nclexId()}));allQ=nclexDedup([...allQ,...tagged]);setQuestions([...allQ]);addLog(`    ✓ ${result.length} found → ${allQ.length} unique`);}else addLog(`    — No questions.`);
+        if(Array.isArray(result)&&result.length>0){nclexAccumulate(seen,allQ,result.map(q=>({...q,id:uid()})));setQuestions(allQ.slice());addLog(`    ✓ ${result.length} found → ${allQ.length} unique`);}else addLog(`    — No questions.`);
       }catch(e){if(e.name==='AbortError')throw e;addLog(`    ⚠ ${e.message}`);}
-      setProgress({current:i+1,total:chunks.length});if(i<chunks.length-1)await nclexSleep(500,signal);
+      setProgress({current:i+1,total:chunks.length});if(i<chunks.length-1)await _sleep(500,signal);
     }
     return allQ;
   }
@@ -4189,10 +4328,41 @@ function NCLEXExtractor(){
     if(pairs.length<3||(pairs.length>0&&matched/pairs.length<0.3)){
       addLog('🤖 Regex found too few — using AI to pair...');
       try{
-        const prompt=NCLEX_AI_PAIR_PROMPT+qText.slice(0,12000)+'\n\nANSWERS SECTION:\n'+aText.slice(0,12000);
-        const aiResult=await nclexCallGemini(prompt,signal);
-        if(Array.isArray(aiResult)&&aiResult.length>pairs.length){
-          pairs=aiResult.map(r=>({number:r.number||0,question:r.question||'',answer:r.answer||'',matched:!!r.answer}));
+        // v15.13: was ONE call over qText.slice(0,12000)+aText.slice(0,12000), and its result
+        // replaced the regex pairing whenever it returned more pairs. On a 200-question Davis
+        // section the model saw roughly the first 20 questions, returned 20 pairs, beat a weak
+        // 2-pair regex result - and the other 180 questions vanished with no warning at all.
+        // The whole text is now walked in windows and merged by question number, so "better
+        // than regex" is measured against everything rather than against a prefix.
+        //
+        // PROPORTIONAL windows, not equal-size ones: both sections run in question-number
+        // order, which is the premise of split mode itself, so window w of the questions lines
+        // up with window w of the answers. A 10% seam overlap keeps a pair that straddles a
+        // boundary intact in at least one window.
+        const MAX_WIN=12000;
+        const W=Math.max(1,Math.ceil(Math.max(qText.length,aText.length)/MAX_WIN));
+        const qStep=Math.ceil(qText.length/W)||1,aStep=Math.ceil(aText.length/W)||1;
+        const grab=(s,step,w)=>s.slice(Math.max(0,Math.floor(w*step-step*0.1)),Math.ceil((w+1)*step+step*0.1));
+        const byNum=new Map();
+        for(let w=0;w<W;w++){
+          if(signal.aborted)throw new DOMException('Aborted','AbortError');
+          const qs=grab(qText,qStep,w),as=grab(aText,aStep,w);
+          if(!qs.trim()&&!as.trim())continue;
+          if(W>1)addLog('  pairing window '+(w+1)+'/'+W+'...');
+          const part=await nclexCallGemini(NCLEX_AI_PAIR_PROMPT+qs+'\n\nANSWERS SECTION:\n'+as,signal);
+          if(!Array.isArray(part))continue;
+          for(const r of part){
+            const row={number:Number(r&&r.number)||0,question:String(r&&r.question||''),answer:String(r&&r.answer||''),matched:!!(r&&r.answer)};
+            if(!row.question.trim())continue;
+            const prev=byNum.get(row.number);
+            // An overlapping seam can yield the same number twice; keep the fuller record.
+            if(!prev||(!prev.matched&&row.matched)||row.question.length>prev.question.length)byNum.set(row.number,row);
+          }
+          if(w<W-1)await _sleep(500,signal);
+        }
+        const aiResult=[...byNum.values()].sort((x,y)=>x.number-y.number);
+        if(aiResult.length>pairs.length){
+          pairs=aiResult;
           addLog(`  → AI paired ${pairs.length} questions (better than regex)`);
         }
       }catch(e){if(e.name==='AbortError')throw e;addLog(`  ⚠ AI pairing failed: ${e.message}`);}
@@ -4200,15 +4370,16 @@ function NCLEXExtractor(){
     if(!pairs.length){addLog('⚠ No numbered questions detected. Try adjusting page ranges or Inline mode.');return existingQ;}
     const batches=nclexBatchPairs(pairs,batchSize);
     addLog(`Sending ${batches.length} batches of ~${batchSize} to ${model}...`);
-    setProgress({current:0,total:batches.length});let allQ=[...existingQ];
+    setProgress({current:0,total:batches.length});
+    const allQ=[...existingQ],seen=new Set();for(const q of allQ)if(q&&q.question)seen.add(nclexKey(q)); // v15.13: one Set for the run
     for(let i=0;i<batches.length;i++){
       if(signal.aborted)throw new DOMException('Aborted','AbortError');
       const batch=batches[i];addLog(`  Batch ${i+1}/${batches.length} (Q#${batch[0].number}–#${batch[batch.length-1].number})...`);
       try{
         const result=await nclexCallGemini(NCLEX_SPLIT_PROMPT+nclexPairsToText(batch),signal);
-        if(Array.isArray(result)&&result.length>0){const tagged=result.map(q=>({...q,id:nclexId()}));allQ=nclexDedup([...allQ,...tagged]);setQuestions([...allQ]);addLog(`    ✓ ${result.length} → ${allQ.length} unique`);}else addLog(`    — No output.`);
+        if(Array.isArray(result)&&result.length>0){nclexAccumulate(seen,allQ,result.map(q=>({...q,id:uid()})));setQuestions(allQ.slice());addLog(`    ✓ ${result.length} → ${allQ.length} unique`);}else addLog(`    — No output.`);
       }catch(e){if(e.name==='AbortError')throw e;addLog(`    ⚠ ${e.message}`);}
-      setProgress({current:i+1,total:batches.length});if(i<batches.length-1)await nclexSleep(500,signal);
+      setProgress({current:i+1,total:batches.length});if(i<batches.length-1)await _sleep(500,signal);
     }
     return allQ;
   }
@@ -4302,8 +4473,8 @@ function NCLEXExtractor(){
         </div>}
 
         {/* Upload */}
-        <div role="button" tabIndex={0} aria-label="Add PDF files" onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fRef.current?.click();}}} className="upload-zone" onClick={()=>fRef.current?.click()} onDragOver={e=>{e.preventDefault();e.currentTarget.classList.add('dragover');}} onDragLeave={e=>e.currentTarget.classList.remove('dragover')} onDrop={e=>{e.preventDefault();e.currentTarget.classList.remove('dragover');const nf=Array.from(e.dataTransfer.files).filter(f=>f.type==='application/pdf');setFiles(p=>[...p,...nf]);}}>
-          <input ref={fRef} type="file" accept=".pdf" multiple style={{display:'none'}} onChange={e=>{setFiles(p=>[...p,...Array.from(e.target.files)]);e.target.value='';}}/>
+        <div role="button" tabIndex={0} aria-label="Add PDF files" onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fRef.current?.click();}}} className="upload-zone" onClick={()=>fRef.current?.click()} onDragOver={e=>{e.preventDefault();e.currentTarget.classList.add('dragover');}} onDragLeave={e=>e.currentTarget.classList.remove('dragover')} onDrop={e=>{e.preventDefault();e.currentTarget.classList.remove('dragover');addPdfs(e.dataTransfer.files);}}>
+          <input ref={fRef} type="file" accept=".pdf" multiple style={{display:'none'}} onChange={e=>{addPdfs(e.target.files);e.target.value='';}}/>
           <div style={{fontSize:28,marginBottom:4,opacity:.6}}>📋</div>
           <p style={{fontSize:12,color:'var(--text)'}}>Drop PDFs or <strong style={{color:'var(--accent)'}}>click to browse</strong></p>
         </div>
@@ -5056,7 +5227,7 @@ function ngSplitNumbered(text){
 // items end with "Answer: ____".
 function ngParseItem(block){
   const raw=String(block.text||'');
-  const body=raw.replace(/^(\s{0,4})(?:Q)?\d{1,2}[.)]\s+/,'');
+  const body=raw.replace(/^(\s{0,4})(?:Q)?\d{1,3}[.)]\s+/,''); // v15.13: was {1,2}; ngSplitNumbered uses {1,3}
   const lines=body.split('\n');
   const options=[];
   let stem=[];
@@ -5259,9 +5430,9 @@ ${keyBlock||'(unavailable)'}
   "repairNote": "one sentence on what you changed, or why you could not"
 }`;
 }
-function ngRenumber(text,n){return text.replace(/^(\s{0,4})(?:Q)?\d{1,2}[.)]\s+/,'$1'+n+'. ');}
+function ngRenumber(text,n){return text.replace(/^(\s{0,4})(?:Q)?\d{1,3}[.)]\s+/,'$1'+n+'. ');} // v15.13: {1,2} -> {1,3}
 function ngStem(t){
-  const f=t.replace(/^(\s{0,4})(?:Q)?\d{1,2}[.)]\s+/,'').split('\n')[0].trim();
+  const f=t.replace(/^(\s{0,4})(?:Q)?\d{1,3}[.)]\s+/,'').split('\n')[0].trim(); // v15.13: {1,2} -> {1,3}
   return f.length>95?f.slice(0,95)+'…':f;
 }
 
@@ -5293,7 +5464,7 @@ function NCLEXGenerator(){
   // boundary replaced the whole app, discarding all six tools' unsaved state.
   const [showUncov,setShowUncov]=useState(false);
 
-  const log=useCallback((msg,t='')=>setLogs(p=>[...p,{msg,t}]),[]);
+  const log=useCallback((msg,t='')=>setLogs(p=>[...p.slice(-200),{msg,t}]),[]); // v15.13: capped, like the KB builder
   const numBatches=Math.max(1,Math.ceil(targetCount/batchSize));
 
   function buildFocusBlock(){
@@ -5473,7 +5644,7 @@ GROUNDING ADAPTER — INPUT FORM ONLY:
         const parts=allocMode?[{text:groundingAdapter},{text:prompt}]:[...fileParts,{text:prompt}];
 
         let raw;
-        try{raw=await callGemini(cfg.apiKey,model,parts,true,toolLevel,ctl.signal,2,t=>setLiveKB(Math.round(t.length/102.4)/10),m=>{if(m.truncated){const th=m.usage?.thoughtsTokenCount||0;log('  \u26a0 Batch '+b+' hit the 65,536-token ceiling \u2014 the answer key is likely cut short.'+(th?' Thinking used '+th.toLocaleString()+' tok of that budget.':' Try a smaller batch size.'),'err');}});}
+        try{raw=await callGemini(cfg.apiKey,model,parts,{thinkingLevel:toolLevel,signal:ctl.signal,onUpdate:t=>setLiveKB(Math.round(t.length/102.4)/10),onMeta:m=>{if(m.truncated){const th=m.usage?.thoughtsTokenCount||0;log('  \u26a0 Batch '+b+' hit the 65,536-token ceiling \u2014 the answer key is likely cut short.'+(th?' Thinking used '+th.toLocaleString()+' tok of that budget.':' Try a smaller batch size.'),'err');}}});}
         catch(e){
           if(e.name==='AbortError')throw e;
           log('  ⚠ Batch '+b+' failed: '+e.message,'err');
@@ -5544,7 +5715,7 @@ GROUNDING ADAPTER — INPUT FORM ONLY:
                 correctAnswers:[(String(k&&k.answer||'').match(/\b([A-Z])\b/)||[])[1]||''].filter(Boolean)};
               let v;
               try{
-                const out=await callGemini(cfg.apiKey,aModel,[{text:itemBuildAuditPrompt(itemAuditPayload('',q))}],true,aLevel,ctl.signal,AUDIT_RETRIES);
+                const out=await callGemini(cfg.apiKey,aModel,[{text:itemBuildAuditPrompt(itemAuditPayload('',q))}],{thinkingLevel:aLevel,signal:ctl.signal,retries:AUDIT_RETRIES});
                 v=itemParseAuditVerdict(out);
               }catch(e){
                 if(e.name==='AbortError')throw e;
@@ -5578,7 +5749,7 @@ GROUNDING ADAPTER — INPUT FORM ONLY:
                 try{
                   const k=keyItems.get(r.num);
                   const keyRaw=k?k.raw:'';
-                  const out=await callGemini(cfg.apiKey,gModel,[{text:ngBuildRepairPrompt({item:r.item,criterion:r.criterion,keyBlock:keyRaw})}],true,gLevel,ctl.signal,1,null,null,{responseMimeType:'application/json'});
+                  const out=await callGemini(cfg.apiKey,gModel,[{text:ngBuildRepairPrompt({item:r.item,criterion:r.criterion,keyBlock:keyRaw})}],{thinkingLevel:gLevel,signal:ctl.signal,retries:1,generationConfig:{responseMimeType:'application/json'}});
                   const fixed=extractJSON(out);
                   if(!fixed||!fixed.stem||!Array.isArray(fixed.options)||!fixed.options.length)throw new Error('repair returned no usable item');
                   const strat=(keyRaw.match(/^\s*Strategy:[^\n]*$/m)||[])[0]||'';
@@ -5631,7 +5802,10 @@ GROUNDING ADAPTER — INPUT FORM ONLY:
           unallocated:poolSize-allocatedAll.size});
         log(`Fact coverage: ${citedAll.size}/${allocatedAll.size} allocated fact(s) cited · ${poolSize-allocatedAll.size} of ${poolSize} pool fact(s) never allocated.`,uncovered.length?'warn':'ok');
       }
-      if(K.registerArtifact)K.registerArtifact('nclexQuestions',results.filter(r=>r.qCount>0).map(r=>({id:'batch-'+r.n,factIds:r.factIds||[],label:'NCLEX batch '+r.n+' ('+r.qCount+' question'+(r.qCount===1?'':'s')+')'})));
+      // v15.13: gated on validation, not just on question count. Once a fact badge shows up
+      // in the Inspector it reads as verified provenance, and the case generator already
+      // refuses to register a case that failed. These two now agree.
+      if(K.registerArtifact)K.registerArtifact('nclexQuestions',results.filter(r=>r.qCount>0&&!(r.wsIssues||[]).some(x=>x.sev==='error')).map(r=>({id:'batch-'+r.n,factIds:r.factIds||[],label:'NCLEX batch '+r.n+' ('+r.qCount+' question'+(r.qCount===1?'':'s')+')'})));
       log('✅ Done — '+produced+' questions across '+results.filter(r=>r.qCount>0).length+' batches. '+logged.length+' unique concepts logged.','ok');
       if(produced<targetCount)log('ⓘ Produced fewer than the '+targetCount+' target. The source may not support more non-duplicate questions.','warn');
     }catch(e){
@@ -5654,11 +5828,18 @@ GROUNDING ADAPTER — INPUT FORM ONLY:
     return{questions:qs,answers:ks,count:n-1};
   },[batches]);
 
+  // v15.13: validateNCLEXWorksheet already found these; nothing carried them out of the app.
+  const wsIssuesAll=useMemo(()=>batches.flatMap(b=>(b.wsIssues||[]).map(x=>({...x,msg:'Batch '+b.n+': '+x.msg}))),[batches]);
+  const wsErrCount=useMemo(()=>wsIssuesAll.filter(x=>x.sev==='error').length,[wsIssuesAll]);
   const wsMd=useMemo(()=>{
     if(!ws.count)return'';
-    return'# NCLEX Practice Questions\n\n**'+ws.count+' questions** generated from source material.\n\n---\n\n## Questions\n\n'
+    // Stamped, not blocked. A failed worksheet is still worth inspecting and hand-correcting;
+    // what it must not do is leave the app looking indistinguishable from a validated one.
+    // Same policy the case generator already applies to a failed case.
+    return caseValidationStamp(wsIssuesAll,'worksheet')
+      +'# NCLEX Practice Questions\n\n**'+ws.count+' questions** generated from source material.\n\n---\n\n## Questions\n\n'
       +ws.questions.join('\n\n')+'\n\n<div class="pagebreak"></div>\n\n## Answer Key\n\n'+ws.answers.join('\n\n');
-  },[ws]);
+  },[ws,wsIssuesAll]);
 
   // v15.7: the audit trail now carries the deterministic worksheet findings, the per-item
   // audit verdicts, and the provenance stamp. The printable worksheet stays clean.
@@ -6717,12 +6898,15 @@ function latteProvenanceStamp({genModel,genLevel,auditModel,auditLevel,promptLab
     '```',''];
   return L.join('\n');
 }
-function caseValidationStamp(issues){
+// v15.13: `what` lets the NCLEX worksheet share this. The default keeps the case wording
+// byte-identical, so nothing about the case path changes.
+function caseValidationStamp(issues,what){
   const errs=(issues||[]).filter(x=>x.sev==='error');
   const warns=(issues||[]).filter(x=>x.sev!=='error');
   if(!errs.length)return'';
   return['> **\u26a0 FAILED VALIDATION \u2014 '+errs.length+' error(s), '+warns.length+' warning(s)**',
-    '>','> This case did not pass source-grounding checks. Do not use it as verified study',
+    '>',what?('> This '+what+' did not pass its automated checks. Do not use it as verified study')
+      :'> This case did not pass source-grounding checks. Do not use it as verified study',
     '> content until corrected. Errors:','>',
     ...errs.slice(0,12).map(e=>'> - '+e.msg),
     ...(errs.length>12?['> - \u2026and '+(errs.length-12)+' more']:[]),
@@ -6859,14 +7043,15 @@ function itemParseAuditVerdict(text){
   const raw=String(text||'');
   const lines=raw.split('\n').map(l=>l.trim()).filter(Boolean);
   const warns=[];
-  let status='REVIEW',criterion='',detail='';
+  let status='REVIEW',criterion='',detail='',verdictSeen=false; // v15.13: see below
   for(const line of lines){
     let m;
     if((m=line.match(/^WARN\s+([^:]+):\s*(.*)$/i))){warns.push({criterion:m[1].trim(),detail:m[2].trim()});continue;}
-    if(status!=='REVIEW'||criterion)continue; // first verdict line wins
-    if(/^PASS\b/i.test(line)){status='PASS';continue;}
-    if((m=line.match(/^FAIL\s*[—–\-:]\s*(.+)$/i))){status='FAIL';criterion=m[1].trim();continue;}
-    if((m=line.match(/^REVIEW\s*[—–\-:]\s*(.+)$/i))){status='REVIEW';detail=m[1].trim();continue;}
+    if(verdictSeen)continue; // v15.13: an explicit flag. The old test could not tell a
+    // leading REVIEW apart from the 'nothing seen yet' default, because they are the same state.
+    if(/^PASS\b/i.test(line)){status='PASS';verdictSeen=true;continue;}
+    if((m=line.match(/^FAIL\s*[—–\-:]\s*(.+)$/i))){status='FAIL';criterion=m[1].trim();verdictSeen=true;continue;}
+    if((m=line.match(/^REVIEW\s*[—–\-:]\s*(.+)$/i))){status='REVIEW';detail=m[1].trim();verdictSeen=true;continue;}
   }
   // A FAIL naming criterion 11 is downgraded here, not trusted. The prompt forbids it, but
   // a prompt instruction is not an enforcement mechanism — this is.
@@ -7013,7 +7198,7 @@ function CaseStudyGenerator(){
   const [audit,setAudit]=useState(null);
   const [auditPhase,setAuditPhase]=useState('');
   const [provenance,setProvenance]=useState(null); // v15.7 B2: what produced this artifact
-  const log=useCallback((msg,t='')=>setLogs(p=>[...p,{msg,t}]),[]);
+  const log=useCallback((msg,t='')=>setLogs(p=>[...p.slice(-200),{msg,t}]),[]); // v15.13: capped, like the KB builder
 
   const conditions=K.knowledgeBase.conditions||[];
   const activeCondition=conditions.find(c=>c.id===conditionId)||conditions[0]||null;
@@ -7046,10 +7231,13 @@ function CaseStudyGenerator(){
       const prompt=caseBuildPrompt({conditionName:activeCondition.name,facts:selectedFacts,difficulty,stages,questionsPerStage,includeTypes:types});
       log('Generating unfolding case ('+stages+' stages · '+questionsPerStage+' Q/stage)...','warn');
       let meta=null;
-      const raw=await callGemini(cfg.apiKey,model,[{text:prompt}],true,level,ctl.signal,2,
-        t=>setLiveKB(Math.round(t.length/102.4)/10),
-        m=>{meta=m;if(m.truncated)log('  ⚠ Output hit the 65,536-token ceiling — the case may be cut short. Reduce stages or questions per stage.','err');},
-        {responseMimeType:'application/json'}); // v15: the case prompt already demands bare JSON; this stops fence/prose wrappers at the source (extractJSON stays as the truncation fallback)
+      const raw=await callGemini(cfg.apiKey,model,[{text:prompt}],{
+        thinkingLevel:level,signal:ctl.signal,
+        onUpdate:t=>setLiveKB(Math.round(t.length/102.4)/10),
+        onMeta:m=>{meta=m;if(m.truncated)log('  ⚠ Output hit the 65,536-token ceiling — the case may be cut short. Reduce stages or questions per stage.','err');},
+        // v15: the case prompt already demands bare JSON; this stops fence/prose wrappers at
+        // the source (extractJSON stays as the truncation fallback).
+        generationConfig:{responseMimeType:'application/json'}});
       let parsed;
       try{parsed=extractJSON(raw);}catch(e){log('Could not parse JSON from the model output: '+e.message,'err');setBusy(false);setAbortCtl(null);return;}
       if(!parsed||!Array.isArray(parsed.stages)||!parsed.stages.length){log('The response did not contain any case stages.','err');setBusy(false);setAbortCtl(null);return;}
@@ -7093,7 +7281,7 @@ function CaseStudyGenerator(){
             const payload=caseAuditPayload(parsed,it.stageNumber,it.q);
             let verdict;
             try{
-              const out=await callGemini(cfg.apiKey,aModel,[{text:itemBuildAuditPrompt(payload)}],true,aLevel,ctl.signal,AUDIT_RETRIES);
+              const out=await callGemini(cfg.apiKey,aModel,[{text:itemBuildAuditPrompt(payload)}],{thinkingLevel:aLevel,signal:ctl.signal,retries:AUDIT_RETRIES});
               verdict=itemParseAuditVerdict(out);
             }catch(e){
               if(e.name==='AbortError')throw e;
@@ -7135,8 +7323,8 @@ function CaseStudyGenerator(){
                 const visible=caseAuditPayload(parsed,r.stageNumber,r.q);
                 const out=await callGemini(cfg.apiKey,model,[{text:caseBuildRepairPrompt({
                   conditionName:activeCondition.name,facts:selectedFacts,stageNumber:r.stageNumber,
-                  q:r.q,criterion:r.criterion,visibleContext:visible})}],true,level,ctl.signal,1,
-                  null,null,{responseMimeType:'application/json'});
+                  q:r.q,criterion:r.criterion,visibleContext:visible})}],
+                  {thinkingLevel:level,signal:ctl.signal,retries:1,generationConfig:{responseMimeType:'application/json'}});
                 const fixed=extractJSON(out);
                 if(!fixed||!fixed.stem||!Array.isArray(fixed.options))throw new Error('repair returned no usable item');
                 // v15.13: rebuild rather than mutate. `parsed` is the SAME object already

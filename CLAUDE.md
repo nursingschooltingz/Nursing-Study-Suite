@@ -21,7 +21,7 @@ Maintained by one person — a working LPN in an LPN-to-RN bridge program — be
 node latte-tests.js
 ```
 
-Expect **642 passed · 0 failed**. The harness extracts live functions from the shipped HTML by anchor strings — it never copies code, so it fails loudly if a refactor moves an anchor. That failure is signal, not noise: fix the anchor reference, don't weaken the test.
+Expect **678 passed · 0 failed**. The harness extracts live functions from the shipped HTML by anchor strings — it never copies code, so it fails loudly if a refactor moves an anchor. That failure is signal, not noise: fix the anchor reference, don't weaken the test.
 
 Watch for *vacuous* passes as well as failures: an end anchor that matches earlier than intended silently truncates a span, and every assertion about the missing tail then passes for the wrong reason. `caseBuildPrompt` hit exactly this — `'\n}\n'` matched inside its JSON-shape block. Where a span covers a prompt, assert that something near its *end* is present.
 
@@ -60,7 +60,7 @@ Do not "fix" these:
 | File | Purpose |
 |---|---|
 | `Nursing-Study-Suite v15.12.html` | The entire application. The filename carries the version — quote it on the command line. Both harnesses auto-detect any `Nursing-Study-Suite*.html`, so a version bump needs no code change. |
-| `latte-tests.js` | Regression harness, 642 assertions |
+| `latte-tests.js` | Regression harness, 678 assertions |
 | `neia-fixture.json` | 10 fixed MCQs with reference classifications, for the audit test–retest |
 | `neia-retest.js` | Test–retest runner — **costs live API calls**, never part of `latte-tests.js` |
 | `davis-transcribe-test.js` | Flashcard transcription batch runner — **costs live API calls**, never part of `latte-tests.js`. The in-app panel is the normal path; this is for measuring a deck without clicking through it. |

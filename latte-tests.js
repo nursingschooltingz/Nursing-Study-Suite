@@ -46,7 +46,13 @@ const CASE = new Function(
   ';return {CASE_CLINICAL_TOKEN_RE,CASE_CLINICAL_TERM_RE,scanUncitedProse,caseNormalizeClinical,caseAuditTextValues,caseAuditDatumValues,validateCaseStudy,validateStageTiming,NEIA_TERMINOLOGY_RULES,neiaTerminologyScan,CASE_SUPPORT_TYPES,caseParseThreshold,caseSplitValue,caseUnitsCompatible,caseThresholdSatisfied,itemHeuristics,caseContentWords,caseDifficultySignals};'
 )();
 const nclexChunkText = new Function(spanFrom('function nclexChunkText', '\n  return chunks;\n}') + ';return nclexChunkText;')();
-const nclexDedup = new Function(spanFrom('function nclexDedup', '\n}') + ';return nclexDedup;')();
+// v15.13: the span starts at nclexKey now. nclexDedup delegates to it, and the incremental
+// accumulator that shares it has to be tested against the SAME key function — two
+// normalizations would be free to drift, which is the whole reason it was lifted out.
+const NX = new Function(
+  spanFrom('function nclexKey', 'return allQ;\n}') +
+  ';return {nclexKey,nclexDedup,nclexAccumulate};')();
+const nclexDedup = NX.nclexDedup;
 const kbLine = (() => { const i = S.indexOf('contraindicat|'); return S.slice(S.lastIndexOf('\n', i) + 1, S.indexOf('\n', i)); })();
 const KB_RE = new RegExp(kbLine.slice(kbLine.indexOf('||/') + 3, kbLine.indexOf('/i.test')), 'i');
 const pptxSplit = new Function('text', spanFrom("const parts=String(text||'').split(/(?=--- SLIDE", 'text:t};});'));
@@ -254,8 +260,22 @@ t('undefined textContent is survivable', pdfLayoutText(undefined) === '');
   t('perPage says WHICH pages are empty, not just how many',
     q.perPage.filter(p => p.chars < 50).map(p => p.n).join(',') === '1,2,3');
 }
+// v15.13: the layout-aware extractor moved INTO pdfWalkPages, so the KB branch now receives
+// already-laid-out text. Same property, one level up: the naive join must stay gone, and the
+// one place that produces page text must be the shared helper.
 t('KB path uses pdfLayoutText, not the naive join',
-  S.includes("'\\n--- PAGE '+i+' ---\\n'+pdfLayoutText(tc)") && !S.includes("+tc.items.map(x=>x.str).join(' ')"));
+  S.includes("'\\n--- PAGE '+i+' ---\\n'+text") && !S.includes("+tc.items.map(x=>x.str).join(' ')") &&
+  S.includes('const text=pdfLayoutText(await pg.getTextContent());'));
+t('there is exactly ONE page walk, and it is cancellable',
+  S.split('async function pdfWalkPages').length - 1 === 1 &&
+  !S.includes('for(let i=1;i<=pdf.numPages;i++)') &&
+  S.includes("if(signal&&signal.aborted)throw new DOMException('Aborted','AbortError');"));
+t('all three former walkers go through it',
+  S.includes('await pdfWalkPages(file,{signal,onPage:t=>{out.push(t);}});') &&
+  S.includes('await pdfWalkPages(file,{signal,from:startPage,to:endPage,onPage:t=>{out.push(t);}});') &&
+  S.includes('await pdfWalkPages(file,{signal,onPage:async(text,i,pg,total)=>{'));
+t('the inline NCLEX read is cancellable, not just the chunk loop',
+  S.includes('await extractPdfTextSpaced(file,signal)'));
 t('default Flash model is gemini-3.7-flash', /useState\('gemini-3\.7-flash'\)/.test(S));
 
 /* ── 10d. v15.10: quote-miss classification + benchmark instrumentation ── */
@@ -380,8 +400,13 @@ t('the probe does not depend on the non-existent paintJpegXObject', !S.includes(
 t('tiled and grouped raster variants are counted — a scanned page paints via those',
   S.includes('OPS.paintImageXObjectRepeat') && S.includes('OPS.paintImageMaskXObjectGroup'));
 t('the probe is opt-in', S.includes('const [probeComposition,setProbeComposition]=useState(false);'));
+// v15.13: cleanup moved into pdfWalkPages, so a textual index comparison no longer says
+// anything (the helper is defined earlier in the file than its caller). The invariant is
+// now structural and stronger: cleanup runs in a finally AFTER onPage is awaited, so any
+// probe inside onPage still sees the operator list that cleanup() is about to release.
 t('the probe runs before cleanup() releases the operator list',
-  S.indexOf('kbPageComposition(pg)') < S.indexOf('try{pg.cleanup();}catch(e){}\n      if(onProgress'));
+  /if\(onPage\)await onPage\([^)]*\);\s*\}finally\{\s*try\{pg\.cleanup\(\);\}catch\(e\)\{\}/.test(S) &&
+  S.includes('if(composition){try{units[units.length-1].composition=await kbPageComposition(pg);}catch(e){}}'));
 t('diagnostics export exists and is not a Knowledge Base', S.includes("kind:'latte-extraction-diagnostics'"));
 t('the panel no longer claims diagnostics never reach any export',
   !S.includes('never written into the Knowledge Base or any export.'));
@@ -1884,10 +1909,18 @@ section('v15.8 — Phase 3 hardening');
 }
 {
   t('PDF documents are tracked for bulk release',S.includes('const _pdfLiveDocs=new Set();'));
-  t('a release helper exists',S.includes('function destroyAllPdfDocs()'));
-  t('the registry is cleared after release',S.includes('_pdfLiveDocs.clear();'));
-  t('both PDF-opening tools release on unmount',
-    S.split('useEffect(()=>()=>destroyAllPdfDocs(),[]);').length-1===2);
+  // v15.13: the v15.8 unmount cleanup was UNREACHABLE. App keeps all six tools mounted for
+  // the whole session (display:contents/none), so neither effect could ever fire, and
+  // destroyAllPdfDocs was cross-tool global besides — had either component unmounted it
+  // would have destroyed the other's open documents. Deleted. What actually releases a
+  // document is destroyPdfDoc on the x / Clear buttons, and that had the real leak: it
+  // destroyed the proxy but never removed it from the Set.
+  t('the unreachable unmount cleanup is gone',
+    !S.includes('destroyAllPdfDocs') && !S.includes('_pdfLiveDocs.clear();'));
+  t('destroying one document prunes it from the live set',
+    S.includes('p.then(pdf=>{_pdfLiveDocs.delete(pdf);return pdf.destroy();}).catch(()=>{});'));
+  t('the live set is still populated on load, so the prune has something to remove',
+    S.includes('.then(doc=>{_pdfLiveDocs.add(doc);return doc;})'));
   t('the cache stays a WeakMap so Files are never pinned',S.includes('const _pdfDocCache=new WeakMap();'));
 }
 
@@ -1945,6 +1978,97 @@ section('v15.7 — provenance + Anki lint');
     S.includes('This is transcription, not paraphrase'));
   t('the comment does not claim NEIA validates flashcards',
     S.includes('Do NOT claim NEIA validates flashcards'));
+}
+
+/* ── v15.13 tier 3: consolidation, provenance, and debloat ── */
+section('v15.13 — tier 3');
+{
+  // T3.6 — the KB builder capped its log at 200; the other four grew without bound and
+  // rendered every entry as an index-keyed div.
+  t('all five tool logs are capped', S.split('p.slice(-200)').length - 1 === 5);
+  // T3.13i — ten positional parameters, one of them inert since v15.
+  t('callGemini takes an options object', S.includes('async function callGemini(apiKey,model,parts,opts={}){'));
+  t('no positional call site survives the migration', !S.includes('],true,') && S.split('callGemini(').length - 1 === 10);
+  t('a missed migration fails loudly instead of binding a boolean to opts',
+    S.includes("throw new Error('callGemini: pass an options object"));
+  t('the inert useThinking parameter is gone from the signature and every call site',
+    !S.includes('parts,useThinking,') && !S.includes(',true,thinkingLevel'));
+  // T3.13g/h — the wrapper no longer mutates its caller, and a deterministic failure is
+  // no longer retried twice.
+  t('geminiRequest does not mutate the body it was handed',
+    S.includes('body=Object.assign({},body,{safetySettings:SAFETY_SETTINGS});'));
+  t('an all-thinking empty response is fatal, not retried',
+    S.includes("if(finish==='MAX_TOKENS'){const e=new Error('The model spent its whole output budget"));
+  // T3.1 — the case generator stamped a failed artifact and refused to register it; the
+  // worksheet, which is the sheet a student actually studies from, did neither.
+  t('the printable worksheet carries a validation stamp',
+    S.includes("caseValidationStamp(wsIssuesAll,'worksheet')"));
+  t('a batch with structural errors is not registered as verified provenance',
+    S.includes("results.filter(r=>r.qCount>0&&!(r.wsIssues||[]).some(x=>x.sev==='error'))"));
+  t('the case wording is unchanged by the shared stamp',
+    S.includes("'> This case did not pass source-grounding checks. Do not use it as verified study'"));
+  // T3.11 — one intake path, a stale-guarded page count, a visible inverted range.
+  t('the NCLEX picker and drop zone share one filtered, de-duplicating intake',
+    S.includes('addPdfs(e.dataTransfer.files);') && S.includes('addPdfs(e.target.files);') &&
+    S.includes('const addPdfs=fl=>setFiles('));
+  t('a slow page-count resolve cannot overwrite a newer file', S.includes('return()=>{stale=true;};'));
+  t('page ranges are only reseeded when the file in slot 0 actually changes',
+    S.includes('if(firstFileRef.current!==id){'));
+  t('an inverted page range says so', S.includes('start is after end'));
+  // T3.3 — the AI pairing fallback saw only the first 12,000 characters and its result
+  // replaced the regex pairing wholesale.
+  t('AI pairing walks the whole text in windows',
+    S.includes('const W=Math.max(1,Math.ceil(Math.max(qText.length,aText.length)/MAX_WIN));') &&
+    !S.includes('NCLEX_AI_PAIR_PROMPT+qText.slice(0,12000)'));
+  t('windows are merged by question number, keeping the fuller record at a seam',
+    S.includes('byNum.set(row.number,row);'));
+  // T3.7 — narrow by design. The value is connect-src; the omissions are the point.
+  t('a CSP is present and pins where the page can send data',
+    S.includes("connect-src 'self' blob: data: https://generativelanguage.googleapis.com"));
+  t('the CSP omits default-src, which would fall through to worker-src and kill pdf.js under file://',
+    !/Content-Security-Policy[^>]*default-src/.test(S));
+  t('object-src, base-uri and form-action are locked, since none of them is used at all',
+    S.includes("object-src 'none'; base-uri 'none'; form-action 'none'"));
+  t('there is still exactly one fetch for connect-src to govern', S.split('fetch(').length - 1 === 1);
+  t('and still no form, object, embed or base tag to need the other three',
+    !S.includes('<form') && !S.includes('<object') && !S.includes('<embed') && !S.includes('<base '));
+  // T3.8 — the shared DOMPurify hash was an assumption; it is now a measurement.
+  t('the shared SRI hash is recorded as measured, not assumed',
+    S.includes('Measured 2026-08-29: both') && S.includes('29,209 identical bytes'));
+}
+{
+  // T3.10 — a single-unit chunk used to return null, and the caller then discarded it.
+  const SC = new Function('kbUnitLabel',
+    spanFrom('function kbSplitChunk', "units:only?[{...only,text:t}]:[]}));\n}") + ';return kbSplitChunk;')(u => 'page ' + (u[0] || {}).n);
+  const page = n => ({ kind: 'page', n, text: 'x'.repeat(1500) });
+  t('a multi-unit chunk still halves on the unit boundary',
+    SC({ units: [page(1), page(2), page(3)], text: 'a' }).length === 2);
+  const big = 'A'.repeat(3000) + '\n\n' + 'B'.repeat(3000);
+  const one = SC({ units: [{ kind: 'page', n: 7, text: big }], text: big, label: 'page 7' });
+  t('a single dense page now splits on text instead of being discarded', one && one.length === 2);
+  t('the split lands on the paragraph break, not mid-word',
+    one[0].text.endsWith('A') && one[1].text.startsWith('B'));
+  t('both halves keep the original page pointer, so the source label stays truthful',
+    one.every(h => h.units.length === 1 && h.units[0].n === 7));
+  t('a half can be split again, so the recursion terminates on content not on structure',
+    SC(one[0]) === null || SC(one[0]).length === 2);
+  t('a chunk too small to divide still returns null',
+    SC({ units: [{ kind: 'page', n: 1, text: 'short' }], text: 'short' }) === null);
+  // A card chunk carries units:[] and used to be unsplittable for that reason alone.
+  t('a card chunk with no units can still be halved on text',
+    SC({ units: [], text: big, label: 'card' }).length === 2);
+}
+{
+  // T3.13e — "first verdict line wins" was not true for a leading REVIEW: status stayed
+  // 'REVIEW' with criterion still '', which is indistinguishable from "nothing seen yet",
+  // so a later PASS overwrote it while the REVIEW detail survived.
+  const V = AUDIT.itemParseAuditVerdict;
+  const lead = V('REVIEW - could not resolve the dose\nPASS');
+  t('a leading REVIEW is not overwritten by a later PASS', lead.status === 'REVIEW');
+  t('and it keeps its own detail', /could not resolve/.test(lead.detail));
+  t('a leading PASS still wins over a later FAIL', V('PASS\nFAIL - Stem Clarity').status === 'PASS');
+  t('WARN lines are still collected regardless of position',
+    V('WARN Terminology: use client\nPASS').warns.length === 1);
 }
 
 /* ── v15.13 tier 2: input clamps, backoff, and storage lifecycle ── */
