@@ -66,7 +66,7 @@ Do not "fix" these:
 | `davis-transcribe-test.js` | Flashcard transcription batch runner — **costs live API calls**, never part of `latte-tests.js`. The in-app panel is the normal path; this is for measuring a deck without clicking through it. |
 | `CHANGELOG.md` | Release summary (Keep a Changelog format) |
 | `Nursing-Study-Suite-v16-spec.md` | Multimodal architecture spec — **build blocked** pending benchmark |
-| `Prompts.md` | All five prompt families, extracted verbatim from live bytes. Regenerate it after any prompt edit — it drifts silently otherwise. |
+| `Prompts.md` | Six prompt families, extracted verbatim from live bytes: KB builder, Anki, Priority, NCLEX Generator, Case Study, item audit. **Does NOT yet cover** the NCLEX *Extractor* (`NCLEX_INLINE_PROMPT`, `NCLEX_SPLIT_PROMPT`, `NCLEX_AI_PAIR_PROMPT`) or `CARD_TRANSCRIBE_PROMPT` — the file states that gap itself. Regenerate after any prompt edit — it drifts silently otherwise. |
 | `README.md` | End-user guide |
 
 ## Current state

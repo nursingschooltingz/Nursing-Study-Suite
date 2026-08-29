@@ -1,12 +1,238 @@
 # Nursing Study Suite — Prompt Library
 
-The full prompts behind the Anki Generator, Priority Analyzer, NCLEX Generator, Case Study Generator, and the item-quality auditor, **extracted verbatim from the shipped v15.9 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
+The full prompts behind the Knowledge Base builder, Anki Generator, Priority Analyzer, NCLEX Generator, Case Study Generator, and the item-quality auditor, **extracted verbatim from the shipped v15.15 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
+
+> **Coverage.** This library does not yet document the NCLEX *Extractor* (`NCLEX_INLINE_PROMPT`, `NCLEX_SPLIT_PROMPT`, `NCLEX_AI_PAIR_PROMPT`) or the flashcard transcriber (`CARD_TRANSCRIBE_PROMPT`). Those four are shipped and frozen, just not written up here yet.
 
 How to read them: text inside `${...}` is filled in at runtime by the app (your settings, your Knowledge Base, the current chunk). The Priority, Case, and audit prompts are shown as their complete builder functions because the assembly logic is part of the design.
 
 ---
 
-## 1 · Anki Card Generator (`ANKI_MASTER_PROMPT`, 17,825 chars)
+## 1 · Knowledge Base Builder (`KB_EXTRACTION_PROMPT` 6,172 chars · `KB_VERIFY_PROMPT` 2,454 chars)
+
+This is the first tool in the suite and the one every other tool feeds from — the study guide, Anki cards, NCLEX questions and case studies are all generated from the Knowledge Base this pass produces, not from the source PDF directly.
+
+It runs as **two passes over each chunk**, with different risk profiles on purpose:
+
+| Pass | Prompt | Job | Quote policy |
+|---|---|---|---|
+| 1 — extraction | `KB_EXTRACTION_PROMPT` | pull every testable fact out of the chunk | **keeps** a fact whose `sourceQuote` fails verification, counting it as a `quoteMiss` |
+| 2 — audit | `KB_VERIFY_PROMPT` | find what pass 1 *omitted* | **discards** a fact whose `sourceQuote` fails |
+
+The asymmetry is deliberate and long-standing: pass 1 losing a real fact is worse than carrying one with a weak quote, while pass 2 adding a fabricated fact is worse than missing a marginal one. Making both strict reintroduces omissions.
+
+### Runtime assembly — pass 1
+
+````js
+KB_EXTRACTION_PROMPT.replace(
+  'ONE supplied source file',
+  'ONE supplied source chunk named "' + file.name + '" (' + chunk.label + ')'
+) + focusBlock
+````
+
+Note the `.replace()`: the first line of the shipped constant is **never** what the model actually receives. At runtime that phrase is rewritten to name the specific file and chunk, which is what lets every extracted fact carry a page-level source pointer.
+
+### Runtime assembly — pass 2
+
+The audit call sends three parts, and the **prompt comes last**, after the evidence:
+
+````js
+contents: [{ parts: [
+  { text: '(A) SOURCE CHUNK — ' + file.name + ' (' + chunk.label + ')\n' + chunk.text },
+  { text: '(B) FACTS ALREADY EXTRACTED FROM THIS CHUNK\n' + inventory },
+  { text: KB_VERIFY_PROMPT + focusBlock }
+]}]
+````
+
+`focusBlock` is the same Outcomes / Points / Additional Context rendering the other tools use. Neither KB prompt contains any `${...}` interpolation — both are fixed text, and everything variable arrives in the parts above.
+
+### `KB_EXTRACTION_PROMPT`
+
+````text
+You are extracting a structured nursing knowledge base from ONE supplied source file.
+Treat the supplied source as the sole source of truth. Do not add outside knowledge.
+Return valid JSON only. Do not wrap the JSON in a markdown fence.
+
+JSON SHAPE:
+{
+  "source":{"filename":"string"},
+  "conditions":[{
+    "name":"string",
+    "aliases":["string"],
+    "facts":[{
+      "text":"string",
+      "latteBucket":"BriefPatho|Look|Assess|Tests|Treatments|Educate",
+      "subtype":"early|late|independent|dependent|acute|discharge|null",
+      "factType":"mechanism|symptom|assessment|test|medication|intervention|education|threshold|contraindication|other",
+      "safetyCritical":false,
+      "tier":1,
+      "sourceQuote":"verbatim source phrase, 20 words maximum",
+      "sourcePointer":{"filename":"string","location":"page N or slide N"}
+    }]
+  }],
+  "medications":[],
+  "diagnostics":[],
+  "scoringTools":[],
+  "formulas":[],
+  "contradictions":[]
+}
+
+PHASE 0 — INPUT HANDLING
+
+- Clean repeated headers, footers, page numbers, offsets, citation markers, and artifact text internally.
+- If duplicate content appears, keep it once unless the duplicate adds meaningful differences.
+- Preserve the order of first appearance within each condition and LATTE bucket.
+- Separate combined conditions. Do not invent diseases, values, thresholds, or missing facts.
+
+PHASE 1 — LATTE ASSIGNMENT
+
+Before returning JSON, assign every extractable fact to exactly one LATTE bucket.
+
+BriefPatho = disease mechanism, etiology, classification, what is going wrong
+Look = signs, symptoms, complaints, red flags, deterioration signs, observable side effects
+Assess = what the nurse assesses, checks, asks, inspects, trends, monitors, sequences
+Tests = labs, imaging, diagnostics, values, ranges, units, interpretations
+Treatments = medications, doses, routes, timing, interventions, procedures, safety steps, contraindications, precautions, hold/notify thresholds
+Educate = patient/family teaching, discharge teaching, home management, follow-up, when to seek care
+
+Every fact must belong to exactly one LATTE bucket. If a sentence spans multiple buckets, split it into separate atomic facts.
+
+Look vs Assess:
+- Look = what is present.
+- Assess = what the nurse does.
+
+Quick bucket rules:
+- drug mechanism of action stated in the source -> Treatments
+- disease cause or etiology -> BriefPatho
+- disease subtype or classification -> BriefPatho
+- side effects and findings -> Look
+- assessment actions -> Assess
+- labs, values, ranges, and diagnostic interpretations -> Tests
+- medications, interventions, precautions, and hold parameters -> Treatments
+- home and discharge teaching -> Educate
+
+PHASE 1.25 — FAST-REVIEW LANGUAGE
+
+Rewrite long source wording into concise review language.
+Target style: compressed, punchy, minimal, non-fluffy, easy to scan, and still precise.
+Do not write essay-like facts.
+
+COVERAGE-OVER-COMPRESSION RULE
+
+If compression would drop a threshold, qualifier, timing, route, population, exception, or condition that changes meaning, do not compress it away.
+Keep the qualifier in the same fact or split the content into multiple atomic facts.
+
+Details that must not be lost:
+- exact dose and unit
+- frequency and route
+- timing and duration
+- hold and notify thresholds
+- population or person to whom the instruction applies
+- when to seek care
+- contraindication condition
+- comparison words such as increased, decreased, high, low, above, and below
+
+PHASE 1.5 — ATOMICITY
+
+Each fact should contain one tightly linked clinical idea.
+Split when:
+- a sentence contains unrelated facts
+- the facts matter independently
+- one item would become a list-recall prompt
+- brevity would otherwise omit a qualifier needed for full meaning
+
+Combine only when facts are naturally linked, such as:
+- drug + dose + route
+- threshold + required action
+- a clinically taught pair where one fact is necessary to interpret the other
+
+SOURCE POINTER RULES
+
+- Use the actual filename in every source pointer.
+- Never use generic labels such as File 1, Source 1, the textbook, or the slides.
+- Preserve the page or slide location whenever it can be determined.
+- For every fact, preserve a short verbatim sourceQuote of no more than 20 words containing the supporting fact, value, or rule.
+- The sourceQuote must be copied from the supplied source, not rewritten. If no clean quote can be recovered, use an empty string rather than inventing one.
+- Every numeric value, dose, route, threshold, timeframe, contraindication, emergency finding, and safety instruction must carry a source pointer.
+- Do not silently correct or modernize source content.
+- When two source statements conflict within this file, preserve both and add a concise item to contradictions.
+
+TIER RULES
+
+Every fact receives exactly one tier.
+
+Tier 1 = must-know for exams: core concepts, hallmark findings, priority nursing interventions, safety concerns, major labs, major medications and critical parameters, key complications, and essential teaching.
+Tier 2 = important supporting detail: secondary findings, additional monitoring, less common but testable adverse effects, supporting pathophysiology, supporting interpretations, and additional teaching.
+Tier 3 = useful lower-priority context: minor details, rare exceptions, deep mechanisms, exhaustive list completions, and edge-case qualifiers.
+
+Assignment safeguards:
+- When uncertain, round up in priority rather than down.
+- Drug names, doses, routes, hold parameters, notify thresholds, contraindications, and safety warnings are always Tier 1.
+- Patient education about when to seek emergency care is always Tier 1.
+- Do not omit Tier 3 facts. Tiering is for prioritization, not extraction filtering.
+
+FINAL VALIDATION BEFORE RETURNING JSON
+
+Silently verify:
+- every fact belongs to exactly one valid LATTE bucket
+- no fact lost a clinically meaningful qualifier
+- combined conditions were split
+- every fact has one tier
+- safety-critical and numerical facts have actual filename pointers
+- each fact has a verbatim sourceQuote when the source text allows one
+- no outside facts were introduced
+- the response is valid JSON matching the required shape
+````
+
+### `KB_VERIFY_PROMPT`
+
+````text
+You are auditing a completed extraction for OMISSIONS ONLY.
+
+You are given (A) a source chunk and (B) the list of facts already extracted from it.
+Your only job is to find substantive clinical content present in the source chunk that is NOT represented in the extracted list.
+
+Return valid JSON only. Do not wrap the JSON in a markdown fence.
+
+JSON SHAPE:
+{"missed":[{
+  "conditionName":"string — the condition/topic this fact belongs to, matching the source's own naming",
+  "text":"string",
+  "latteBucket":"BriefPatho|Look|Assess|Tests|Treatments|Educate",
+  "subtype":"early|late|independent|dependent|acute|discharge|null",
+  "factType":"mechanism|symptom|assessment|test|medication|intervention|education|threshold|contraindication|other",
+  "safetyCritical":false,
+  "tier":1,
+  "sourceQuote":"verbatim source phrase, 20 words maximum"
+}]}
+
+REPORT AS MISSED:
+- a drug, dose, unit, route, frequency, or timing not represented
+- a numeric value, lab range, or vital-sign threshold not represented
+- a hold parameter, notify threshold, contraindication, or precaution not represented
+- a sign, symptom, red flag, or deterioration finding not represented
+- a nursing assessment or intervention not represented
+- a teaching point or when-to-seek-care instruction not represented
+- a qualifier that changes meaning and was dropped: population, exception, timing, route, or a comparison word such as increased, decreased, above, below
+
+DO NOT REPORT:
+- content already represented in the extracted list, even if worded differently
+- slide titles, headers, footers, page furniture, citations, learning objectives
+- restatements that add no new clinical detail
+- anything not physically present in this source chunk
+
+HARD RULES
+- NEVER invent. Every returned fact must be supported by text in THIS chunk.
+- Every returned fact MUST carry a verbatim sourceQuote of 20 words or fewer, copied character-for-character from the chunk. A fact whose quote cannot be located in the chunk WILL BE DISCARDED automatically.
+- Do not add outside clinical knowledge, even when it is correct and relevant.
+- Finding nothing is a valid and expected result. If nothing substantive was missed, return {"missed":[]}.
+- Do NOT pad this list to appear thorough. An empty result is better than a fabricated one. You are not scored on how many items you return.
+- Assign latteBucket, subtype, factType, safetyCritical, and tier using the same rules the original extraction used.
+````
+
+---
+
+## 2 · Anki Card Generator (`ANKI_MASTER_PROMPT`, 17,825 chars)
 
 **Runtime assembly** — each request the app sends is:
 
@@ -609,7 +835,7 @@ BEGIN
 
 ---
 
-## 2 · Priority Analyzer (two-stage, v2.1)
+## 3 · Priority Analyzer (two-stage, v2.1)
 
 Stage 1 runs once **per chunk** on its own model profile (a fast, deliberately tier-free inventory sweep — tier assignment is withheld until Stage 2 can see everything). Stage 2 runs once over the combined harvest and applies the full rule cascade.
 
@@ -839,7 +1065,7 @@ Produce the ranked analysis now.`;
 
 ---
 
-## 3 · NCLEX Question Generator (`NCLEX_GEN_PROMPT`, v4.2, 24,083 chars)
+## 4 · NCLEX Question Generator (`NCLEX_GEN_PROMPT`, v4.2, 24,083 chars)
 
 **Runtime assembly** — each batch the app sends is:
 
@@ -1305,7 +1531,7 @@ Either way, the ANCHOR RULE is unchanged: every option must trace to verbatim so
 
 ---
 
-## 4 · Clinical Case Study Generator (`caseBuildPrompt`, 7,373 chars)
+## 5 · Clinical Case Study Generator (`caseBuildPrompt`, 7,373 chars)
 
 Returns JSON, not markdown — every field is re-validated in code against the real Knowledge Base after generation. The fact packet is appended by `caseRenderFactPacket`; the shared question rules come from `CASE_QUESTION_RULES` (see the Appendix).
 
@@ -1481,7 +1707,7 @@ regardless of how well it is written.
 
 ---
 
-## 5 · Item quality audit (`itemBuildAuditPrompt`, 3,014 chars)
+## 6 · Item quality audit (`itemBuildAuditPrompt`, 3,014 chars)
 
 The independent review pass. Used by both the Case Study Generator and the NCLEX Generator — one prompt, one profile row (`itemAudit`), because the payload is a rendered item and the criteria are the same regardless of which tool authored it.
 
