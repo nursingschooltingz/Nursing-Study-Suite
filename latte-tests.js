@@ -46,7 +46,7 @@ const CASE = new Function(
   ';return {CASE_CLINICAL_TOKEN_RE,CASE_CLINICAL_TERM_RE,scanUncitedProse,caseNormalizeClinical,caseAuditTextValues,caseAuditDatumValues,validateCaseStudy,validateStageTiming,NEIA_TERMINOLOGY_RULES,neiaTerminologyScan,CASE_SUPPORT_TYPES,caseParseThreshold,caseSplitValue,caseUnitsCompatible,caseThresholdSatisfied,itemHeuristics,caseContentWords,caseDifficultySignals};'
 )();
 const nclexChunkText = new Function(spanFrom('function nclexChunkText', '\n  return chunks;\n}') + ';return nclexChunkText;')();
-// v15.13: the span starts at nclexKey now. nclexDedup delegates to it, and the incremental
+// v15.14: the span starts at nclexKey now. nclexDedup delegates to it, and the incremental
 // accumulator that shares it has to be tested against the SAME key function — two
 // normalizations would be free to drift, which is the whole reason it was lifted out.
 const NX = new Function(
@@ -260,7 +260,7 @@ t('undefined textContent is survivable', pdfLayoutText(undefined) === '');
   t('perPage says WHICH pages are empty, not just how many',
     q.perPage.filter(p => p.chars < 50).map(p => p.n).join(',') === '1,2,3');
 }
-// v15.13: the layout-aware extractor moved INTO pdfWalkPages, so the KB branch now receives
+// v15.14: the layout-aware extractor moved INTO pdfWalkPages, so the KB branch now receives
 // already-laid-out text. Same property, one level up: the naive join must stay gone, and the
 // one place that produces page text must be the shared helper.
 t('KB path uses pdfLayoutText, not the naive join',
@@ -400,7 +400,7 @@ t('the probe does not depend on the non-existent paintJpegXObject', !S.includes(
 t('tiled and grouped raster variants are counted — a scanned page paints via those',
   S.includes('OPS.paintImageXObjectRepeat') && S.includes('OPS.paintImageMaskXObjectGroup'));
 t('the probe is opt-in', S.includes('const [probeComposition,setProbeComposition]=useState(false);'));
-// v15.13: cleanup moved into pdfWalkPages, so a textual index comparison no longer says
+// v15.14: cleanup moved into pdfWalkPages, so a textual index comparison no longer says
 // anything (the helper is defined earlier in the file than its caller). The invariant is
 // now structural and stronger: cleanup runs in a finally AFTER onPage is awaited, so any
 // probe inside onPage still sees the operator list that cleanup() is about to release.
@@ -411,8 +411,8 @@ t('diagnostics export exists and is not a Knowledge Base', S.includes("kind:'lat
 t('the panel no longer claims diagnostics never reach any export',
   !S.includes('never written into the Knowledge Base or any export.'));
 
-/* ── 10d-bis. v15.13: clinical operators survive the fact-merge key ── */
-section('v15.13 — fact key preserves clinical operators');
+/* ── 10d-bis. v15.14: clinical operators survive the fact-merge key ── */
+section('v15.14 — fact key preserves clinical operators');
 // One line, so the span cannot truncate early — evaluating the function IS the end-anchor check.
 const FK = new Function(spanFrom('function kbFactKey', "].join('|');}") + ';return {kbFactKey};')();
 {
@@ -434,8 +434,8 @@ const FK = new Function(spanFrom('function kbFactKey', "].join('|');}") + ';retu
     S.includes("replace(/[^a-z0-9.%/<>≤≥↑↓+-]+/g,' ')"));
 }
 
-/* ── 10d-ter. v15.13: operator agreement on already-verified quotes ── */
-section('v15.13 — operator agreement');
+/* ── 10d-ter. v15.14: operator agreement on already-verified quotes ── */
+section('v15.14 — operator agreement');
 {
   const src = 'Hold digoxin if the apical heart rate is < 60 beats per minute and notify the provider.';
   const n = QM.kbNormForMatch(src), d = QM.kbDehyphNormForMatch(src);
@@ -555,8 +555,8 @@ t('pass 2 never receives the image — cards enter the queue as text only',
   S.includes("queue.push({file:{name:'flashcards · '+c.key},chunk:{text:c.text,") &&
   !/queue\.push\(\{file:\{name:'flashcards[^\n]*inlineData/.test(S));
 
-/* ── v15.13: flashcard identity, provenance, and the build gate ── */
-section('v15.13 — flashcard trust boundary');
+/* ── v15.14: flashcard identity, provenance, and the build gate ── */
+section('v15.14 — flashcard trust boundary');
 // Transcripts were keyed on the basename while addFiles dedupes on name+size+lastModified,
 // so two photos sharing a basename both entered the file list and the second silently
 // overwrote the first's transcript.
@@ -632,7 +632,7 @@ t('the review acknowledgement is recorded in the exported transcript',
 t('the panel and the queue read one partition, so they cannot disagree',
   S.includes('return{rows,buildable:rows.filter(r=>!r.blockers.length).map(r=>r.card),blocked:rows.filter(r=>r.blockers.length)};'));
 
-// v15.13: the upload payload. Every failure path must PASS THROUGH the original bytes rather
+// v15.14: the upload payload. Every failure path must PASS THROUGH the original bytes rather
 // than error — HEIC decodes in Safari but not Chrome, and Gemini accepts image/heic directly.
 {
   const mkFile = (name, size) => ({ name, size, type: 'image/jpeg', _b64: 'ORIGINALBYTES' });
@@ -1270,7 +1270,7 @@ section('v15.6 — case audit pass');
       return 'done' + x;
     }).then(() => 'resolved-unexpectedly', e => ({ name: e.name, partial: e.partial }));
   }
-  // v15.13: a lane that throws must also stop the OTHER lane. Promise.all rejected on the
+  // v15.14: a lane that throws must also stop the OTHER lane. Promise.all rejected on the
   // first throw, but the sibling stayed inside its own for(;;) and kept pulling items and
   // issuing calls — which defeated the QuotaStop path entirely, since only one of the two
   // lanes ever actually stopped.
@@ -1909,7 +1909,7 @@ section('v15.8 — Phase 3 hardening');
 }
 {
   t('PDF documents are tracked for bulk release',S.includes('const _pdfLiveDocs=new Set();'));
-  // v15.13: the v15.8 unmount cleanup was UNREACHABLE. App keeps all six tools mounted for
+  // v15.14: the v15.8 unmount cleanup was UNREACHABLE. App keeps all six tools mounted for
   // the whole session (display:contents/none), so neither effect could ever fire, and
   // destroyAllPdfDocs was cross-tool global besides — had either component unmounted it
   // would have destroyed the other's open documents. Deleted. What actually releases a
@@ -1980,8 +1980,8 @@ section('v15.7 — provenance + Anki lint');
     S.includes('Do NOT claim NEIA validates flashcards'));
 }
 
-/* ── v15.13 tier 3: consolidation, provenance, and debloat ── */
-section('v15.13 — tier 3');
+/* ── v15.14 tier 3: consolidation, provenance, and debloat ── */
+section('v15.14 — tier 3');
 {
   // T3.6 — the KB builder capped its log at 200; the other four grew without bound and
   // rendered every entry as an index-keyed div.
@@ -2071,8 +2071,8 @@ section('v15.13 — tier 3');
     V('WARN Terminology: use client\nPASS').warns.length === 1);
 }
 
-/* ── v15.13 tier 2: input clamps, backoff, and storage lifecycle ── */
-section('v15.13 — clamps, backoff, storage');
+/* ── v15.14 tier 2: input clamps, backoff, and storage lifecycle ── */
+section('v15.14 — clamps, backoff, storage');
 {
   const bp = new Function(spanFrom('function nclexBatchPairs', '\n}') + ';return nclexBatchPairs;')();
   const pairs = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -2159,7 +2159,7 @@ section('v15.13 — clamps, backoff, storage');
   // !caseStudy and no per-item verdict can render while the audit is running.
   t('the case is published before the audit runs',
     S.indexOf('setCaseStudy(parsed);') < S.indexOf('if(runAudit&&errCount===0){'));
-  // v15.13: a SECOND publish is now correct and required. The repair rebuilds the case
+  // v15.14: a SECOND publish is now correct and required. The repair rebuilds the case
   // immutably rather than mutating React state, so the new object has to be handed back or
   // the memoized exports keep serving pre-repair text. Exactly two: the publish before the
   // audit, and the republish inside the repair worker.

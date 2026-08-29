@@ -59,7 +59,7 @@ Do not "fix" these:
 
 | File | Purpose |
 |---|---|
-| `Nursing-Study-Suite v15.12.html` | The entire application. The filename carries the version — quote it on the command line. Both harnesses auto-detect any `Nursing-Study-Suite*.html`, so a version bump needs no code change. |
+| `Nursing-Study-Suite v15.14.html` | The entire application. The filename carries the version — quote it on the command line. Both harnesses auto-detect any `Nursing-Study-Suite*.html`, so a version bump needs no code change. |
 | `latte-tests.js` | Regression harness, 678 assertions |
 | `neia-fixture.json` | 10 fixed MCQs with reference classifications, for the audit test–retest |
 | `neia-retest.js` | Test–retest runner — **costs live API calls**, never part of `latte-tests.js` |
@@ -71,7 +71,16 @@ Do not "fix" these:
 
 ## Current state
 
-Shipping v15.12. The app file is `Nursing-Study-Suite v15.12.html` — both harnesses auto-detect it, so a rename needs no code change. Open items:
+Shipping v15.14. The app file is `Nursing-Study-Suite v15.14.html` — all three harnesses auto-detect any `Nursing-Study-Suite*.html`, so a rename needs no code change. Open items:
+
+- **v15.14 is unverified against live output.** It is a correctness release from a three-way review (Claude Code / ChatGPT / Gemini), and all three gates pass — but nothing in it has been run against a real Knowledge Base or a real deck yet. The checks that matter, in order: a chapter carrying both `↑` and `↓` of one lab (they must stay separate facts); a hand-corrupted `sourceQuote` comparator (must now be reported); a card transcribed then its photo removed (must NOT build); one full-resolution phone photo through the new downscale path, measured at 2 runs per card; and one split-mode run on a real Davis PDF to confirm windowed pairing recovers questions past the old 12,000-character cliff.
+- **`kbQuoteOperatorsAgree` is WARN tier on purpose, and that is the measure step.** It reports quotes that verified but whose comparator or arrow disagrees with the source. It can false-positive on a column or table span exactly the way `reordered` misses do. Do not promote it to a pass-2 discard until a real corpus shows its false-positive rate — the same measure-then-act sequence that earned de-hyphenation its promotion in v15.11. A non-zero count in the diagnostics panel is worth stopping for, not worth automating on.
+- **`CARD_MAX_EDGE` / `CARD_JPEG_QUALITY` / `CARD_RESIZE_ABOVE_BYTES` are `CARD_TRANSCRIBE_PROMPT`-class.** Changing image resolution on an OCR path whose prompt says *never guess a number* is at least as consequential as changing the prompt. Re-measure with 2 runs per card before touching them.
+- **`responseSchema` is the obvious next API change and is deliberately not done.** The app sets `responseMimeType` in eight places and `responseSchema` in none, so JSON shape rests on prompt text plus `extractJSON`. It is a `generationConfig` field, so it touches no frozen prompt byte — but it changes what the model returns, which makes it a generator-pipeline change needing a real batch first.
+- **Per-operation token budgets are a rejected idea, not a pending one.** `maxOutputTokens` is a ceiling, not a reservation; lowering it saves nothing and only truncates earlier, and on Gemini 3 thinking shares that budget. The universal 65,536 is correct.
+- **Every SRI pin was verified against its CDN on 2026-08-29** — all eight match, including the DOMPurify hash shared between cdnjs and jsDelivr (29,209 identical bytes). That was an assumption until v15.14. Re-run the check on any version bump; a wrong pin hard-blocks the script.
+- **`.gitattributes` pins `* -text`.** Windows autocrlf was rewriting the working copy to CRLF on checkout, stash, and merge, which breaks the harness instantly — every span anchor is written with `
+`, so extraction throws and it reads as a wholesale regression. If the harness ever fails wholesale right after a git operation, check line endings before hunting for a real bug.
 
 - **The audit gate has been measured.** A full test–retest (10 fixture items × 3, plus a 6-call top-up) produced **zero verdict flips**, zero false fatals on the sound items, and both seeded defects caught and correctly named every run. No criterion was demoted; the cutoffs and severities stand on evidence, not guesses. Re-run `neia-retest.js` after any prompt or model change.
 - **Fact coverage is confirmed working.** Live runs report 18/30 and 23/30 where the metric had been structurally incapable of anything but 0.
