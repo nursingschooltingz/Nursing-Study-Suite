@@ -72,6 +72,9 @@ local/
 scratch/
 *.local.*
 run-node-*.md
+# Proton Drive can fork an in-progress app edit under this suffix. The shared resolver still
+# stops and requires a manual diff, while this guard prevents an accidental `git add -A`.
+*Name clash*.html
 
 # ── Test-retest reports ────────────────────────────────────────────────
 # neia-retest.js writes raw model output here. Not source material, but it is

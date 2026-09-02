@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /*
- * LATTE Study Suite — regression test harness (v15.2)
+ * LATTE Study Suite — deterministic regression test harness
  * Usage:  node latte-tests.js [path/to/LATTE-Study-Suite-*.html or Nursing-Study-Suite-*.html]
- * With no argument it picks the newest LATTE-Study-Suite*.html or Nursing-Study-Suite*.html in the current folder.
+ * With no argument it requires exactly one suite HTML in the current folder. Ambiguity and
+ * Proton Drive Name clash copies fail loudly rather than selecting a file lexically.
  *
  * The harness extracts the REAL functions from the shipped HTML (no copies to drift) and
  * exercises the deterministic logic that must never regress silently. It depends on these
@@ -14,14 +15,14 @@
  */
 'use strict';
 const fs = require('fs');
+const { NAME_CLASH_RE, resolveSuiteFile } = require('./tools/repo-checks');
+const EXPECTED_ASSERTIONS = 725;
 
-let file = process.argv[2];
-if (!file) {
-  const cands = fs.readdirSync('.').filter(f => /^(LATTE-Study-Suite|Nursing-Study-Suite).*\.html$/i.test(f)).sort();
-  file = cands[cands.length - 1];
-}
-if (!file || !fs.existsSync(file)) {
-  console.error('usage: node latte-tests.js <LATTE-Study-Suite or Nursing-Study-Suite html>'); process.exit(2);
+let file;
+try {
+  file = resolveSuiteFile({ rootDir: process.cwd(), explicit: process.argv[2] || '' });
+} catch (error) {
+  console.error(error.message); process.exit(2);
 }
 const S = fs.readFileSync(file, 'utf8');
 console.log('LATTE regression harness — testing: ' + file + ' (' + S.length.toLocaleString() + ' chars)\n');
@@ -2348,7 +2349,33 @@ section('v15.14 — clamps, backoff, storage');
   t('the misleading "cannot leave a stale verdict" claim is gone',
     !S.includes('so a repaired case cannot leave a stale verdict on screen'));
 
+  section('repository verification tooling');
+  const baseline = JSON.parse(fs.readFileSync('prompt-baseline.json', 'utf8'));
+  const frozenNames = Object.keys(baseline.prompts || {});
+  t('the prompt baseline contains exactly 11 constants and excludes the tunable card prompt',
+    frozenNames.length === 11 && !frozenNames.includes('CARD_TRANSCRIBE_PROMPT'));
+  const resolvedSuite = resolveSuiteFile({ rootDir: process.cwd(), explicit: file });
+  t('the shared resolver preserves an explicitly selected canonical suite HTML', resolvedSuite === file);
+  t('the shared resolver recognises Proton Drive Name clash filenames',
+    NAME_CLASH_RE.test('Nursing-Study-Suite v15.15 (# Name clash 1 #).html'));
+  const harnessSources = ['latte-tests.js','neia-retest.js','davis-transcribe-test.js']
+    .map(name => fs.readFileSync(name, 'utf8'));
+  t('all three harnesses use the shared unambiguous suite resolver',
+    harnessSources.every(text => text.includes("require('./tools/repo-checks')")));
+  const promptDoc = fs.readFileSync('Prompts.md', 'utf8');
+  t('the generated prompt appendix covers all extractor prompts and the card transcriber',
+    ['NCLEX_INLINE_PROMPT','NCLEX_SPLIT_PROMPT','NCLEX_AI_PAIR_PROMPT','CARD_TRANSCRIBE_PROMPT']
+      .every(name => promptDoc.includes('### `' + name + '`')));
+  const verifier = fs.readFileSync('verify-repo.js', 'utf8');
+  t('the unified verifier wires prompt hashes, prompt docs, the harness and Babel parse',
+    ['checkFrozenPrompts','checkPromptDoc','runHarness','presets: [\'react\']']
+      .every(anchor => verifier.includes(anchor)));
+
   console.log('\n════════════════════════════');
+  const total = pass + fail;
+  if (total !== EXPECTED_ASSERTIONS) {
+    console.log('FAIL  harness executed ' + total + ' assertions; expected ' + EXPECTED_ASSERTIONS);
+  }
   console.log(pass + ' passed · ' + fail + ' failed');
-  process.exit(fail ? 1 : 0);
+  process.exit(fail || total !== EXPECTED_ASSERTIONS ? 1 : 0);
 })();

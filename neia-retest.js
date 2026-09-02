@@ -29,6 +29,7 @@
  */
 'use strict';
 const fs = require('fs');
+const { resolveSuiteFile } = require('./tools/repo-checks');
 
 /* ── args ── */
 const argv = process.argv.slice(2);
@@ -64,12 +65,12 @@ if (!KEY) {
   process.exit(2);
 }
 
-let htmlFile = arg('html', '');
-if (!htmlFile) {
-  const cands = fs.readdirSync('.').filter(f => /^(LATTE-Study-Suite|Nursing-Study-Suite).*\.html$/i.test(f)).sort();
-  htmlFile = cands[cands.length - 1];
+let htmlFile;
+try {
+  htmlFile = resolveSuiteFile({ rootDir: process.cwd(), explicit: arg('html', '') });
+} catch (error) {
+  console.error(error.message); process.exit(2);
 }
-if (!htmlFile || !fs.existsSync(htmlFile)) { console.error('No suite HTML found. Pass --html <file>.'); process.exit(2); }
 if (!fs.existsSync('neia-fixture.json')) { console.error('neia-fixture.json not found.'); process.exit(2); }
 
 const S = fs.readFileSync(htmlFile, 'utf8');

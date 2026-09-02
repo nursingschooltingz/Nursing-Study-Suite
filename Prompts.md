@@ -1,8 +1,8 @@
 # Nursing Study Suite — Prompt Library
 
-The full prompts behind the Knowledge Base builder, Anki Generator, Priority Analyzer, NCLEX Generator, Case Study Generator, and the item-quality auditor, **extracted verbatim from the shipped v15.15 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
+The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, and the item-quality auditor, **extracted verbatim from the shipped v15.15 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
 
-> **Coverage.** This library does not yet document the NCLEX *Extractor* (`NCLEX_INLINE_PROMPT`, `NCLEX_SPLIT_PROMPT`, `NCLEX_AI_PAIR_PROMPT`) or the flashcard transcriber (`CARD_TRANSCRIBE_PROMPT`). Those four are shipped and frozen, just not written up here yet.
+> **Coverage.** All 12 named prompt constants are represented from live HTML bytes. Eleven are byte-frozen; `CARD_TRANSCRIBE_PROMPT` is deliberately tunable but requires two transcription runs per card after an edit. The generated appendix is maintained by `node tools/render-prompts.js --write` and checked by `node verify-repo.js`.
 
 How to read them: text inside `${...}` is filled in at runtime by the app (your settings, your Knowledge Base, the current chunk). The Priority, Case, and audit prompts are shown as their complete builder functions because the assembly logic is part of the design.
 
@@ -244,7 +244,8 @@ where `focusBlock` renders your Outcomes / Points / Additional Context boxes (an
 
 ### The master prompt
 
-````textSYSTEM / ROLE
+````text
+SYSTEM / ROLE
 
 You are an elite Medical Education Specialist, Nursing Clinical Instructor, and Anki Expert. Your task is to convert the provided PDF text into high-quality Anki cloze notes for a nursing student.
 
@@ -841,7 +842,8 @@ Stage 1 runs once **per chunk** on its own model profile (a fast, deliberately t
 
 ### Stage 1 — harvest (`paBuildExtractPrompt`, 3,759 chars)
 
-````jsfunction paBuildExtractPrompt(chunk,idx,total,prevSummary){
+````js
+function paBuildExtractPrompt(chunk,idx,total,prevSummary){
   return `You are a nursing content analyst harvesting a priority inventory from one chunk of a FINISHED study guide.
 Chunk ${idx+1} of ${total}.
 
@@ -904,7 +906,8 @@ ${chunk}`;
 
 ### Stage 2 — synthesis (`paBuildSynthPrompt`, 8,669 chars)
 
-````jsfunction paBuildSynthPrompt(extractions,context){
+````js
+function paBuildSynthPrompt(extractions,context){
   const combined=extractions.map((e,i)=>`### Chunk ${i+1}\n${e}`).join('\n\n---\n\n');
   return `You are a nursing priority analyst. You are re-ranking the contents of a FINISHED study guide into a
 study order. You are not adding knowledge — you are sorting what is already there, by fixed rules,
@@ -1786,7 +1789,8 @@ These four constants are named `NCLEX_*` but are **not** appended to the NCLEX G
 
 ### `NCLEX_ANCHOR_RULES` (370 chars)
 
-````textANCHOR RULE — every option (correct AND distractors) must trace to at least one supplied
+````text
+ANCHOR RULE — every option (correct AND distractors) must trace to at least one supplied
 fact ID. An option you cannot trace to a fact ID is a hallucination by definition; rewrite it
 from the facts or drop the question. Distractors are NOT exempt: a distractor that is clinically
 true but absent from the supplied facts makes the question unanswerable from the material.
@@ -1794,7 +1798,8 @@ true but absent from the supplied facts makes the question unanswerable from the
 
 ### `NCLEX_DISTRACTOR_RULES` (810 chars)
 
-````textDISTRACTOR RULES — every wrong answer must be ONE of these, built FROM THE SUPPLIED FACTS:
+````text
+DISTRACTOR RULES — every wrong answer must be ONE of these, built FROM THE SUPPLIED FACTS:
   · A correct action for a DIFFERENT condition or context in the facts
   · A partially correct action that is not the priority
   · A misconception the facts explicitly correct
@@ -1809,7 +1814,8 @@ distractors. Match option length and specificity.
 
 ### `NCLEX_RATIONALE_RULES` (397 chars)
 
-````textRATIONALE RULES — every option gets its own rationale line, correct and incorrect alike.
+````text
+RATIONALE RULES — every option gets its own rationale line, correct and incorrect alike.
 For the correct answer, give 1-2 sentences of clinical reasoning and cite the supporting fact
 ID(s). For each distractor, give one sentence and cite the fact ID it traces to. Do not skip
 distractors. For calculation items, show the worked math. Never make the correct answer obvious
@@ -1818,8 +1824,105 @@ by length or specificity.
 
 ### `NCLEX_COMPLETENESS_RULES` (306 chars)
 
-````textCOMPLETENESS RULE — every question must be fully formed: a complete stem, all options, exactly
+````text
+COMPLETENESS RULE — every question must be fully formed: a complete stem, all options, exactly
 one set of correct answers, and a rationale line for every option. Never end mid-question or
 mid-rationale. If you cannot complete a question to this standard, produce fewer questions
 rather than truncating one.
 ````
+
+---
+
+<!-- BEGIN GENERATED: EXTRACTOR_AND_TRANSCRIBER_PROMPTS -->
+## Appendix · NCLEX Extractor and card-transcription constants
+
+Generated verbatim from the shipped HTML by `node tools/render-prompts.js --write`.
+Do not edit inside these markers. The three extractor prompts are among the 11 byte-frozen
+constants. `CARD_TRANSCRIBE_PROMPT` is not byte-frozen, but its safety rules are load-bearing.
+
+### `NCLEX_INLINE_PROMPT` (757 source chars; byte-frozen)
+
+SHA-256 of the raw template-literal body: `c3b6a2f79519a04b4b2aa56a2d60a647e1c3021aec289d5c458ed27a933bf20e`
+
+````js
+const NCLEX_INLINE_PROMPT=`You are an expert nursing educator. From the following text chunk of an NCLEX-style review book, extract EVERY test question.\n\nFor EACH question, return a JSON object with:\n- "question": full question text with all choices\n- "correct_answer": correct answer letter and text\n- "rationale": full rationale\n- "priority_nursing_tip": any tip mentioned (or null)\n- "test_taking_strategy": strategy mentioned (or null)\n- "clinical_judgment_skill": CJ skill identified (or null)\n- "diseases_conditions": array of conditions referenced\n- "keywords": important nursing keywords\n\nThis chunk may overlap with a previous chunk. Do NOT return duplicates.\nReturn ONLY a valid JSON array. No markdown fences. If no questions found, return [].\n\nTEXT CHUNK:\n`;
+````
+
+### `NCLEX_SPLIT_PROMPT` (889 source chars; byte-frozen)
+
+SHA-256 of the raw template-literal body: `8ee1deab184825d7ca6eed849b5b0411af9cb6d9cad1ef90f123b80beae5f338`
+
+````js
+const NCLEX_SPLIT_PROMPT=`You are an expert nursing educator. Below are NCLEX-style questions that have been PRE-MATCHED with their corresponding answers and rationales. The questions were originally on separate pages from their answers and have been paired by question number.\n\nFor EACH question+answer pair, return a JSON object with:\n- "question_number": original question number\n- "question": full question text with all choices\n- "correct_answer": correct answer letter and text\n- "rationale": full rationale\n- "priority_nursing_tip": any tip mentioned (or null)\n- "test_taking_strategy": strategy mentioned (or null)\n- "clinical_judgment_skill": CJ skill identified (or null)\n- "diseases_conditions": array of conditions referenced\n- "keywords": important nursing keywords\n\nReturn ONLY a valid JSON array. No markdown fences. If no valid pairs found, return [].\n\nPAIRED QUESTIONS AND ANSWERS:\n`;
+````
+
+### `NCLEX_AI_PAIR_PROMPT` (500 source chars; byte-frozen)
+
+SHA-256 of the raw template-literal body: `0418d3c786b2c4896d5f483dd0a813606d9c2c7eb97bf7b222cf05700be813d9`
+
+````js
+const NCLEX_AI_PAIR_PROMPT=`You are a text-matching assistant. Below are two sections from a nursing test book:\n1. QUESTIONS section - contains numbered test questions\n2. ANSWERS section - contains numbered answers and rationales\n\nMatch each question number with its answer. Return a JSON array where each object has:\n- "number": question number (integer)\n- "question": full question text with all choices\n- "answer": full answer text with rationale\n\nReturn ONLY a valid JSON array. No markdown.\n\nQUESTIONS SECTION:\n`;
+````
+
+### `CARD_TRANSCRIBE_PROMPT` (3,684 source chars; tunable; remeasure with 2 runs per card after edits)
+
+SHA-256 of the raw template-literal body: `17df88af3f2af7438cfc4109e5b9974c34a937c833dfc23db5c2651727389622`
+
+````js
+const CARD_TRANSCRIBE_PROMPT=`You are transcribing ONE face of a printed nursing flashcard from a photograph.
+
+Your ONLY job is to reproduce what is printed. You are not summarizing, teaching, correcting, or organizing. A later step does all of that, and it will only ever see your output — never this image. If you improve the wording here, the improvement becomes indistinguishable from the source and nobody downstream can catch it.
+
+ORIENTATION
+The photograph may be rotated by any amount, shot at an angle, or sit on a patterned background. Read the card in whatever orientation it appears. Ignore everything outside the card's edges.
+
+ABSOLUTE RULES
+1. VERBATIM. Reproduce the printed wording exactly, including punctuation and capitalization. Do not rephrase, condense, join, or split.
+2. DO NOT EXPAND ABBREVIATIONS. "NGT" stays "NGT". "F and E" stays "F and E". "H&H" stays "H&H". Never write the expansion, not even in parentheses.
+3. PRESERVE SYMBOLS EXACTLY. Arrows carry clinical meaning: an up arrow before a lab value means "increased", and dropping it silently reverses the fact. Reproduce every arrow, inequality, degree sign, and unit exactly as printed.
+4. NEVER GUESS A NUMBER. If any digit, unit, or inequality is not certain, mark it unreadable rather than reporting your best guess. A missing number is recoverable; a wrong number is not.
+5. NO OUTSIDE KNOWLEDGE. If the card says something you believe is incomplete or outdated, transcribe it as printed anyway. Do not add what you know should be there.
+6. ONE PRINTED BULLET = ONE ARRAY ENTRY. Do not merge bullets, and do not break one bullet into several.
+
+SECTION KEYS
+Use these keys where the printed heading matches. Headings vary between cards and editions, so ALWAYS also record the heading exactly as printed.
+  pathophysiology | assessmentAndDiagnosticFindings | complications
+  medicalCareAndSurgicalTreatment | keepInMind | makeTheConnection
+  clue          (the front's cue or clue block, whatever it is titled)
+  other         (ANY heading that does not clearly match the above)
+Never force a heading into a key that does not fit. "other" plus the verbatim heading is always correct and always better than a wrong key.
+
+LEGIBILITY
+Report legibility per section: "clean", "uncertain", or "unreadable". Use "uncertain" whenever glare, blur, curvature, or the angle of the shot leaves you less than fully confident about any character.
+
+Return ONLY this JSON object, with no commentary:
+
+{
+  "face": "front" or "back",
+  "category": "the running header, verbatim",
+  "cardNumber": "the printed card number, as a string",
+  "title": "front only; the condition name, verbatim; null on a back face",
+  "pronunciation": "front only; the parenthesized pronunciation, verbatim, or null",
+  "sections": [
+    {
+      "key": "one of the keys above",
+      "heading": "the heading exactly as printed",
+      "bullets": ["one entry per printed bullet, verbatim"],
+      "legibility": "clean or uncertain or unreadable"
+    }
+  ],
+  "numerics": [
+    {
+      "value": "the number exactly as printed, with unit and any inequality",
+      "context": "the few printed words it modifies",
+      "legibility": "clean or uncertain or unreadable"
+    }
+  ],
+  "symbols": ["every non-ASCII symbol appearing on the card"],
+  "unreadable": ["a short description of each thing you could not read"],
+  "overallLegibility": "clean or uncertain or unreadable"
+}
+
+"numerics" must list EVERY number carrying clinical meaning — thresholds, doses, sizes, times, lab values — even though those numbers also appear inside the bullets. The duplication is deliberate: it is the list a human checks against the card by eye, and it is what the safety gate keys on.`;
+````
+<!-- END GENERATED: EXTRACTOR_AND_TRANSCRIBER_PROMPTS -->

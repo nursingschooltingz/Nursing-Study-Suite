@@ -33,6 +33,16 @@ NCLEX Question Extractor. Three faults found by running v15.14 against a real qu
 
 ## [Unreleased]
 
+### Added
+- **One deterministic repository gate:** `node verify-repo.js` resolves one canonical suite HTML, rejects Proton Drive Name clash copies, checks LF/version agreement, verifies the 11 frozen prompt hashes, checks the generated prompt documentation, enforces the regression assertion total, and Babel-transforms the full JSX block. `--setup-babel` installs the pinned scratch parser under the operating-system temp directory, never in the repository.
+- **Machine-enforced prompt provenance:** `prompt-baseline.json`, `tools/check-prompts.js`, and a generated `Prompts.md` appendix now cover all 12 named constants. The three NCLEX Extractor prompts are correctly marked byte-frozen; `CARD_TRANSCRIBE_PROMPT` is correctly marked tunable but remeasurement-sensitive.
+- **Progressive project context:** `AGENTS.md` is now the compact operating contract, with release evidence in `CURRENT_STATE.md`, deliberate behavior decisions in `DECISIONS.md`, and implementation routing in `DEVELOPMENT.md`. `CLAUDE.md` points to the same canonical contract rather than duplicating it.
+- Six repository-tooling assertions (**719 → 725**) cover the baseline shape, shared resolver, Name clash recognition, harness wiring, generated prompt coverage, and unified gate wiring.
+
+### Changed
+- All three harnesses now share one suite-file resolver and fail on ambiguous auto-discovery instead of choosing the lexically last filename. An explicit filename remains supported after the canonical copy has been identified.
+- Live Gemini retest/transcription harnesses are explicitly outside the deterministic gate and require user authorization because they consume quota and may handle copyrighted source material.
+
 ### To do
 - **Verify v15.14 against live output.** It ships from a three-way review with all gates green, but nothing in it has met a real Knowledge Base or a real deck. In order: a chapter carrying both an up-arrow and a down-arrow form of one lab (they must stay separate facts); a hand-corrupted `sourceQuote` comparator (must now be reported); a card transcribed then its photo removed (must NOT build); one full-resolution phone photo through the new downscale path, measured at 2 runs per card; one split-mode run on a real Davis PDF to confirm windowed pairing recovers questions past the old 12,000-character cliff.
 - **Measure `kbQuoteOperatorsAgree` before promoting it.** It is WARN tier deliberately. Once a real corpus shows its false-positive rate on multi-column and tabular sources, decide whether pass 2 should discard on it. Same measure-then-act sequence de-hyphenation went through in v15.11.

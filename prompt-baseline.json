@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "hash": "sha256",
+  "scope": "UTF-8 bytes between each source template literal's backticks; JavaScript escape sequences remain source bytes",
+  "baseline": "Captured from Nursing Study Suite v15.15; repository release records state these bytes are unchanged from the frozen 14.x baseline",
+  "prompts": {
+    "KB_EXTRACTION_PROMPT": "dbba2eb43d7ca89c17350f392c0cf139de2128e15a8c6af94ef2cdbd4e64b74b",
+    "KB_VERIFY_PROMPT": "9335f2c24af1d946f4e6a0f5d4bb4227d83173a070d097374fa68db25151aece",
+    "ANKI_MASTER_PROMPT": "3f8831e520741b7ee9a4bdd609294974bd9a3c3f92a3ee13aba7f0952690be5c",
+    "NCLEX_INLINE_PROMPT": "c3b6a2f79519a04b4b2aa56a2d60a647e1c3021aec289d5c458ed27a933bf20e",
+    "NCLEX_SPLIT_PROMPT": "8ee1deab184825d7ca6eed849b5b0411af9cb6d9cad1ef90f123b80beae5f338",
+    "NCLEX_AI_PAIR_PROMPT": "0418d3c786b2c4896d5f483dd0a813606d9c2c7eb97bf7b222cf05700be813d9",
+    "NCLEX_GEN_PROMPT": "8b92334d375b292626eac1dae809eb0e33a03c2768b8ae827bd3ea43072ce0ae",
+    "NCLEX_DISTRACTOR_RULES": "c3c199c86b88158a590769dd1ea85fdb80c203b8e8e97e9c792790f2d35ce29b",
+    "NCLEX_ANCHOR_RULES": "9e32d8b59323ec338edc0af442e77c784ebaf375b3959342a6dd7429a93e1f23",
+    "NCLEX_RATIONALE_RULES": "5b5a4228f2a48fb70cb009024fefa48e34b6c36578ab11e18aaa43600bc5c63b",
+    "NCLEX_COMPLETENESS_RULES": "3da5f81803920d0cb6589f0bcef8593489f2d497215b7b36a40252dbd4c005cf"
+  }
+}

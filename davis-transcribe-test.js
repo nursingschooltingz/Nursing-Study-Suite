@@ -5,6 +5,7 @@
  * Usage:
  *   GEMINI_API_KEY=... node davis-transcribe-test.js card-front.jpg card-back.jpg
  *   GEMINI_API_KEY=... node davis-transcribe-test.js *.jpg --runs 3 --model gemini-3.1-pro-preview
+ *                                                        [--app <suite.html>]
  *
  * WHY THIS EXISTS
  * The proposed card pipeline is two passes: (1) transcribe the card image to structured
@@ -45,6 +46,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const { resolveSuiteFile } = require('./tools/repo-checks');
 
 /* ── args ── */
 const argv = process.argv.slice(2);
@@ -79,15 +81,11 @@ const SAFETY = ['HARM_CATEGORY_HARASSMENT','HARM_CATEGORY_HATE_SPEECH',
  * silent — the harness would then be measuring a prompt nobody runs. If the anchor moves,
  * this fails loudly at startup, which is the intended behaviour.
  */
-const APP_FILE = (() => {
-  const explicit = arg('app', '');
-  if (explicit) return explicit;
-  const cands = fs.readdirSync('.').filter(f => /^(LATTE-Study-Suite|Nursing-Study-Suite).*\.html$/i.test(f)).sort();
-  return cands[cands.length - 1];
-})();
-if (!APP_FILE || !fs.existsSync(APP_FILE)) {
-  console.error('Could not find the app HTML. Run from the repo folder, or pass --app <file>.');
-  process.exit(2);
+let APP_FILE;
+try {
+  APP_FILE = resolveSuiteFile({ rootDir: process.cwd(), explicit: arg('app', '') });
+} catch (error) {
+  console.error(error.message); process.exit(2);
 }
 const TRANSCRIBE_PROMPT = (() => {
   const S = fs.readFileSync(APP_FILE, 'utf8');
