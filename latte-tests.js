@@ -417,7 +417,7 @@ t('all three former walkers go through it',
   S.includes('await pdfWalkPages(file,{signal,onPage:async(text,i,pg,total)=>{'));
 t('the inline NCLEX read is cancellable, not just the chunk loop',
   S.includes('await extractPdfTextSpaced(file,signal)'));
-t('default Flash model is gemini-3.7-flash', /useState\('gemini-3\.7-flash'\)/.test(S));
+t('default Flash model is gemini-3.8-flash', /useState\('gemini-3\.8-flash'\)/.test(S));
 
 /* ── 10d. v15.10: quote-miss classification + benchmark instrumentation ── */
 section('v15.10 — quote-miss classification');

@@ -77,7 +77,7 @@ The sidebar controls which Gemini model does the work. Two ways to run it:
 
 **Flash vs. Pro, practically:**
 
-- **Flash** (`gemini-3.6-flash` by default) — fast, cheap, generous free-tier limits. It handles extraction, Anki cards, and question generation very well. This should be your default.
+- **Flash** (`gemini-3.8-flash` by default) — fast, cheap, generous free-tier limits. It handles extraction, Anki cards, and question generation very well. This should be your default.
 - **Pro** (`gemini-3.1-pro-preview` by default) — deeper reasoning, noticeably slower, much tighter free-tier limits. Worth trying for Case Studies or Priority synthesis if you have quota to spend; overkill for extraction.
 - **Thinking level** trades speed for care. "Low" is fine for most work; bump to "medium/high" when output quality matters more than waiting.
 

@@ -7904,7 +7904,7 @@ const TOOL_COMPONENTS={knowledge:KnowledgeBaseBuilder,priority:PriorityAnalyzer,
 
 function App(){
   const [apiKey,setApiKey]=useState(()=>{try{return sessionStorage.getItem('suite_key')||'';}catch{return'';}});
-  const [flashModel,setFlashModel]=useState('gemini-3.7-flash'); // v15.4: 3.7 Flash went GA 2026-08-13 — a refinement of 3.6 with markedly better complex-document handling (Google's GDP.pdf eval: 34.0% vs 22.0%), at half 3.6's launch price through 2026-12-31. Same v1beta generateContent path, same lowercase thinking levels, 64K output.
+  const [flashModel,setFlashModel]=useState('gemini-3.8-flash'); // v15.15 model refresh (2026-09-02): 3.8 Flash is stable and keeps the supported low/medium/high thinking levels and 65,536-token output ceiling.
   const [proModel,setProModel]=useState('gemini-3.1-pro-preview'); // v15 note: this IS the current main Pro path — Google ships Pro as -preview only (gemini-3-pro-preview was shut down and now redirects here); re-verified 2026-08: Google shipped 3.7 Flash with still no Pro successor announced
   const [thinkingMode,setThinkingMode]=useState(false);
   // Thinking level is tracked per model family so decoupling doesn't silently change
