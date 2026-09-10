@@ -5,9 +5,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 Detailed engineering rationale for each change — including rejected proposals and why — lives in `LATTE-v15-changelog.md`. This file is the summary.
 
-Every release since 15.0 has been verified against three gates before shipping: Babel parse of the full JSX block, the `latte-tests.js` regression harness, and a byte-comparison proving all 11 prompt constants are unchanged from the 14.x baseline.
+Releases use the unified verifier for Babel parsing, regression assertions, prompt documentation, and all 11 frozen prompt hashes. Through v15.15, the constants retained their v14.x bytes; v15.16 deliberately updates only the explicitly approved Anki prompt baseline.
 
 ---
+
+## [15.16] — 2026-09-09
+
+### Changed
+- **Approved Anki prompt revision:** consistent condition/topic and retrieval labels, article clues absorbed into clozes or removed through label phrasing, one independently gradable clinical pivot per review card, and a soft 15-word front target that never drops necessary qualifiers. Supporting mechanisms and contrasts stay source-grounded in Extra; substantive mechanisms still receive recall notes. Anti-redundancy rules now preserve separate notes when combining would reveal the target.
+- Only `ANKI_MASTER_PROMPT` receives a new baseline hash. [Exact prompt diff](ANKI-v15.16-prompt.diff); the other ten frozen constants remain unchanged.
+
+### Added
+- **Review preview:** select a cloze index, reveal/hide its answer, and show Extra only after reveal. Same-index gaps hide together and other cloze answers remain visible. Generated text is rendered as inert text.
+- **Advisory style warnings** for article clues, missing anchors/labels, multiple same-index gaps, and long review fronts. Warnings update after edits and never affect keep/export decisions.
+- **Style warnings filter** across Table, List, and Preview. Export continues to include all kept notes in the selected tier, regardless of this review-only filter.
+
+### Validation
+- `node verify-repo.js` passes all 761 assertions (36 new), prompt hashes/documentation, LF/version checks, and the full JSX Babel transform. All eight CDN SRI pins rechecked on 2026-09-09 and matched.
+- Browser check with synthetic notes confirmed same-index masking, c1/c2 switching, answer/Extra reveal, inert markup, combined tier/style filtering, and immediate warning removal after editing while preserving keep selection.
+- Live generation adherence and a real Anki import/review remain unmeasured; no live Gemini calls were made.
 
 ## [15.15] — 2026-08-29
 

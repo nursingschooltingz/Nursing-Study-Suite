@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 725;
+const EXPECTED_ASSERTIONS = 761;
 
 let file;
 try {
@@ -2063,6 +2063,79 @@ section('v15.8 — Phase 3 hardening');
   t('the live set is still populated on load, so the prune has something to remove',
     S.includes('.then(doc=>{_pdfLiveDocs.add(doc);return doc;})'));
   t('the cache stays a WeakMap so Files are never pinned',S.includes('const _pdfDocCache=new WeakMap();'));
+}
+
+/* ── v15.16 — Anki text retrieval, advisory-only checks and export isolation ── */
+section('v15.16 — Anki preview and style checks');
+{
+  // Extract through the LAST pure helper; exercise the filter below so a shortened
+  // extraction cannot silently omit its implementation.
+  const source=spanFrom('function clozeNums(text)', 'function AnkiStyleBadges');
+  const helpers=source.slice(0,source.lastIndexOf('function AnkiStyleBadges'));
+  const A=new Function(helpers+';return {ankiPreviewText,ankiStyleWarnings,ankiReviewFilter,lintAnkiCard};')();
+  const note=(text,id='n1',tier=1)=>({id,text,extra:'Source-stated explanation',tags:'Nursing::LATTE::Look Condition::Example Tier::'+tier,pipeCount:2,keep:true,factIds:['fact-1']});
+  const codes=c=>A.ankiStyleWarnings(c).map(x=>x.code);
+  const two='[Example] Pattern: {{c1::alpha}} then {{c2::beta}}';
+  t('preview hides only c1 and leaves c2 answer visible',A.ankiPreviewText(two,1)==='[Example] Pattern: [...] then beta');
+  t('preview switches to c2 without hiding c1',A.ankiPreviewText(two,2)==='[Example] Pattern: alpha then [...]');
+  t('reveal shows both answers without cloze syntax',A.ankiPreviewText(two,2,true)==='[Example] Pattern: alpha then beta');
+  t('all same-number gaps hide together',A.ankiPreviewText('{{c1::alpha}} + {{c1::beta}}',1)==='[...] + [...]');
+  t('cloze hints are visible while answers are hidden',A.ankiPreviewText('{{c1::alpha::first letter}}',1)==='[first letter]');
+  t('revealed hints are replaced with the answer',A.ankiPreviewText('{{c1::alpha::first letter}}',1,true)==='alpha');
+  t('uppercase cloze markers and numeric indices work',A.ankiPreviewText('{{C3::gamma}}',3)==='[...]');
+  t('plain text remains unchanged',A.ankiPreviewText('Plain <text> & units',1)==='Plain <text> & units');
+  t('preview does not interpret HTML or alter clinical comparators',A.ankiPreviewText('Threshold {{c1::<5 & >2}}',1,true)==='Threshold <5 & >2');
+  t('empty preview input is safe',A.ankiPreviewText(null,1)==='');
+  const good=note('[Example] Finding: {{c1::an unusual finding}}');
+  const weak=note('[Example] Finding: an {{c1::unusual finding}}','n2',2);
+  t('article outside the cloze is flagged',codes(weak).includes('article-clue'));
+  t('article inside the cloze avoids the clue warning',!codes(good).includes('article-clue'));
+  t('a and uppercase AN are detected',codes(note('A {{c1::finding}}')).includes('article-clue')&&codes(note('AN {{c1::answer}}')).includes('article-clue'));
+  t('article detection does not match word suffixes',!codes(note('Scan {{c1::finding}}')).includes('article-clue'));
+  t('a consistent anchor and label avoid the anchor warning',!codes(good).includes('front-anchor'));
+  t('missing retrieval label is advisory',codes(note('[Example] {{c1::finding}}')).includes('front-anchor'));
+  t('a diagnosis-retrieval exception is explained by the warning',A.ankiStyleWarnings(note('Findings suggest {{c1::Example}}')).some(x=>x.code==='front-anchor'&&x.msg.includes('reveal the answer')));
+  t('independent indices do not trigger a same-gap warning',!codes(note(two)).includes('shared-gaps'));
+  t('same-index gaps identify the index needing review',A.ankiStyleWarnings(note('[Example] Pair: {{c2::alpha}} + {{c2::beta}}')).some(x=>x.code==='shared-gaps'&&x.msg.startsWith('c2:')));
+  const fifteen=note('[Example] Finding: '+Array(12).fill('context').join(' ')+' {{c1::answer}}');
+  const sixteen=note('[Example] Finding: '+Array(13).fill('context').join(' ')+' {{c1::answer}}');
+  t('15 visible front words do not trigger the soft warning',!codes(fifteen).includes('long-front'));
+  t('16 visible front words trigger the soft warning',codes(sixteen).includes('long-front'));
+  t('a long hidden answer counts as one gap',!codes(note('[Example] Finding: {{c1::'+Array(25).fill('word').join(' ')+'}}')).includes('long-front'));
+  t('word check includes other visible cloze answers',codes(note('[Example] Pattern: {{c1::alpha}} {{c2::'+Array(16).fill('word').join(' ')+'}}')).includes('long-front'));
+  const snapshot=JSON.stringify(weak);A.ankiStyleWarnings(weak);
+  t('style inspection never mutates keep, content, or fact IDs',JSON.stringify(weak)===snapshot);
+  t('style warnings do not become structural lint',A.lintAnkiCard(weak).length===0&&A.lintAnkiCard(sixteen).length===0);
+  const notes=[good,weak];
+  t('style filter shows only warned notes',A.ankiReviewFilter(notes,'all',true).map(c=>c.id).join(',')==='n2');
+  t('turning the style filter off restores all notes',A.ankiReviewFilter(notes,'all',false).length===2);
+  t('style and tier filters compose',A.ankiReviewFilter(notes,'1',true).length===0&&A.ankiReviewFilter(notes,'2',true)[0]===weak);
+  t('filter tail assertion: an empty tier produces no matches',A.ankiReviewFilter(notes,'3',false).length===0);
+  // Exercise the live edit callback, not a copy: style warnings derive from edited
+  // text on render; structural lint retains its established keep semantics.
+  let edited=[{...weak,lint:[],abbrev:[]}];
+  const updateSource=spanFrom('const updateField=useCallback(', '  })),[]);', 'function AnkiGenerator()');
+  const abbrevSource=spanFrom('const NEIA_UNSAFE_ABBREV_MSGS=', '\n}');
+  const update=new Function('setCards','useCallback','NEIA_TERMINOLOGY_RULES',helpers+abbrevSource+'\n'+updateSource+';return updateField;')(fn=>{edited=fn(edited);},fn=>fn,CASE.NEIA_TERMINOLOGY_RULES);
+  update('n2','text',good.text);
+  t('editing away an article clue immediately clears style findings',A.ankiStyleWarnings(edited[0]).length===0);
+  t('style edits preserve a kept note and provenance',edited[0].keep&&edited[0].factIds[0]==='fact-1');
+  edited=[{...weak,keep:false,lint:[],abbrev:[]}];update('n2','text',good.text);
+  t('clearing style warnings never rechecks a manually excluded note',edited[0].keep===false);
+  // Capture the actual export callback using a tiny Blob recorder; no file download
+  // or Gemini call occurs. A review-only filter must not shrink exported coverage.
+  const exportSource=spanFrom('const exportTxt=useCallback(', '  },[cards,filteredCards,tierFilter,ankiHeader]);', 'function AnkiGenerator()');
+  let exported='';
+  const makeExport=(cards,filtered,tier,header)=>new Function('cards','filteredCards','tierFilter','ankiHeader','downloadBlob','useCallback','Blob',exportSource+';return exportTxt;')(
+    cards,filtered,tier,header,b=>{exported=b.body;},fn=>fn,class{constructor(parts){this.body=parts.join('');}});
+  makeExport(notes,notes,'all',false)();
+  t('export keeps clean and warned notes regardless of review filter',exported.split('\n').length===2&&exported.includes(good.text)&&exported.includes(weak.text));
+  makeExport(notes,[weak],'2',false)();
+  t('export still respects the selected tier',exported===weak.text+'|'+weak.extra+'|'+weak.tags);
+  makeExport([good,{...weak,keep:false}],notes,'all',false)();
+  t('export still excludes manually unchecked notes',exported.split('\n').length===1&&exported.startsWith(good.text));
+  makeExport([note('[Example] Threshold: {{c1::<5 & >2}}')],[],'all',true)();
+  t('Anki header export preserves escaped comparator bytes and cloze braces',exported.startsWith('#separator:Pipe\n')&&exported.includes('{{c1::&lt;5 &amp; &gt;2}}'));
 }
 
 /* ── 21. v15.7 — provenance stamp + Anki abbreviation lint (B2, B5) ── */

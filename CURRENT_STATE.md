@@ -1,8 +1,17 @@
 # Current maintainer state
 
-Shipping v15.15. The canonical app is `Nursing-Study-Suite v15.15.html`. Repository tooling now requires exactly one suite HTML unless an explicit path is supplied; Proton Drive Name clash copies fail loudly.
+Shipping v15.16. The canonical app is `Nursing-Study-Suite v15.16.html`. Repository tooling now requires exactly one suite HTML unless an explicit path is supplied; Proton Drive Name clash copies fail loudly.
 
 This file carries release-specific evidence, unresolved measurements, and the current source profile. It is intentionally separate from the always-loaded `AGENTS.md`.
+
+## Anki text-only retrieval (v15.16)
+
+- **The Anki prompt revision was explicitly approved on 2026-09-09.** Only ANKI_MASTER_PROMPT changed; the other ten frozen constants retain their baseline. The exact change is in `ANKI-v15.16-prompt.diff`.
+- **Style checks are advisory.** Article clues, missing condition/topic + retrieval labels, repeated cloze indices, and fronts over the soft 15-word target never uncheck a note or block export. Exceptions need judgment; a missing anchor can be correct when the condition is the answer.
+- **Preview models each cloze review.** Same-number gaps hide together, other cloze answers remain visible, and Extra appears after reveal. This previews the suite's flat text cloze syntax, not custom Anki templates or nested clozes.
+- **The style filter changes review visibility only.** Export still includes all kept notes in the selected tier. Warnings update immediately when Text is edited.
+- **Deterministic and browser checks pass.** All 761 assertions, the full JSX Babel transform, prompt documentation/hashes, and eight SRI pins pass. The browser fixture exercised masking, reveal, cloze switching, inert markup, filters, and editing with synthetic notes.
+- **Live Anki generation remains unmeasured.** Deterministic checks cannot establish prompt adherence; a real-material generation and Anki import/review remain to be checked. No live Gemini calls were authorized or made for this change.
 
 ## NCLEX extractor
 
@@ -26,7 +35,7 @@ The deterministic gates pass, but these v15.14 paths still need real-material ch
 - **Card resize constants are prompt-class.** Changing `CARD_MAX_EDGE`, `CARD_JPEG_QUALITY`, or `CARD_RESIZE_ABOVE_BYTES` can change OCR accuracy and therefore requires two runs per card.
 - **`responseSchema` remains deliberately unimplemented.** It changes model output shape even though it does not touch frozen prompt bytes. It needs a real batch before adoption.
 - **Per-operation token budgets are rejected.** `maxOutputTokens` is a ceiling, not a reservation, and Gemini 3 thinking shares the budget. The universal 65,536 remains correct.
-- **All eight SRI pins were verified on 2026-08-29.** Both DOMPurify CDNs served 29,209 identical bytes. Recheck every pin on an application version bump.
+- **All eight SRI pins were verified again on 2026-09-09 for v15.16.** Both DOMPurify CDNs served 29,209 identical bytes. Recheck every pin on an application version bump.
 - **`.gitattributes` pins `* -text`.** If the harness fails wholesale after a Git operation, check line endings first; every extraction anchor assumes LF (`\n`).
 
 ## Live-generation evidence

@@ -146,6 +146,16 @@ This tab answers the question every nursing student asks the night before an exa
 
 Generates cloze-deletion flashcards ready for Anki, from your Knowledge Base. Optional boxes — **Outcomes**, **Points**, **Additional Context** (e.g., *"Exam is on cardiac meds only"*) — steer emphasis without you writing prompts.
 
+### Preview and style checks
+
+After generation, switch to **Preview**, select a cloze number (c1/c2/c3), and click **Show answer** to reveal the answer and Extra. Gaps sharing a number hide together; the other answers remain visible. Use **Edit in Table** to revise a note.
+
+Amber style warnings flag possible article clues, missing condition/topic labels, several gaps hidden together, or a review front longer than the soft 15-word target. These are suggestions: keep necessary clinical qualifiers and omit anchors that would reveal the answer. The warnings update as you edit and never uncheck notes or prevent export.
+
+Use **Style warnings** to focus your review. This filter only changes which notes are shown; export includes every kept note in the selected tier.
+
+Cards now prefer consistent retrieval labels and one clinical decision per review. Supporting explanations and source-supported contrasts belong in Extra; testable mechanisms also receive their own recall notes.
+
 ### The tag system (worth two minutes to learn)
 
 Every card carries a structured set of tags, and this is where the suite quietly becomes powerful — in Anki you can filter, build filtered decks, and cram by any slice of them:

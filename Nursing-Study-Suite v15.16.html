@@ -30,7 +30,8 @@
      If this page is ever served over http(s) rather than opened from disk, tighten it there. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net">
 <title>LATTE Study Suite</title>
-<!-- v15.15 (2026-08-29): NCLEX Question Extractor — three fixes found by testing v15.14 against a real question bank. No prompt constant was touched; all three were code faults.
+<!-- v15.16 (2026-09-09): approved Anki prompt revision for text-only retrieval; cloze review preview and advisory style checks. Style warnings never uncheck notes or block export.
+     v15.15 (2026-08-29): NCLEX Question Extractor — three fixes found by testing v15.14 against a real question bank. No prompt constant was touched; all three were code faults.
      (1) ANSWER CHOICES WERE BEING READ AS QUESTION NUMBERS. nclexSplitByQNum matched "1." at a line start, which is the stem marker AND the first-choice marker. The slice for question 1 therefore ended at its own first choice: item 1 was the stem alone, items 2-4 were single choice lines posing as questions, and questions 2 and 3 were dropped outright because their numbers had already been claimed. That is the reported "only the stem is captured" symptom, and it was also deleting most of the section. Choice runs are now identified by SPACING and removed from the candidate starts, behind three guards so a genuine question list is never eaten.
      (2) CHOICES ARE PARSED, RENDERED AND REPAIRED. nclexSplitStemOptions reads the choice list back out of the question text (numbered, lettered, parenthesised, inline or on its own lines), so cards show choices as a list and an item that arrived WITHOUT choices is visibly flagged instead of looking complete. In split mode the batch still holds each question's verbatim page text, so a bare stem has its choices restored from the source bytes — no extra call, nothing invented.
      (3) ANSWERS ARE GROUPED AT THE END. Every export (.md, .txt, Copy, PDF) is now Questions first, then one Answer Key, matching the shape the NCLEX Generator worksheet has always used. Answers used to sit under their own question, which made an exported set unusable for actual practice.
@@ -3165,6 +3166,8 @@ function PriorityAnalyzer(){
 }
 
 // ──── TOOL: Anki Generator ────
+// v15.16: optional cues and implicit atomicity left room for answer clues and overloaded reviews.
+// Approved prompt revision: consistent retrieval labels, article handling, per-card pivots, grounded Extra.
 const ANKI_MASTER_PROMPT=`SYSTEM / ROLE
 
 You are an elite Medical Education Specialist, Nursing Clinical Instructor, and Anki Expert. Your task is to convert the provided PDF text into high-quality Anki cloze notes for a nursing student.
@@ -3277,17 +3280,11 @@ no commentary
 no wrapped tags
 Text Field Rule
 
-The Text field does NOT need to begin with a LATTE header.
-
-Use short visible condition/topic cues only when needed for isolated review clarity, such as:
-
-[HF]
-[COPD]
-[Warfarin]
-[ABG]
-[HF / Look]
-
-Do not add a cue if the stem is already uniquely identifiable.
+Prefer this front structure: [Condition / Topic] Specific retrieval label: prompt with cloze.
+Use the same source-supported condition name and the same label for the same clinical axis across related notes.
+Prefer specific labels such as Key presentation:, Assessment:, Diagnostic finding:, Treatment:, Hold parameter:, Teaching:, or Mechanism:. Use a more specific label when it makes the target clearer, such as Rash progression:.
+These are retrieval cues, not mandatory visible LATTE headers; LATTE assignment remains in tags.
+Omit or change the anchor when naming the condition/topic would reveal the answer being tested. Do not add redundant cues to an already self-contained stem.
 Text Field Style
 
 The Text field must be:
@@ -3297,6 +3294,10 @@ direct
 clinically specific
 easy to answer in about 5 seconds
 written in fast-review phrasing, not textbook prose
+
+Aim for about 15 words or fewer on each review front, including the anchor and counting a hidden gap as one word. This is a preference, never a hard limit: preserve every qualifier needed for accuracy and a uniquely correct answer.
+
+Avoid grammatical answer clues: move a/an inside the cloze, or rewrite in telegraphic label style. For example, replace Characterized by an {{c1::erythematous plaque}} with Lesion type: {{c1::erythematous plaque}}. Do not remove a preposition, comparison word, unit, or qualifier needed to define the clinical relationship.
 
 Preferred style:
 
@@ -3500,7 +3501,9 @@ comparison word such as increased/decreased/high/low/above/below
 PHASE 1.5 — ATOMICITY RULES
 Core Rule
 
-Each note should test one tightly linked clinical idea.
+Each note should test one tightly linked clinical idea. Each generated review card should have one independently gradable clinical pivot.
+Different indices (c1, c2, c3) create separate review cards; repeated instances of the same index are hidden together. Do not repeat one index across unrelated findings.
+Use separate notes when the other visible answers would give away the hidden target. Multiple gaps sharing an index are acceptable only when they jointly express one inseparable clinical decision.
 Split When
 
 one sentence contains unrelated facts
@@ -3511,7 +3514,7 @@ brevity would otherwise force omission of a qualifier needed for full meaning
 Combine When
 
 facts are naturally linked
-one fact helps recall the other
+the visible companion fact is necessary context and does not give away the hidden target
 the pair/cluster is clinically taught as one unit
 drug + dose + route belong together
 threshold + action belong together
@@ -3536,14 +3539,14 @@ If the PDF gives one unified monitoring directive, the stem may contain more tha
 PHASE 1.9 — ANTI-REDUNDANCY + ANTI-OVERFRAGMENTATION
 Anti-Redundancy
 
-If two notes share >=80% identical visible text and differ only by cloze target, combine or rewrite them.
+If two notes share >=80% identical visible text and differ only by cloze target, combine or rewrite them only if each resulting review card still tests an independent target without answer leakage. Keep separate notes when needed to avoid clues.
 Anti-Overfragmentation
 
 Do not split so aggressively that several neighboring notes become tiny near-duplicates with nearly identical context.
 
 Prefer:
 
-one clean 2-3 cloze note for tightly linked facts
+one clean 2-3 cloze note for tightly linked facts, provided each review card remains independently answerable without the other answers giving it away
 
 Avoid:
 
@@ -3604,6 +3607,9 @@ Extract every patient/family teaching point, discharge instruction, self-managem
 PHASE 3.5 — EXTRA FIELD RULES (LEAN BY DEFAULT)
 
 The Extra field should support retention, not slow the deck down.
+Keep supporting mechanisms and explanations here, after answer reveal, when the supplied source states them. Do not invent a why when the source gives none.
+If a mechanism is itself a substantive testable fact, also give it a dedicated recall note in its appropriate LATTE bucket; mentioning it only in Extra does not replace testing it.
+For confusable pairs, prefer one brief source-supported contrast in Extra or a dedicated comparison note. Both sides must be supported by the supplied facts. Do not put a visible opposite answer on the front when it gives away the hidden target; do not force two unrelated answers into one review card.
 Default Extra Style
 
 Prefer very short cue-style extras:
@@ -3740,7 +3746,7 @@ Specificity: shortened wording did not remove the context needed for one uniquel
 
 CRITICAL REMINDERS
 
-LATTE belongs in tags and organization first, not as forced visible formatting on every card.
+LATTE belongs in tags and organization first. Prefer consistent condition/topic anchors and specific retrieval labels without revealing the answer.
 One fact = one punchy card.
 Coverage is enforced by the ledger, not by making cards wordy.
 Never drop list items.
@@ -3834,6 +3840,47 @@ function lintAnkiCard(c){
 }
 const LINT_LABEL={'no-cloze':'no {{c…}} cloze','no-tier':'missing Tier::','many-cloze':'>3 cloze indices','pipe-format':'wrong pipe count'};
 
+// v15.16: raw cloze braces hid what a review actually tests. Render plain text so generated
+// markup stays inert, and keep style heuristics separate from structural lint/keep decisions.
+function ankiPreviewText(text,index,revealed=false){
+  return String(text||'').replace(/\{\{c(\d+)::([^{}]*?)(?:::([^{}]*?))?\}\}/gi,
+    (_,n,answer,hint)=>Number(n)===Number(index)&&!revealed?'['+(hint||'...')+']':answer);
+}
+function ankiStyleWarnings(card){
+  const text=String(card.text||''),issues=[],indices=clozeNums(text);
+  if(/\b(?:a|an)\s+\{\{c\d+::/i.test(text))issues.push({code:'article-clue',msg:'Possible article clue: move a/an inside the cloze or use a short label.'});
+  if(!/^\s*\[[^\]{}]+\]\s+[^:{}]+:/.test(text))issues.push({code:'front-anchor',msg:'Check the condition/topic cue and retrieval label. Omit cues that reveal the answer or repeat clear context.'});
+  const counts={};
+  for(const m of text.matchAll(/\{\{c(\d+)::/gi))counts[Number(m[1])]=(counts[Number(m[1])]||0)+1;
+  const repeated=indices.filter(n=>counts[n]>1);
+  if(repeated.length)issues.push({code:'shared-gaps',msg:repeated.map(n=>'c'+n).join(', ')+': several gaps hide together. Check that they form one clinical decision.'});
+  const longest=Math.max(0,...(indices.length?indices:[0]).map(n=>(ankiPreviewText(text,n).match(/\S+/g)||[]).length));
+  if(longest>15)issues.push({code:'long-front',msg:'Longest review front: '+longest+' words (soft target: 15). Keep all clinically necessary qualifiers.'});
+  return issues;
+}
+function ankiReviewFilter(cards,tier,styleOnly){
+  return cards.filter(c=>(tier==='all'||new RegExp('\\bTier::'+tier+'\\b').test(c.tags||''))&&(!styleOnly||ankiStyleWarnings(c).length>0));
+}
+function AnkiStyleBadges({issues}){
+  return issues.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:4,marginTop:5}}>{issues.map(x=><span key={x.code} title={x.msg} style={{fontSize:10,color:'var(--accent-warm)'}}>⚠ {x.msg}</span>)}</div>;
+}
+function AnkiReviewCard({card}){
+  const indices=clozeNums(card.text);
+  const [selected,setSelected]=useState(indices[0]||1);
+  const [revealed,setRevealed]=useState(false);
+  const index=indices.includes(selected)?selected:indices[0];
+  useEffect(()=>{setRevealed(false);},[card.text,card.extra]);
+  return <div style={{marginTop:8,padding:12,background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}>
+    <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap',marginBottom:10}}>
+      <span style={{fontSize:11,color:'var(--text-dim)'}}>Review card</span>
+      {indices.map(n=><button key={n} className="btn-secondary" aria-pressed={index===n} onClick={()=>{setSelected(n);setRevealed(false);}} style={{padding:'3px 9px',borderColor:index===n?'var(--accent)':'var(--border)'}}>c{n}</button>)}
+    </div>
+    <div style={{fontSize:15,lineHeight:1.6,whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{ankiPreviewText(card.text,index,revealed)}</div>
+    {indices.length>0?<button className="btn-secondary" style={{marginTop:10}} onClick={()=>setRevealed(v=>!v)}>{revealed?'Hide answer':'Show answer'}</button>:<div style={{color:'var(--accent-warm)',marginTop:8}}>Add a cloze in Table view to preview a review card.</div>}
+    {revealed&&card.extra&&<div style={{fontSize:12,lineHeight:1.5,color:'var(--text-dim)',marginTop:10,whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>Extra: {card.extra}</div>}
+  </div>;
+}
+
 function TierBadge({tier}){
   const cls=tier==='1'?'t1':tier==='2'?'t2':tier==='3'?'t3':'';
   const label=tier==='1'?'T1':tier==='2'?'T2':tier==='3'?'T3':'?';
@@ -3855,6 +3902,7 @@ function AnkiGenerator(){
   const [cards,setCards]=useState([]);
   const [ledger,setLedger]=useState('');
   const [view,setView]=useState('table');
+  const [styleOnly,setStyleOnly]=useState(false); // v15.16: review filter only; export still uses kept notes in the selected tier.
   const [tierFilter,setTierFilter]=useState('all');
   const [coverage,setCoverage]=useState(null);
   const [showUncovered,setShowUncovered]=useState(false);
@@ -3864,6 +3912,8 @@ function AnkiGenerator(){
   const {model,level:toolLevel}=cfg.forTool('anki');
   const getTier=useCallback(tags=>{const m=tags.match(/Tier::(\d)/);return m?m[1]:'?';},[]);
   const filteredCards=useMemo(()=>tierFilter==='all'?cards:cards.filter(c=>getTier(c.tags)===tierFilter),[cards,tierFilter,getTier]);
+  const displayedCards=useMemo(()=>ankiReviewFilter(filteredCards,'all',styleOnly),[filteredCards,styleOnly]);
+  const styleCount=useMemo(()=>filteredCards.filter(c=>ankiStyleWarnings(c).length>0).length,[filteredCards]);
   const tierCounts=useMemo(()=>{const ct={'1':0,'2':0,'3':0,'?':0};cards.forEach(c=>{const t=getTier(c.tags);ct[t]=(ct[t]||0)+1;});return ct;},[cards,getTier]);
 
   const log=useCallback((msg,t='')=>setLogs(p=>[...p.slice(-200),{msg,t,ts:new Date().toLocaleTimeString()}]),[]); // v15.14: capped, like the KB builder
@@ -3991,12 +4041,12 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
   return(
     <div className="tool-panel">
       <h2 className="tool-title">LATTE Anki Generator</h2>
-      <p className="tool-desc">Generate Anki cloze cards from the shared LATTE Knowledge Base using the original Anki prompt and safeguards.</p>
+      <p className="tool-desc">Generate source-grounded cloze cards with consistent retrieval cues. Preview each review card and check advisory style warnings before export.</p>
 
       {/* Upload / source */}
       <div style={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:18,marginBottom:14}}>
         <div style={{padding:14,background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:'var(--radius)'}}>
-          {(K.knowledgeBase.conditions||[]).length?<><div style={{fontSize:13,fontWeight:700,color:'var(--text-bright)'}}>Shared Knowledge Base ready</div><div style={{fontSize:11,color:'var(--text-dim)',marginTop:4}}>{K.knowledgeBase.conditions.length} conditions · {(K.knowledgeBase.conditions||[]).reduce((n,c)=>n+(c.facts||[]).length,0)} source-grounded facts · schema {K.knowledgeBase.metadata?.schemaVersion||'1.0'}</div><div style={{fontSize:10.5,color:'var(--accent)',marginTop:7}}>The original Anki prompt formats these facts into cards without re-extracting source files.</div></>:<><div style={{fontSize:13,fontWeight:700,color:'var(--accent-warm)'}}>No Knowledge Base loaded</div><div style={{fontSize:11,color:'var(--text-dim)',marginTop:4}}>Open Knowledge and build it from your source files first.</div></>}
+          {(K.knowledgeBase.conditions||[]).length?<><div style={{fontSize:13,fontWeight:700,color:'var(--text-bright)'}}>Shared Knowledge Base ready</div><div style={{fontSize:11,color:'var(--text-dim)',marginTop:4}}>{K.knowledgeBase.conditions.length} conditions · {(K.knowledgeBase.conditions||[]).reduce((n,c)=>n+(c.facts||[]).length,0)} source-grounded facts · schema {K.knowledgeBase.metadata?.schemaVersion||'1.0'}</div><div style={{fontSize:10.5,color:'var(--accent)',marginTop:7}}>The Anki prompt formats these facts into cards without re-extracting source files.</div></>:<><div style={{fontSize:13,fontWeight:700,color:'var(--accent-warm)'}}>No Knowledge Base loaded</div><div style={{fontSize:11,color:'var(--text-dim)',marginTop:4}}>Open Knowledge and build it from your source files first.</div></>}
         </div>
 
         {/* Optional focus context fields */}
@@ -4055,31 +4105,43 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
           <span style={{fontSize:11,color:'var(--text-dim)',fontWeight:500}}>TIERS:</span>
           {['1','2','3'].map(t=><button key={t} className={`tier-btn t${t} ${tierFilter===t?'active':''}`} onClick={()=>setTierFilter(tierFilter===t?'all':t)}>T{t} <b>{tierCounts[t]}</b></button>)}
           {tierFilter!=='all'&&<button className="btn-secondary" style={{padding:'3px 8px',fontSize:10}} onClick={()=>setTierFilter('all')}>Show All</button>}
+          <label style={{display:'flex',gap:5,alignItems:'center',fontSize:11,marginLeft:8}}><input type="checkbox" checked={styleOnly} onChange={e=>setStyleOnly(e.target.checked)}/>Style warnings ({styleCount})</label>
         </div>
+        <p style={{fontSize:11,color:'var(--text-dim)',margin:'0 0 10px'}}>Style warnings are suggestions; notes stay exportable. The style filter affects review only. Export includes all kept notes in the selected tier.</p>
+        {styleOnly&&!displayedCards.length&&<p role="status" style={{fontSize:12}}>No style warnings in this tier.</p>}
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10,flexWrap:'wrap',gap:6}}>
-          <span style={{fontSize:12,color:'var(--text-dim)'}}><b style={{color:'var(--text)'}}>{filteredCards.length}</b> cards · <b style={{color:'var(--accent-green)'}}>{keptCount}</b> kept{filteredCards.filter(c=>c.lint&&c.lint.length).length>0&&<span style={{color:'var(--accent-warm)'}}> · {filteredCards.filter(c=>c.lint&&c.lint.length).length} lint</span>}</span>
+          <span style={{fontSize:12,color:'var(--text-dim)'}}><b style={{color:'var(--text)'}}>{displayedCards.length}</b> shown · {filteredCards.length} notes · <b style={{color:'var(--accent-green)'}}>{keptCount}</b> kept{filteredCards.filter(c=>c.lint&&c.lint.length).length>0&&<span style={{color:'var(--accent-warm)'}}> · {filteredCards.filter(c=>c.lint&&c.lint.length).length} lint</span>}</span>
           <div style={{display:'flex',gap:10,alignItems:'center'}}>
             <label style={{display:'flex',alignItems:'center',gap:5,fontSize:10.5,color:'var(--text-dim)',cursor:'pointer',userSelect:'none'}} title="Prepend #separator:Pipe / #notetype:Cloze / #tags column:3 and HTML-escape < > & so the file imports in one click. Leave off if your importer maps fields manually.">
               <input type="checkbox" checked={ankiHeader} onChange={e=>setAnkiHeader(e.target.checked)} style={{accentColor:'var(--accent)'}}/>Anki header
             </label>
             <div style={{display:'flex',background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:6,overflow:'hidden'}}>
-              {['table','list'].map(v=><button key={v} onClick={()=>setView(v)} style={{background:view===v?'var(--accent)':'none',border:'none',color:view===v?'#fff':'var(--text-dim)',padding:'4px 12px',fontSize:11,cursor:'pointer',fontFamily:'DM Sans',fontWeight:500}}>{v==='table'?'Table':'List'}</button>)}
+              {['table','list','preview'].map(v=><button key={v} onClick={()=>setView(v)} style={{background:view===v?'var(--accent)':'none',border:'none',color:view===v?'#fff':'var(--text-dim)',padding:'4px 12px',fontSize:11,cursor:'pointer',fontFamily:'DM Sans',fontWeight:500}}>{v==='table'?'Table':v==='list'?'List':'Preview'}</button>)}
             </div>
             <button className="btn-primary" style={{padding:'6px 14px',fontSize:12}} onClick={exportTxt}>⬇ Export .txt</button>
           </div>
         </div>
 
         {view==='table'&&<div className="anki-tbl-wrap"><table><thead><tr><th style={{width:36}}>✓</th><th style={{width:38}}>Tier</th><th>Text</th><th style={{width:'16%'}}>Extra</th><th style={{width:'16%'}}>Tags</th><th style={{width:36}}></th></tr></thead><tbody>
-          {filteredCards.map(c=><tr key={c.id} className={c.keep?'':'dim'} style={c.lint&&c.lint.length?{boxShadow:'inset 3px 0 0 var(--accent-red)'}:undefined} title={c.lint&&c.lint.length?('Lint: '+c.lint.map(x=>LINT_LABEL[x]||x).join(', ')):undefined}><td><input type="checkbox" checked={c.keep} onChange={()=>toggle(c.id)} style={{accentColor:'var(--accent)'}}/></td><td><TierBadge tier={getTier(c.tags)}/>{c.lint&&c.lint.length>0&&<span style={{color:'var(--accent-red)',fontSize:11,fontWeight:700,marginLeft:3}}>!</span>}</td><td><textarea className="cell-ta" value={c.text} rows={2} onChange={e=>updateField(c.id,'text',e.target.value)}/></td><td><textarea className="cell-ta" value={c.extra} rows={2} onChange={e=>updateField(c.id,'extra',e.target.value)}/></td><td><textarea className="cell-ta tags-ta" value={c.tags} rows={2} onChange={e=>updateField(c.id,'tags',e.target.value)}/></td><td><button style={{background:'none',border:'none',color:'var(--text-dim)',cursor:'pointer',fontSize:13}} onClick={()=>del(c.id)}>×</button></td></tr>)}
+          {displayedCards.map(c=><tr key={c.id} className={c.keep?'':'dim'} style={c.lint&&c.lint.length?{boxShadow:'inset 3px 0 0 var(--accent-red)'}:undefined} title={c.lint&&c.lint.length?('Lint: '+c.lint.map(x=>LINT_LABEL[x]||x).join(', ')):undefined}><td><input type="checkbox" checked={c.keep} onChange={()=>toggle(c.id)} style={{accentColor:'var(--accent)'}}/></td><td><TierBadge tier={getTier(c.tags)}/>{c.lint&&c.lint.length>0&&<span style={{color:'var(--accent-red)',fontSize:11,fontWeight:700,marginLeft:3}}>!</span>}</td><td><textarea className="cell-ta" value={c.text} rows={2} onChange={e=>updateField(c.id,'text',e.target.value)}/><AnkiStyleBadges issues={ankiStyleWarnings(c)}/></td><td><textarea className="cell-ta" value={c.extra} rows={2} onChange={e=>updateField(c.id,'extra',e.target.value)}/></td><td><textarea className="cell-ta tags-ta" value={c.tags} rows={2} onChange={e=>updateField(c.id,'tags',e.target.value)}/></td><td><button style={{background:'none',border:'none',color:'var(--text-dim)',cursor:'pointer',fontSize:13}} onClick={()=>del(c.id)}>×</button></td></tr>)}
         </tbody></table></div>}
 
-        {view==='list'&&filteredCards.map(c=><div key={c.id} style={{display:'flex',gap:8,padding:'10px 12px',background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:6,marginBottom:4,fontSize:12,opacity:c.keep?1:.35}}>
+        {view==='list'&&displayedCards.map(c=><div key={c.id} style={{display:'flex',gap:8,padding:'10px 12px',background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:6,marginBottom:4,fontSize:12,opacity:c.keep?1:.35}}>
           <input type="checkbox" checked={c.keep} onChange={()=>toggle(c.id)} style={{accentColor:'var(--accent)',marginTop:2}}/>
           <TierBadge tier={getTier(c.tags)}/>
-          <div style={{flex:1,minWidth:0}}><div style={{fontFamily:'JetBrains Mono',fontSize:11,lineHeight:1.5,wordBreak:'break-word'}}>{c.text}</div>{c.extra&&<div style={{fontSize:10,color:'var(--text-dim)',marginTop:2}}>Extra: {c.extra}</div>}{c.tags&&<div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:4}}>{c.tags.split(/\s+/).map((t,j)=><span key={j} style={{fontSize:8,padding:'1px 6px',borderRadius:8,background:'var(--bg-card-alt)',color:'var(--text-dim)',border:'1px solid var(--border)'}}>{t}</span>)}</div>}{c.lint&&c.lint.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:4}}>{c.lint.map((x,j)=><span key={j} style={{fontSize:8,padding:'1px 6px',borderRadius:8,background:'rgba(248,113,113,.1)',color:'var(--accent-red)',border:'1px solid rgba(248,113,113,.3)'}}>{LINT_LABEL[x]||x}</span>)}</div>}{c.abbrev&&c.abbrev.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:4}}>{c.abbrev.map((x,j)=><span key={j} title={x} style={{fontSize:8,padding:'1px 6px',borderRadius:8,background:'rgba(240,168,58,.1)',color:'var(--accent-warm)',border:'1px solid rgba(240,168,58,.3)'}}>unsafe abbreviation</span>)}</div>}</div>
+          <div style={{flex:1,minWidth:0}}><div style={{fontFamily:'JetBrains Mono',fontSize:11,lineHeight:1.5,wordBreak:'break-word'}}>{c.text}</div><AnkiStyleBadges issues={ankiStyleWarnings(c)}/>{c.extra&&<div style={{fontSize:10,color:'var(--text-dim)',marginTop:2}}>Extra: {c.extra}</div>}{c.tags&&<div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:4}}>{c.tags.split(/\s+/).map((t,j)=><span key={j} style={{fontSize:8,padding:'1px 6px',borderRadius:8,background:'var(--bg-card-alt)',color:'var(--text-dim)',border:'1px solid var(--border)'}}>{t}</span>)}</div>}{c.lint&&c.lint.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:4}}>{c.lint.map((x,j)=><span key={j} style={{fontSize:8,padding:'1px 6px',borderRadius:8,background:'rgba(248,113,113,.1)',color:'var(--accent-red)',border:'1px solid rgba(248,113,113,.3)'}}>{LINT_LABEL[x]||x}</span>)}</div>}{c.abbrev&&c.abbrev.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:4}}>{c.abbrev.map((x,j)=><span key={j} title={x} style={{fontSize:8,padding:'1px 6px',borderRadius:8,background:'rgba(240,168,58,.1)',color:'var(--accent-warm)',border:'1px solid rgba(240,168,58,.3)'}}>unsafe abbreviation</span>)}</div>}</div>
           <button style={{background:'none',border:'none',color:'var(--text-dim)',cursor:'pointer',fontSize:13,flexShrink:0}} onClick={()=>del(c.id)}>×</button>
         </div>)}
       </div>}
+
+      {/* v15.16: preview uses the same editable notes and selection; no extra generation call. */}
+      {cards.length>0&&view==='preview'&&<div style={{display:'grid',gap:10}}>{displayedCards.map(c=><div key={c.id} style={{padding:12,background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:8,opacity:c.keep?1:.5}}>
+        <div style={{display:'flex',gap:8,alignItems:'center'}}><label style={{fontSize:12}}><input type="checkbox" checked={c.keep} onChange={()=>toggle(c.id)}/> Keep</label><TierBadge tier={getTier(c.tags)}/><button className="btn-secondary" style={{marginLeft:'auto',padding:'3px 9px'}} onClick={()=>setView('table')}>Edit in Table</button></div>
+        <AnkiReviewCard card={c}/>
+        <AnkiStyleBadges issues={ankiStyleWarnings(c)}/>
+        {(c.lint||[]).length>0&&<div style={{color:'var(--accent-red)',fontSize:11,marginTop:5}}>Structural lint: {c.lint.map(x=>LINT_LABEL[x]||x).join(', ')}</div>}
+        {(c.abbrev||[]).map((msg,i)=><div key={i} style={{color:'var(--accent-warm)',fontSize:11,marginTop:5}}>{msg}</div>)}
+      </div>)}</div>}
 
       {ledger&&<div style={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:16,marginTop:14}}>
         <div style={{fontSize:10,fontWeight:600,textTransform:'uppercase',letterSpacing:1,color:'var(--text-dim)',marginBottom:8}}>Fact Coverage Map (fact-id → line #)</div>

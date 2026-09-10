@@ -1,6 +1,6 @@
 # Nursing Study Suite — Prompt Library
 
-The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, and the item-quality auditor, **extracted verbatim from the shipped v15.15 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
+The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, and the item-quality auditor, **extracted verbatim from the shipped v15.16 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
 
 > **Coverage.** All 12 named prompt constants are represented from live HTML bytes. Eleven are byte-frozen; `CARD_TRANSCRIBE_PROMPT` is deliberately tunable but requires two transcription runs per card after an edit. The generated appendix is maintained by `node tools/render-prompts.js --write` and checked by `node verify-repo.js`.
 
@@ -232,7 +232,7 @@ HARD RULES
 
 ---
 
-## 2 · Anki Card Generator (`ANKI_MASTER_PROMPT`, 17,825 chars)
+## 2 · Anki Card Generator (`ANKI_MASTER_PROMPT`, 20,252 chars)
 
 **Runtime assembly** — each request the app sends is:
 
@@ -357,17 +357,11 @@ no commentary
 no wrapped tags
 Text Field Rule
 
-The Text field does NOT need to begin with a LATTE header.
-
-Use short visible condition/topic cues only when needed for isolated review clarity, such as:
-
-[HF]
-[COPD]
-[Warfarin]
-[ABG]
-[HF / Look]
-
-Do not add a cue if the stem is already uniquely identifiable.
+Prefer this front structure: [Condition / Topic] Specific retrieval label: prompt with cloze.
+Use the same source-supported condition name and the same label for the same clinical axis across related notes.
+Prefer specific labels such as Key presentation:, Assessment:, Diagnostic finding:, Treatment:, Hold parameter:, Teaching:, or Mechanism:. Use a more specific label when it makes the target clearer, such as Rash progression:.
+These are retrieval cues, not mandatory visible LATTE headers; LATTE assignment remains in tags.
+Omit or change the anchor when naming the condition/topic would reveal the answer being tested. Do not add redundant cues to an already self-contained stem.
 Text Field Style
 
 The Text field must be:
@@ -377,6 +371,10 @@ direct
 clinically specific
 easy to answer in about 5 seconds
 written in fast-review phrasing, not textbook prose
+
+Aim for about 15 words or fewer on each review front, including the anchor and counting a hidden gap as one word. This is a preference, never a hard limit: preserve every qualifier needed for accuracy and a uniquely correct answer.
+
+Avoid grammatical answer clues: move a/an inside the cloze, or rewrite in telegraphic label style. For example, replace Characterized by an {{c1::erythematous plaque}} with Lesion type: {{c1::erythematous plaque}}. Do not remove a preposition, comparison word, unit, or qualifier needed to define the clinical relationship.
 
 Preferred style:
 
@@ -580,7 +578,9 @@ comparison word such as increased/decreased/high/low/above/below
 PHASE 1.5 — ATOMICITY RULES
 Core Rule
 
-Each note should test one tightly linked clinical idea.
+Each note should test one tightly linked clinical idea. Each generated review card should have one independently gradable clinical pivot.
+Different indices (c1, c2, c3) create separate review cards; repeated instances of the same index are hidden together. Do not repeat one index across unrelated findings.
+Use separate notes when the other visible answers would give away the hidden target. Multiple gaps sharing an index are acceptable only when they jointly express one inseparable clinical decision.
 Split When
 
 one sentence contains unrelated facts
@@ -591,7 +591,7 @@ brevity would otherwise force omission of a qualifier needed for full meaning
 Combine When
 
 facts are naturally linked
-one fact helps recall the other
+the visible companion fact is necessary context and does not give away the hidden target
 the pair/cluster is clinically taught as one unit
 drug + dose + route belong together
 threshold + action belong together
@@ -616,14 +616,14 @@ If the PDF gives one unified monitoring directive, the stem may contain more tha
 PHASE 1.9 — ANTI-REDUNDANCY + ANTI-OVERFRAGMENTATION
 Anti-Redundancy
 
-If two notes share >=80% identical visible text and differ only by cloze target, combine or rewrite them.
+If two notes share >=80% identical visible text and differ only by cloze target, combine or rewrite them only if each resulting review card still tests an independent target without answer leakage. Keep separate notes when needed to avoid clues.
 Anti-Overfragmentation
 
 Do not split so aggressively that several neighboring notes become tiny near-duplicates with nearly identical context.
 
 Prefer:
 
-one clean 2-3 cloze note for tightly linked facts
+one clean 2-3 cloze note for tightly linked facts, provided each review card remains independently answerable without the other answers giving it away
 
 Avoid:
 
@@ -684,6 +684,9 @@ Extract every patient/family teaching point, discharge instruction, self-managem
 PHASE 3.5 — EXTRA FIELD RULES (LEAN BY DEFAULT)
 
 The Extra field should support retention, not slow the deck down.
+Keep supporting mechanisms and explanations here, after answer reveal, when the supplied source states them. Do not invent a why when the source gives none.
+If a mechanism is itself a substantive testable fact, also give it a dedicated recall note in its appropriate LATTE bucket; mentioning it only in Extra does not replace testing it.
+For confusable pairs, prefer one brief source-supported contrast in Extra or a dedicated comparison note. Both sides must be supported by the supplied facts. Do not put a visible opposite answer on the front when it gives away the hidden target; do not force two unrelated answers into one review card.
 Default Extra Style
 
 Prefer very short cue-style extras:
@@ -820,7 +823,7 @@ Specificity: shortened wording did not remove the context needed for one uniquel
 
 CRITICAL REMINDERS
 
-LATTE belongs in tags and organization first, not as forced visible formatting on every card.
+LATTE belongs in tags and organization first. Prefer consistent condition/topic anchors and specific retrieval labels without revealing the answer.
 One fact = one punchy card.
 Coverage is enforced by the ledger, not by making cards wordy.
 Never drop list items.
