@@ -3802,7 +3802,7 @@ function ankiParseCards(raw,chunkNo=1){
   const ankiBlock=blocks[0]||raw;const cards=[];let noteLine=0;
   ankiBlock.split('\n').forEach(line=>{
     const t=line.trim();if(!t||!t.includes('|'))return;noteLine++;const pts=t.split('|');
-    if(pts.length>=2){const malformed=pts.length!==3;cards.push({id:uid(),chunk:chunkNo,sourceLine:noteLine,text:pts[0].trim(),extra:(pts[1]||'').trim(),tags:pts.slice(2).join(' ').trim(),pipeCount:pts.length-1,needsReview:malformed,keep:!malformed,factIds:[]});}
+    if(pts.length>=2){const malformed=pts.length!==3;cards.push({id:uid(),chunk:chunkNo,sourceLine:noteLine,text:pts[0].trim(),extra:(pts[1]||'').trim(),tags:pts.slice(2).join('|').trim(),pipeCount:pts.length-1,needsReview:malformed,keep:true,factIds:[]});}
   });
   return{cards,ledger:blocks[1]||''};
 }
@@ -3828,30 +3828,62 @@ function attachCoverageToCards(cards,ledger){
   for(const ref of parseKBCoverage(ledger)){if(ref.line<1)continue;const card=byLine.get(ref.chunk+':'+ref.line);if(card&&!card.factIds.includes(ref.id))card.factIds.push(ref.id);}
 }
 
-function clozeNums(text){const s=new Set();for(const m of String(text||'').matchAll(/\{\{c(\d+)::/gi))s.add(parseInt(m[1],10));return[...s];}
-// Structural lint on a parsed note. Codes: no-cloze, no-tier, many-cloze, pipe-format.
-function lintAnkiCard(c){
-  const issues=[];
-  if(!/\{\{c\d+::/i.test(c.text||''))issues.push('no-cloze');
-  if(!/Tier::[123]\b/.test(c.tags||''))issues.push('no-tier');
-  if(clozeNums(c.text).length>3)issues.push('many-cloze');
-  if(c.pipeCount!==2)issues.push('pipe-format');
-  return issues;
+// v15.17: marker counts accepted broken/nested clozes and could expose answers in preview.
+// This is the one parser for the suite's flat subset; it never repairs the user's text.
+function parseAnkiClozes(value){
+  const text=String(value||''),spans=[],issues=[];
+  const delimiter=/\{\{|\}\}/g;let m;
+  while((m=delimiter.exec(text))){
+    const start=m.index;
+    if(m[0]==='}}'){issues.push('unmatched closing delimiter at '+start);continue;}
+    const close=text.indexOf('}}',start+2),nested=text.indexOf('{{',start+2);
+    if(close<0){issues.push('unclosed cloze at '+start);break;}
+    const body=text.slice(start+2,close);
+    const match=body.match(/^c(\d+)::([^{}]*?)(?:::([^{}]*))?$/i);
+    if(nested>=0&&nested<close)issues.push('nested cloze at '+start);
+    else if(!match||/[{}]/.test(body))issues.push('malformed cloze at '+start);
+    else if(!Number.isSafeInteger(Number(match[1]))||Number(match[1])<1)issues.push('nonpositive or unsafe cloze index at '+start);
+    else if(!match[2].trim())issues.push('empty cloze answer at '+start);
+    else spans.push({start,end:close+2,index:Number(match[1]),answer:match[2],hint:match[3]});
+    delimiter.lastIndex=close+2;
+  }
+  const indices=[...new Set(spans.map(x=>x.index))];
+  if(indices.length>3)issues.push('more than three distinct cloze indices');
+  return {text,spans,indices,issues};
 }
-const LINT_LABEL={'no-cloze':'no {{c…}} cloze','no-tier':'missing Tier::','many-cloze':'>3 cloze indices','pipe-format':'wrong pipe count'};
-
-// v15.16: raw cloze braces hid what a review actually tests. Render plain text so generated
-// markup stays inert, and keep style heuristics separate from structural lint/keep decisions.
-function ankiPreviewText(text,index,revealed=false){
-  return String(text||'').replace(/\{\{c(\d+)::([^{}]*?)(?:::([^{}]*?))?\}\}/gi,
-    (_,n,answer,hint)=>Number(n)===Number(index)&&!revealed?'['+(hint||'...')+']':answer);
+function clozeNums(text){const p=parseAnkiClozes(text);return p.issues.length?[]:p.indices;}
+function lintAnkiCard(c){
+  const p=parseAnkiClozes(c.text),issues=[];
+  if(!p.spans.length)issues.push('no-cloze');
+  if(p.issues.length)issues.push('cloze-structure');
+  if(!/Tier::[123]\b/.test(c.tags||''))issues.push('no-tier');
+  if(p.indices.length>3)issues.push('many-cloze');
+  // v15.17: cached pipeCount alone let edits insert separators/newlines into an export.
+  if(c.pipeCount!==2||[c.text,c.extra,c.tags].some(x=>/[|\r\n]/.test(String(x||''))))issues.push('pipe-format');
+  if(parseAnkiClozes(c.extra).issues.length)issues.push('cloze-structure');
+  return [...new Set(issues)];
+}
+const LINT_LABEL={'no-cloze':'no {{c…}} cloze','cloze-structure':'invalid flat cloze syntax','no-tier':'missing Tier::','many-cloze':'>3 cloze indices','pipe-format':'each field must be one line without pipes'};
+function ankiRenderClozes(parsed,index,revealed=false){
+  if(parsed.issues.length)return 'Structural error: '+parsed.issues.join('; ')+'. Edit in Table.';
+  let out='',cursor=0;
+  for(const span of parsed.spans){out+=parsed.text.slice(cursor,span.start)+(span.index===Number(index)&&!revealed?'['+(span.hint||'...')+']':span.answer);cursor=span.end;}
+  return out+parsed.text.slice(cursor);
+}
+function ankiPreviewText(text,index,revealed=false){return ankiRenderClozes(parseAnkiClozes(text),index,revealed);}
+// v15.17: keep records only the student's selection. Structural exclusion is derived,
+// so a repair restores eligibility without ever reversing a manual exclusion.
+function ankiSelection(cards,current=true,tier='all'){
+  const scoped=cards.filter(c=>tier==='all'||new RegExp('\\bTier::'+tier+'\\b').test(c.tags||''));
+  const valid=scoped.filter(c=>!lintAnkiCard(c).length),kept=current?valid.filter(c=>c.keep):[];
+  return {valid,kept,invalid:scoped.length-valid.length,manualExcluded:scoped.filter(c=>!c.keep).length,reviews:kept.reduce((n,c)=>n+clozeNums(c.text).length,0)};
 }
 function ankiStyleWarnings(card){
   const text=String(card.text||''),issues=[],indices=clozeNums(text);
   if(/\b(?:a|an)\s+\{\{c\d+::/i.test(text))issues.push({code:'article-clue',msg:'Possible article clue: move a/an inside the cloze or use a short label.'});
   if(!/^\s*\[[^\]{}]+\]\s+[^:{}]+:/.test(text))issues.push({code:'front-anchor',msg:'Check the condition/topic cue and retrieval label. Omit cues that reveal the answer or repeat clear context.'});
   const counts={};
-  for(const m of text.matchAll(/\{\{c(\d+)::/gi))counts[Number(m[1])]=(counts[Number(m[1])]||0)+1;
+  for(const span of parseAnkiClozes(text).spans)counts[span.index]=(counts[span.index]||0)+1;
   const repeated=indices.filter(n=>counts[n]>1);
   if(repeated.length)issues.push({code:'shared-gaps',msg:repeated.map(n=>'c'+n).join(', ')+': several gaps hide together. Check that they form one clinical decision.'});
   const longest=Math.max(0,...(indices.length?indices:[0]).map(n=>(ankiPreviewText(text,n).match(/\S+/g)||[]).length));
@@ -3865,7 +3897,7 @@ function AnkiStyleBadges({issues}){
   return issues.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:4,marginTop:5}}>{issues.map(x=><span key={x.code} title={x.msg} style={{fontSize:10,color:'var(--accent-warm)'}}>⚠ {x.msg}</span>)}</div>;
 }
 function AnkiReviewCard({card}){
-  const indices=clozeNums(card.text);
+  const parsed=parseAnkiClozes(card.text),indices=parsed.issues.length?[]:parsed.indices;
   const [selected,setSelected]=useState(indices[0]||1);
   const [revealed,setRevealed]=useState(false);
   const index=indices.includes(selected)?selected:indices[0];
@@ -3877,7 +3909,7 @@ function AnkiReviewCard({card}){
     </div>
     <div style={{fontSize:15,lineHeight:1.6,whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{ankiPreviewText(card.text,index,revealed)}</div>
     {indices.length>0?<button className="btn-secondary" style={{marginTop:10}} onClick={()=>setRevealed(v=>!v)}>{revealed?'Hide answer':'Show answer'}</button>:<div style={{color:'var(--accent-warm)',marginTop:8}}>Add a cloze in Table view to preview a review card.</div>}
-    {revealed&&card.extra&&<div style={{fontSize:12,lineHeight:1.5,color:'var(--text-dim)',marginTop:10,whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>Extra: {card.extra}</div>}
+    {revealed&&!parsed.issues.length&&card.extra&&<div style={{fontSize:12,lineHeight:1.5,color:'var(--text-dim)',marginTop:10,whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>Extra: {card.extra}</div>}
   </div>;
 }
 
@@ -3976,7 +4008,7 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
       const seen=new Map(),deduped=[];
       for(const c of all){const k=(c.text||'').toLowerCase().replace(/\s+/g,' ').trim();if(!k){deduped.push(c);continue;}if(seen.has(k)){const kept=seen.get(k);kept.factIds=[...new Set([...(kept.factIds||[]),...(c.factIds||[])])];continue;}seen.set(k,c);deduped.push(c);}
       if(all.length-deduped.length>0)log(`Removed ${all.length-deduped.length} duplicate(s); their fact IDs were merged into the surviving cards.`,'warn');
-      deduped.forEach(c=>{c.lint=lintAnkiCard(c);if(c.lint.length)c.keep=false;});
+      deduped.forEach(c=>{c.lint=lintAnkiCard(c);});
       // v15.7 B5: unsafe-abbreviation findings are WARN tier and kept OUT of `lint`, because
       // `lint` unchecks the card. A dose written "5.0 mg" is worth flagging, not discarding —
       // the fact is right and the card is still usable once you fix the transcription.
@@ -4006,25 +4038,24 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
   // v15.8: recompute BOTH lint tiers on edit. They were evaluated once at generation, so a
   // user who fixed a missing cloze or a bad dose abbreviation kept the badge permanently and
   // the card stayed unchecked — uncorrectable from the UI, which is where corrections happen.
-  // keep is only re-enabled when lint (which unchecked it) actually clears; abbrev never
-  // unchecks anything, so it must not flip keep either way.
+  // v15.17: structural eligibility and manual selection are independent; edits never flip keep.
   const updateField=useCallback((id,f,v)=>setCards(p=>p.map(c=>{
     if(c.id!==id)return c;
     const next={...c,[f]:v};
     if(f==='text'||f==='extra'||f==='tags'){
-      const hadLint=(c.lint||[]).length>0;
+      // v15.17: revalidate the actual edited fields; selection belongs to the student.
+      next.pipeCount=2;
       next.lint=lintAnkiCard(next);
       const found=[];
       ankiUnsafeAbbrevScan(next.text,'Text',found);
       ankiUnsafeAbbrevScan(next.extra,'Extra',found);
       next.abbrev=found.map(x=>x.msg);
-      if(hadLint&&!next.lint.length)next.keep=true;
     }
     return next;
   })),[]);
 
   const exportTxt=useCallback(()=>{
-    const kept=(tierFilter!=='all'?filteredCards:cards).filter(c=>c.keep);if(!kept.length)return;
+    const kept=ankiSelection(cards,true,tierFilter).kept;if(!kept.length)return;
     // With #html:true, thresholds like "<90%" would be swallowed as tags, so escape
     // < > & in Text/Extra only when the header is on. Tags stay raw (Anki treats col 3
     // as space-separated tags, not HTML). Cloze braces are unaffected by escaping.
@@ -4034,7 +4065,7 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
     downloadBlob(new Blob([header+body],{type:'text/plain'}),`latte_anki_import${tierFilter!=='all'?'_tier'+tierFilter:''}.txt`);
   },[cards,filteredCards,tierFilter,ankiHeader]);
 
-  const keptCount=filteredCards.filter(c=>c.keep).length;
+  const keptCount=ankiSelection(cards,true,tierFilter).kept.length;
   const liveLint=useMemo(()=>cards.filter(c=>c.lint&&c.lint.length).length,[cards]);
   const liveAbbrev=useMemo(()=>cards.filter(c=>c.abbrev&&c.abbrev.length).length,[cards]);
 

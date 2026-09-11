@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 761;
+const EXPECTED_ASSERTIONS = 784;
 
 let file;
 try {
@@ -1996,7 +1996,7 @@ section('v15.8 — Phase 2 fixes');
 {
   t('Anki edits recompute lint',S.includes('next.lint=lintAnkiCard(next);'));
   t('Anki edits recompute the abbreviation scan',S.includes("ankiUnsafeAbbrevScan(next.text,'Text',found);"));
-  t('a cleared lint re-enables keep',S.includes('if(hadLint&&!next.lint.length)next.keep=true;'));
+  t('edits retain manual selection and derive structural eligibility',S.includes('const kept=ankiSelection(cards,true,tierFilter).kept;')&&!S.includes('if(hadLint&&!next.lint.length)next.keep=true;'));
   t('abbrev findings never flip keep',!S.includes('next.abbrev.length)next.keep'));
 }
 
@@ -2070,7 +2070,7 @@ section('v15.16 — Anki preview and style checks');
 {
   // Extract through the LAST pure helper; exercise the filter below so a shortened
   // extraction cannot silently omit its implementation.
-  const source=spanFrom('function clozeNums(text)', 'function AnkiStyleBadges');
+  const source=spanFrom('function parseAnkiClozes(value)', 'function AnkiStyleBadges');
   const helpers=source.slice(0,source.lastIndexOf('function AnkiStyleBadges'));
   const A=new Function(helpers+';return {ankiPreviewText,ankiStyleWarnings,ankiReviewFilter,lintAnkiCard};')();
   const note=(text,id='n1',tier=1)=>({id,text,extra:'Source-stated explanation',tags:'Nursing::LATTE::Look Condition::Example Tier::'+tier,pipeCount:2,keep:true,factIds:['fact-1']});
@@ -2126,7 +2126,7 @@ section('v15.16 — Anki preview and style checks');
   // or Gemini call occurs. A review-only filter must not shrink exported coverage.
   const exportSource=spanFrom('const exportTxt=useCallback(', '  },[cards,filteredCards,tierFilter,ankiHeader]);', 'function AnkiGenerator()');
   let exported='';
-  const makeExport=(cards,filtered,tier,header)=>new Function('cards','filteredCards','tierFilter','ankiHeader','downloadBlob','useCallback','Blob',exportSource+';return exportTxt;')(
+  const makeExport=(cards,filtered,tier,header)=>new Function('cards','filteredCards','tierFilter','ankiHeader','downloadBlob','useCallback','Blob',helpers+exportSource+';return exportTxt;')(
     cards,filtered,tier,header,b=>{exported=b.body;},fn=>fn,class{constructor(parts){this.body=parts.join('');}});
   makeExport(notes,notes,'all',false)();
   t('export keeps clean and warned notes regardless of review filter',exported.split('\n').length===2&&exported.includes(good.text)&&exported.includes(weak.text));
@@ -2136,6 +2136,31 @@ section('v15.16 — Anki preview and style checks');
   t('export still excludes manually unchecked notes',exported.split('\n').length===1&&exported.startsWith(good.text));
   makeExport([note('[Example] Threshold: {{c1::<5 & >2}}')],[],'all',true)();
   t('Anki header export preserves escaped comparator bytes and cloze braces',exported.startsWith('#separator:Pipe\n')&&exported.includes('{{c1::&lt;5 &amp; &gt;2}}'));
+}
+
+/* ── v15.17: shared flat cloze parser and live eligibility ── */
+section('v15.17 — flat cloze structure');
+{
+  const source=spanFrom('function parseAnkiClozes(value)','function AnkiStyleBadges');
+  const A=new Function(source.slice(0,source.lastIndexOf('function AnkiStyleBadges'))+';return {parseAnkiClozes,ankiPreviewText,ankiSelection,lintAnkiCard,ankiReviewFilter};')();
+  const note=text=>({id:'synthetic-1',text,extra:'',tags:'Tier::1',pipeCount:2,keep:true});
+  const p=A.parseAnkiClozes('a {{C2::alpha::hint}} + {{c2::beta}}');
+  t('flat spans retain offsets, answers, hints and numeric indices',p.spans.length===2&&p.spans[0].start===2&&p.spans[0].end===21&&p.spans[0].answer==='alpha'&&p.spans[0].hint==='hint'&&p.indices.join()==='2');
+  for(const bad of ['{{c1::answer','}} before {{c1::answer}}','{{c1::answer}} }}','{{c1:: }}','{{c0::answer}}','{{c-1::answer}}','{{c1:answer}}','{{c1::outer {{c2::inner}} }}','{{c1::a}} {{oops}}']){
+    t('invalid flat syntax is reported: '+bad,A.parseAnkiClozes(bad).issues.length>0&&A.lintAnkiCard(note(bad)).length>0&&A.ankiPreviewText(bad,1).startsWith('Structural error:'));
+  }
+  t('three distinct positive indices need no renumbering',A.ankiSelection([note('{{c2::a}} {{c8::b}} {{c20::c}}')]).reviews===3);
+  t('four distinct indices are structurally ineligible',A.ankiSelection([note('{{c1::a}} {{c2::b}} {{c3::c}} {{c4::d}}')]).invalid===1);
+  t('repeated c1 makes one review',A.ankiSelection([note('{{c1::a}} {{c1::b}}')]).reviews===1);
+  const selected=note('{{c1::a}}'),manual={...selected,keep:false};
+  t('invalid selected note remains editable but has no export eligibility',A.ankiSelection([{...selected,text:'{{c1::broken'}]).kept.length===0&&selected.keep);
+  t('a repaired selected note regains eligibility while manual exclusion survives',A.ankiSelection([selected,manual]).kept.length===1);
+  for(const field of ['text','extra','tags']){
+    t('edited pipe rejected in '+field,A.lintAnkiCard({...selected,[field]:selected[field]+'|bad'}).includes('pipe-format'));
+    t('edited newline rejected in '+field,A.lintAnkiCard({...selected,[field]:selected[field]+'\nbad'}).includes('pipe-format'));
+  }
+  t('stale selection cannot export any reviews',A.ankiSelection([selected],false).reviews===0);
+  t('shared helper extraction reaches filter tail',A.ankiReviewFilter([selected],'3',false).length===0);
 }
 
 /* ── 21. v15.7 — provenance stamp + Anki abbreviation lint (B2, B5) ── */
