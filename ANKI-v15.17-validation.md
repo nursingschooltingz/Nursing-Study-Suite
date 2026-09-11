@@ -1,18 +1,18 @@
 # v15.17 text-only Anki implementation and validation
 
-Prepared 2026-09-11. This reports the local implementation and subsequently approved example edit, not live-generation or clinical-validation results.
+Updated 2026-09-11. The reliability implementation passes its software checks. The approved example-only prompt candidate failed the subsequent paired live pilot and is not ready for publication. The exact rollback is prepared, not applied. These results do not certify clinical accuracy.
 
 ## Baseline and scope
 
 - Starting checkout: `21fb5980f796649d3cb7f53f2f919e8b93e2136b`, clean `main`, canonical `Nursing-Study-Suite v15.16.html`.
 - Starting unified verifier: 761 assertions passed; all frozen hashes, prompt documentation, LF/version checks and full JSX Babel transform passed.
 - Working branch: `codex/text-only-anki`. Final canonical file: `Nursing-Study-Suite v15.17.html`.
-- Stages A0–A5 and B are implemented. Stage C now has a source-specific private comparison specification awaiting live-call approval. D has no measured justification. E's exact example diff was applied under the user's one-time approval on 2026-09-11. F's local version/docs/file checks are done; actual Anki import and public publication are not done.
-- The user explicitly scoped one KB on 2026-09-11; it was read only to prepare the pilot specification. No unrelated course files were read. No live Gemini requests, manual quota-consuming test scripts, API keys in files, push, merge, or publication occurred.
+- Stages A0–A5 and B are implemented. Stage C's authorized paired pilot completed, with the baseline response-capture limitation below. D now has evidence of a one-to-many contract limitation but remains unimplemented and needs separate measurement. E's exact example diff was applied under the user's one-time approval on 2026-09-11 and failed the pilot. F's local version/docs/file checks are done; actual Anki import and public publication are not done.
+- The user explicitly scoped one KB and approved 16 generation calls total, at most 48 HTTP attempts under the existing retry policy. Both runs completed; no additional audit calls were made. No unrelated course files, manual quota-consuming test scripts, API keys in files, push, merge, or publication were involved.
 
 All eleven hashes remained unchanged through the code-only checkpoint `1da58a3`. The subsequently approved `ANKI-v15.17-example-proposal.diff` changes only `ANKI_MASTER_PROMPT`, from `353471cbee66c759341ad8f4d857fa75ea4051744a52771ce780fcf172efc548` to `9d6c99229af067191df7b34d92c8ad98ff569870dd8f3be88634a5eb1a378b83`. Only that baseline hash was deliberately updated, with the approval recorded in its description. The other ten frozen constants retain their baseline. `Prompts.md` contains the actual new source bytes.
 
-The user approved applying the example edit before a live baseline existed. The pre-edit application was preserved privately and remains recoverable at `1da58a3`, so the planned comparison can still use the original prompt with the same implementation and generation settings. No baseline generation is claimed here.
+The user approved applying the example edit before a live baseline existed. The pre-edit application was preserved privately and remains recoverable at `1da58a3`. The comparison used that preserved application and the current candidate with the same implementation and generation settings. The only generation-input difference was the approved example diff.
 
 The following generation-input source hashes were measured from the A0 checkout and are now regression assertions. These are trimmed source spans, not hashes of a generated deck.
 
@@ -77,28 +77,70 @@ Ran `node tools/anki-browser-fixture.js 4173` in the supported in-app browser. T
 
 These are software checks against deliberately seeded examples. The synthetic response's numeric discrepancy and different-answer collision were intentional test defects; they are not measurements of Gemini's clinical quality or adherence.
 
-## Pending live pilot: source scoped, call approval required
+## Completed paired live pilot
 
 The user supplied the exact KB path on 2026-09-11. `tools/anki-pilot-spec.js` inspected that JSON with the shipped packet/chunk functions: **40 conditions, 328 facts, eight chunks**. The exact source path, source/packet hashes, chunk sizes, both prompt hashes and pre-edit application snapshot are in gitignored `scratch/anki-pilot/`. No source text or clinical facts are included in this report.
 
-The prepared `scratch/anki-pilot/comparison-spec.json` proposes two runs of the same KB using `gemini-3.8-flash`, low thinking, blank Outcomes/Points/Additional Context, unchanged chunking, a 65,536-token output ceiling, and the existing streaming transport. Each run expects **eight generation calls**, with at most **24 attempts** under the unchanged two-retry policy: **16 calls / at most 48 attempts total**, plus **zero additional audit calls**. No live calls are authorized or made by this specification.
+The user approved both runs using `gemini-3.8-flash`, low thinking, blank Outcomes/Points/Additional Context, unchanged chunking, a 65,536-token output ceiling, and the existing streaming transport. The source hash was rechecked; applying the actual import normalizer preserved the exact planned packet hash. The UI imported 40 conditions and 328 facts with zero schema validation errors. Both tabs used the specified model and settings.
 
-Remaining procedure:
+Each run completed **eight logical generation calls**: **16 total**, with **zero additional audit calls**. The approval allowed at most 48 HTTP attempts under the unchanged two-retry policy. Actual HTTP retries and token usage were not independently instrumented; do not equate logical calls with measured HTTP attempts. No further calls are authorized by this completed pilot.
 
-1. Obtain approval for this concrete comparison. Before executing, recheck the source hash and verify the actual model, focus and generation settings match the specification. If they differ, amend the specification before approval. Keep credentials in the existing session/process mechanisms.
-2. Use the preserved pre-example application for the baseline run and the current application for the second run. Their only generation-input difference must be the exact approved example diff. The pre-edit application remains available in Git at `1da58a3`; its private snapshot is `scratch/anki-pilot/before-examples.html`.
-3. Save each run's original diagnostics/responses and source snapshot in `scratch/anki-pilot/` before editing, exclusions or tier selection. Record truncation/cancellation and inspect the actual exported bytes. Keep every generated artifact private and out of Git.
-4. Record front-anchor warnings / parsed Text rows; unmapped notes and partial/invalid edges; raw same/different-answer collision groups and affected review cards; numeric warned/checked notes and tokens, quote-only/unsupported findings, and not-checked reasons. Also retain raw/post-dedupe/invalid/kept counts, reviews by tier and global linked facts.
-5. Adjudicate every numeric discrepancy and different-answer collision as defect, false alarm or unresolved, and sample unflagged notes. A lower warning rate alone is not improvement. A single before/after is a pilot, not causal evidence.
-6. Consider Stage D only if the evidence isolates an actual one-to-many mapping-contract limitation. The parser already accepts repeated fact IDs on separate lines. Absent maps, bad row numbers and invalid IDs require separate diagnoses. No adapter change is currently proposed.
-7. Compare the two runs using the same KB, model, thinking, focus, chunking and selection. Check for fictional-example contamination. The exact example edit is already approved and applied; no further prompt or adapter changes are authorized by that one-time approval. Any calls beyond the specified comparison need authorization.
-8. Import the actual pilot `.txt` into an isolated Anki test deck using the student's established compatible cloze note type. Check note/review counts, c1/c2/c3 behavior, Extra/source display, comparators and tag-column mapping. No Anki import was performed here; no bridge or dependency was installed.
+Baseline ran 15:01:03–15:02:12 and revised ran 15:10:26–15:11:30 on 2026-09-11, America/New_York (UTC−04:00). Neither reported truncation, cancellation or an API error. No note edits, manual exclusions or tier filtering preceded capture.
+
+| Measurement | Baseline examples | Revised examples |
+| --- | ---: | ---: |
+| Parsed / post-dedupe notes | 315 / 315 | 311 / 311 |
+| Structurally invalid notes | 0 | 147 |
+| Current eligible kept notes | 315 | 164 |
+| Current cloze reviews | 560 | 278 |
+| Current linked facts / total | 328 / 328 | 170 / 328 |
+| Tier 1 notes / reviews | 222 / 405 | 124 / 213 |
+| Tier 2 notes / reviews | 92 / 154 | 40 / 65 |
+| Tier 3 notes / reviews | 1 / 1 | 0 / 0 |
+| Front-anchor warnings / Text rows | 1 / 315 | 0 / 311 |
+| Unmapped notes | 3 | 0 |
+| Partial mappings / invalid edges | 0 / 0 | 0 / 0 |
+| Same-answer / different-answer collision groups | 0 / 0 | 0 / 0 |
+| Collision-affected reviews | 0 | 0 |
+| Numeric checked notes / tokens | 31 / 44 | 18 / 29 |
+| Numeric warned notes (unsupported notation) | 47 | 25 |
+| Numeric discrepancies / quote-only findings | 0 / 0 | 0 / 0 |
+| Numeric not-checked notes | 3: no mapping | 147: structural failure |
+| Fictional-example contamination | 0 | 0 |
+
+### Failure analysis and manual review
+
+All **147 revised structural failures** had the shape `Text||Extra|Tags`: four fields instead of three. They occupied every note in chunks 1, 4, 5 and 7 (44, 27, 40 and 36 notes). Existing structural checks correctly excluded them. Copying the empty-Extra separator pattern into rows with populated Extra is a plausible explanation, but one paired run does not establish causation.
+
+All **26 notes in revised chunk 8** instead used `Text||Explanation followed by tags`. They have three fields, an empty Extra, and explanation prose in Tags. They pass the current field-count/tier checks and are included in the 164 eligible notes. This is a confirmed generation field-assignment defect, not a study-ready export. No rows were silently repaired and no validator was weakened.
+
+The smaller anchor and numeric-warning counts do not outweigh these failures. In particular, 147 revised notes skipped numeric checking because of structural errors. There were no numeric-discrepancy or different-answer-collision findings requiring individual adjudication. Unsupported notation remains a source-review warning; zero discrepancy findings do not demonstrate clinical correctness.
+
+A deterministic spread of **20 unflagged notes per run** was reviewed against mapped facts. The baseline sample contained two source-support concerns: one strengthened “commonly” to “most commonly”; another added a drug-class detail in Extra that was absent from its mapped fact. These are source-grounding observations, not claims that the latter detail is clinically false. Two sampled revised notes were among the 26 explanation-in-Tags defects. This small sample is not an accuracy estimate. Private adjudication retains note and fact identifiers without putting course text in Git.
+
+The baseline's **three unmapped notes** were legitimate additional notes from facts whose other content was already mapped to another note. The ledgers otherwise used valid chunk-local lines and IDs; this was not an absent ledger or parser failure. This supports Stage D's proposed one-to-many mapping contract. The adapter still requires each supplied fact exactly once, even when multiple notes need that association. A separate adapter diff and bounded live measurement remain necessary after resolving the example candidate; neither an adapter edit nor another live run occurred here.
+
+### Evidence capture and export checks
+
+The in-app browser did not complete Blob downloads, including a manual user click. The baseline's **original response bytes were not saved**. All 315 unedited rows, the complete visible coverage ledger, per-chunk note counts and original diagnostics were saved from the rendered UI. Reconstructing only these note/map blocks through the actual application helpers reproduced every diagnostic exactly. That evidence is explicitly labeled **rendered UI notes and coverage, not original response bytes**. The baseline tab is retained for inspection, but its unsaved response bytes depend on that session remaining open.
+
+For the revised run, only the temporary server's served copy of the download handler was changed to expose Blob text in a read-only textarea. Generation inputs, prompts and transport were unchanged; the canonical HTML was not edited. This captured the complete diagnostics file, all eight original responses, and the actual current export. No key is in the export shape; temporary key fields were cleared after both runs.
+
+The actual revised export is **34,238 characters / 164 note rows**, byte-identical to the live-helper replay (SHA-256 `654349091814d21f5cd143b354495937099cc0ffe14aee66a5da0d2c20c4797e`). Baseline replay exports **315 note rows / 74,553 characters**; it is derived from captured UI rows, not a recovered browser download. Plain and HTML source-reference exports have exactly three fields per row, preserve the Tags column, and have matching note counts. Source-mode headers remain `#separator:Pipe`, `#html:true`, `#notetype:Cloze`, and `#tags column:3`.
+
+The private specification, capture files, replay script/results, exports, hashes and adjudication are in gitignored `scratch/anki-pilot/`. No KB, original response, generated note text or API key is committed. Native Anki control is unavailable in this session, so actual import, template rendering and c1/c2/c3 review in Anki remain outstanding. No bridge or new dependency was installed.
+
+### Decision and exact rollback proposal
+
+Reject the revised example candidate for adoption based on this pilot. `ANKI-v15.17-example-rollback.diff` is the exact inverse of the approved example-only diff and restores Anki hash `353471cbee66c759341ad8f4d857fa75ea4051744a52771ce780fcf172efc548`. It leaves all reliability code and the other ten frozen prompts intact. The inverse was verified against the current and historical prompt bodies, but **has not been applied**. The current frozen baseline still describes the approved revised examples.
+
+Applying that rollback requires approval because the user authorized one exact prompt edit one time. After approval, restore the corresponding prompt documentation and deliberately update only the Anki baseline, retaining meaningful regression coverage and rerunning the unified verifier. Mapping correction and an actual Anki import remain separate unfinished work; the failed candidate is not presented as a validated release.
 
 ## Approved examples and limits
 
 `tools/anki-example-proposal.js` reproduces the approved diff from either the original or applied prompt; the harness extracts and validates the five complete example rows directly from the shipped HTML. Structure, supplied fictional tags, numeric consistency, style findings and collision checks pass. The edit changes two example locations only and explicitly says the examples are fictional format demonstrations, never source material. See `ANKI-v15.17-example-proposal.diff` for the exact applied diff.
 
-The user's one-time approval on 2026-09-11 satisfies `AGENTS.md` invariant 1 for this exact example diff only. It does not authorize additional prompt edits or live API calls. Stage C's remaining live-call boundary follows `DEVELOPMENT.md`: “Run live-material checks only when the changed pipeline requires them and the user explicitly authorizes the API calls.”
+The user's one-time approval on 2026-09-11 satisfied `AGENTS.md` invariant 1 for the exact applied example diff only. A separate user approval covered the completed 16-call pilot. Neither authorizes additional prompt edits or more API calls. `DEVELOPMENT.md` requires explicit authorization for live-material API checks.
 
 Numeric matching checks token occurrence, not clinical entailment. Reversed comparators and swapped roles of two supported values are deliberately tested limits. Equivalent notation includes leading/trailing zeros, valid grouped numbers, microgram aliases, spelled-out supported units, U/IU/units and declared compound units such as mcg/kg/min, mg/dL and mL/hr. Fractions, blood-pressure ratios, scientific notation, unknown units and bare numerals requiring context are reported for review; the scanner does not convert units or certify an unflagged note. There is no reliable per-fact quote-verification flag to promote quote-only support into verified fact support.
 
