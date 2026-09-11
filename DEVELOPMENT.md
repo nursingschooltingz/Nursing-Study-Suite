@@ -12,6 +12,7 @@ This is the task map for maintainers and coding agents. `AGENTS.md` remains the 
 - `tools/check-prompts.js` enforces the frozen hashes.
 - `tools/render-prompts.js` checks or regenerates the generated prompt appendix.
 - `neia-retest.js` and `davis-transcribe-test.js` are explicitly authorized, live-API measurement tools.
+- `docs/history/` preserves historical prompt diffs and the dormant v16 design/benchmark. These are reference records, not current implementation instructions.
 
 ## Safe workflow
 
@@ -51,7 +52,7 @@ The harness comments identify its extraction anchors. If a refactor moves one, u
 
 - `node tools/anki-browser-fixture.js 4173` serves only a synthetic fixture at `http://127.0.0.1:4173/`. It uses the shipped generator and the harness mini-KB, mocks generation, and blocks fetch. It never serves repository files. Stop it after checking the UI.
 - `node tools/anki-pilot-spec.js <explicitly-authorized-KB.json>` computes the exact chunk/call count with the shipped packet and chunker. This reads the named KB and makes no API request. Obtain authorization for that material before running it; obtain separate authorization for the resulting live run.
-- `node tools/anki-example-proposal.js` reproduces the historical example-only diff from either side. That candidate failed its live pilot and was rolled back with explicit approval; the tool is retained for evidence, not authorization to reapply it. It rejects partially applied examples and never changes the app or prompt baseline. The harness validates all five examples reconstructed from the historical candidate and pins both its measured hash and the exact restored live prompt hash.
+- `node tools/anki-example-proposal.js` reproduces the historical example-only diff at `docs/history/ANKI-v15.17-example-proposal.diff` from either side. That candidate failed its live pilot and was rolled back with explicit approval; the tool is retained for evidence, not authorization to reapply it. It rejects partially applied examples and never changes the app or prompt baseline. The harness validates all five examples reconstructed from the historical candidate and pins both its measured hash and the exact restored live prompt hash.
 - See `ANKI-v15.17-validation.md` for the completed pilot, approved rollback, capture limitations and outstanding mapping/import work. Completed and interrupted generation diagnostics can be saved privately from the UI, including original responses and their source snapshot; keep these files out of Git.
 
 ## Release checklist

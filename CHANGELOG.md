@@ -3,7 +3,7 @@
 All notable changes to the Nursing Study Suite.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-Detailed engineering rationale for each change — including rejected proposals and why — lives in `LATTE-v15-changelog.md`. This file is the summary.
+This file records release history. Deliberate engineering decisions live in `DECISIONS.md`; current evidence and open work live in `CURRENT_STATE.md`.
 
 Releases use the unified verifier for Babel parsing, regression assertions, prompt documentation, and all 11 frozen prompt hashes. Through v15.15, the constants retained their v14.x bytes. The approved v15.16 Anki prompt remains current after the v15.17 example experiment and its explicitly approved rollback.
 
@@ -11,7 +11,7 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ## [15.17] — 2026-09-11
 
-Available on `main` for user testing, with the exact pre-pilot Anki prompt restored. Actual Anki import verification remains outstanding; this update does not create a GitHub release.
+Published as the [latest GitHub release](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/tag/v15.17), with the exact pre-pilot Anki prompt restored. Actual Anki import verification remains outstanding.
 
 ### Fixed
 - Flat cloze structure now drives preview, index counting, numeric scanning, collisions, and export validation. Malformed delimiters, nesting, empty/nonpositive indices, and edits that insert pipes/newlines cannot silently export. Structural eligibility is independent of manual selection.
@@ -23,7 +23,7 @@ Available on `main` for user testing, with the exact pre-pilot Anki prompt resto
 - Warning-only exact numeric comparisons with honest checked/not-checked status, quote-only and unsupported-form findings; identical rendered-front groups distinguish possible ambiguity and redundancy.
 - Optional source-pointer footers in the existing pipe-delimited export, default off, with safe HTML/plain rendering and explicit unavailable sources.
 - Private raw-response diagnostics, including interrupted runs; a synthetic browser fixture and a read-only pilot planner.
-- Historical evidence for the example-only Anki prompt experiment and its failed live pilot. The candidate was applied and then rolled back under separate explicit approvals on 2026-09-11. Exact diffs: `ANKI-v15.17-example-proposal.diff` and `ANKI-v15.17-example-rollback.diff`.
+- Historical evidence for the example-only Anki prompt experiment and its failed live pilot. The candidate was applied and then rolled back under separate explicit approvals on 2026-09-11. Exact diffs: `docs/history/ANKI-v15.17-example-proposal.diff` and `docs/history/ANKI-v15.17-example-rollback.diff`.
 
 ### Validation
 - `node verify-repo.js`: 904 assertions (143 added), full JSX Babel transform, LF/version checks, generated prompt documentation, and all eleven frozen hashes pass after rollback. The restored live prompt and rejected candidate retain their measured hashes; historical example formulation checks remain covered. All eight CDN SRI pins rechecked and matched on 2026-09-11.
@@ -35,7 +35,7 @@ Available on `main` for user testing, with the exact pre-pilot Anki prompt resto
 
 ### Changed
 - **Approved Anki prompt revision:** consistent condition/topic and retrieval labels, article clues absorbed into clozes or removed through label phrasing, one independently gradable clinical pivot per review card, and a soft 15-word front target that never drops necessary qualifiers. Supporting mechanisms and contrasts stay source-grounded in Extra; substantive mechanisms still receive recall notes. Anti-redundancy rules now preserve separate notes when combining would reveal the target.
-- Only `ANKI_MASTER_PROMPT` receives a new baseline hash. [Exact prompt diff](ANKI-v15.16-prompt.diff); the other ten frozen constants remain unchanged.
+- Only `ANKI_MASTER_PROMPT` receives a new baseline hash. [Exact prompt diff](docs/history/ANKI-v15.16-prompt.diff); the other ten frozen constants remain unchanged.
 
 ### Added
 - **Review preview:** select a cloze index, reveal/hide its answer, and show Extra only after reveal. Same-index gaps hide together and other cloze answers remain visible. Generated text is rendered as inert text.
@@ -267,7 +267,7 @@ Instrumentation for the v16 decision. No behavior changed: `kbQuoteInSource` is 
 
 ### Why
 
-v16 has been blocked on the 20-page benchmark in `Nursing-Study-Suite-v16-spec.md` §11, and v15.9 could not answer its two most decision-relevant rows.
+v16 has been blocked on the 20-page benchmark in `docs/history/Nursing-Study-Suite-v16-spec.md` §11, and v15.9 could not answer its two most decision-relevant rows.
 
 The spec's §4 splits quote-verification failures into two populations that argue in opposite directions. *Hyphenation and ligature* failures are fixable by normalizing the matcher — cheap, no vision. *Column-major reading-order* failures are the ones the spec says only seeing the rendered page can fix. Which population dominates decides whether v16 gets built at all. `quoteMiss` was a single integer, and the quote strings were thrown away, so the split could not be measured.
 
@@ -488,4 +488,4 @@ Harness 98 → 307 assertions (356 as of v15.7). `Prompts.md` regenerated from l
 
 ## [14.x] — baseline
 
-Pre-release. The 15.x series began with a full production review of the 5,075-line v14 file; findings and adjudication are recorded in `LATTE-v14-code-review.md`.
+Pre-release. The 15.x series began with a full production review of the 5,075-line v14 file. The original review record is not included in this repository.

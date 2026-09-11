@@ -50,7 +50,7 @@ Read only the context relevant to the task, but do not skip a routed document:
 | Any application behavior, API, validation-tier, security, or architecture change | `DECISIONS.md` |
 | Ingestion, quote verification, cards, NCLEX extraction/generation, case generation, model settings, or release planning | `CURRENT_STATE.md` |
 | Prompt work | `Prompts.md`, `prompt-baseline.json`, and the prompt rules in `DEVELOPMENT.md` |
-| v16 or PDF vision proposal | `Nursing-Study-Suite-v16-spec.md` plus the source-profile decision in `CURRENT_STATE.md`; nothing in the spec is approved |
+| v16 or PDF vision proposal | `docs/history/Nursing-Study-Suite-v16-spec.md` plus the source-profile decision in `CURRENT_STATE.md`; nothing in the spec is approved |
 | Repository workflow, version bump, or unfamiliar part of the HTML | `DEVELOPMENT.md` |
 | End-user behavior | `README.md` |
 

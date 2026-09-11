@@ -35,7 +35,7 @@ if(require.main===module){
   const lines=result.stdout.split('\n');
   lines[0]='diff --git a/ANKI_MASTER_PROMPT b/ANKI_MASTER_PROMPT';
   for(let i=1;i<lines.length;i++){if(lines[i].startsWith('--- '))lines[i]='--- a/ANKI_MASTER_PROMPT';if(lines[i].startsWith('+++ '))lines[i]='+++ b/ANKI_MASTER_PROMPT';}
-  fs.writeFileSync(path.join(root,'ANKI-v15.17-example-proposal.diff'),lines.join('\n'));
-  console.log('Reproduced historical ANKI-v15.17-example-proposal.diff; rejected candidate, live prompt and baseline unchanged.');
+  fs.writeFileSync(path.join(root,'docs','history','ANKI-v15.17-example-proposal.diff'),lines.join('\n'));
+  console.log('Reproduced historical docs/history/ANKI-v15.17-example-proposal.diff; rejected candidate, live prompt and baseline unchanged.');
 }
 module.exports={buildAnkiExampleProposal};
