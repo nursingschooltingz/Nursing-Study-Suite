@@ -3917,6 +3917,72 @@ function ankiSelection(cards,current=true,tier='all'){
   const valid=scoped.filter(c=>!lintAnkiCard(c).length),kept=current?valid.filter(c=>c.keep):[];
   return {valid,kept,invalid:scoped.length-valid.length,manualExcluded:scoped.filter(c=>!c.keep).length,reviews:kept.reduce((n,c)=>n+clozeNums(c.text).length,0)};
 }
+// v15.17: Anki checks exact value/unit tokens in revealed text. The case validator's
+// substring/instantiation semantics are intentionally unchanged; they serve a different task.
+function ankiNumericText(value){
+  return String(value||'').toLowerCase().replace(/[µμ]g/g,'mcg')
+    .replace(/\bmicrograms?\b/g,'mcg').replace(/\bmilligrams?\b/g,'mg')
+    .replace(/\bkilograms?\b/g,'kg').replace(/\bgrams?\b/g,'g')
+    .replace(/\bmillilit(?:er|re)s?\b/g,'ml').replace(/\blit(?:er|re)s?\b/g,'l')
+    .replace(/\bmilliequivalents?\b/g,'meq').replace(/\bmillimoles?\b/g,'mmol')
+    .replace(/\b(?:international\s+units?|iu|u|units?)\b/g,'unit')
+    .replace(/\bbeats?\s*(?:per|\/)\s*min(?:ute)?s?\b/g,'bpm')
+    .replace(/\bbreaths?\s*(?:per|\/)\s*min(?:ute)?s?\b/g,'breath/min')
+    .replace(/\bmm\s*hg\b/g,'mmhg').replace(/\bhours?\b/g,'hr').replace(/\bminutes?\b/g,'min')
+    .replace(/\bseconds?\b/g,'sec').replace(/\bpounds?\b/g,'lb').replace(/\bpercent\b/g,'%')
+    .replace(/\bper\b/g,'/').replace(/\u00a0/g,' ');
+}
+function ankiDecimal(value){
+  const raw=String(value).replace(/,/g,''),negative=raw.startsWith('-');
+  const [whole,decimal='']=raw.replace(/^[+-]/,'').split('.');
+  const normalized=(whole.replace(/^0+(?=\d)/,'')||'0')+(decimal.replace(/0+$/,'')?'.'+decimal.replace(/0+$/,''):'');
+  return (negative&&normalized!=='0'?'-':'')+normalized;
+}
+const ANKI_NUMBER_PART=String.raw`[+-]?(?:\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?|\.\d+)`;
+const ANKI_UNIT_PART=String.raw`(?!(?:to)\b)(?:[a-z°]+|%)(?:\s*\/\s*[a-z]+)*`;
+const ANKI_SUPPORTED_UNIT=/^(?:mcg|mg|g|kg|ml|l|meq|mmol|unit|lb|oz|bpm|mmhg|breath|hr|min|sec|day|week|month|year|cm|mm|°c|°f|%)(?:\/(?:kg|ml|l|dl|hr|min|sec|day|dose|m2))*$/;
+function ankiNumericTokens(value){
+  const text=ankiNumericText(value),tokens=[],unsupported=[],blocked=[];
+  // Recognized unsupported forms are blocked before tokenizing so a fraction/scientific
+  // expression cannot donate a misleading matching suffix such as the 2 in 1/2 mg.
+  const unusual=/(?<![\w.])(?:\d+(?:\.\d+)?\s*(?:e[+-]?\d+|[x×]\s*10\s*\^?\s*[+-]?\d+)|\d+(?:\s+\d+)?\s*\/\s*\d+|\d+[⁰¹²³⁴⁵⁶⁷⁸⁹]+)(?:\s*[a-z%°]+(?:\/[a-z]+)*)?/gi;
+  for(const m of text.matchAll(unusual)){blocked.push([m.index,m.index+m[0].length]);unsupported.push(m[0]);}
+  const re=new RegExp('(?<![\\w.,])('+ANKI_NUMBER_PART+')\\s*('+ANKI_UNIT_PART+')?(?:\\s*(?:[–—-]|\\bto\\b)\\s*('+ANKI_NUMBER_PART+')\\s*('+ANKI_UNIT_PART+')?)?(?![\\w,]|\\.\\d)','g');
+  for(const m of text.matchAll(re)){
+    if(blocked.some(([a,b])=>m.index<b&&m.index+m[0].length>a))continue;
+    const firstUnit=(m[2]||m[4]||'').replace(/\s+/g,''),secondUnit=(m[4]||m[2]||'').replace(/\s+/g,'');
+    const values=[[m[1],firstUnit],...(m[3]?[[m[3],secondUnit]]:[])];
+    if(values.some(([,u])=>!ANKI_SUPPORTED_UNIT.test(u))){unsupported.push(m[0].trim());continue;}
+    for(const [n,u] of values)tokens.push({value:ankiDecimal(n),unit:u,key:ankiDecimal(n)+' '+u,raw:m[0].trim()});
+  }
+  // Ungrouped commas and other leftover numerals must never yield a silent clean result.
+  const remainder=text.replace(unusual,m=>' '.repeat(m.length)).replace(re,m=>' '.repeat(m.length));
+  for(const m of remainder.matchAll(/(?<![\w.])\d[\d,.:^]*/g))unsupported.push(m[0]);
+  return {tokens,unsupported:[...new Set(unsupported)]};
+}
+function ankiNumericAudit(card,batch,current){
+  const findings=[],notChecked=reason=>({status:'Not checked',checked:0,findings:[{code:'not-checked',msg:reason}]});
+  if(!current||!batch)return notChecked('Earlier or unavailable Knowledge Base.');
+  if(lintAnkiCard(card).length)return notChecked('Correct the note structure first.');
+  const ids=ankiLinkedIds(card,batch.snapshot);
+  if(!ids.length)return notChecked('No valid source mapping.');
+  const parsed=ankiNumericTokens(ankiPreviewText(card.text,0,true)+' '+ankiPreviewText(card.extra,0,true));
+  const supported=new Set(),quoted=new Set();
+  for(const id of ids){
+    const fact=batch.snapshot.byId[id],ft=ankiNumericTokens(fact.text);
+    ft.tokens.forEach(t=>supported.add(t.key));
+    ankiNumericTokens(fact.sourceQuote).tokens.forEach(t=>quoted.add(t.key));
+    if(ft.unsupported.length)findings.push({code:'unsupported-source',msg:id+': source numeric form needs review ('+ft.unsupported.join('; ')+').'});
+  }
+  if((card.mappingIssues||[]).length||ids.length!==(card.factIds||[]).length)findings.push({code:'partial-mapping',msg:'Only valid source links were compared; some mapping edges are invalid.'});
+  for(const form of parsed.unsupported)findings.push({code:'unsupported-form',msg:'Unsupported numeric form: '+form+'. Review the source.'});
+  for(const token of parsed.tokens){
+    if(supported.has(token.key))continue;
+    findings.push(quoted.has(token.key)?{code:'quote-only',msg:token.key+': Found only in source quote; review source.'}:{code:'numeric-discrepancy',msg:token.key+': no exact value/unit occurrence in linked fact text.'});
+  }
+  const status=findings.some(x=>x.code==='numeric-discrepancy')?'Numeric discrepancy':findings.length?'Source review needed':parsed.tokens.length?'No numeric mismatch detected':'No supported numeric values found';
+  return {status,checked:parsed.tokens.length,findings};
+}
 function ankiStyleWarnings(card){
   const text=String(card.text||''),issues=[],indices=clozeNums(text);
   if(/\b(?:a|an)\s+\{\{c\d+::/i.test(text))issues.push({code:'article-clue',msg:'Possible article clue: move a/an inside the cloze or use a short label.'});
@@ -3934,6 +4000,14 @@ function ankiReviewFilter(cards,tier,styleOnly){
 }
 function AnkiStyleBadges({issues}){
   return issues.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:4,marginTop:5}}>{issues.map(x=><span key={x.code} title={x.msg} style={{fontSize:10,color:'var(--accent-warm)'}}>⚠ {x.msg}</span>)}</div>;
+}
+function AnkiNoteDiagnostics({card,audit,current}){
+  return <details style={{fontSize:12,marginTop:6,color:audit.findings.length?'var(--accent-warm)':'var(--text-dim)'}}>
+    <summary>{audit.status} · {audit.checked} numeric tokens checked</summary>
+    {audit.findings.map((x,i)=><div key={i}>{x.msg}</div>)}
+    <div>Source association (retained after edits): {current?(card.factIds||[]).map(id=><FactTag key={id} factId={id}/>):'earlier KB; links inactive'}{current&&!(card.factIds||[]).length&&'unavailable'}</div>
+    <div>Checks value/unit occurrence only; comparators, roles, and clinical meaning still need review.</div>
+  </details>;
 }
 function AnkiReviewCard({card}){
   const parsed=parseAnkiClozes(card.text),indices=parsed.issues.length?[]:parsed.indices;
@@ -3981,6 +4055,7 @@ function AnkiGenerator(){
   const current=!!batch&&batch.sourceKB===K.knowledgeBase;
   const coverage=useMemo(()=>ankiBatchSummary(cards,batch,current),[cards,batch,current]);
   const selected=useMemo(()=>ankiSelection(cards,current,tierFilter),[cards,current,tierFilter]);
+  const numericAudits=useMemo(()=>new Map(cards.map(c=>[c.id,ankiNumericAudit(c,batch,current)])),[cards,batch,current]);
   const registerAnki=K.registerArtifact;
   // v15.17: generation-only publication left stale entries after edits/deletion. This
   // effect uses stable dependencies and replaces only Anki entries, across every tier.
@@ -4217,13 +4292,13 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
         </div>
 
         {view==='table'&&<div className="anki-tbl-wrap"><table><thead><tr><th style={{width:36}}>✓</th><th style={{width:38}}>Tier</th><th>Text</th><th style={{width:'16%'}}>Extra</th><th style={{width:'16%'}}>Tags</th><th style={{width:36}}></th></tr></thead><tbody>
-          {displayedCards.map(c=><tr key={c.id} className={c.keep?'':'dim'} style={c.lint&&c.lint.length?{boxShadow:'inset 3px 0 0 var(--accent-red)'}:undefined} title={c.lint&&c.lint.length?('Lint: '+c.lint.map(x=>LINT_LABEL[x]||x).join(', ')):undefined}><td><input type="checkbox" checked={c.keep} onChange={()=>toggle(c.id)} style={{accentColor:'var(--accent)'}}/></td><td><TierBadge tier={getTier(c.tags)}/>{c.lint&&c.lint.length>0&&<span style={{color:'var(--accent-red)',fontSize:11,fontWeight:700,marginLeft:3}}>!</span>}</td><td><textarea className="cell-ta" value={c.text} rows={2} onChange={e=>updateField(c.id,'text',e.target.value)}/><AnkiStyleBadges issues={ankiStyleWarnings(c)}/></td><td><textarea className="cell-ta" value={c.extra} rows={2} onChange={e=>updateField(c.id,'extra',e.target.value)}/></td><td><textarea className="cell-ta tags-ta" value={c.tags} rows={2} onChange={e=>updateField(c.id,'tags',e.target.value)}/></td><td><button style={{background:'none',border:'none',color:'var(--text-dim)',cursor:'pointer',fontSize:13}} onClick={()=>del(c.id)}>×</button></td></tr>)}
+          {displayedCards.map(c=><tr key={c.id} className={c.keep?'':'dim'} style={c.lint&&c.lint.length?{boxShadow:'inset 3px 0 0 var(--accent-red)'}:undefined} title={c.lint&&c.lint.length?('Lint: '+c.lint.map(x=>LINT_LABEL[x]||x).join(', ')):undefined}><td><input type="checkbox" checked={c.keep} onChange={()=>toggle(c.id)} style={{accentColor:'var(--accent)'}}/></td><td><TierBadge tier={getTier(c.tags)}/>{c.lint&&c.lint.length>0&&<span style={{color:'var(--accent-red)',fontSize:11,fontWeight:700,marginLeft:3}}>!</span>}</td><td><textarea className="cell-ta" value={c.text} rows={2} onChange={e=>updateField(c.id,'text',e.target.value)}/><AnkiStyleBadges issues={ankiStyleWarnings(c)}/><AnkiNoteDiagnostics card={c} audit={numericAudits.get(c.id)} current={current}/></td><td><textarea className="cell-ta" value={c.extra} rows={2} onChange={e=>updateField(c.id,'extra',e.target.value)}/></td><td><textarea className="cell-ta tags-ta" value={c.tags} rows={2} onChange={e=>updateField(c.id,'tags',e.target.value)}/></td><td><button style={{background:'none',border:'none',color:'var(--text-dim)',cursor:'pointer',fontSize:13}} onClick={()=>del(c.id)}>×</button></td></tr>)}
         </tbody></table></div>}
 
         {view==='list'&&displayedCards.map(c=><div key={c.id} style={{display:'flex',gap:8,padding:'10px 12px',background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:6,marginBottom:4,fontSize:12,opacity:c.keep?1:.35}}>
           <input type="checkbox" checked={c.keep} onChange={()=>toggle(c.id)} style={{accentColor:'var(--accent)',marginTop:2}}/>
           <TierBadge tier={getTier(c.tags)}/>
-          <div style={{flex:1,minWidth:0}}><div style={{fontFamily:'JetBrains Mono',fontSize:11,lineHeight:1.5,wordBreak:'break-word'}}>{c.text}</div><AnkiStyleBadges issues={ankiStyleWarnings(c)}/>{c.extra&&<div style={{fontSize:10,color:'var(--text-dim)',marginTop:2}}>Extra: {c.extra}</div>}{c.tags&&<div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:4}}>{c.tags.split(/\s+/).map((t,j)=><span key={j} style={{fontSize:8,padding:'1px 6px',borderRadius:8,background:'var(--bg-card-alt)',color:'var(--text-dim)',border:'1px solid var(--border)'}}>{t}</span>)}</div>}{c.lint&&c.lint.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:4}}>{c.lint.map((x,j)=><span key={j} style={{fontSize:8,padding:'1px 6px',borderRadius:8,background:'rgba(248,113,113,.1)',color:'var(--accent-red)',border:'1px solid rgba(248,113,113,.3)'}}>{LINT_LABEL[x]||x}</span>)}</div>}{c.abbrev&&c.abbrev.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:4}}>{c.abbrev.map((x,j)=><span key={j} title={x} style={{fontSize:8,padding:'1px 6px',borderRadius:8,background:'rgba(240,168,58,.1)',color:'var(--accent-warm)',border:'1px solid rgba(240,168,58,.3)'}}>unsafe abbreviation</span>)}</div>}</div>
+          <div style={{flex:1,minWidth:0}}><div style={{fontFamily:'JetBrains Mono',fontSize:11,lineHeight:1.5,wordBreak:'break-word'}}>{c.text}</div><AnkiStyleBadges issues={ankiStyleWarnings(c)}/><AnkiNoteDiagnostics card={c} audit={numericAudits.get(c.id)} current={current}/>{c.extra&&<div style={{fontSize:10,color:'var(--text-dim)',marginTop:2}}>Extra: {c.extra}</div>}{c.tags&&<div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:4}}>{c.tags.split(/\s+/).map((t,j)=><span key={j} style={{fontSize:8,padding:'1px 6px',borderRadius:8,background:'var(--bg-card-alt)',color:'var(--text-dim)',border:'1px solid var(--border)'}}>{t}</span>)}</div>}{c.lint&&c.lint.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:4}}>{c.lint.map((x,j)=><span key={j} style={{fontSize:8,padding:'1px 6px',borderRadius:8,background:'rgba(248,113,113,.1)',color:'var(--accent-red)',border:'1px solid rgba(248,113,113,.3)'}}>{LINT_LABEL[x]||x}</span>)}</div>}{c.abbrev&&c.abbrev.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:4}}>{c.abbrev.map((x,j)=><span key={j} title={x} style={{fontSize:8,padding:'1px 6px',borderRadius:8,background:'rgba(240,168,58,.1)',color:'var(--accent-warm)',border:'1px solid rgba(240,168,58,.3)'}}>unsafe abbreviation</span>)}</div>}</div>
           <button style={{background:'none',border:'none',color:'var(--text-dim)',cursor:'pointer',fontSize:13,flexShrink:0}} onClick={()=>del(c.id)}>×</button>
         </div>)}
       </div>}
@@ -4232,7 +4307,7 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
       {cards.length>0&&view==='preview'&&<div style={{display:'grid',gap:10}}>{displayedCards.map(c=><div key={c.id} style={{padding:12,background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:8,opacity:c.keep?1:.5}}>
         <div style={{display:'flex',gap:8,alignItems:'center'}}><label style={{fontSize:12}}><input type="checkbox" checked={c.keep} onChange={()=>toggle(c.id)}/> Keep</label><TierBadge tier={getTier(c.tags)}/><button className="btn-secondary" style={{marginLeft:'auto',padding:'3px 9px'}} onClick={()=>setView('table')}>Edit in Table</button></div>
         <AnkiReviewCard card={c}/>
-        <AnkiStyleBadges issues={ankiStyleWarnings(c)}/>
+        <AnkiStyleBadges issues={ankiStyleWarnings(c)}/><AnkiNoteDiagnostics card={c} audit={numericAudits.get(c.id)} current={current}/>
         {(c.lint||[]).length>0&&<div style={{color:'var(--accent-red)',fontSize:11,marginTop:5}}>Structural lint: {c.lint.map(x=>LINT_LABEL[x]||x).join(', ')}</div>}
         {(c.abbrev||[]).map((msg,i)=><div key={i} style={{color:'var(--accent-warm)',fontSize:11,marginTop:5}}>{msg}</div>)}
       </div>)}</div>}

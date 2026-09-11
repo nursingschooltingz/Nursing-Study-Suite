@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 815;
+const EXPECTED_ASSERTIONS = 849;
 
 let file;
 try {
@@ -2154,7 +2154,7 @@ function ankiSyntheticFixture(){
   return {kb,cards,chunkIds,ledgers,note};
 }
 const ankiHelperSource=spanFrom('function ankiParseCards(raw','function AnkiStyleBadges');
-const ANKI=new Function('uid',ankiHelperSource.slice(0,ankiHelperSource.lastIndexOf('function AnkiStyleBadges'))+';return {ankiParseCards,parseKBCoverage,ankiSourceSnapshot,ankiChunkFactIds,attachCoverageToCards,ankiDedupeCards,ankiRunIsCurrent,ankiBatchSummary,ankiSelection,ankiReviewFilter,ankiPreviewText};')(()=> 'synthetic-'+Math.random());
+const ANKI=new Function('uid',ankiHelperSource.slice(0,ankiHelperSource.lastIndexOf('function AnkiStyleBadges'))+';return {ankiParseCards,parseKBCoverage,ankiSourceSnapshot,ankiChunkFactIds,attachCoverageToCards,ankiDedupeCards,ankiRunIsCurrent,ankiBatchSummary,ankiSelection,ankiReviewFilter,ankiPreviewText,ankiNumericTokens,ankiNumericAudit};')(()=> 'synthetic-'+Math.random());
 section('v15.17 — batch provenance and live counts');
 {
   const F=ankiSyntheticFixture(),snapshot=ANKI.ankiSourceSnapshot(F.kb),original=JSON.stringify(F.kb);
@@ -2202,6 +2202,39 @@ section('v15.17 — batch provenance and live counts');
   const unmapped=[F.note('none','[Example] Finding: {{c1::answer}}')];
   t('missing mapping is diagnosed yet note stays exportable',ANKI.attachCoverageToCards(unmapped,[],snapshot,F.chunkIds).some(x=>x.code==='no-mapping')&&ANKI.ankiSelection(unmapped).kept.length===1);
   t('helper extraction reaches a non-vacuous tail',ANKI.ankiReviewFilter(dedup,'3',false).length===0);
+}
+
+section('v15.17 — advisory numeric consistency');
+{
+  const F=ankiSyntheticFixture(),batch={snapshot:ANKI.ankiSourceSnapshot(F.kb)};
+  const card=(text,id='fact-1',extra='')=>({...F.note('numeric','[Example] Value: '+text),factIds:id?[id]:[],extra});
+  const audit=(text,id,extra)=>ANKI.ankiNumericAudit(card(text,id,extra),batch,true);
+  t('60 bpm source versus 50 bpm card warns',audit('{{c1::50 bpm}}').status==='Numeric discrepancy');
+  t('150 mg source does not support substring 50 mg',audit('{{c1::50 mg}}','fact-2').status==='Numeric discrepancy');
+  t('exact value and unit match is reported narrowly',audit('{{c1::150 mg}}','fact-2').status==='No numeric mismatch detected');
+  t('cloze boundary placement has identical numeric assessment',JSON.stringify(audit('{{c1::50}} bpm'))===JSON.stringify(audit('{{c1::50 bpm}}')));
+  const tokens=x=>ANKI.ankiNumericTokens(x).tokens.map(t=>t.key).join(';');
+  for(const [a,b] of [['.5 mg','0.5 mg'],['5.0 mg','5 mg'],['005.00 mg','5 mg'],['5,000 U','5000 units'],['50 µg','50 mcg'],['50 μg','50 micrograms'],['2 milliliters per hour','2 mL/hr'],['60 beats per minute','60 bpm']])t('notation equivalence: '+a,tokens(a)===tokens(b)&&tokens(a)!=='');
+  t('units are distinct, without automatic conversion',tokens('50 mg')!==tokens('50 mcg')&&tokens('30 mL')!==tokens('30 mL/hr'));
+  t('compound units remain complete',tokens('2 mcg/kg/min')==='2 mcg/kg/min'&&tokens('5 mg/dL')==='5 mg/dl');
+  t('range endpoints inherit trailing unit',tokens('5–10 mg')==='5 mg;10 mg');
+  t('explicit endpoint units and to notation are supported',tokens('5 mg to 10 mg')==='5 mg;10 mg'&&tokens('5 to 10 mg')==='5 mg;10 mg');
+  t('decimal comparison preserves arbitrary supplied precision',tokens('1.12345678901234567890 mg')==='1.1234567890123456789 mg');
+  for(const text of ['1/2 mg','1e3 mg','5 × 10^9/L','120/80','50 widgets','1,50 mg'])t('unsupported form requires source review: '+text,ANKI.ankiNumericTokens(text).unsupported.length>0);
+  t('quote-only support never claims checked fact support',audit('{{c1::55 bpm}}').status==='Source review needed'&&audit('{{c1::55 bpm}}').findings.some(x=>x.code==='quote-only'));
+  t('no mapping remains not checked',audit('{{c1::60 bpm}}',null).status==='Not checked');
+  t('partial mappings report limited support',ANKI.ankiNumericAudit({...card('{{c1::60 bpm}}'),mappingIssues:[{code:'unknown-id'}]},batch,true).status==='Source review needed');
+  t('invalid cloze is not numerically checked',audit('{{c1::60 bpm').status==='Not checked');
+  t('earlier KB is never used for numeric checks',ANKI.ankiNumericAudit(card('{{c1::60 bpm}}'),batch,false).status==='Not checked');
+  t('notes with no numbers have an explicit no-values status',audit('{{c1::pulse}}').status==='No supported numeric values found');
+  t('Extra is included in numeric assessment',audit('{{c1::pulse}}','fact-1','Threshold 50 bpm').status==='Numeric discrepancy');
+  const before=JSON.stringify(F.kb),beforeCard=card('{{c1::50 bpm}}');const frozen=JSON.stringify(beforeCard);ANKI.ankiNumericAudit(beforeCard,batch,true);
+  t('numeric warnings leave source and selection bytes untouched',JSON.stringify(F.kb)===before&&JSON.stringify(beforeCard)===frozen&&beforeCard.keep);
+  t('known limit: occurrence checks cannot distinguish below from above',audit('Above {{c1::60 bpm}}').status==='No numeric mismatch detected');
+  const roleBatch={snapshot:ANKI.ankiSourceSnapshot({conditions:[{facts:[{id:'fact-1',text:'Morning 5 mg; evening 10 mg.'}]}]})};
+  t('known limit: supported values can be assigned the wrong roles',ANKI.ankiNumericAudit(card('Morning {{c1::10 mg}}; evening {{c2::5 mg}}'),roleBatch,true).status==='No numeric mismatch detected');
+  const rangeBatch={snapshot:ANKI.ankiSourceSnapshot({conditions:[{facts:[{id:'fact-1',text:'Range 5–10 mg.'}]}]})};
+  t('range comparison checks the second endpoint',ANKI.ankiNumericAudit(card('{{c1::5–12 mg}}'),rangeBatch,true).findings.some(x=>x.code==='numeric-discrepancy'&&x.msg.startsWith('12 mg')));
 }
 
 /* ── v15.17: shared flat cloze parser and live eligibility ── */
