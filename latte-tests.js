@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 864;
+const EXPECTED_ASSERTIONS = 899;
 
 let file;
 try {
@@ -1996,7 +1996,7 @@ section('v15.8 — Phase 2 fixes');
 {
   t('Anki edits recompute lint',S.includes('next.lint=lintAnkiCard(next);'));
   t('Anki edits recompute the abbreviation scan',S.includes("ankiUnsafeAbbrevScan(next.text,'Text',found);"));
-  t('edits retain manual selection and derive structural eligibility',S.includes('const kept=ankiSelection(cards,current,tierFilter).kept;')&&!S.includes('if(hadLint&&!next.lint.length)next.keep=true;'));
+  t('edits retain manual selection and derive structural eligibility',S.includes('const text=ankiExportText(cards,batch,current,tierFilter,ankiHeader,includeSources);')&&!S.includes('if(hadLint&&!next.lint.length)next.keep=true;'));
   t('abbrev findings never flip keep',!S.includes('next.abbrev.length)next.keep'));
 }
 
@@ -2124,9 +2124,9 @@ section('v15.16 — Anki preview and style checks');
   t('clearing style warnings never rechecks a manually excluded note',edited[0].keep===false);
   // Capture the actual export callback using a tiny Blob recorder; no file download
   // or Gemini call occurs. A review-only filter must not shrink exported coverage.
-  const exportSource=spanFrom('const exportTxt=useCallback(', '  },[cards,current,tierFilter,ankiHeader]);', 'function AnkiGenerator()');
+  const exportSource=spanFrom('const exportTxt=useCallback(', '  },[cards,batch,current,tierFilter,ankiHeader,includeSources]);', 'function AnkiGenerator()');
   let exported='';
-  const makeExport=(cards,filtered,tier,header)=>new Function('cards','filteredCards','tierFilter','ankiHeader','downloadBlob','useCallback','Blob',helpers+'const current=true;'+exportSource+';return exportTxt;')(
+  const makeExport=(cards,filtered,tier,header)=>new Function('cards','filteredCards','tierFilter','ankiHeader','downloadBlob','useCallback','Blob',helpers+'const current=true,batch=null,includeSources=false;'+exportSource+';return exportTxt;')(
     cards,filtered,tier,header,b=>{exported=b.body;},fn=>fn,class{constructor(parts){this.body=parts.join('');}});
   makeExport(notes,notes,'all',false)();
   t('export keeps clean and warned notes regardless of review filter',exported.split('\n').length===2&&exported.includes(good.text)&&exported.includes(weak.text));
@@ -2154,7 +2154,7 @@ function ankiSyntheticFixture(){
   return {kb,cards,chunkIds,ledgers,note};
 }
 const ankiHelperSource=spanFrom('function ankiParseCards(raw','function AnkiStyleBadges');
-const ANKI=new Function('uid',ankiHelperSource.slice(0,ankiHelperSource.lastIndexOf('function AnkiStyleBadges'))+';return {ankiParseCards,parseKBCoverage,ankiSourceSnapshot,ankiChunkFactIds,attachCoverageToCards,ankiDedupeCards,ankiRunIsCurrent,ankiBatchSummary,ankiSelection,ankiReviewFilter,ankiPreviewText,ankiNumericTokens,ankiNumericAudit,ankiCollisionGroups,ankiBatchDiagnostics};')(()=> 'synthetic-'+Math.random());
+const ANKI=new Function('uid',ankiHelperSource.slice(0,ankiHelperSource.lastIndexOf('function AnkiStyleBadges'))+';return {ankiParseCards,parseKBCoverage,ankiSourceSnapshot,ankiChunkFactIds,attachCoverageToCards,ankiDedupeCards,ankiRunIsCurrent,ankiBatchSummary,ankiSelection,ankiReviewFilter,ankiPreviewText,ankiNumericTokens,ankiNumericAudit,ankiCollisionGroups,ankiBatchDiagnostics,ankiSourcePointers,ankiExportText,ankiRunEvidence,lintAnkiCard,ankiStyleWarnings,parseAnkiClozes};')(()=> 'synthetic-'+Math.random());
 section('v15.17 — batch provenance and live counts');
 {
   const F=ankiSyntheticFixture(),snapshot=ANKI.ankiSourceSnapshot(F.kb),original=JSON.stringify(F.kb);
@@ -2202,6 +2202,10 @@ section('v15.17 — batch provenance and live counts');
   const unmapped=[F.note('none','[Example] Finding: {{c1::answer}}')];
   t('missing mapping is diagnosed yet note stays exportable',ANKI.attachCoverageToCards(unmapped,[],snapshot,F.chunkIds).some(x=>x.code==='no-mapping')&&ANKI.ankiSelection(unmapped).kept.length===1);
   t('helper extraction reaches a non-vacuous tail',ANKI.ankiReviewFilter(dedup,'3',false).length===0);
+  t('fractional and suffixed line references are invalid destinations',Number.isNaN(ANKI.parseKBCoverage('fact-1 -> line #1.5')[0].line)&&Number.isNaN(ANKI.parseKBCoverage('fact-1 -> line #1abc')[0].line));
+  F.kb.conditions[0].facts[0].text='mutated';F.kb.conditions[0].facts[0].sources[0].filename='mutated';
+  t('batch snapshot does not alias mutable source fact or pointer objects',snapshot.facts[0].text.includes('60 bpm')&&snapshot.facts[0].sources[0].filename.startsWith('Synthetic'));
+
 }
 
 section('v15.17 — advisory numeric consistency');
@@ -2261,6 +2265,78 @@ section('v15.17 — rendered-front collisions and raw diagnostics');
   t('raw style denominator and truncation remain explicit',D.frontAnchor.withText===4&&D.frontAnchor.warned===0&&D.truncated);
   t('current tier workload counts reviews rather than notes',D.current.byTier[0].notes===2&&D.current.byTier[0].reviews===3);
   t('stale raw diagnostics never claim numeric checks',ANKI.ankiBatchDiagnostics(cards,batch,false).numeric.checkedNotes===0);
+}
+
+section('v15.17 — optional source footers');
+{
+  const F=ankiSyntheticFixture(),snapshot=ANKI.ankiSourceSnapshot(F.kb),batch={snapshot},c={...F.cards[0],factIds:['fact-1','fact-2'],extra:'Original <extra> & explanation'};
+  const before=JSON.stringify({c,snapshot});
+  const output=(html=false,refs=false,cards=[c],current=true)=>ANKI.ankiExportText(cards,batch,current,'all',html,refs);
+  t('source option off preserves the original three-field bytes',output()===c.text+'|'+c.extra+'|'+c.tags);
+  t('all distinct source pairs survive and duplicates are removed',ANKI.ankiSourcePointers(c,batch,true).length===2);
+  const plain=output(false,true),html=output(true,true);
+  t('plain source footer uses inline separators without added markup',plain.includes(' — Source: Synthetic <notes> & examples / only, handout, page 1; Synthetic doses, page 2')&&!plain.includes('<br>'));
+  t('HTML Extra and metadata escape separately around one trusted break',html.includes('Original &lt;extra&gt; &amp; explanation<br>Source: Synthetic &lt;notes&gt; &amp; examples / only, handout')&&html.split('<br>').length===2);
+  t('metadata pipes and newlines cannot create extra fields or rows',plain.split('|').length===3&&plain.split('\n').length===1&&html.split('\n').length===5);
+  t('source quotes are absent from pointer export',!plain.includes('Source also says 55 bpm'));
+  t('HTML headers retain the existing import contract',html.startsWith('#separator:Pipe\n#html:true\n#notetype:Cloze\n#tags column:3\n'));
+  t('current unmapped notes explicitly export unavailable sources',output(false,true,[{...c,factIds:[]}]).includes('Source: unavailable'));
+  t('repeated export never appends duplicate footers or mutates state',output(true,true)===html&&JSON.stringify({c,snapshot})===before);
+  t('stale batches cannot export or borrow source pointers',output(false,true,[c],false)===''&&ANKI.ankiSourcePointers(c,batch,false).length===0);
+  t('a pipe introduced after generation cannot bypass export validation',output(false,true,[{...c,text:c.text+'|broken'}])==='');
+  t('a newline introduced after generation cannot bypass export validation',output(false,true,[{...c,extra:'broken\nfield'}])==='');
+  const comparator={...c,text:'[Example] Threshold: {{c1::<60 & >40}}'};
+  t('source export preserves cloze braces and escaped comparisons',output(true,true,[comparator]).includes('{{c1::&lt;60 &amp; &gt;40}}'));
+  t('empty Extra gains a footer with no stray separator',output(true,true,[{...c,extra:''}]).includes('}}|Source:')&&!output(true,true,[{...c,extra:''}]).includes('<br>'));
+  t('tier filter still selects export while source option is on',ANKI.ankiExportText([c,{...c,id:'tier2',tags:'Tier::2'}],batch,true,'2',false,true).split('\n').length===1);
+  const D=ANKI.ankiBatchDiagnostics([],{...batch,rawCards:F.cards,postDedupeNotes:3},true);
+  t('deletion cannot rewrite the original post-dedupe baseline count',D.postDedupeNotes===3&&D.current.keptNotes===0);
+}
+
+section('v15.17 — proposal examples and replay evidence');
+{
+  const {buildAnkiExampleProposal}=require('./tools/anki-example-proposal');
+  const proposal=buildAnkiExampleProposal(S);
+  const prompt=new Function(proposal.proposed+';return ANKI_MASTER_PROMPT;')();
+  const rows=prompt.match(/\[Example(?:Medication-A|Condition-B)\][^\n]*?Tier::[123]\b/g)||[];
+  const facts=[
+    {id:'fact-1',text:'Before ExampleMedication-A, count the pulse for one full minute.',tier:1,latteBucket:'Assess'},
+    {id:'fact-2',text:'Hold ExampleMedication-A when pulse is below 60 bpm.',tier:1,latteBucket:'Treatments'},
+    {id:'fact-3',text:'Report weight gain of 2 lb in 24 hours with ExampleCondition-B.',tier:1,latteBucket:'Educate'},
+    {id:'fact-4',text:'ExampleMedication-A blocks the fictional Receptor-Z.',tier:1,latteBucket:'Treatments'},
+    {id:'fact-5',text:'ExampleCondition-B has an erythematous plaque as its lesion type.',tier:2,latteBucket:'Look'}
+  ];
+  const batch={snapshot:ANKI.ankiSourceSnapshot({conditions:[{facts}]})},ids=['fact-5','fact-1','fact-2','fact-3','fact-4'];
+  const notes=rows.map((row,i)=>({...ANKI.ankiParseCards(row).cards[0],factIds:[ids[i]]}));
+  t('all five complete examples come from the actual proposed prompt',rows.length===5&&notes.every(c=>c.text&&c.pipeCount===2));
+  t('proposed examples have valid flat structure and no style warnings',notes.every(c=>ANKI.lintAnkiCard(c).length===0&&ANKI.ankiStyleWarnings(c).length===0));
+  t('proposed examples retain supplied LATTE and Tier tags',notes.every(c=>{const f=batch.snapshot.byId[c.factIds[0]];return c.tags.includes('Nursing::LATTE::'+f.bucket)&&c.tags.includes('Tier::'+f.tier);}));
+  t('proposed examples have no numeric findings against their fictional facts',notes.every(c=>ANKI.ankiNumericAudit(c,batch,true).findings.length===0));
+  t('proposed examples have no identical rendered fronts',ANKI.ankiCollisionGroups(notes).length===0);
+  t('fictional examples are explicitly excluded from generated source material',prompt.includes('fictional; never source material for the generated deck'));
+  t('preparing the proposal does not change the shipped frozen declaration',S.includes(proposal.original)&&!S.includes(proposal.proposed));
+  const fixturePage=require('./tools/anki-browser-fixture').page();
+  t('browser fixture mounts real generator and blocks live network calls',fixturePage.includes('<AnkiGenerator/>')&&fixturePage.includes('window.fetch=()=>Promise.reject')&&fixturePage.includes('<SyntheticAnkiApp/>'));
+  const evidence=ANKI.ankiRunEvidence({model:'synthetic',thinkingLevel:'low',snapshot:batch.snapshot,rawResponses:['complete response'],partialResponse:'partial',apiKey:'MUST-NOT-RETAIN',ctl:new AbortController()},'cancelled');
+  t('interrupted evidence retains raw responses and cancellation status',evidence.status==='cancelled'&&evidence.rawResponses.length===1&&evidence.partialResponse==='partial');
+  t('private replay evidence excludes credentials and mutable controllers',!JSON.stringify(evidence).includes('MUST-NOT-RETAIN')&&!('ctl' in evidence));
+}
+
+section('v15.17 — unchanged generation inputs and bounded pilot');
+{
+  // Source hashes measured at the clean A0 checkout 21fb598; no baseline is refreshed here.
+  const inputs=[
+    ['source packet','function kbForAnki(kb){','// ── KB source chunking','abf40adde002b03587eefe395958ec67de14c7bec5c1fee5db600cc527e74a71'],
+    ['chunking','function splitOversizedConditionBlock(block,max){','function ankiParseCards(raw','b3d15fb1e63a7b1cdd49eb105db827debac59bd0340c282fdae5049989e42002'],
+    ['focus block','  function buildFocusBlock(){','  const run=useCallback(async()=>{','b096b8eb8733da287a097a99ede3f3e233d8e413c01bdf5605376f516054094f'],
+    ['mapping adapter','        const kbAdapter=','        parts.push({text:ANKI_MASTER_PROMPT','5cc837d1317a87d3d58d2bc6ed7afef835dbace0b6d089167e83b354863b3836']
+  ];
+  const {sha256}=require('./tools/repo-checks');
+  for(const [name,start,end,hash] of inputs){const a=S.indexOf(start,name==='focus block'?S.indexOf('function AnkiGenerator()'):0),b=S.indexOf(end,a);t('code-only generation input unchanged: '+name,a>=0&&b>a&&sha256(S.slice(a,b).trim())===hash);}
+  const F=ankiSyntheticFixture(),before=JSON.stringify(F.kb),spec=require('./tools/anki-pilot-spec').makeAnkiPilotSpec(F.kb,S);
+  t('pilot planner derives exact call counts from the live chunker',spec.facts===5&&spec.chunkCount===1&&spec.expectedGenerationCalls===1&&spec.maximumAttempts===3);
+  t('pilot planner preserves the recommended model and token contract',spec.model==='gemini-3.8-flash'&&spec.thinkingLevel==='low'&&spec.maxOutputTokensPerAttempt===65536&&spec.additionalAuditCalls===0);
+  t('pilot planning does not modify source facts or authorize execution',JSON.stringify(F.kb)===before&&spec.status.startsWith('PLANNED ONLY'));
 }
 
 /* ── v15.17: shared flat cloze parser and live eligibility ── */
@@ -2349,7 +2425,7 @@ section('v15.14 — tier 3');
 {
   // T3.6 — the KB builder capped its log at 200; the other four grew without bound and
   // rendered every entry as an index-keyed div.
-  t('all five tool logs are capped', S.split('p.slice(-200)').length - 1 === 5);
+  t('all five tool logs and the KB-replacement notice are capped', S.split('p.slice(-200)').length - 1 === 6);
   // T3.13i — ten positional parameters, one of them inert since v15.
   t('callGemini takes an options object', S.includes('async function callGemini(apiKey,model,parts,opts={}){'));
   t('no positional call site survives the migration', !S.includes('],true,') && S.split('callGemini(').length - 1 === 10);

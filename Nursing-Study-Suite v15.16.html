@@ -3818,7 +3818,7 @@ function parseKBCoverage(text,chunk=1){
   const refs=[];
   for(const raw of String(text||'').split('\n')){
     const ids=[...raw.matchAll(/\bfact-\d+\b/gi)].map(m=>m[0].toLowerCase());if(!ids.length)continue;
-    const destinations=[...raw.matchAll(/(?:#\s*|\bline\s+)(-?\d+)/gi)];
+    const destinations=[...raw.matchAll(/(?:#\s*|\bline\s+)(-?\d+)(?=$|[ \t,])/gi)];
     const line=destinations.length===1?Number(destinations[0][1]):NaN;
     for(const id of ids)refs.push({id,chunk,line});
   }
@@ -3857,6 +3857,9 @@ function ankiDedupeCards(cards){
   }
   return out;
 }
+// v15.17: retain partial responses for private replay without retaining credentials or
+// publishing interrupted notes. Aggregate diagnostics alone would hide cancellation defects.
+function ankiRunEvidence(run,status){return {status,model:run.model,thinkingLevel:run.thinkingLevel,context:run.context,snapshot:run.snapshot,chunkIds:run.chunkIds||[],rawResponses:[...run.rawResponses],partialResponse:run.partialResponse||'',truncated:!!run.truncated};}
 function ankiRunIsCurrent(run,active,sourceKB){return run===active&&run.sourceKB===sourceKB&&!run.ctl.signal.aborted;}
 function ankiLinkedIds(card,snapshot){return (card.factIds||[]).filter(id=>snapshot&&snapshot.byId[id]);}
 function ankiBatchSummary(cards,batch,current){
@@ -4001,13 +4004,34 @@ function ankiBatchDiagnostics(cards,batch,current){
   const raw=batch?batch.rawCards:[],groups=ankiCollisionGroups(raw),audits=raw.map(c=>ankiNumericAudit(c,batch,current));
   const count=code=>audits.filter(a=>a.findings.some(x=>x.code===code)).length;
   const live=ankiBatchSummary(cards,batch,current);
-  return {parsedNotes:raw.length,postDedupeNotes:cards.length,rawInvalidNotes:raw.filter(c=>lintAnkiCard(c).length).length,
+  return {parsedNotes:raw.length,postDedupeNotes:batch&&batch.postDedupeNotes!=null?batch.postDedupeNotes:cards.length,rawInvalidNotes:raw.filter(c=>lintAnkiCard(c).length).length,
     frontAnchor:{warned:raw.filter(c=>c.text&&ankiStyleWarnings(c).some(x=>x.code==='front-anchor')).length,withText:raw.filter(c=>c.text).length},
     unmappedNotes:raw.filter(c=>!ankiLinkedIds(c,batch&&batch.snapshot).length).length,partialMappings:raw.filter(c=>(c.mappingIssues||[]).length).length,
     collisions:{groups:groups.length,affectedReviews:groups.reduce((n,g)=>n+g.members.length,0),differentAnswer:groups.filter(g=>g.kind==='different-answer').length,sameAnswer:groups.filter(g=>g.kind==='same-answer').length},
     numeric:{warnedNotes:audits.filter(a=>a.status==='Numeric discrepancy'||a.status==='Source review needed').length,checkedNotes:audits.filter(a=>a.checked>0).length,checkedTokens:audits.reduce((n,a)=>n+a.checked,0),notChecked:audits.filter(a=>a.status==='Not checked').map(a=>a.findings[0].msg),discrepancies:count('numeric-discrepancy'),quoteOnly:count('quote-only'),unsupported:audits.filter(a=>a.findings.some(x=>x.code.startsWith('unsupported'))).length},
     current:{keptNotes:live.kept.length,reviews:live.reviews,linkedFacts:live.coveredCount,totalFacts:live.total,byTier:[1,2,3].map(t=>{const x=ankiSelection(cards,current,String(t));return {tier:t,notes:x.kept.length,reviews:x.reviews};})},
     truncated:!!(batch&&batch.truncated),stale:!current};
+}
+// v15.17: source footers are composed only at export, from the immutable batch snapshot.
+// Sanitizing pointer metadata is safe; broken user-authored field separators still need edits.
+function ankiSourcePointers(card,batch,current){
+  if(!current||!batch)return [];
+  const clean=s=>String(s||'').replace(/\|/g,' / ').replace(/[\r\n]+/g,', ').replace(/\s+/g,' ').trim(),seen=new Set(),pointers=[];
+  for(const id of ankiLinkedIds(card,batch.snapshot))for(const source of batch.snapshot.byId[id].sources){
+    const pair=[clean(source.filename),clean(source.location)],key=JSON.stringify(pair);
+    if(!pair.some(Boolean)||seen.has(key))continue;seen.add(key);pointers.push(pair.filter(Boolean).join(', '));
+  }
+  return pointers;
+}
+function ankiExportText(cards,batch,current,tier,html,references){
+  const kept=ankiSelection(cards,current,tier).kept;if(!kept.length)return '';
+  const escape=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const body=kept.map(c=>{
+    let extra=html?escape(c.extra):c.extra;
+    if(references){const source='Source: '+(ankiSourcePointers(c,batch,current).join('; ')||'unavailable');extra+=(extra?(html?'<br>':' — '):'')+(html?escape(source):source);}
+    return (html?escape(c.text):c.text)+'|'+extra+'|'+c.tags;
+  }).join('\n');
+  return (html?'#separator:Pipe\n#html:true\n#notetype:Cloze\n#tags column:3\n':'')+body;
 }
 function ankiStyleWarnings(card){
   const text=String(card.text||''),issues=[],indices=clozeNums(text);
@@ -4037,14 +4061,15 @@ function AnkiCollisionWarnings({groups,current}){
 }
 function AnkiNoteDiagnostics({card,audit,current}){
   return <details style={{fontSize:12,marginTop:6,color:audit.findings.length?'var(--accent-warm)':'var(--text-dim)'}}>
-    <summary>{audit.status} · {audit.checked} numeric tokens checked</summary>
+    <summary>{audit.status} · {audit.checked} numeric token{audit.checked===1?'':'s'} checked</summary>
     {audit.findings.map((x,i)=><div key={i}>{x.msg}</div>)}
     <div>Source association (retained after edits): {current?(card.factIds||[]).map(id=><FactTag key={id} factId={id}/>):'earlier KB; links inactive'}{current&&!(card.factIds||[]).length&&'unavailable'}</div>
     <div>Checks value/unit occurrence only; comparators, roles, and clinical meaning still need review.</div>
   </details>;
 }
 function AnkiReviewCard({card}){
-  const parsed=parseAnkiClozes(card.text),indices=parsed.issues.length?[]:parsed.indices;
+  // v15.17: any malformed field blocks preview, including separators outside Text.
+  const parsed=parseAnkiClozes(card.text),structure=lintAnkiCard(card),indices=structure.length?[]:parsed.indices;
   const [selected,setSelected]=useState(indices[0]||1);
   const [revealed,setRevealed]=useState(false);
   const index=indices.includes(selected)?selected:indices[0];
@@ -4054,9 +4079,9 @@ function AnkiReviewCard({card}){
       <span style={{fontSize:11,color:'var(--text-dim)'}}>Review card</span>
       {indices.map(n=><button key={n} className="btn-secondary" aria-pressed={index===n} onClick={()=>{setSelected(n);setRevealed(false);}} style={{padding:'3px 9px',borderColor:index===n?'var(--accent)':'var(--border)'}}>c{n}</button>)}
     </div>
-    <div style={{fontSize:15,lineHeight:1.6,whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{ankiPreviewText(card.text,index,revealed)}</div>
-    {indices.length>0?<button className="btn-secondary" style={{marginTop:10}} onClick={()=>setRevealed(v=>!v)}>{revealed?'Hide answer':'Show answer'}</button>:<div style={{color:'var(--accent-warm)',marginTop:8}}>Add a cloze in Table view to preview a review card.</div>}
-    {revealed&&!parsed.issues.length&&card.extra&&<div style={{fontSize:12,lineHeight:1.5,color:'var(--text-dim)',marginTop:10,whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>Extra: {card.extra}</div>}
+    <div style={{fontSize:15,lineHeight:1.6,whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{structure.length?'Structural error: '+structure.map(x=>LINT_LABEL[x]||x).join('; ')+'. Edit in Table.':ankiPreviewText(card.text,index,revealed)}</div>
+    {indices.length>0?<button className="btn-secondary" style={{marginTop:10}} onClick={()=>setRevealed(v=>!v)}>{revealed?'Hide answer':'Show answer'}</button>:<div style={{color:'var(--accent-warm)',marginTop:8}}>Correct the structural issues in Table to preview this note.</div>}
+    {revealed&&!structure.length&&card.extra&&<div style={{fontSize:12,lineHeight:1.5,color:'var(--text-dim)',marginTop:10,whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>Extra: {card.extra}</div>}
   </div>;
 }
 
@@ -4084,6 +4109,7 @@ function AnkiGenerator(){
   const [styleOnly,setStyleOnly]=useState(false); // v15.16: review filter only; export still uses kept notes in the selected tier.
   const [tierFilter,setTierFilter]=useState('all');
   const [batch,setBatch]=useState(null);
+  const [interruptedRun,setInterruptedRun]=useState(null);
   const activeRun=useRef(null),currentKB=useRef(K.knowledgeBase);
   currentKB.current=K.knowledgeBase;
   const current=!!batch&&batch.sourceKB===K.knowledgeBase;
@@ -4098,17 +4124,19 @@ function AnkiGenerator(){
   },[cards,collisionGroups]);
   const actionableCollisions=useMemo(()=>ankiCollisionGroups(coverage.kept),[coverage.kept]);
   const diagnostics=useMemo(()=>ankiBatchDiagnostics(cards,batch,current),[cards,batch,current]);
+  const missingPointers=useMemo(()=>selected.kept.filter(c=>!ankiSourcePointers(c,batch,current).length).length,[selected.kept,batch,current]);
   const registerAnki=K.registerArtifact;
   // v15.17: generation-only publication left stale entries after edits/deletion. This
   // effect uses stable dependencies and replaces only Anki entries, across every tier.
   useEffect(()=>{if(registerAnki)registerAnki('ankiNotes',coverage.entries);},[registerAnki,coverage.entries]);
   useEffect(()=>{
     const run=activeRun.current;
-    if(run&&run.sourceKB!==K.knowledgeBase){run.ctl.abort();activeRun.current=null;setBusy(false);setLiveKB(0);setAbortCtl(null);}
+    if(run&&run.sourceKB!==K.knowledgeBase){run.ctl.abort();setInterruptedRun(ankiRunEvidence(run,'source-replaced'));activeRun.current=null;setBusy(false);setLiveKB(0);setAbortCtl(null);setLogs(p=>[...p.slice(-200),{msg:'Knowledge Base replaced; in-flight generation cancelled.',t:'warn',ts:new Date().toLocaleTimeString()}]);}
   },[K.knowledgeBase]);
   useEffect(()=>()=>{activeRun.current?.ctl.abort();activeRun.current=null;},[]);
   const [showUncovered,setShowUncovered]=useState(false);
   const [ankiHeader,setAnkiHeader]=useState(false);
+  const [includeSources,setIncludeSources]=useState(false);
   const [abortCtl,setAbortCtl]=useState(null);
 
   const {model,level:toolLevel}=cfg.forTool('anki');
@@ -4133,12 +4161,12 @@ function AnkiGenerator(){
   const run=useCallback(async()=>{
     if(!cfg.apiKey){log('Enter API key first.','err');return;}
     if(!(K.knowledgeBase.conditions||[]).length){log('Build the LATTE Knowledge Base first.','err');return;}
-    setBusy(true);setProg(0);setLogs([]);setCards([]);setLedger('');setBatch(null);setShowUncovered(false);
+    setBusy(true);setProg(0);setLogs([]);setCards([]);setLedger('');setBatch(null);setInterruptedRun(null);setShowUncovered(false);
     // v15.17: capture identity before awaiting; a replaced KB or superseded run cannot publish.
     activeRun.current?.ctl.abort();
     const ctl=new AbortController();setAbortCtl(ctl);
     const sourceKB=K.knowledgeBase,snapshot=ankiSourceSnapshot(sourceKB);
-    const runState={sourceKB,ctl,rawResponses:[],truncated:false};activeRun.current=runState;
+    const runState={sourceKB,ctl,snapshot,model,thinkingLevel:toolLevel,context:{outcomes,points,focusContext},rawResponses:[],truncated:false};activeRun.current=runState;
     const isCurrent=()=>ankiRunIsCurrent(runState,activeRun.current,currentKB.current);
     const focusBlock=buildFocusBlock();
     try{
@@ -4150,7 +4178,7 @@ function AnkiGenerator(){
       log(`Knowledge Base ready: ${K.knowledgeBase.conditions.length} conditions, ${(K.knowledgeBase.conditions||[]).reduce((n,c)=>n+(c.facts||[]).length,0)} facts.`,'ok');
       const chunks=allTxt.trim()?ankiChunkText(allTxt,ANKI_CHUNK_CHARS,ANKI_OVERLAP_PAGES):[''];const n=chunks.length||1;
       log(`${n} chunk(s) — Knowledge Base — Model: ${model} [Thinking: ${toolLevel}]${cfg.autoProfile?' (auto)':''}${focusBlock?' — with focus context':''}`, 'warn');
-      const chunkIds=chunks.map(ankiChunkFactIds),ledgers=[];
+      const chunkIds=chunks.map(ankiChunkFactIds),ledgers=[];runState.chunkIds=chunkIds;
       let all=[],allLedg='';
       for(let i=0;i<n;i++){
         if(!isCurrent())return;
@@ -4173,9 +4201,9 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
 - The Phase 4/5 zero-skip and "every indexed item appears in the coverage map" requirements still apply, measured against this fact-id map.
 `;
         parts.push({text:ANKI_MASTER_PROMPT+focusBlock+kbAdapter+'\n\n'+sourceLabel+'\n\n'+(chunks[i]||'')+ctx});
-        const resp=await callGemini(cfg.apiKey,model,parts,{thinkingLevel:toolLevel,signal:ctl.signal,onUpdate:t=>{if(isCurrent())setLiveKB(Math.round(t.length/102.4)/10);},onMeta:m=>{if(isCurrent()&&m.truncated){runState.truncated=true;const th=m.usage?.thoughtsTokenCount||0;log(`  \u26a0 Chunk ${i+1} hit the 65,536-token ceiling \u2014 cards are missing from the end.`+(th?` Thinking used ${th.toLocaleString()} tok of that budget.`:' Lower the chunk size.'),'err');}}});
-        if(!isCurrent())return;
-        runState.rawResponses.push(resp);
+        const resp=await callGemini(cfg.apiKey,model,parts,{thinkingLevel:toolLevel,signal:ctl.signal,onUpdate:t=>{if(isCurrent()){runState.partialResponse=t;setLiveKB(Math.round(t.length/102.4)/10);}},onMeta:m=>{if(isCurrent()&&m.truncated){runState.truncated=true;const th=m.usage?.thoughtsTokenCount||0;log(`  \u26a0 Chunk ${i+1} hit the 65,536-token ceiling \u2014 cards are missing from the end.`+(th?` Thinking used ${th.toLocaleString()} tok of that budget.`:' Lower the chunk size.'),'err');}}});
+        if(!isCurrent()){if(activeRun.current===runState)setInterruptedRun(ankiRunEvidence(runState,'cancelled'));return;}
+        runState.rawResponses.push(resp);runState.partialResponse='';
         const{cards:cc,ledger:cl}=ankiParseCards(resp,i+1);ledgers.push({chunk:i+1,text:cl});all=[...all,...cc];allLedg+=cl?'\n--- Chunk '+(i+1)+' ---\n'+cl:'';
         setProg(((i+1)/n)*100);log(`Chunk ${i+1} done — ${cc.length} received notes`,'ok');
       }
@@ -4200,14 +4228,14 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
       if(abbrevCount)log(`⚠ ${abbrevCount} card(s) contain an error-prone dose abbreviation (q.d., IU, bare U, trailing/missing zero). They are still exportable — fix the transcription before drilling them.`,'warn');
       const lintCount=deduped.filter(c=>c.lint.length).length;
       if(!isCurrent())return;
-      const completed={sourceKB,snapshot,chunkIds,parsedNotes:all.length,rawCards:all,rawResponses:runState.rawResponses,mappingIssues,truncated:runState.truncated,model,thinkingLevel:toolLevel};
+      const completed={sourceKB,snapshot,chunkIds,context:runState.context,parsedNotes:all.length,rawCards:all,postDedupeNotes:deduped.length,rawResponses:runState.rawResponses,mappingIssues,truncated:runState.truncated,model,thinkingLevel:toolLevel};
       const summary=ankiBatchSummary(deduped,completed,true);
       setBatch(completed);setCards(deduped);setLedger(allLedg);
       log('Complete! '+all.length+' received notes; '+deduped.length+' after dedupe; '+summary.kept.length+' kept notes → '+summary.reviews+' review cards.','ok');
       log('Facts linked to kept notes: '+summary.coveredCount+'/'+summary.total+'.','ok');
       if(mappingIssues.length)log(mappingIssues.length+' mapping diagnostics; inspect the Fact Coverage Map.','warn');
       if(lintCount)log(lintCount+' structurally invalid note(s) excluded from export; correct them in Table.','warn');
-    }catch(e){if(isCurrent()||activeRun.current===runState){if(e.name==='AbortError')log('Cancelled.','warn');else log('Error: '+e.message,'err');}}
+    }catch(e){if(isCurrent()||activeRun.current===runState){setInterruptedRun(ankiRunEvidence(runState,e.name==='AbortError'?'cancelled':'failed'));if(e.name==='AbortError')log('Cancelled.','warn');else log('Error: '+e.message,'err');}}
     finally{if(activeRun.current===runState){activeRun.current=null;setBusy(false);setAbortCtl(null);setLiveKB(0);}}
   },[cfg,model,toolLevel,log,K.knowledgeBase,focusContext,outcomes,points]);
 
@@ -4233,15 +4261,10 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
   })),[]);
 
   const exportTxt=useCallback(()=>{
-    const kept=ankiSelection(cards,current,tierFilter).kept;if(!kept.length)return;
-    // With #html:true, thresholds like "<90%" would be swallowed as tags, so escape
-    // < > & in Text/Extra only when the header is on. Tags stay raw (Anki treats col 3
-    // as space-separated tags, not HTML). Cloze braces are unaffected by escaping.
-    const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const body=kept.map(c=>`${ankiHeader?esc(c.text):c.text}|${ankiHeader?esc(c.extra):c.extra}|${c.tags}`).join('\n'); // v15: bare pipes — Anki's Pipe separator keeps surrounding spaces inside every field
-    const header=ankiHeader?'#separator:Pipe\n#html:true\n#notetype:Cloze\n#tags column:3\n':'';
-    downloadBlob(new Blob([header+body],{type:'text/plain'}),`latte_anki_import${tierFilter!=='all'?'_tier'+tierFilter:''}.txt`);
-  },[cards,current,tierFilter,ankiHeader]);
+    // v15.17: validate current fields and batch identity again at the export boundary.
+    const text=ankiExportText(cards,batch,current,tierFilter,ankiHeader,includeSources);if(!text)return;
+    downloadBlob(new Blob([text],{type:'text/plain'}),'latte_anki_import'+(tierFilter!=='all'?'_tier'+tierFilter:'')+'.txt');
+  },[cards,batch,current,tierFilter,ankiHeader,includeSources]);
 
   const keptCount=selected.kept.length;
   const liveLint=useMemo(()=>cards.filter(c=>c.lint&&c.lint.length).length,[cards]);
@@ -4320,13 +4343,15 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
         <p style={{fontSize:12}}>Identical-front groups: {actionableCollisions.length} among kept notes · {collisionGroups.length} across current rows. Warnings do not change selection.</p>
         <p style={{fontSize:12}}>Excluded from export: {selected.invalid} structural · {selected.manualExcluded} manually unchecked. Structural repairs restore eligibility; checkboxes record your choice.</p>
         <p style={{fontSize:11,color:'var(--text-dim)',margin:'0 0 10px'}}>Style warnings are suggestions; notes stay exportable. The style filter affects review only. Export includes all kept notes in the selected tier.</p>
+        {includeSources&&<p style={{fontSize:12}}>{missingPointers} kept note(s) in this tier have no usable source pointer; exported as “Source: unavailable”. References are added only to the exported Extra field.</p>}
         {styleOnly&&!displayedCards.length&&<p role="status" style={{fontSize:12}}>No style warnings in this tier.</p>}
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10,flexWrap:'wrap',gap:6}}>
           <span style={{fontSize:12,color:'var(--text-dim)'}}><b style={{color:'var(--text)'}}>{displayedCards.length}</b> shown · {filteredCards.length} notes · <b style={{color:'var(--accent-green)'}}>{keptCount}</b> kept notes → {selected.reviews} review cards{filteredCards.filter(c=>c.lint&&c.lint.length).length>0&&<span style={{color:'var(--accent-warm)'}}> · {filteredCards.filter(c=>c.lint&&c.lint.length).length} lint</span>}</span>
-          <div style={{display:'flex',gap:10,alignItems:'center'}}>
+          <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
             <label style={{display:'flex',alignItems:'center',gap:5,fontSize:10.5,color:'var(--text-dim)',cursor:'pointer',userSelect:'none'}} title="Prepend #separator:Pipe / #notetype:Cloze / #tags column:3 and HTML-escape < > & so the file imports in one click. Leave off if your importer maps fields manually.">
               <input type="checkbox" checked={ankiHeader} onChange={e=>setAnkiHeader(e.target.checked)} style={{accentColor:'var(--accent)'}}/>Anki header
             </label>
+            <label style={{fontSize:12}}><input type="checkbox" checked={includeSources} onChange={e=>setIncludeSources(e.target.checked)}/>Include source references</label>
             <div style={{display:'flex',background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:6,overflow:'hidden'}}>
               {['table','list','preview'].map(v=><button key={v} onClick={()=>setView(v)} style={{background:view===v?'var(--accent)':'none',border:'none',color:view===v?'#fff':'var(--text-dim)',padding:'4px 12px',fontSize:11,cursor:'pointer',fontFamily:'DM Sans',fontWeight:500}}>{v==='table'?'Table':v==='list'?'List':'Preview'}</button>)}
             </div>
@@ -4355,9 +4380,12 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
         {(c.abbrev||[]).map((msg,i)=><div key={i} style={{color:'var(--accent-warm)',fontSize:11,marginTop:5}}>{msg}</div>)}
       </div>)}</div>}
 
+      {interruptedRun&&<details style={{marginTop:14}}><summary>Interrupted batch: {interruptedRun.status} · {interruptedRun.rawResponses.length} completed response(s)</summary>
+        <p>Partial output is retained for inspection; it contributes no notes or coverage.</p><button className="btn-secondary" onClick={()=>downloadBlob(new Blob([JSON.stringify(interruptedRun,null,2)],{type:'application/json'}),'anki-batch-diagnostics-interrupted.json')}>Save interrupted diagnostics</button>
+      </details>}
       {batch&&<details style={{marginTop:14}}><summary>Batch diagnostics · original responses before edits and exclusions</summary>
         <pre style={{fontSize:12,whiteSpace:'pre-wrap'}}>{JSON.stringify(diagnostics,null,2)}</pre>
-        <button className="btn-secondary" onClick={()=>downloadBlob(new Blob([JSON.stringify({model:batch.model,thinkingLevel:batch.thinkingLevel,chunkIds:batch.chunkIds,mappingIssues:batch.mappingIssues,diagnostics,rawResponses:batch.rawResponses},null,2)],{type:'application/json'}),'anki-batch-diagnostics.json')}>Save diagnostics and original responses</button>
+        <button className="btn-secondary" onClick={()=>downloadBlob(new Blob([JSON.stringify({model:batch.model,thinkingLevel:batch.thinkingLevel,context:batch.context,snapshot:batch.snapshot,chunkIds:batch.chunkIds,mappingIssues:batch.mappingIssues,diagnostics,rawResponses:batch.rawResponses},null,2)],{type:'application/json'}),'anki-batch-diagnostics.json')}>Save diagnostics and original responses</button>
       </details>}
       {batch&&batch.mappingIssues.length>0&&<details style={{marginTop:14}}><summary>Mapping diagnostics ({batch.mappingIssues.length}) · {batch.parsedNotes} parsed notes</summary>{batch.mappingIssues.map((x,i)=><div key={i} style={{fontSize:12}}>{x.code} — {x.id||x.noteId} · chunk {x.chunk}, line {Number.isFinite(x.line)?x.line:'invalid'}</div>)}</details>}
       {ledger&&<div style={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:16,marginTop:14}}>

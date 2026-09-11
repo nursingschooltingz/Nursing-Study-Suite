@@ -40,6 +40,7 @@ NCLEX-Audit-Trail*.txt
 priority-analysis*.md
 priority-analysis*.txt
 anki*.txt
+anki-batch-diagnostics*.json
 *-anki.txt
 
 # ── Secrets ───────────────────────────────────────────────────────────
