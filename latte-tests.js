@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 849;
+const EXPECTED_ASSERTIONS = 864;
 
 let file;
 try {
@@ -2154,7 +2154,7 @@ function ankiSyntheticFixture(){
   return {kb,cards,chunkIds,ledgers,note};
 }
 const ankiHelperSource=spanFrom('function ankiParseCards(raw','function AnkiStyleBadges');
-const ANKI=new Function('uid',ankiHelperSource.slice(0,ankiHelperSource.lastIndexOf('function AnkiStyleBadges'))+';return {ankiParseCards,parseKBCoverage,ankiSourceSnapshot,ankiChunkFactIds,attachCoverageToCards,ankiDedupeCards,ankiRunIsCurrent,ankiBatchSummary,ankiSelection,ankiReviewFilter,ankiPreviewText,ankiNumericTokens,ankiNumericAudit};')(()=> 'synthetic-'+Math.random());
+const ANKI=new Function('uid',ankiHelperSource.slice(0,ankiHelperSource.lastIndexOf('function AnkiStyleBadges'))+';return {ankiParseCards,parseKBCoverage,ankiSourceSnapshot,ankiChunkFactIds,attachCoverageToCards,ankiDedupeCards,ankiRunIsCurrent,ankiBatchSummary,ankiSelection,ankiReviewFilter,ankiPreviewText,ankiNumericTokens,ankiNumericAudit,ankiCollisionGroups,ankiBatchDiagnostics};')(()=> 'synthetic-'+Math.random());
 section('v15.17 — batch provenance and live counts');
 {
   const F=ankiSyntheticFixture(),snapshot=ANKI.ankiSourceSnapshot(F.kb),original=JSON.stringify(F.kb);
@@ -2235,6 +2235,32 @@ section('v15.17 — advisory numeric consistency');
   t('known limit: supported values can be assigned the wrong roles',ANKI.ankiNumericAudit(card('Morning {{c1::10 mg}}; evening {{c2::5 mg}}'),roleBatch,true).status==='No numeric mismatch detected');
   const rangeBatch={snapshot:ANKI.ankiSourceSnapshot({conditions:[{facts:[{id:'fact-1',text:'Range 5–10 mg.'}]}]})};
   t('range comparison checks the second endpoint',ANKI.ankiNumericAudit(card('{{c1::5–12 mg}}'),rangeBatch,true).findings.some(x=>x.code==='numeric-discrepancy'&&x.msg.startsWith('12 mg')));
+}
+
+section('v15.17 — rendered-front collisions and raw diagnostics');
+{
+  const F=ankiSyntheticFixture(),n=(id,text)=>F.note(id,text),collision=ANKI.ankiCollisionGroups;
+  const a=n('a','[Example] Dose: {{c1::5 mg}}'),b=n('b','[Example] Dose: {{c1::10 mg}}');
+  t('same rendered front and different answers warn as ambiguous',collision([a,b])[0].kind==='different-answer');
+  const c=n('c','[Example] Dose: {{c2::5 mg}}');
+  t('same front and answer sequence warn separately as redundant',collision([a,c])[0].kind==='same-answer');
+  t('meaningful labels and case remain distinct',collision([a,n('d','[Example] Other: {{c1::5 mg}}'),n('e','[example] Dose: {{c1::5 mg}}')]).length===0);
+  t('whitespace-only representation changes still collide',collision([a,n('f','[Example]   Dose: {{c1::5 mg}}')]).length===1);
+  t('visible sibling answers distinguish actual fronts',collision([n('g','{{c1::a}} then {{c2::b}}'),n('h','{{c1::a}} then {{c2::c}}')]).length===1);
+  t('different visible hints do not collide',collision([n('g','{{c1::a::first}}'),n('h','{{c1::b::second}}')]).length===0);
+  const repeated=collision([n('g','{{c1::a}} plus {{c1::b}}'),n('h','{{c2::a}} plus {{c2::c}}')]);
+  t('same-index gaps store the complete hidden answer sequence',repeated[0].members[0].answers.join(',')==='a,b'&&repeated[0].members.length===2);
+  const original=JSON.stringify([a,b]);collision([a,b]);
+  t('collision warnings never mutate, merge or deselect notes',JSON.stringify([a,b])===original&&a.keep&&b.keep);
+  t('editing the front clears a group',collision([a,{...b,text:'[Example] New task: {{c1::10 mg}}'}]).length===0);
+  t('raw groups include manually excluded rows',collision([a,{...b,keep:false}]).length===1&&collision(ANKI.ankiSelection([a,{...b,keep:false}]).kept).length===0);
+  const snapshot=ANKI.ankiSourceSnapshot(F.kb);ANKI.attachCoverageToCards(F.cards,F.ledgers,snapshot,F.chunkIds);
+  const batch={snapshot,rawCards:F.cards,truncated:true},cards=ANKI.ankiDedupeCards(F.cards),D=ANKI.ankiBatchDiagnostics(cards,batch,true);
+  t('diagnostics retain raw parsed and post-dedupe counts',D.parsedNotes===4&&D.postDedupeNotes===3);
+  t('raw duplicate fronts survive as baseline evidence',D.collisions.groups===1&&D.collisions.affectedReviews===2&&D.collisions.sameAnswer===1);
+  t('raw style denominator and truncation remain explicit',D.frontAnchor.withText===4&&D.frontAnchor.warned===0&&D.truncated);
+  t('current tier workload counts reviews rather than notes',D.current.byTier[0].notes===2&&D.current.byTier[0].reviews===3);
+  t('stale raw diagnostics never claim numeric checks',ANKI.ankiBatchDiagnostics(cards,batch,false).numeric.checkedNotes===0);
 }
 
 /* ── v15.17: shared flat cloze parser and live eligibility ── */

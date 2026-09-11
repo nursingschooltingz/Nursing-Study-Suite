@@ -3983,6 +3983,32 @@ function ankiNumericAudit(card,batch,current){
   const status=findings.some(x=>x.code==='numeric-discrepancy')?'Numeric discrepancy':findings.length?'Source review needed':parsed.tokens.length?'No numeric mismatch detected':'No supported numeric values found';
   return {status,checked:parsed.tokens.length,findings};
 }
+// v15.17: exact rendered fronts can collide even when full Text differs. Preserve
+// punctuation/case/qualifiers and visible siblings; these groups are advisory only.
+function ankiCollisionGroups(cards){
+  const fronts=new Map(),normalize=s=>s.replace(/\s+/g,' ').trim();
+  for(const card of cards){
+    const parsed=parseAnkiClozes(card.text);if(parsed.issues.length)continue;
+    for(const index of parsed.indices){
+      const front=normalize(ankiRenderClozes(parsed,index)),answers=parsed.spans.filter(s=>s.index===index).map(s=>normalize(s.answer));
+      if(!fronts.has(front))fronts.set(front,[]);
+      fronts.get(front).push({noteId:card.id,index,answers,factIds:card.factIds||[]});
+    }
+  }
+  return [...fronts].filter(([,members])=>members.length>1).map(([front,members])=>({front,members,kind:new Set(members.map(m=>JSON.stringify(m.answers))).size>1?'different-answer':'same-answer'}));
+}
+function ankiBatchDiagnostics(cards,batch,current){
+  const raw=batch?batch.rawCards:[],groups=ankiCollisionGroups(raw),audits=raw.map(c=>ankiNumericAudit(c,batch,current));
+  const count=code=>audits.filter(a=>a.findings.some(x=>x.code===code)).length;
+  const live=ankiBatchSummary(cards,batch,current);
+  return {parsedNotes:raw.length,postDedupeNotes:cards.length,rawInvalidNotes:raw.filter(c=>lintAnkiCard(c).length).length,
+    frontAnchor:{warned:raw.filter(c=>c.text&&ankiStyleWarnings(c).some(x=>x.code==='front-anchor')).length,withText:raw.filter(c=>c.text).length},
+    unmappedNotes:raw.filter(c=>!ankiLinkedIds(c,batch&&batch.snapshot).length).length,partialMappings:raw.filter(c=>(c.mappingIssues||[]).length).length,
+    collisions:{groups:groups.length,affectedReviews:groups.reduce((n,g)=>n+g.members.length,0),differentAnswer:groups.filter(g=>g.kind==='different-answer').length,sameAnswer:groups.filter(g=>g.kind==='same-answer').length},
+    numeric:{warnedNotes:audits.filter(a=>a.status==='Numeric discrepancy'||a.status==='Source review needed').length,checkedNotes:audits.filter(a=>a.checked>0).length,checkedTokens:audits.reduce((n,a)=>n+a.checked,0),notChecked:audits.filter(a=>a.status==='Not checked').map(a=>a.findings[0].msg),discrepancies:count('numeric-discrepancy'),quoteOnly:count('quote-only'),unsupported:audits.filter(a=>a.findings.some(x=>x.code.startsWith('unsupported'))).length},
+    current:{keptNotes:live.kept.length,reviews:live.reviews,linkedFacts:live.coveredCount,totalFacts:live.total,byTier:[1,2,3].map(t=>{const x=ankiSelection(cards,current,String(t));return {tier:t,notes:x.kept.length,reviews:x.reviews};})},
+    truncated:!!(batch&&batch.truncated),stale:!current};
+}
 function ankiStyleWarnings(card){
   const text=String(card.text||''),issues=[],indices=clozeNums(text);
   if(/\b(?:a|an)\s+\{\{c\d+::/i.test(text))issues.push({code:'article-clue',msg:'Possible article clue: move a/an inside the cloze or use a short label.'});
@@ -4000,6 +4026,14 @@ function ankiReviewFilter(cards,tier,styleOnly){
 }
 function AnkiStyleBadges({issues}){
   return issues.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:4,marginTop:5}}>{issues.map(x=><span key={x.code} title={x.msg} style={{fontSize:10,color:'var(--accent-warm)'}}>⚠ {x.msg}</span>)}</div>;
+}
+function AnkiCollisionWarnings({groups,current}){
+  return groups.length>0&&<details style={{fontSize:12,color:'var(--accent-warm)',marginTop:6}}><summary>Identical-front warning ({groups.length})</summary>
+    {groups.map((g,i)=><div key={i} style={{padding:8,border:'1px solid var(--border)',marginTop:6}}>
+      <b>{g.kind==='different-answer'?'Possible ambiguous retrieval':'Possible redundant review'}</b><div style={{whiteSpace:'pre-wrap'}}>{g.front}</div>
+      {g.members.map(m=><div key={m.noteId+':'+m.index}>{m.noteId} · c{m.index} · expected: {m.answers.join(' / ')} {current&&m.factIds.map(id=><FactTag key={id} factId={id}/>)}</div>)}
+    </div>)}
+  </details>;
 }
 function AnkiNoteDiagnostics({card,audit,current}){
   return <details style={{fontSize:12,marginTop:6,color:audit.findings.length?'var(--accent-warm)':'var(--text-dim)'}}>
@@ -4056,6 +4090,14 @@ function AnkiGenerator(){
   const coverage=useMemo(()=>ankiBatchSummary(cards,batch,current),[cards,batch,current]);
   const selected=useMemo(()=>ankiSelection(cards,current,tierFilter),[cards,current,tierFilter]);
   const numericAudits=useMemo(()=>new Map(cards.map(c=>[c.id,ankiNumericAudit(c,batch,current)])),[cards,batch,current]);
+  const collisionGroups=useMemo(()=>ankiCollisionGroups(cards),[cards]);
+  const collisionsByNote=useMemo(()=>{
+    const map=new Map(cards.map(c=>[c.id,[]]));
+    for(const group of collisionGroups)for(const id of new Set(group.members.map(m=>m.noteId)))map.get(id).push(group);
+    return map;
+  },[cards,collisionGroups]);
+  const actionableCollisions=useMemo(()=>ankiCollisionGroups(coverage.kept),[coverage.kept]);
+  const diagnostics=useMemo(()=>ankiBatchDiagnostics(cards,batch,current),[cards,batch,current]);
   const registerAnki=K.registerArtifact;
   // v15.17: generation-only publication left stale entries after edits/deletion. This
   // effect uses stable dependencies and replaces only Anki entries, across every tier.
@@ -4275,6 +4317,7 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
           {tierFilter!=='all'&&<button className="btn-secondary" style={{padding:'3px 8px',fontSize:10}} onClick={()=>setTierFilter('all')}>Show All</button>}
           <label style={{display:'flex',gap:5,alignItems:'center',fontSize:11,marginLeft:8}}><input type="checkbox" checked={styleOnly} onChange={e=>setStyleOnly(e.target.checked)}/>Style warnings ({styleCount})</label>
         </div>
+        <p style={{fontSize:12}}>Identical-front groups: {actionableCollisions.length} among kept notes · {collisionGroups.length} across current rows. Warnings do not change selection.</p>
         <p style={{fontSize:12}}>Excluded from export: {selected.invalid} structural · {selected.manualExcluded} manually unchecked. Structural repairs restore eligibility; checkboxes record your choice.</p>
         <p style={{fontSize:11,color:'var(--text-dim)',margin:'0 0 10px'}}>Style warnings are suggestions; notes stay exportable. The style filter affects review only. Export includes all kept notes in the selected tier.</p>
         {styleOnly&&!displayedCards.length&&<p role="status" style={{fontSize:12}}>No style warnings in this tier.</p>}
@@ -4292,13 +4335,13 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
         </div>
 
         {view==='table'&&<div className="anki-tbl-wrap"><table><thead><tr><th style={{width:36}}>✓</th><th style={{width:38}}>Tier</th><th>Text</th><th style={{width:'16%'}}>Extra</th><th style={{width:'16%'}}>Tags</th><th style={{width:36}}></th></tr></thead><tbody>
-          {displayedCards.map(c=><tr key={c.id} className={c.keep?'':'dim'} style={c.lint&&c.lint.length?{boxShadow:'inset 3px 0 0 var(--accent-red)'}:undefined} title={c.lint&&c.lint.length?('Lint: '+c.lint.map(x=>LINT_LABEL[x]||x).join(', ')):undefined}><td><input type="checkbox" checked={c.keep} onChange={()=>toggle(c.id)} style={{accentColor:'var(--accent)'}}/></td><td><TierBadge tier={getTier(c.tags)}/>{c.lint&&c.lint.length>0&&<span style={{color:'var(--accent-red)',fontSize:11,fontWeight:700,marginLeft:3}}>!</span>}</td><td><textarea className="cell-ta" value={c.text} rows={2} onChange={e=>updateField(c.id,'text',e.target.value)}/><AnkiStyleBadges issues={ankiStyleWarnings(c)}/><AnkiNoteDiagnostics card={c} audit={numericAudits.get(c.id)} current={current}/></td><td><textarea className="cell-ta" value={c.extra} rows={2} onChange={e=>updateField(c.id,'extra',e.target.value)}/></td><td><textarea className="cell-ta tags-ta" value={c.tags} rows={2} onChange={e=>updateField(c.id,'tags',e.target.value)}/></td><td><button style={{background:'none',border:'none',color:'var(--text-dim)',cursor:'pointer',fontSize:13}} onClick={()=>del(c.id)}>×</button></td></tr>)}
+          {displayedCards.map(c=><tr key={c.id} className={c.keep?'':'dim'} style={c.lint&&c.lint.length?{boxShadow:'inset 3px 0 0 var(--accent-red)'}:undefined} title={c.lint&&c.lint.length?('Lint: '+c.lint.map(x=>LINT_LABEL[x]||x).join(', ')):undefined}><td><input type="checkbox" checked={c.keep} onChange={()=>toggle(c.id)} style={{accentColor:'var(--accent)'}}/></td><td><TierBadge tier={getTier(c.tags)}/>{c.lint&&c.lint.length>0&&<span style={{color:'var(--accent-red)',fontSize:11,fontWeight:700,marginLeft:3}}>!</span>}</td><td><textarea className="cell-ta" value={c.text} rows={2} onChange={e=>updateField(c.id,'text',e.target.value)}/><AnkiStyleBadges issues={ankiStyleWarnings(c)}/><AnkiNoteDiagnostics card={c} audit={numericAudits.get(c.id)} current={current}/><AnkiCollisionWarnings groups={collisionsByNote.get(c.id)} current={current}/></td><td><textarea className="cell-ta" value={c.extra} rows={2} onChange={e=>updateField(c.id,'extra',e.target.value)}/></td><td><textarea className="cell-ta tags-ta" value={c.tags} rows={2} onChange={e=>updateField(c.id,'tags',e.target.value)}/></td><td><button style={{background:'none',border:'none',color:'var(--text-dim)',cursor:'pointer',fontSize:13}} onClick={()=>del(c.id)}>×</button></td></tr>)}
         </tbody></table></div>}
 
         {view==='list'&&displayedCards.map(c=><div key={c.id} style={{display:'flex',gap:8,padding:'10px 12px',background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:6,marginBottom:4,fontSize:12,opacity:c.keep?1:.35}}>
           <input type="checkbox" checked={c.keep} onChange={()=>toggle(c.id)} style={{accentColor:'var(--accent)',marginTop:2}}/>
           <TierBadge tier={getTier(c.tags)}/>
-          <div style={{flex:1,minWidth:0}}><div style={{fontFamily:'JetBrains Mono',fontSize:11,lineHeight:1.5,wordBreak:'break-word'}}>{c.text}</div><AnkiStyleBadges issues={ankiStyleWarnings(c)}/><AnkiNoteDiagnostics card={c} audit={numericAudits.get(c.id)} current={current}/>{c.extra&&<div style={{fontSize:10,color:'var(--text-dim)',marginTop:2}}>Extra: {c.extra}</div>}{c.tags&&<div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:4}}>{c.tags.split(/\s+/).map((t,j)=><span key={j} style={{fontSize:8,padding:'1px 6px',borderRadius:8,background:'var(--bg-card-alt)',color:'var(--text-dim)',border:'1px solid var(--border)'}}>{t}</span>)}</div>}{c.lint&&c.lint.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:4}}>{c.lint.map((x,j)=><span key={j} style={{fontSize:8,padding:'1px 6px',borderRadius:8,background:'rgba(248,113,113,.1)',color:'var(--accent-red)',border:'1px solid rgba(248,113,113,.3)'}}>{LINT_LABEL[x]||x}</span>)}</div>}{c.abbrev&&c.abbrev.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:4}}>{c.abbrev.map((x,j)=><span key={j} title={x} style={{fontSize:8,padding:'1px 6px',borderRadius:8,background:'rgba(240,168,58,.1)',color:'var(--accent-warm)',border:'1px solid rgba(240,168,58,.3)'}}>unsafe abbreviation</span>)}</div>}</div>
+          <div style={{flex:1,minWidth:0}}><div style={{fontFamily:'JetBrains Mono',fontSize:11,lineHeight:1.5,wordBreak:'break-word'}}>{c.text}</div><AnkiStyleBadges issues={ankiStyleWarnings(c)}/><AnkiNoteDiagnostics card={c} audit={numericAudits.get(c.id)} current={current}/><AnkiCollisionWarnings groups={collisionsByNote.get(c.id)} current={current}/>{c.extra&&<div style={{fontSize:10,color:'var(--text-dim)',marginTop:2}}>Extra: {c.extra}</div>}{c.tags&&<div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:4}}>{c.tags.split(/\s+/).map((t,j)=><span key={j} style={{fontSize:8,padding:'1px 6px',borderRadius:8,background:'var(--bg-card-alt)',color:'var(--text-dim)',border:'1px solid var(--border)'}}>{t}</span>)}</div>}{c.lint&&c.lint.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:4}}>{c.lint.map((x,j)=><span key={j} style={{fontSize:8,padding:'1px 6px',borderRadius:8,background:'rgba(248,113,113,.1)',color:'var(--accent-red)',border:'1px solid rgba(248,113,113,.3)'}}>{LINT_LABEL[x]||x}</span>)}</div>}{c.abbrev&&c.abbrev.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:4}}>{c.abbrev.map((x,j)=><span key={j} title={x} style={{fontSize:8,padding:'1px 6px',borderRadius:8,background:'rgba(240,168,58,.1)',color:'var(--accent-warm)',border:'1px solid rgba(240,168,58,.3)'}}>unsafe abbreviation</span>)}</div>}</div>
           <button style={{background:'none',border:'none',color:'var(--text-dim)',cursor:'pointer',fontSize:13,flexShrink:0}} onClick={()=>del(c.id)}>×</button>
         </div>)}
       </div>}
@@ -4307,11 +4350,15 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
       {cards.length>0&&view==='preview'&&<div style={{display:'grid',gap:10}}>{displayedCards.map(c=><div key={c.id} style={{padding:12,background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:8,opacity:c.keep?1:.5}}>
         <div style={{display:'flex',gap:8,alignItems:'center'}}><label style={{fontSize:12}}><input type="checkbox" checked={c.keep} onChange={()=>toggle(c.id)}/> Keep</label><TierBadge tier={getTier(c.tags)}/><button className="btn-secondary" style={{marginLeft:'auto',padding:'3px 9px'}} onClick={()=>setView('table')}>Edit in Table</button></div>
         <AnkiReviewCard card={c}/>
-        <AnkiStyleBadges issues={ankiStyleWarnings(c)}/><AnkiNoteDiagnostics card={c} audit={numericAudits.get(c.id)} current={current}/>
+        <AnkiStyleBadges issues={ankiStyleWarnings(c)}/><AnkiNoteDiagnostics card={c} audit={numericAudits.get(c.id)} current={current}/><AnkiCollisionWarnings groups={collisionsByNote.get(c.id)} current={current}/>
         {(c.lint||[]).length>0&&<div style={{color:'var(--accent-red)',fontSize:11,marginTop:5}}>Structural lint: {c.lint.map(x=>LINT_LABEL[x]||x).join(', ')}</div>}
         {(c.abbrev||[]).map((msg,i)=><div key={i} style={{color:'var(--accent-warm)',fontSize:11,marginTop:5}}>{msg}</div>)}
       </div>)}</div>}
 
+      {batch&&<details style={{marginTop:14}}><summary>Batch diagnostics · original responses before edits and exclusions</summary>
+        <pre style={{fontSize:12,whiteSpace:'pre-wrap'}}>{JSON.stringify(diagnostics,null,2)}</pre>
+        <button className="btn-secondary" onClick={()=>downloadBlob(new Blob([JSON.stringify({model:batch.model,thinkingLevel:batch.thinkingLevel,chunkIds:batch.chunkIds,mappingIssues:batch.mappingIssues,diagnostics,rawResponses:batch.rawResponses},null,2)],{type:'application/json'}),'anki-batch-diagnostics.json')}>Save diagnostics and original responses</button>
+      </details>}
       {batch&&batch.mappingIssues.length>0&&<details style={{marginTop:14}}><summary>Mapping diagnostics ({batch.mappingIssues.length}) · {batch.parsedNotes} parsed notes</summary>{batch.mappingIssues.map((x,i)=><div key={i} style={{fontSize:12}}>{x.code} — {x.id||x.noteId} · chunk {x.chunk}, line {Number.isFinite(x.line)?x.line:'invalid'}</div>)}</details>}
       {ledger&&<div style={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:16,marginTop:14}}>
         <div style={{fontSize:10,fontWeight:600,textTransform:'uppercase',letterSpacing:1,color:'var(--text-dim)',marginBottom:8}}>Fact Coverage Map (fact-id → line #)</div>
