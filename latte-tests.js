@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 784;
+const EXPECTED_ASSERTIONS = 815;
 
 let file;
 try {
@@ -1996,7 +1996,7 @@ section('v15.8 — Phase 2 fixes');
 {
   t('Anki edits recompute lint',S.includes('next.lint=lintAnkiCard(next);'));
   t('Anki edits recompute the abbreviation scan',S.includes("ankiUnsafeAbbrevScan(next.text,'Text',found);"));
-  t('edits retain manual selection and derive structural eligibility',S.includes('const kept=ankiSelection(cards,true,tierFilter).kept;')&&!S.includes('if(hadLint&&!next.lint.length)next.keep=true;'));
+  t('edits retain manual selection and derive structural eligibility',S.includes('const kept=ankiSelection(cards,current,tierFilter).kept;')&&!S.includes('if(hadLint&&!next.lint.length)next.keep=true;'));
   t('abbrev findings never flip keep',!S.includes('next.abbrev.length)next.keep'));
 }
 
@@ -2124,9 +2124,9 @@ section('v15.16 — Anki preview and style checks');
   t('clearing style warnings never rechecks a manually excluded note',edited[0].keep===false);
   // Capture the actual export callback using a tiny Blob recorder; no file download
   // or Gemini call occurs. A review-only filter must not shrink exported coverage.
-  const exportSource=spanFrom('const exportTxt=useCallback(', '  },[cards,filteredCards,tierFilter,ankiHeader]);', 'function AnkiGenerator()');
+  const exportSource=spanFrom('const exportTxt=useCallback(', '  },[cards,current,tierFilter,ankiHeader]);', 'function AnkiGenerator()');
   let exported='';
-  const makeExport=(cards,filtered,tier,header)=>new Function('cards','filteredCards','tierFilter','ankiHeader','downloadBlob','useCallback','Blob',helpers+exportSource+';return exportTxt;')(
+  const makeExport=(cards,filtered,tier,header)=>new Function('cards','filteredCards','tierFilter','ankiHeader','downloadBlob','useCallback','Blob',helpers+'const current=true;'+exportSource+';return exportTxt;')(
     cards,filtered,tier,header,b=>{exported=b.body;},fn=>fn,class{constructor(parts){this.body=parts.join('');}});
   makeExport(notes,notes,'all',false)();
   t('export keeps clean and warned notes regardless of review filter',exported.split('\n').length===2&&exported.includes(good.text)&&exported.includes(weak.text));
@@ -2136,6 +2136,72 @@ section('v15.16 — Anki preview and style checks');
   t('export still excludes manually unchecked notes',exported.split('\n').length===1&&exported.startsWith(good.text));
   makeExport([note('[Example] Threshold: {{c1::<5 & >2}}')],[],'all',true)();
   t('Anki header export preserves escaped comparator bytes and cloze braces',exported.startsWith('#separator:Pipe\n')&&exported.includes('{{c1::&lt;5 &amp; &gt;2}}'));
+}
+
+// Deliberately synthetic, shared by deterministic checks and the local browser fixture.
+function ankiSyntheticFixture(){
+  const source={filename:'Synthetic <notes> & examples|only\nhandout',location:'page 1'};
+  const kb={metadata:{schemaVersion:'1.0'},conditions:[{name:'ExampleMedication-A',facts:[
+    {id:'fact-1',text:'Count pulse for 1 minute; hold below 60 bpm.',sourceQuote:'Pulse below 60 bpm. Source also says 55 bpm.',tier:1,latteBucket:'Assess',sources:[source,source]},
+    {id:'fact-2',text:'The fictional dose is 150 mg.',sourceQuote:'150 mg',tier:1,latteBucket:'Treatments',sources:[{filename:'Synthetic doses',location:'page 2'}]},
+    {id:'fact-3',text:'The fictional amount is 5,000 U.',sourceQuote:'5,000 U',tier:2,latteBucket:'Treatments',sources:[]},
+    {id:'fact-4',text:'The fictional rate is 30 mL/hr.',sourceQuote:'30 mL/hr',tier:2,latteBucket:'Treatments',sources:[]}
+  ]},{name:'ExampleCondition-B',facts:[{id:'fact-5',text:'Report weight gain of 2 lb in 24 hours.',sourceQuote:'2 lb in 24 hours',tier:1,latteBucket:'Educate',sources:[{filename:'Synthetic teaching',location:'page 3'}]}]}]};
+  const note=(id,text,tier=1,chunk=1,line=1)=>({id,text,extra:'',tags:'Nursing::LATTE::Assess Condition::Example Tier::'+tier,chunk,sourceLine:line,pipeCount:2,keep:true,factIds:[]});
+  const cards=[note('n1','[Example] Pulse: {{c1::60 bpm}}'),note('n2','[Example] Pulse: {{c1::60 bpm}}',1,1,2),note('n3','[Example] Dose: {{c1::150 mg}}',2,1,3),note('n4','[Example B] Gain: {{c1::2 lb}} in {{c2::24 hr}}',1,2,1)];
+  const chunkIds=[['fact-1','fact-2','fact-3','fact-4'],['fact-5']];
+  const ledgers=[{chunk:1,text:'fact-1 -> line #1\nfact-1 -> line #2\nfact-2 -> line #2\nfact-2 -> line #3\nfact-3 -> line #0\nfact-999 -> line #1\nfact-5 -> line #3\nfact-4 -> line #99\nfact-4 -> nowhere'}, {chunk:2,text:'fact-5 -> line #1'}];
+  return {kb,cards,chunkIds,ledgers,note};
+}
+const ankiHelperSource=spanFrom('function ankiParseCards(raw','function AnkiStyleBadges');
+const ANKI=new Function('uid',ankiHelperSource.slice(0,ankiHelperSource.lastIndexOf('function AnkiStyleBadges'))+';return {ankiParseCards,parseKBCoverage,ankiSourceSnapshot,ankiChunkFactIds,attachCoverageToCards,ankiDedupeCards,ankiRunIsCurrent,ankiBatchSummary,ankiSelection,ankiReviewFilter,ankiPreviewText};')(()=> 'synthetic-'+Math.random());
+section('v15.17 — batch provenance and live counts');
+{
+  const F=ankiSyntheticFixture(),snapshot=ANKI.ankiSourceSnapshot(F.kb),original=JSON.stringify(F.kb);
+  t('batch snapshot freezes facts, lookup and source pointers',Object.isFrozen(snapshot)&&Object.isFrozen(snapshot.byId)&&Object.isFrozen(snapshot.facts[0].sources[0]));
+  const ids=ANKI.ankiChunkFactIds('header fact-99\nFACT fact-1 | X\nFACT FACT-2 | Y\nFACT fact-1 | Z');
+  t('chunk fact capture reads only supplied FACT rows',ids.join(',')==='fact-1,fact-2');
+  const issues=ANKI.attachCoverageToCards(F.cards,F.ledgers,snapshot,F.chunkIds);
+  t('repeated mappings on separate lines are retained',F.cards[0].factIds.join()==='fact-1'&&F.cards[1].factIds.join()==='fact-1,fact-2');
+  t('unknown fact IDs never acquire support',issues.some(x=>x.code==='unknown-id')&&!F.cards[0].factIds.includes('fact-999'));
+  t('out-of-chunk fact IDs never acquire support',issues.some(x=>x.code==='out-of-chunk')&&!F.cards[2].factIds.includes('fact-5'));
+  t('line zero is an explicit omission',issues.some(x=>x.code==='omitted'&&x.id==='fact-3')&&!F.cards.some(c=>c.factIds.includes('fact-3')));
+  t('missing and out-of-range destinations are diagnosed',issues.filter(x=>x.code==='invalid-destination').length===2);
+  t('second chunk line one maps only to second chunk note',F.cards[3].factIds.join()==='fact-5'&&!F.cards[0].factIds.includes('fact-5'));
+  t('model headings cannot override trusted chunk identity',ANKI.parseKBCoverage('--- Chunk 2 ---\nfact-1 -> line #1',1)[0].chunk===1);
+  t('ambiguous multiple destinations are not silently partially accepted',Number.isNaN(ANKI.parseKBCoverage('fact-1 -> line #1, line #2')[0].line));
+  const dedup=ANKI.ankiDedupeCards(F.cards);
+  t('full text dedupe unions validated links before dropping duplicates',dedup.length===3&&dedup[0].factIds.join()==='fact-1,fact-2');
+  t('dedupe preserves raw cards for baseline measurement',F.cards.length===4&&F.cards[0].factIds.join()==='fact-1');
+  const batch={sourceKB:F.kb,snapshot};const summary=ANKI.ankiBatchSummary(dedup,batch,true);
+  t('batch summary counts kept notes, reviews and distinct linked facts',summary.kept.length===3&&summary.reviews===4&&summary.coveredCount===3&&summary.total===5);
+  const without=dedup.filter(c=>c.id!=='n4');
+  t('deleting sole linked note lowers coverage and registry',ANKI.ankiBatchSummary(without,batch,true).coveredCount===2&&ANKI.ankiBatchSummary(without,batch,true).entries.length===2);
+  t('unchecking sole linked note lowers coverage',ANKI.ankiBatchSummary(dedup.map(c=>c.id==='n4'?{...c,keep:false}:c),batch,true).coveredCount===2);
+  t('invalid notes leave registry and linked coverage',ANKI.ankiBatchSummary(dedup.map(c=>c.id==='n4'?{...c,text:'{{c1::broken'}:c),batch,true).coveredCount===2);
+  t('structural repair restores selected coverage',ANKI.ankiBatchSummary(dedup,batch,true).coveredCount===3);
+  const changed=ANKI.ankiBatchSummary(dedup.map(c=>({...c,text:'[Example] Edited label: {{c1::answer}}'})),batch,true);
+  t('registry labels follow edits and retain original associations',changed.entries[0].label.includes('Edited label: answer')&&changed.entries[0].factIds.includes('fact-1'));
+  t('empty batch clears Anki registry entries',ANKI.ankiBatchSummary([],batch,true).entries.length===0);
+  t('stale batch has no active support or export',ANKI.ankiBatchSummary(dedup,batch,false).entries.length===0&&ANKI.ankiBatchSummary(dedup,batch,false).total===0&&ANKI.ankiBatchSummary(dedup,batch,false).kept.length===0);
+  const replacement=JSON.parse(original);replacement.conditions[0].facts[0].text='Different fact-1, 900 mg';
+  const run={sourceKB:F.kb,ctl:new AbortController()},second={sourceKB:F.kb,ctl:new AbortController()};
+  t('late result fails source identity guard even with matching fact IDs',!ANKI.ankiRunIsCurrent(run,run,replacement));
+  t('superseded run cannot overwrite second run',!ANKI.ankiRunIsCurrent(run,second,F.kb)&&ANKI.ankiRunIsCurrent(second,second,F.kb));
+  run.ctl.abort();t('cancellation rejects late success',!ANKI.ankiRunIsCurrent(run,run,F.kb));
+  t('snapshot retains original source and leaves KB bytes unchanged',snapshot.facts[0].text.includes('60 bpm')&&JSON.stringify(F.kb)===original);
+  let registry={ankiNotes:[{id:'old'}],nclexQuestions:[{id:'q'}],caseStudies:[{id:'case'}]};
+  const registerSource=spanFrom('const registerArtifact=useCallback(', '  },[]);','function App()');
+  const register=new Function('useCallback','setArtifactRegistry',registerSource+';return registerArtifact;')(f=>f,f=>{registry=f(registry);});
+  register('ankiNotes',summary.entries);
+  t('registry replaces only Anki entries across all tiers',registry.ankiNotes.length===3&&registry.nclexQuestions[0].id==='q'&&registry.caseStudies[0].id==='case');
+  register('ankiNotes',[]);t('empty publication preserves other artifact kinds',registry.ankiNotes.length===0&&registry.caseStudies.length===1);
+  t('registry effect depends on stable callback and derived entries',S.includes("useEffect(()=>{if(registerAnki)registerAnki('ankiNotes',coverage.entries);},[registerAnki,coverage.entries]);"));
+  t('selected tier changes exports but not global registry',ANKI.ankiSelection(dedup,true,'2').kept.length===1&&summary.entries.length===3);
+  t('style view does not modify current workload or coverage',ANKI.ankiReviewFilter(dedup,'all',true).length===0&&summary.reviews===4&&summary.coveredCount===3);
+  const unmapped=[F.note('none','[Example] Finding: {{c1::answer}}')];
+  t('missing mapping is diagnosed yet note stays exportable',ANKI.attachCoverageToCards(unmapped,[],snapshot,F.chunkIds).some(x=>x.code==='no-mapping')&&ANKI.ankiSelection(unmapped).kept.length===1);
+  t('helper extraction reaches a non-vacuous tail',ANKI.ankiReviewFilter(dedup,'3',false).length===0);
 }
 
 /* ── v15.17: shared flat cloze parser and live eligibility ── */

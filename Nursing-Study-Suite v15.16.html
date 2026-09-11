@@ -3813,19 +3813,58 @@ function kbAllFacts(kb){
   for(const c of (kb&&kb.conditions)||[])for(const f of c.facts||[])out.push({id:String(f.id||'').toLowerCase(),condition:c.name||'—',tier:f.tier,bucket:f.latteBucket,text:f.text||''});
   return out;
 }
-function parseKBCoverage(text){
-  const refs=[];let chunk=1;
+// v15.17: chunk identity comes from the caller, never from a model-authored heading.
+function parseKBCoverage(text,chunk=1){
+  const refs=[];
   for(const raw of String(text||'').split('\n')){
-    const cm=raw.match(/^---\s*Chunk\s+(\d+)\s*---/i);if(cm){chunk=parseInt(cm[1],10)||chunk;continue;}
-    const ids=[...raw.matchAll(/fact-\d+/gi)].map(m=>m[0].toLowerCase());if(!ids.length)continue;
-    const lm=raw.match(/#\s*(\d+)/)||raw.match(/line\s*(\d+)/i);const line=lm?parseInt(lm[1],10):NaN;
-    for(const id of ids)refs.push({id,chunk,line:Number.isFinite(line)?line:0});
+    const ids=[...raw.matchAll(/\bfact-\d+\b/gi)].map(m=>m[0].toLowerCase());if(!ids.length)continue;
+    const destinations=[...raw.matchAll(/(?:#\s*|\bline\s+)(-?\d+)/gi)];
+    const line=destinations.length===1?Number(destinations[0][1]):NaN;
+    for(const id of ids)refs.push({id,chunk,line});
   }
   return refs;
 }
-function attachCoverageToCards(cards,ledger){
-  const byLine=new Map(cards.map(c=>[c.chunk+':'+c.sourceLine,c]));
-  for(const ref of parseKBCoverage(ledger)){if(ref.line<1)continue;const card=byLine.get(ref.chunk+':'+ref.line);if(card&&!card.factIds.includes(ref.id))card.factIds.push(ref.id);}
+function ankiSourceSnapshot(kb){
+  const facts=[];
+  for(const condition of (kb&&kb.conditions)||[])for(const f of condition.facts||[])facts.push(Object.freeze({
+    id:String(f.id||'').toLowerCase(),condition:condition.name||'',text:String(f.text||''),sourceQuote:String(f.sourceQuote||''),tier:f.tier,bucket:f.latteBucket,
+    sources:Object.freeze((f.sources||[]).map(p=>Object.freeze({filename:String(p.filename||''),location:String(p.location||'')})))
+  }));
+  const byId=Object.create(null);for(const f of facts)byId[f.id]=f;
+  return Object.freeze({facts:Object.freeze(facts),byId:Object.freeze(byId)});
+}
+function ankiChunkFactIds(text){return [...new Set([...String(text||'').matchAll(/^FACT\s+(fact-\d+)\s*\|/gim)].map(m=>m[1].toLowerCase()))];}
+function attachCoverageToCards(cards,ledgers,snapshot,chunkIds){
+  const byLine=new Map(cards.map(c=>[c.chunk+':'+c.sourceLine,c])),issues=[];
+  for(const card of cards){card.factIds=[];card.mappingIssues=[];}
+  for(const ledger of ledgers)for(const ref of parseKBCoverage(ledger.text,ledger.chunk)){
+    const card=byLine.get(ref.chunk+':'+ref.line);
+    const code=!snapshot.byId[ref.id]?'unknown-id':!(chunkIds[ref.chunk-1]||[]).includes(ref.id)?'out-of-chunk':!Number.isSafeInteger(ref.line)||ref.line<0||ref.line>0&&!card?'invalid-destination':ref.line===0?'omitted':null;
+    if(code){const issue={...ref,code};issues.push(issue);if(card)card.mappingIssues.push(issue);continue;}
+    if(!card.factIds.includes(ref.id))card.factIds.push(ref.id);
+  }
+  for(const card of cards)if(!card.factIds.length)issues.push({code:'no-mapping',noteId:card.id,chunk:card.chunk,line:card.sourceLine});
+  return issues;
+}
+// v15.17: dedupe remains full normalized Text only, but unions validated links and diagnostics.
+function ankiDedupeCards(cards){
+  const seen=new Map(),out=[];
+  for(const original of cards){
+    const c={...original,factIds:[...(original.factIds||[])],mappingIssues:[...(original.mappingIssues||[])]};
+    const key=String(c.text||'').toLowerCase().replace(/\s+/g,' ').trim();
+    if(key&&seen.has(key)){const kept=seen.get(key);kept.factIds=[...new Set([...kept.factIds,...c.factIds])];kept.mappingIssues.push(...c.mappingIssues);continue;}
+    if(key)seen.set(key,c);out.push(c);
+  }
+  return out;
+}
+function ankiRunIsCurrent(run,active,sourceKB){return run===active&&run.sourceKB===sourceKB&&!run.ctl.signal.aborted;}
+function ankiLinkedIds(card,snapshot){return (card.factIds||[]).filter(id=>snapshot&&snapshot.byId[id]);}
+function ankiBatchSummary(cards,batch,current){
+  const selection=ankiSelection(cards,current),snapshot=batch&&batch.snapshot;
+  const linked=new Set(selection.kept.flatMap(c=>ankiLinkedIds(c,snapshot)));
+  const facts=current&&snapshot?snapshot.facts:[],uncovered=facts.filter(f=>!linked.has(f.id));
+  const entries=selection.kept.map(c=>({id:c.id,factIds:ankiLinkedIds(c,snapshot),label:'Anki note — '+ankiPreviewText(c.text,0,true).slice(0,60)})).filter(e=>e.factIds.length);
+  return {...selection,total:facts.length,coveredCount:linked.size,uncovered,entries};
 }
 
 // v15.17: marker counts accepted broken/nested clozes and could expose answers in preview.
@@ -3936,7 +3975,21 @@ function AnkiGenerator(){
   const [view,setView]=useState('table');
   const [styleOnly,setStyleOnly]=useState(false); // v15.16: review filter only; export still uses kept notes in the selected tier.
   const [tierFilter,setTierFilter]=useState('all');
-  const [coverage,setCoverage]=useState(null);
+  const [batch,setBatch]=useState(null);
+  const activeRun=useRef(null),currentKB=useRef(K.knowledgeBase);
+  currentKB.current=K.knowledgeBase;
+  const current=!!batch&&batch.sourceKB===K.knowledgeBase;
+  const coverage=useMemo(()=>ankiBatchSummary(cards,batch,current),[cards,batch,current]);
+  const selected=useMemo(()=>ankiSelection(cards,current,tierFilter),[cards,current,tierFilter]);
+  const registerAnki=K.registerArtifact;
+  // v15.17: generation-only publication left stale entries after edits/deletion. This
+  // effect uses stable dependencies and replaces only Anki entries, across every tier.
+  useEffect(()=>{if(registerAnki)registerAnki('ankiNotes',coverage.entries);},[registerAnki,coverage.entries]);
+  useEffect(()=>{
+    const run=activeRun.current;
+    if(run&&run.sourceKB!==K.knowledgeBase){run.ctl.abort();activeRun.current=null;setBusy(false);setLiveKB(0);setAbortCtl(null);}
+  },[K.knowledgeBase]);
+  useEffect(()=>()=>{activeRun.current?.ctl.abort();activeRun.current=null;},[]);
   const [showUncovered,setShowUncovered]=useState(false);
   const [ankiHeader,setAnkiHeader]=useState(false);
   const [abortCtl,setAbortCtl]=useState(null);
@@ -3963,8 +4016,13 @@ function AnkiGenerator(){
   const run=useCallback(async()=>{
     if(!cfg.apiKey){log('Enter API key first.','err');return;}
     if(!(K.knowledgeBase.conditions||[]).length){log('Build the LATTE Knowledge Base first.','err');return;}
-    setBusy(true);setProg(0);setLogs([]);setCards([]);setLedger('');setCoverage(null);setShowUncovered(false);
+    setBusy(true);setProg(0);setLogs([]);setCards([]);setLedger('');setBatch(null);setShowUncovered(false);
+    // v15.17: capture identity before awaiting; a replaced KB or superseded run cannot publish.
+    activeRun.current?.ctl.abort();
     const ctl=new AbortController();setAbortCtl(ctl);
+    const sourceKB=K.knowledgeBase,snapshot=ankiSourceSnapshot(sourceKB);
+    const runState={sourceKB,ctl,rawResponses:[],truncated:false};activeRun.current=runState;
+    const isCurrent=()=>ankiRunIsCurrent(runState,activeRun.current,currentKB.current);
     const focusBlock=buildFocusBlock();
     try{
       log('Loading structured LATTE Knowledge Base...','warn');
@@ -3975,8 +4033,10 @@ function AnkiGenerator(){
       log(`Knowledge Base ready: ${K.knowledgeBase.conditions.length} conditions, ${(K.knowledgeBase.conditions||[]).reduce((n,c)=>n+(c.facts||[]).length,0)} facts.`,'ok');
       const chunks=allTxt.trim()?ankiChunkText(allTxt,ANKI_CHUNK_CHARS,ANKI_OVERLAP_PAGES):[''];const n=chunks.length||1;
       log(`${n} chunk(s) — Knowledge Base — Model: ${model} [Thinking: ${toolLevel}]${cfg.autoProfile?' (auto)':''}${focusBlock?' — with focus context':''}`, 'warn');
+      const chunkIds=chunks.map(ankiChunkFactIds),ledgers=[];
       let all=[],allLedg='';
       for(let i=0;i<n;i++){
+        if(!isCurrent())return;
         log(`Chunk ${i+1}/${n}...`,'warn');const parts=[];
         setLiveKB(0);
         const ctx=n>1?`\n\n[CHUNK ${i+1} of ${n}. Process ALL content.]`:'';
@@ -3996,17 +4056,18 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
 - The Phase 4/5 zero-skip and "every indexed item appears in the coverage map" requirements still apply, measured against this fact-id map.
 `;
         parts.push({text:ANKI_MASTER_PROMPT+focusBlock+kbAdapter+'\n\n'+sourceLabel+'\n\n'+(chunks[i]||'')+ctx});
-        const resp=await callGemini(cfg.apiKey,model,parts,{thinkingLevel:toolLevel,signal:ctl.signal,onUpdate:t=>setLiveKB(Math.round(t.length/102.4)/10),onMeta:m=>{if(m.truncated){const th=m.usage?.thoughtsTokenCount||0;log(`  \u26a0 Chunk ${i+1} hit the 65,536-token ceiling \u2014 cards are missing from the end.`+(th?` Thinking used ${th.toLocaleString()} tok of that budget.`:' Lower the chunk size.'),'err');}}});
-        const{cards:cc,ledger:cl}=ankiParseCards(resp,i+1);all=[...all,...cc];allLedg+=cl?'\n--- Chunk '+(i+1)+' ---\n'+cl:'';
-        setProg(((i+1)/n)*100);log(`Chunk ${i+1} done — ${cc.length} cards`,'ok');
+        const resp=await callGemini(cfg.apiKey,model,parts,{thinkingLevel:toolLevel,signal:ctl.signal,onUpdate:t=>{if(isCurrent())setLiveKB(Math.round(t.length/102.4)/10);},onMeta:m=>{if(isCurrent()&&m.truncated){runState.truncated=true;const th=m.usage?.thoughtsTokenCount||0;log(`  \u26a0 Chunk ${i+1} hit the 65,536-token ceiling \u2014 cards are missing from the end.`+(th?` Thinking used ${th.toLocaleString()} tok of that budget.`:' Lower the chunk size.'),'err');}}});
+        if(!isCurrent())return;
+        runState.rawResponses.push(resp);
+        const{cards:cc,ledger:cl}=ankiParseCards(resp,i+1);ledgers.push({chunk:i+1,text:cl});all=[...all,...cc];allLedg+=cl?'\n--- Chunk '+(i+1)+' ---\n'+cl:'';
+        setProg(((i+1)/n)*100);log(`Chunk ${i+1} done — ${cc.length} received notes`,'ok');
       }
       // Key on the FULL normalized text. The old 120-char prefix key silently dropped
       // distinct notes that shared an opening — exactly the zero-skip guarantee v10c
       // works hardest to enforce. A surviving near-duplicate is deletable in the UI;
       // a dropped card is not recoverable.
-      attachCoverageToCards(all,allLedg);
-      const seen=new Map(),deduped=[];
-      for(const c of all){const k=(c.text||'').toLowerCase().replace(/\s+/g,' ').trim();if(!k){deduped.push(c);continue;}if(seen.has(k)){const kept=seen.get(k);kept.factIds=[...new Set([...(kept.factIds||[]),...(c.factIds||[])])];continue;}seen.set(k,c);deduped.push(c);}
+      const mappingIssues=attachCoverageToCards(all,ledgers,snapshot,chunkIds);
+      const deduped=ankiDedupeCards(all);
       if(all.length-deduped.length>0)log(`Removed ${all.length-deduped.length} duplicate(s); their fact IDs were merged into the surviving cards.`,'warn');
       deduped.forEach(c=>{c.lint=lintAnkiCard(c);});
       // v15.7 B5: unsafe-abbreviation findings are WARN tier and kept OUT of `lint`, because
@@ -4021,16 +4082,16 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
       const abbrevCount=deduped.filter(c=>(c.abbrev||[]).length).length;
       if(abbrevCount)log(`⚠ ${abbrevCount} card(s) contain an error-prone dose abbreviation (q.d., IU, bare U, trailing/missing zero). They are still exportable — fix the transcription before drilling them.`,'warn');
       const lintCount=deduped.filter(c=>c.lint.length).length;
-      const allFacts=kbAllFacts(K.knowledgeBase);
-      const covered=new Set(deduped.filter(c=>c.keep&&!(c.lint||[]).length).flatMap(c=>c.factIds||[]));
-      const uncovered=allFacts.filter(f=>!covered.has(f.id));
-      setCoverage({total:allFacts.length,coveredCount:allFacts.length-uncovered.length,uncovered,lintCount});
-      setCards(deduped);setLedger(allLedg);log(`Complete! ${deduped.length} cards ready.`,'ok');
-      // Register in the shared artifact registry so the Fact Inspector can show "Used in".
-      if(K.registerArtifact)K.registerArtifact('ankiNotes',deduped.filter(c=>(c.factIds||[]).length).map((c,i)=>({id:c.id,factIds:c.factIds||[],label:'Anki note '+(i+1)+' \u2014 '+String(c.text||'').replace(/\{\{c\d+::(.*?)(?:::.*?)?\}\}/g,'$1').slice(0,60)})));
-      if(allFacts.length)log(`Coverage: ${allFacts.length-uncovered.length}/${allFacts.length} facts mapped to a card${uncovered.length?` — ${uncovered.length} uncovered`:''}.`,uncovered.length?'err':'ok');
-      if(lintCount)log(`${lintCount} card(s) flagged by lint (missing cloze/tier or >3 clozes).`,'warn');
-    }catch(e){if(e.name==='AbortError')log('Cancelled.','warn');else log('Error: '+e.message,'err');}finally{setBusy(false);setAbortCtl(null);setLiveKB(0);}
+      if(!isCurrent())return;
+      const completed={sourceKB,snapshot,chunkIds,parsedNotes:all.length,rawCards:all,rawResponses:runState.rawResponses,mappingIssues,truncated:runState.truncated,model,thinkingLevel:toolLevel};
+      const summary=ankiBatchSummary(deduped,completed,true);
+      setBatch(completed);setCards(deduped);setLedger(allLedg);
+      log('Complete! '+all.length+' received notes; '+deduped.length+' after dedupe; '+summary.kept.length+' kept notes → '+summary.reviews+' review cards.','ok');
+      log('Facts linked to kept notes: '+summary.coveredCount+'/'+summary.total+'.','ok');
+      if(mappingIssues.length)log(mappingIssues.length+' mapping diagnostics; inspect the Fact Coverage Map.','warn');
+      if(lintCount)log(lintCount+' structurally invalid note(s) excluded from export; correct them in Table.','warn');
+    }catch(e){if(isCurrent()||activeRun.current===runState){if(e.name==='AbortError')log('Cancelled.','warn');else log('Error: '+e.message,'err');}}
+    finally{if(activeRun.current===runState){activeRun.current=null;setBusy(false);setAbortCtl(null);setLiveKB(0);}}
   },[cfg,model,toolLevel,log,K.knowledgeBase,focusContext,outcomes,points]);
 
   const toggle=useCallback(id=>setCards(p=>p.map(c=>c.id===id?{...c,keep:!c.keep}:c)),[]);
@@ -4055,7 +4116,7 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
   })),[]);
 
   const exportTxt=useCallback(()=>{
-    const kept=ankiSelection(cards,true,tierFilter).kept;if(!kept.length)return;
+    const kept=ankiSelection(cards,current,tierFilter).kept;if(!kept.length)return;
     // With #html:true, thresholds like "<90%" would be swallowed as tags, so escape
     // < > & in Text/Extra only when the header is on. Tags stay raw (Anki treats col 3
     // as space-separated tags, not HTML). Cloze braces are unaffected by escaping.
@@ -4063,9 +4124,9 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
     const body=kept.map(c=>`${ankiHeader?esc(c.text):c.text}|${ankiHeader?esc(c.extra):c.extra}|${c.tags}`).join('\n'); // v15: bare pipes — Anki's Pipe separator keeps surrounding spaces inside every field
     const header=ankiHeader?'#separator:Pipe\n#html:true\n#notetype:Cloze\n#tags column:3\n':'';
     downloadBlob(new Blob([header+body],{type:'text/plain'}),`latte_anki_import${tierFilter!=='all'?'_tier'+tierFilter:''}.txt`);
-  },[cards,filteredCards,tierFilter,ankiHeader]);
+  },[cards,current,tierFilter,ankiHeader]);
 
-  const keptCount=ankiSelection(cards,true,tierFilter).kept.length;
+  const keptCount=selected.kept.length;
   const liveLint=useMemo(()=>cards.filter(c=>c.lint&&c.lint.length).length,[cards]);
   const liveAbbrev=useMemo(()=>cards.filter(c=>c.abbrev&&c.abbrev.length).length,[cards]);
 
@@ -4119,10 +4180,11 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
 
       {/* Cards */}
       {cards.length>0&&<div style={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:18}}>
-        {coverage&&<div style={{marginBottom:12,padding:'10px 12px',borderRadius:8,border:'1px solid '+(coverage.uncovered.length?'rgba(248,113,113,.35)':'rgba(52,211,153,.3)'),background:coverage.uncovered.length?'rgba(248,113,113,.06)':'rgba(52,211,153,.05)'}}>
+        {batch&&!current&&<p role="alert" style={{color:'var(--accent-warm)'}}>These notes belong to an earlier Knowledge Base. Generate a new batch to restore source links, coverage, and export.</p>}
+        {current&&<div style={{marginBottom:12,padding:'10px 12px',borderRadius:8,border:'1px solid '+(coverage.uncovered.length?'rgba(248,113,113,.35)':'rgba(52,211,153,.3)'),background:coverage.uncovered.length?'rgba(248,113,113,.06)':'rgba(52,211,153,.05)'}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap'}}>
             <span style={{fontSize:12,fontWeight:600,color:coverage.uncovered.length?'var(--accent-red)':'var(--accent-green)'}}>
-              {coverage.uncovered.length?'⚠':'✓'} Verified coverage: {coverage.coveredCount}/{coverage.total} facts mapped to a card
+              Facts linked to kept notes: {coverage.coveredCount}/{coverage.total} (all tiers)
               {liveLint>0&&<span style={{color:'var(--accent-warm)',marginLeft:8}}>· {liveLint} lint issue{liveLint>1?'s':''}</span>}
               {liveAbbrev>0&&<span style={{color:'var(--accent-warm)',marginLeft:8}} title="Error-prone dose abbreviations — exportable, but fix the transcription first">· {liveAbbrev} unsafe abbreviation{liveAbbrev>1?'s':''}</span>}
             </span>
@@ -4134,14 +4196,15 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
         </div>}
         <div style={{display:'flex',gap:6,marginBottom:10,flexWrap:'wrap',alignItems:'center'}}>
           <span style={{fontSize:11,color:'var(--text-dim)',fontWeight:500}}>TIERS:</span>
-          {['1','2','3'].map(t=><button key={t} className={`tier-btn t${t} ${tierFilter===t?'active':''}`} onClick={()=>setTierFilter(tierFilter===t?'all':t)}>T{t} <b>{tierCounts[t]}</b></button>)}
+          {['1','2','3'].map(t=><button key={t} className={`tier-btn t${t} ${tierFilter===t?'active':''}`} onClick={()=>setTierFilter(tierFilter===t?'all':t)}>T{t} <b>{tierCounts[t]} notes</b></button>)}
           {tierFilter!=='all'&&<button className="btn-secondary" style={{padding:'3px 8px',fontSize:10}} onClick={()=>setTierFilter('all')}>Show All</button>}
           <label style={{display:'flex',gap:5,alignItems:'center',fontSize:11,marginLeft:8}}><input type="checkbox" checked={styleOnly} onChange={e=>setStyleOnly(e.target.checked)}/>Style warnings ({styleCount})</label>
         </div>
+        <p style={{fontSize:12}}>Excluded from export: {selected.invalid} structural · {selected.manualExcluded} manually unchecked. Structural repairs restore eligibility; checkboxes record your choice.</p>
         <p style={{fontSize:11,color:'var(--text-dim)',margin:'0 0 10px'}}>Style warnings are suggestions; notes stay exportable. The style filter affects review only. Export includes all kept notes in the selected tier.</p>
         {styleOnly&&!displayedCards.length&&<p role="status" style={{fontSize:12}}>No style warnings in this tier.</p>}
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10,flexWrap:'wrap',gap:6}}>
-          <span style={{fontSize:12,color:'var(--text-dim)'}}><b style={{color:'var(--text)'}}>{displayedCards.length}</b> shown · {filteredCards.length} notes · <b style={{color:'var(--accent-green)'}}>{keptCount}</b> kept{filteredCards.filter(c=>c.lint&&c.lint.length).length>0&&<span style={{color:'var(--accent-warm)'}}> · {filteredCards.filter(c=>c.lint&&c.lint.length).length} lint</span>}</span>
+          <span style={{fontSize:12,color:'var(--text-dim)'}}><b style={{color:'var(--text)'}}>{displayedCards.length}</b> shown · {filteredCards.length} notes · <b style={{color:'var(--accent-green)'}}>{keptCount}</b> kept notes → {selected.reviews} review cards{filteredCards.filter(c=>c.lint&&c.lint.length).length>0&&<span style={{color:'var(--accent-warm)'}}> · {filteredCards.filter(c=>c.lint&&c.lint.length).length} lint</span>}</span>
           <div style={{display:'flex',gap:10,alignItems:'center'}}>
             <label style={{display:'flex',alignItems:'center',gap:5,fontSize:10.5,color:'var(--text-dim)',cursor:'pointer',userSelect:'none'}} title="Prepend #separator:Pipe / #notetype:Cloze / #tags column:3 and HTML-escape < > & so the file imports in one click. Leave off if your importer maps fields manually.">
               <input type="checkbox" checked={ankiHeader} onChange={e=>setAnkiHeader(e.target.checked)} style={{accentColor:'var(--accent)'}}/>Anki header
@@ -4149,7 +4212,7 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
             <div style={{display:'flex',background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:6,overflow:'hidden'}}>
               {['table','list','preview'].map(v=><button key={v} onClick={()=>setView(v)} style={{background:view===v?'var(--accent)':'none',border:'none',color:view===v?'#fff':'var(--text-dim)',padding:'4px 12px',fontSize:11,cursor:'pointer',fontFamily:'DM Sans',fontWeight:500}}>{v==='table'?'Table':v==='list'?'List':'Preview'}</button>)}
             </div>
-            <button className="btn-primary" style={{padding:'6px 14px',fontSize:12}} onClick={exportTxt}>⬇ Export .txt</button>
+            <button className="btn-primary" style={{padding:'6px 14px',fontSize:12}} onClick={exportTxt} disabled={!keptCount}>⬇ Export .txt</button>
           </div>
         </div>
 
@@ -4174,6 +4237,7 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
         {(c.abbrev||[]).map((msg,i)=><div key={i} style={{color:'var(--accent-warm)',fontSize:11,marginTop:5}}>{msg}</div>)}
       </div>)}</div>}
 
+      {batch&&batch.mappingIssues.length>0&&<details style={{marginTop:14}}><summary>Mapping diagnostics ({batch.mappingIssues.length}) · {batch.parsedNotes} parsed notes</summary>{batch.mappingIssues.map((x,i)=><div key={i} style={{fontSize:12}}>{x.code} — {x.id||x.noteId} · chunk {x.chunk}, line {Number.isFinite(x.line)?x.line:'invalid'}</div>)}</details>}
       {ledger&&<div style={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:16,marginTop:14}}>
         <div style={{fontSize:10,fontWeight:600,textTransform:'uppercase',letterSpacing:1,color:'var(--text-dim)',marginBottom:8}}>Fact Coverage Map (fact-id → line #)</div>
         <pre style={{fontFamily:'JetBrains Mono',fontSize:10,color:'var(--text-dim)',whiteSpace:'pre-wrap',lineHeight:1.6,maxHeight:220,overflowY:'auto',background:'var(--bg-deep)',padding:10,borderRadius:6,border:'1px solid var(--border)'}}>{ledger}</pre>
