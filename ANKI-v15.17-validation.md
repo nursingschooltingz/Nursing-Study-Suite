@@ -1,16 +1,18 @@
 # v15.17 text-only Anki implementation and validation
 
-Prepared 2026-09-11. This is a local code-only implementation report, not a live-generation or clinical-validation report.
+Prepared 2026-09-11. This reports the local implementation and subsequently approved example edit, not live-generation or clinical-validation results.
 
 ## Baseline and scope
 
 - Starting checkout: `21fb5980f796649d3cb7f53f2f919e8b93e2136b`, clean `main`, canonical `Nursing-Study-Suite v15.16.html`.
 - Starting unified verifier: 761 assertions passed; all frozen hashes, prompt documentation, LF/version checks and full JSX Babel transform passed.
 - Working branch: `codex/text-only-anki`. Final canonical file: `Nursing-Study-Suite v15.17.html`.
-- Stages A0–A5 and B are implemented. Stage C has a deterministic planning tool and private replay exports; a source-specific live run is pending selection and approval. D has no measured justification. E is a tested proposal only. F's local version/docs/file checks are done; actual Anki import and public publication are not done.
-- No ignored course files were read. No live Gemini requests, manual quota-consuming test scripts, API keys in files, push, merge, or publication occurred.
+- Stages A0–A5 and B are implemented. Stage C now has a source-specific private comparison specification awaiting live-call approval. D has no measured justification. E's exact example diff was applied under the user's one-time approval on 2026-09-11. F's local version/docs/file checks are done; actual Anki import and public publication are not done.
+- The user explicitly scoped one KB on 2026-09-11; it was read only to prepare the pilot specification. No unrelated course files were read. No live Gemini requests, manual quota-consuming test scripts, API keys in files, push, merge, or publication occurred.
 
-All eleven hashes remain the values in `prompt-baseline.json`. In particular, `ANKI_MASTER_PROMPT` remains `353471cbee66c759341ad8f4d857fa75ea4051744a52771ce780fcf172efc548`. The prompt baseline file is unchanged. The exact proposal in `ANKI-v15.17-example-proposal.diff` has **not** been applied.
+All eleven hashes remained unchanged through the code-only checkpoint `1da58a3`. The subsequently approved `ANKI-v15.17-example-proposal.diff` changes only `ANKI_MASTER_PROMPT`, from `353471cbee66c759341ad8f4d857fa75ea4051744a52771ce780fcf172efc548` to `9d6c99229af067191df7b34d92c8ad98ff569870dd8f3be88634a5eb1a378b83`. Only that baseline hash was deliberately updated, with the approval recorded in its description. The other ten frozen constants retain their baseline. `Prompts.md` contains the actual new source bytes.
+
+The user approved applying the example edit before a live baseline existed. The pre-edit application was preserved privately and remains recoverable at `1da58a3`, so the planned comparison can still use the original prompt with the same implementation and generation settings. No baseline generation is claimed here.
 
 The following generation-input source hashes were measured from the A0 checkout and are now regression assertions. These are trimmed source spans, not hashes of a generated deck.
 
@@ -40,7 +42,7 @@ The recommended profile remains `gemini-3.8-flash`, low thinking, 12,000-charact
 
 ## Deterministic verification
 
-`node verify-repo.js` passes **901 assertions**: 140 added to the original 761. All prior meaningful coverage remains. Extraction anchors were updated where needed, with non-vacuous helper-tail assertions. The old assertion that repairs forcibly recheck notes was replaced with the new, tested requirement that manual choice survives repairs.
+`node verify-repo.js` passes **904 assertions**: 143 added to the original 761. All prior meaningful coverage remains. Extraction anchors were updated where needed, with non-vacuous helper-tail assertions. The old assertion that repairs forcibly recheck notes was replaced with the new, tested requirement that manual choice survives repairs. The five example rows are now extracted directly from the shipped prompt; additional assertions verify exact recovery of the historical hash, diff reproducibility from either side, and rejection of partially applied examples.
 
 The full JSX block Babel-transforms, prompt documentation matches, all eleven frozen hashes pass, and the canonical HTML is LF-only with matching filename/release comment. The application remains one HTML with the original CDNs and runtime dependencies.
 
@@ -75,26 +77,28 @@ Ran `node tools/anki-browser-fixture.js 4173` in the supported in-app browser. T
 
 These are software checks against deliberately seeded examples. The synthetic response's numeric discrepancy and different-answer collision were intentional test defects; they are not measurements of Gemini's clinical quality or adherence.
 
-## Pending live pilot: source and approval required
+## Pending live pilot: source scoped, call approval required
 
-No exam KB is currently authorized for inspection in this implementation. A request for its exact path is pending. Do not substitute an ignored course file or infer source permission from the plan's examples.
+The user supplied the exact KB path on 2026-09-11. `tools/anki-pilot-spec.js` inspected that JSON with the shipped packet/chunk functions: **40 conditions, 328 facts, eight chunks**. The exact source path, source/packet hashes, chunk sizes, both prompt hashes and pre-edit application snapshot are in gitignored `scratch/anki-pilot/`. No source text or clinical facts are included in this report.
 
-Once the user identifies the KB:
+The prepared `scratch/anki-pilot/comparison-spec.json` proposes two runs of the same KB using `gemini-3.8-flash`, low thinking, blank Outcomes/Points/Additional Context, unchanged chunking, a 65,536-token output ceiling, and the existing streaming transport. Each run expects **eight generation calls**, with at most **24 attempts** under the unchanged two-retry policy: **16 calls / at most 48 attempts total**, plus **zero additional audit calls**. No live calls are authorized or made by this specification.
 
-1. Inspect that explicitly scoped JSON and run `node tools/anki-pilot-spec.js <KB-path>`. The planner uses the shipped packet/chunk functions and returns source/packet hashes, condition/fact counts, exact chunk count **N**, recommended model/thinking, **N expected generation calls**, at most **3N HTTP attempts** under the unchanged two-retry policy, and no extra audit calls. Confirm the UI's actual model and focus settings match the specification. If they differ, amend the specification before approval.
-2. Present the exact source path, model/thinking, chunk count, retry ceiling and private retention folder for approval. The folder is `scratch/anki-pilot/` under this checkout, already gitignored; explicitly choose it when saving diagnostics. Keep credentials in the existing session/process mechanisms.
-3. After approval, generate once with unchanged prompts. Save the original diagnostics/responses and source snapshot before editing, exclusions or tier selection. Record truncation/cancellation. Inspect the actual exported bytes.
+Remaining procedure:
+
+1. Obtain approval for this concrete comparison. Before executing, recheck the source hash and verify the actual model, focus and generation settings match the specification. If they differ, amend the specification before approval. Keep credentials in the existing session/process mechanisms.
+2. Use the preserved pre-example application for the baseline run and the current application for the second run. Their only generation-input difference must be the exact approved example diff. The pre-edit application remains available in Git at `1da58a3`; its private snapshot is `scratch/anki-pilot/before-examples.html`.
+3. Save each run's original diagnostics/responses and source snapshot in `scratch/anki-pilot/` before editing, exclusions or tier selection. Record truncation/cancellation and inspect the actual exported bytes. Keep every generated artifact private and out of Git.
 4. Record front-anchor warnings / parsed Text rows; unmapped notes and partial/invalid edges; raw same/different-answer collision groups and affected review cards; numeric warned/checked notes and tokens, quote-only/unsupported findings, and not-checked reasons. Also retain raw/post-dedupe/invalid/kept counts, reviews by tier and global linked facts.
 5. Adjudicate every numeric discrepancy and different-answer collision as defect, false alarm or unresolved, and sample unflagged notes. A lower warning rate alone is not improvement. A single before/after is a pilot, not causal evidence.
 6. Consider Stage D only if the evidence isolates an actual one-to-many mapping-contract limitation. The parser already accepts repeated fact IDs on separate lines. Absent maps, bad row numbers and invalid IDs require separate diagnoses. No adapter change is currently proposed.
-7. After the baseline and specific frozen-prompt approval, apply only the reviewed example diff, deliberately update only `ANKI_MASTER_PROMPT`'s baseline, regenerate `Prompts.md`, and verify. Use the same KB, model, thinking, focus, chunking and selection for the comparison. Check for fictional-example contamination. Additional live calls need authorization for that comparison.
+7. Compare the two runs using the same KB, model, thinking, focus, chunking and selection. Check for fictional-example contamination. The exact example edit is already approved and applied; no further prompt or adapter changes are authorized by that one-time approval. Any calls beyond the specified comparison need authorization.
 8. Import the actual pilot `.txt` into an isolated Anki test deck using the student's established compatible cloze note type. Check note/review counts, c1/c2/c3 behavior, Extra/source display, comparators and tag-column mapping. No Anki import was performed here; no bridge or dependency was installed.
 
-## Proposal and limits
+## Approved examples and limits
 
-`tools/anki-example-proposal.js` constructs the candidate from the actual frozen prompt; the harness extracts and validates its five complete example rows. Structure, supplied fictional tags, numeric consistency, style findings and collision checks pass. The proposal changes two example locations only and explicitly says the examples are fictional format demonstrations, never source material. See `ANKI-v15.17-example-proposal.diff` for the exact diff.
+`tools/anki-example-proposal.js` reproduces the approved diff from either the original or applied prompt; the harness extracts and validates the five complete example rows directly from the shipped HTML. Structure, supplied fictional tags, numeric consistency, style findings and collision checks pass. The edit changes two example locations only and explicitly says the examples are fictional format demonstrations, never source material. See `ANKI-v15.17-example-proposal.diff` for the exact applied diff.
 
-Applying it still crosses `AGENTS.md` invariant 1: “The 11 prompt constants are byte-frozen.” The prior v15.16 approval does not authorize this new diff. Stage C's source and live-call boundary follows `AGENTS.md`'s data/external-action rules and `CURRENT_STATE.md`'s evidence requirements.
+The user's one-time approval on 2026-09-11 satisfies `AGENTS.md` invariant 1 for this exact example diff only. It does not authorize additional prompt edits or live API calls. Stage C's remaining live-call boundary follows `DEVELOPMENT.md`: “Run live-material checks only when the changed pipeline requires them and the user explicitly authorizes the API calls.”
 
 Numeric matching checks token occurrence, not clinical entailment. Reversed comparators and swapped roles of two supported values are deliberately tested limits. Equivalent notation includes leading/trailing zeros, valid grouped numbers, microgram aliases, spelled-out supported units, U/IU/units and declared compound units such as mcg/kg/min, mg/dL and mL/hr. Fractions, blood-pressure ratios, scientific notation, unknown units and bare numerals requiring context are reported for review; the scanner does not convert units or certify an unflagged note. There is no reliable per-fact quote-verification flag to promote quote-only support into verified fact support.
 

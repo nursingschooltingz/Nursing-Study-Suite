@@ -51,7 +51,7 @@ The harness comments identify its extraction anchors. If a refactor moves one, u
 
 - `node tools/anki-browser-fixture.js 4173` serves only a synthetic fixture at `http://127.0.0.1:4173/`. It uses the shipped generator and the harness mini-KB, mocks generation, and blocks fetch. It never serves repository files. Stop it after checking the UI.
 - `node tools/anki-pilot-spec.js <explicitly-authorized-KB.json>` computes the exact chunk/call count with the shipped packet and chunker. This reads the named KB and makes no API request. Obtain authorization for that material before running it; obtain separate authorization for the resulting live run.
-- `node tools/anki-example-proposal.js` prepares the example-only diff. It never changes the app or prompt baseline. Its candidate rows are extracted from the proposed prompt and checked by the unified harness.
+- `node tools/anki-example-proposal.js` reproduces the approved example-only diff from either the original or applied prompt. It rejects partially applied examples and never changes the app or prompt baseline. The unified harness now extracts the five examples directly from the shipped prompt and verifies that reversing the exact example edit recovers the historical frozen hash.
 - See `ANKI-v15.17-validation.md` for measured results and the outstanding live/import procedure. Completed and interrupted generation diagnostics can be saved privately from the UI, including original responses and their source snapshot; keep these files out of Git.
 
 ## Release checklist

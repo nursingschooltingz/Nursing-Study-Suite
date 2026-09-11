@@ -5,7 +5,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 Detailed engineering rationale for each change — including rejected proposals and why — lives in `LATTE-v15-changelog.md`. This file is the summary.
 
-Releases use the unified verifier for Babel parsing, regression assertions, prompt documentation, and all 11 frozen prompt hashes. Through v15.15, the constants retained their v14.x bytes; v15.16 deliberately updates only the explicitly approved Anki prompt baseline.
+Releases use the unified verifier for Babel parsing, regression assertions, prompt documentation, and all 11 frozen prompt hashes. Through v15.15, the constants retained their v14.x bytes; v15.16 and v15.17 deliberately update only the explicitly approved Anki prompt baseline.
 
 ---
 
@@ -20,13 +20,14 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 - Explicit received-note, kept-note, and cloze-review totals; style filtering stays independent of export and coverage.
 - Warning-only exact numeric comparisons with honest checked/not-checked status, quote-only and unsupported-form findings; identical rendered-front groups distinguish possible ambiguity and redundancy.
 - Optional source-pointer footers in the existing pipe-delimited export, default off, with safe HTML/plain rendering and explicit unavailable sources.
-- Private raw-response diagnostics, including interrupted runs; a synthetic browser fixture, a read-only pilot planner, and an unapplied example-only prompt proposal.
+- Private raw-response diagnostics, including interrupted runs; a synthetic browser fixture and a read-only pilot planner.
+- The example-only Anki prompt revision, applied under the user's one-time approval on 2026-09-11. Five fictional complete rows demonstrate context anchors and the existing import fields. Exact diff: `ANKI-v15.17-example-proposal.diff`.
 
 ### Validation
-- `node verify-repo.js`: 901 assertions (140 added), full JSX Babel transform, LF/version checks, generated prompt documentation, and all eleven frozen hashes pass. All eight CDN SRI pins rechecked and matched on 2026-09-11.
+- `node verify-repo.js`: 904 assertions (143 added), full JSX Babel transform, LF/version checks, generated prompt documentation, and all eleven frozen hashes pass. The live prompt's examples pass formulation checks; reversing only the approved diff recovers its prior frozen hash. All eight CDN SRI pins rechecked and matched on 2026-09-11.
 - Synthetic browser checks passed for editing/repair, manual exclusion, deletion, counts, global coverage/registry, filters, cloze switching/reveal, inert markup, warnings, escaped source exports, empty regeneration, KB replacement and late-result rejection.
-- Frozen prompts, source packet, chunker, focus block, runtime adapter, API models/settings and transport remain unchanged. `ANKI-v15.17-example-proposal.diff` is review material only.
-- Live generation, real-material finding adjudication, and an actual Anki import remain outstanding. No live Gemini calls or ignored course-file reads occurred. See `ANKI-v15.17-validation.md`. This change was committed locally; no publication or push was performed.
+- The other ten frozen prompts, source packet, chunker, focus block, runtime adapter, API models/settings and transport remain unchanged. Only `ANKI_MASTER_PROMPT`'s baseline was deliberately updated for the exact approved example diff.
+- Live generation, real-material finding adjudication, and an actual Anki import remain outstanding. The user-scoped KB was inspected to prepare a private comparison specification: eight calls per run, 16 total, at most 48 attempts. No live Gemini calls or unrelated course-file reads occurred. See `ANKI-v15.17-validation.md`. This change was committed locally; no publication or push was performed.
 
 ## [15.16] — 2026-09-09
 

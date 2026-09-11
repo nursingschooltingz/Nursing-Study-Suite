@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 'use strict';
 
-// Prepares a reviewable proposal only. Never writes the application or prompt baseline.
+// Reproduces the approved example diff before or after application.
+// Never writes the application or prompt baseline.
 const fs=require('fs'),path=require('path'),{spawnSync}=require('child_process');
 const {extractPromptLiteral,resolveSuiteFile}=require('./repo-checks');
 function buildAnkiExampleProposal(source){
-  const original=extractPromptLiteral(source,'ANKI_MASTER_PROMPT').declaration;
-  let proposed=original;
+  const live=extractPromptLiteral(source,'ANKI_MASTER_PROMPT').declaration;
   const replacements=[[
     'For example, replace Characterized by an {{c1::erythematous plaque}} with Lesion type: {{c1::erythematous plaque}}.',
     'For a fictional format-only example, use [ExampleCondition-B] Lesion type: {{c1::an erythematous plaque}}||Nursing::LATTE::Look Condition::ExampleConditionB Tier::2. ExampleCondition-B is never source material for the generated deck.'
@@ -14,8 +14,15 @@ function buildAnkiExampleProposal(source){
     'Examples of desired compression:\n\n"The patient should report weight gain of 2 lb in 24 hours" -> Report weight gain of {{c1::2 lb in 24 hr}}\n"Aspirin should be avoided in children with viral illness because of the risk of Reye syndrome" -> [Aspirin] Avoid in children with viral illness -> risk of {{c1::Reye syndrome}}\n"Monitor potassium levels while taking loop diuretics" -> [Loop diuretics] Monitor {{c1::potassium}}',
     'Complete format examples (fictional; never source material for the generated deck):\n\n[ExampleMedication-A] Pre-dose pulse count duration: {{c1::one full minute}}||Nursing::LATTE::Assess Condition::ExampleMedicationA Tier::1\n[ExampleMedication-A] Hold parameter: pulse {{c1::<60 bpm}}||Nursing::LATTE::Treatments Condition::ExampleMedicationA Tier::1\n[ExampleCondition-B] Reportable weight gain: {{c1::2 lb in 24 hr}}||Nursing::LATTE::Educate Condition::ExampleConditionB Tier::1\n[ExampleMedication-A] Mechanism: {{c1::blocks Receptor-Z}}||Nursing::LATTE::Treatments Condition::ExampleMedicationA Tier::1'
   ]];
-  for(const [old,next] of replacements){if(proposed.split(old).length!==2)throw Error('Prompt proposal anchor changed; review before regenerating.');proposed=proposed.replace(old,()=>next);}
-  return {original,proposed};
+  const pending=replacements.every(([old,next])=>live.split(old).length===2&&!live.includes(next));
+  const applied=replacements.every(([old,next])=>live.split(next).length===2&&!live.includes(old));
+  if(pending===applied)throw Error('Prompt proposal anchors changed or are partially applied; review before regenerating.');
+  let original=live,proposed=live;
+  for(const [old,next] of replacements){
+    if(pending)proposed=proposed.replace(old,()=>next);
+    else original=original.replace(next,()=>old);
+  }
+  return {original,proposed,applied};
 }
 if(require.main===module){
   const root=path.join(__dirname,'..'),{original,proposed}=buildAnkiExampleProposal(fs.readFileSync(resolveSuiteFile({rootDir:root}),'utf8'));
