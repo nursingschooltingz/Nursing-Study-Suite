@@ -1,8 +1,21 @@
 # Current maintainer state
 
-Shipping v15.16. The canonical app is `Nursing-Study-Suite v15.16.html`. Repository tooling now requires exactly one suite HTML unless an explicit path is supplied; Proton Drive Name clash copies fail loudly.
+Local v15.17 implementation is complete. The canonical app is `Nursing-Study-Suite v15.17.html`. No release was published or pushed during this implementation. Repository tooling now requires exactly one suite HTML unless an explicit path is supplied; Proton Drive Name clash copies fail loudly.
 
 This file carries release-specific evidence, unresolved measurements, and the current source profile. It is intentionally separate from the always-loaded `AGENTS.md`.
+
+## Anki text-only reliability (v15.17)
+
+- **Code-only stages A and B implemented.** Shared flat-cloze parsing blocks malformed notes at preview/export; manual selection is independent of structural eligibility. Edits cannot bypass pipe/newline checks.
+- **Batch identity is conservative.** A replaced KB makes old notes stale. Sources and original mappings stay with their captured snapshot; active coverage, registry, numeric checks, and normal export stop. Aborted or superseded requests cannot publish late results.
+- **Current counts and associations.** The UI distinguishes received notes, valid kept notes, and actual cloze review cards. Global linked facts and only the Anki registry entries follow edits, deletion, selection, and repairs. Style filters affect display only; tier filters affect export only.
+- **Advisory numeric and collision checks.** Numbers compare complete value/unit tokens in revealed Text and Extra against validated linked fact text. Quote-only support, missing/partial mapping, unsupported notation, and stale batches have explicit statuses. This does not check comparator direction, value roles, or clinical entailment. Identical rendered fronts preserve case, punctuation, hints, and visible siblings; warnings never change selection.
+- **Optional source pointers.** “Include source references” defaults off. Export-only footers deduplicate captured filename/location pairs, escape HTML safely, and show unavailable pointers. Pipe-delimited Text/Extra/Tags and current headers remain compatible.
+- **Validation:** 901 deterministic assertions, all frozen prompt hashes and generated documentation, LF/version checks, and full JSX Babel transform pass. All eight SRI pins matched their CDNs on 2026-09-11. The synthetic browser fixture exercised edit/repair/manual exclusion, deletion, tier/style filtering, cloze switching, inert markup, warnings, source export, empty regeneration, stale batches, and late response rejection. The registry remained stable between changes and preserved other artifact kinds.
+- **Generation inputs remain unchanged.** A0 SHA was `21fb5980f796649d3cb7f53f2f919e8b93e2136b` with 761 assertions; all eleven frozen prompt hashes retain that baseline. Packet formatting, chunking, focus context, and the runtime mapping adapter retain their measured source hashes. Model/profile, transport, retry policy, and token ceilings were preserved.
+- **Live measurement is outstanding.** No ignored course materials were read and no live Gemini calls were made. The exact KB path is still needed before producing a source-specific pilot specification. `tools/anki-pilot-spec.js` is ready to calculate it. The one-to-many adapter change has no evidence basis and was not applied.
+- **Frozen-prompt proposal only.** `ANKI-v15.17-example-proposal.diff` contains the smallest example rewrite prepared for review; five fictional complete rows pass structure, tags, style, numeric-fixture and collision assertions. This is not applied, and it is not clinical validation. The 2026-09-09 approval below covered the older v15.16 edit only.
+- **Import remains outstanding.** No real Anki import/review was performed. File-level exports passed; review the authorized pilot export in an isolated deck using the established compatible cloze note type. Details: `ANKI-v15.17-validation.md`.
 
 ## Anki text-only retrieval (v15.16)
 

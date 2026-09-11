@@ -9,6 +9,25 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [15.17] — 2026-09-11
+
+### Fixed
+- Flat cloze structure now drives preview, index counting, numeric scanning, collisions, and export validation. Malformed delimiters, nesting, empty/nonpositive indices, and edits that insert pipes/newlines cannot silently export. Structural eligibility is independent of manual selection.
+- Anki batches capture immutable facts/pointers and validate mapping edges against the supplied chunk before dedupe. Unknown/out-of-chunk IDs, omissions, invalid destinations, and unmapped notes are distinguished. Valid duplicate mappings are retained.
+- Replacing the KB makes old notes stale and rejects late generation results. Live global coverage and Anki Fact Inspector entries now follow edits, deletion, exclusions, and repairs, without changing NCLEX/case entries.
+
+### Added
+- Explicit received-note, kept-note, and cloze-review totals; style filtering stays independent of export and coverage.
+- Warning-only exact numeric comparisons with honest checked/not-checked status, quote-only and unsupported-form findings; identical rendered-front groups distinguish possible ambiguity and redundancy.
+- Optional source-pointer footers in the existing pipe-delimited export, default off, with safe HTML/plain rendering and explicit unavailable sources.
+- Private raw-response diagnostics, including interrupted runs; a synthetic browser fixture, a read-only pilot planner, and an unapplied example-only prompt proposal.
+
+### Validation
+- `node verify-repo.js`: 901 assertions (140 added), full JSX Babel transform, LF/version checks, generated prompt documentation, and all eleven frozen hashes pass. All eight CDN SRI pins rechecked and matched on 2026-09-11.
+- Synthetic browser checks passed for editing/repair, manual exclusion, deletion, counts, global coverage/registry, filters, cloze switching/reveal, inert markup, warnings, escaped source exports, empty regeneration, KB replacement and late-result rejection.
+- Frozen prompts, source packet, chunker, focus block, runtime adapter, API models/settings and transport remain unchanged. `ANKI-v15.17-example-proposal.diff` is review material only.
+- Live generation, real-material finding adjudication, and an actual Anki import remain outstanding. No live Gemini calls or ignored course-file reads occurred. See `ANKI-v15.17-validation.md`. This change was committed locally; no publication or push was performed.
+
 ## [15.16] — 2026-09-09
 
 ### Changed

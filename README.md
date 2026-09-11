@@ -156,6 +156,20 @@ Use **Style warnings** to focus your review. This filter only changes which note
 
 Cards now prefer consistent retrieval labels and one clinical decision per review. Supporting explanations and source-supported contrasts belong in Extra; testable mechanisms also receive their own recall notes.
 
+### Counts, validation, and sources
+
+The summary distinguishes **kept notes** from **review cards**: c1/c2/c3 makes three reviews, while two c1 gaps make one. These totals describe the exported deck, not your daily scheduled reviews.
+
+This suite supports flat `{{c1::answer}}` clozes and optional `{{c1::answer::hint}}` hints, with at most three distinct positive indices per note. Nested or malformed clozes, missing tier tags, pipes inside fields, and embedded line breaks must be corrected in Table before export. Invalid notes stay visible. Checkboxes record your choice: repairing a selected note restores eligibility, and repairing a manually unchecked note leaves it unchecked.
+
+**Facts linked to kept notes** is the global count across all tiers. It follows your edits, selection, and deletions, as do the Anki entries in the Fact Inspector. A link records the original source association; it does not prove that a later edit is accurate. Replacing the KB leaves old notes visible but disables their links, numeric checks, coverage, and export until a new batch is generated.
+
+Expand a note's **numeric status** to inspect exact value/unit discrepancies, quote-only support, or missing/partial mappings. Unsupported numeric forms require source review. These warnings also check revealed Text and Extra, but cannot establish correct comparator direction, the roles of two values, or clinical meaning. Identical-front warnings show the actual masked front and expected answers, distinguishing possible ambiguity from redundancy. Neither warning changes selection.
+
+Turn on **Include source references** to append concise filename/location pointers to Extra during export. It defaults off and never changes the editable Extra field. Missing pointers appear as `Source: unavailable`; quotes are not exported. With **Anki header** enabled, Text and Extra are HTML-escaped and only the trusted source separator uses a line break.
+
+**Batch diagnostics** keeps the original response counts and findings separate from your current selection. Its save button downloads original responses and the source snapshot for private review. Interrupted runs have a separate diagnostics download. These files can contain course material; keep them with your private KB backups.
+
 ### The tag system (worth two minutes to learn)
 
 Every card carries a structured set of tags, and this is where the suite quietly becomes powerful — in Anki you can filter, build filtered decks, and cram by any slice of them:
@@ -171,7 +185,7 @@ Practical plays: five days out, build a **filtered deck** on `Tier::1` and clear
 
 ### Getting cards into Anki
 
-1. Generate, review the output (the tool lints its own cards and shows a **coverage check** — which KB facts made it into cards and which didn't).
+1. Generate, review the output (the tool reports structural issues, advisory findings, and **facts linked to kept notes**).
 2. Check the **Anki header** box before exporting — this stamps the file with import settings so Anki configures itself.
 3. **⬇ Export .txt**, then in Anki: **File → Import**, pick the file. With the header on, separator (Pipe), HTML, note type (**Cloze**), and the tags column are set automatically — just confirm and import.
 4. New to Anki itself? It's a free flashcard app (`apps.ankiweb.net`) built on spaced repetition — it schedules each card right before you'd forget it. Turn on the built-in **FSRS** scheduler in Anki's settings; it's the modern algorithm and works beautifully with these cards.

@@ -30,7 +30,8 @@
      If this page is ever served over http(s) rather than opened from disk, tighten it there. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net">
 <title>LATTE Study Suite</title>
-<!-- v15.16 (2026-09-09): approved Anki prompt revision for text-only retrieval; cloze review preview and advisory style checks. Style warnings never uncheck notes or block export.
+<!-- v15.17 (2026-09-11): text-only Anki reliability: shared flat cloze validation, immutable batch source binding, live note/review counts and linked coverage, numeric and identical-front warnings, optional source-pointer export. All frozen prompts and generation inputs unchanged.
+     v15.16 (2026-09-09): approved Anki prompt revision for text-only retrieval; cloze review preview and advisory style checks. Style warnings never uncheck notes or block export.
      v15.15 (2026-08-29): NCLEX Question Extractor — three fixes found by testing v15.14 against a real question bank. No prompt constant was touched; all three were code faults.
      (1) ANSWER CHOICES WERE BEING READ AS QUESTION NUMBERS. nclexSplitByQNum matched "1." at a line start, which is the stem marker AND the first-choice marker. The slice for question 1 therefore ended at its own first choice: item 1 was the stem alone, items 2-4 were single choice lines posing as questions, and questions 2 and 3 were dropped outright because their numbers had already been claimed. That is the reported "only the stem is captured" symptom, and it was also deleting most of the section. Choice runs are now identified by SPACING and removed from the candidate starts, behind three guards so a genuine question list is never eaten.
      (2) CHOICES ARE PARSED, RENDERED AND REPAIRED. nclexSplitStemOptions reads the choice list back out of the question text (numbered, lettered, parenthesised, inline or on its own lines), so cards show choices as a list and an item that arrived WITHOUT choices is visibly flagged instead of looking complete. In split mode the batch still holds each question's verbatim page text, so a bare stem has its choices restored from the source bytes — no extra call, nothing invented.
@@ -3950,7 +3951,7 @@ function ankiNumericTokens(value){
   // expression cannot donate a misleading matching suffix such as the 2 in 1/2 mg.
   const unusual=/(?<![\w.])(?:\d+(?:\.\d+)?\s*(?:e[+-]?\d+|[x×]\s*10\s*\^?\s*[+-]?\d+)|\d+(?:\s+\d+)?\s*\/\s*\d+|\d+[⁰¹²³⁴⁵⁶⁷⁸⁹]+)(?:\s*[a-z%°]+(?:\/[a-z]+)*)?/gi;
   for(const m of text.matchAll(unusual)){blocked.push([m.index,m.index+m[0].length]);unsupported.push(m[0]);}
-  const re=new RegExp('(?<![\\w.,])('+ANKI_NUMBER_PART+')\\s*('+ANKI_UNIT_PART+')?(?:\\s*(?:[–—-]|\\bto\\b)\\s*('+ANKI_NUMBER_PART+')\\s*('+ANKI_UNIT_PART+')?)?(?![\\w,]|\\.\\d)','g');
+  const re=new RegExp('(?<![\\w.,])('+ANKI_NUMBER_PART+')\\s*('+ANKI_UNIT_PART+')?(?:\\s*(?:[–—-]|\\bto\\b)\\s*('+ANKI_NUMBER_PART+')\\s*('+ANKI_UNIT_PART+')?)?(?![\\w/]|[.,]\\d)','g');
   for(const m of text.matchAll(re)){
     if(blocked.some(([a,b])=>m.index<b&&m.index+m[0].length>a))continue;
     const firstUnit=(m[2]||m[4]||'').replace(/\s+/g,''),secondUnit=(m[4]||m[2]||'').replace(/\s+/g,'');

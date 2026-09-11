@@ -4,7 +4,7 @@ This is the task map for maintainers and coding agents. `AGENTS.md` remains the 
 
 ## Repository shape
 
-- `Nursing-Study-Suite v15.16.html` is the complete application.
+- `Nursing-Study-Suite v15.17.html` is the complete application.
 - `latte-tests.js` is the deterministic regression harness and extracts live functions by anchor.
 - `verify-repo.js` is the only ordinary repository verification entry point.
 - `prompt-baseline.json` stores the 11 frozen prompt hashes.
@@ -46,6 +46,13 @@ This is the task map for maintainers and coding agents. `AGENTS.md` remains the 
 | Persistence | IndexedDB transaction helper, artifact registry builders |
 
 The harness comments identify its extraction anchors. If a refactor moves one, update the harness span and retain an assertion against something near the span's end so a truncated extraction cannot pass vacuously.
+
+## Anki deterministic acceptance and pilot preparation
+
+- `node tools/anki-browser-fixture.js 4173` serves only a synthetic fixture at `http://127.0.0.1:4173/`. It uses the shipped generator and the harness mini-KB, mocks generation, and blocks fetch. It never serves repository files. Stop it after checking the UI.
+- `node tools/anki-pilot-spec.js <explicitly-authorized-KB.json>` computes the exact chunk/call count with the shipped packet and chunker. This reads the named KB and makes no API request. Obtain authorization for that material before running it; obtain separate authorization for the resulting live run.
+- `node tools/anki-example-proposal.js` prepares the example-only diff. It never changes the app or prompt baseline. Its candidate rows are extracted from the proposed prompt and checked by the unified harness.
+- See `ANKI-v15.17-validation.md` for measured results and the outstanding live/import procedure. Completed and interrupted generation diagnostics can be saved privately from the UI, including original responses and their source snapshot; keep these files out of Git.
 
 ## Release checklist
 

@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 899;
+const EXPECTED_ASSERTIONS = 901;
 
 let file;
 try {
@@ -2221,6 +2221,8 @@ section('v15.17 — advisory numeric consistency');
   for(const [a,b] of [['.5 mg','0.5 mg'],['5.0 mg','5 mg'],['005.00 mg','5 mg'],['5,000 U','5000 units'],['50 µg','50 mcg'],['50 μg','50 micrograms'],['2 milliliters per hour','2 mL/hr'],['60 beats per minute','60 bpm']])t('notation equivalence: '+a,tokens(a)===tokens(b)&&tokens(a)!=='');
   t('units are distinct, without automatic conversion',tokens('50 mg')!==tokens('50 mcg')&&tokens('30 mL')!==tokens('30 mL/hr'));
   t('compound units remain complete',tokens('2 mcg/kg/min')==='2 mcg/kg/min'&&tokens('5 mg/dL')==='5 mg/dl');
+  t('unknown compound suffix cannot donate a supported prefix',ANKI.ankiNumericTokens('5 mg/kg2').unsupported.length>0&&ANKI.ankiNumericTokens('5 mg/kg2').tokens.length===0);
+  t('commas separating measurements preserve complete numeric tokens',tokens('5 mg, 10 mg.')==='5 mg;10 mg'&&ANKI.ankiNumericTokens('5 mg, 10 mg.').unsupported.length===0);
   t('range endpoints inherit trailing unit',tokens('5–10 mg')==='5 mg;10 mg');
   t('explicit endpoint units and to notation are supported',tokens('5 mg to 10 mg')==='5 mg;10 mg'&&tokens('5 to 10 mg')==='5 mg;10 mg');
   t('decimal comparison preserves arbitrary supplied precision',tokens('1.12345678901234567890 mg')==='1.1234567890123456789 mg');
