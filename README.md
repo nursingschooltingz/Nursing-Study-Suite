@@ -8,6 +8,8 @@ Turn your lecture PDFs and PowerPoints into a complete, source-cited study syste
 
 The whole suite is **one HTML file**. There is nothing to install, no account to create, and no website collecting your data. You open the file in your web browser, paste in a free Google Gemini API key, upload your study materials, and go.
 
+**v15.17 testing build:** [Download the current HTML from main](https://github.com/nursingschooltingz/Nursing-Study-Suite/raw/refs/heads/main/Nursing-Study-Suite%20v15.17.html). It includes the Anki validation, source tracking, review counts and export improvements with the restored pre-pilot prompt. All 904 software assertions pass; an actual Anki import check remains outstanding. Save the file, then open it in your browser.
+
 ---
 
 ## Quick Start (no tech experience needed)

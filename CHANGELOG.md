@@ -11,6 +11,8 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ## [15.17] — 2026-09-11
 
+Available on `main` for user testing, with the exact pre-pilot Anki prompt restored. Actual Anki import verification remains outstanding; this update does not create a GitHub release.
+
 ### Fixed
 - Flat cloze structure now drives preview, index counting, numeric scanning, collisions, and export validation. Malformed delimiters, nesting, empty/nonpositive indices, and edits that insert pipes/newlines cannot silently export. Structural eligibility is independent of manual selection.
 - Anki batches capture immutable facts/pointers and validate mapping edges against the supplied chunk before dedupe. Unknown/out-of-chunk IDs, omissions, invalid destinations, and unmapped notes are distinguished. Valid duplicate mappings are retained.

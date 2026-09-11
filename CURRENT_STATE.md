@@ -1,6 +1,6 @@
 # Current maintainer state
 
-Local v15.17 reliability code is implemented. The example-only prompt candidate failed its live pilot and was rolled back with explicit user approval; the app again uses the exact pre-pilot prompt. Mapping correction and actual Anki import remain outstanding. The canonical app is `Nursing-Study-Suite v15.17.html`. No release was published or pushed during this implementation. Repository tooling now requires exactly one suite HTML unless an explicit path is supplied; Proton Drive Name clash copies fail loudly.
+The v15.17 reliability code is implemented. The example-only prompt candidate failed its live pilot and was rolled back with explicit user approval; the app again uses the exact pre-pilot prompt. Mapping correction and actual Anki import remain outstanding. The canonical app is `Nursing-Study-Suite v15.17.html`. On 2026-09-11, the user explicitly authorized committing to `main` and pushing v15.17 for testing; the README links directly to that file on `main`. No GitHub release was created as part of this work. Repository tooling requires exactly one suite HTML unless an explicit path is supplied; Proton Drive Name clash copies fail loudly.
 
 This file carries release-specific evidence, unresolved measurements, and the current source profile. It is intentionally separate from the always-loaded `AGENTS.md`.
 
