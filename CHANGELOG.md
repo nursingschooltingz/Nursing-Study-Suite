@@ -5,7 +5,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 Detailed engineering rationale for each change — including rejected proposals and why — lives in `LATTE-v15-changelog.md`. This file is the summary.
 
-Releases use the unified verifier for Babel parsing, regression assertions, prompt documentation, and all 11 frozen prompt hashes. Through v15.15, the constants retained their v14.x bytes; v15.16 and v15.17 deliberately update only the explicitly approved Anki prompt baseline.
+Releases use the unified verifier for Babel parsing, regression assertions, prompt documentation, and all 11 frozen prompt hashes. Through v15.15, the constants retained their v14.x bytes. The approved v15.16 Anki prompt remains current after the v15.17 example experiment and its explicitly approved rollback.
 
 ---
 
@@ -21,13 +21,13 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 - Warning-only exact numeric comparisons with honest checked/not-checked status, quote-only and unsupported-form findings; identical rendered-front groups distinguish possible ambiguity and redundancy.
 - Optional source-pointer footers in the existing pipe-delimited export, default off, with safe HTML/plain rendering and explicit unavailable sources.
 - Private raw-response diagnostics, including interrupted runs; a synthetic browser fixture and a read-only pilot planner.
-- The example-only Anki prompt revision, applied under the user's one-time approval on 2026-09-11. Five fictional complete rows demonstrate context anchors and the existing import fields. Exact diff: `ANKI-v15.17-example-proposal.diff`.
+- Historical evidence for the example-only Anki prompt experiment and its failed live pilot. The candidate was applied and then rolled back under separate explicit approvals on 2026-09-11. Exact diffs: `ANKI-v15.17-example-proposal.diff` and `ANKI-v15.17-example-rollback.diff`.
 
 ### Validation
-- `node verify-repo.js`: 904 assertions (143 added), full JSX Babel transform, LF/version checks, generated prompt documentation, and all eleven frozen hashes pass. The live prompt's examples pass formulation checks; reversing only the approved diff recovers its prior frozen hash. All eight CDN SRI pins rechecked and matched on 2026-09-11.
+- `node verify-repo.js`: 904 assertions (143 added), full JSX Babel transform, LF/version checks, generated prompt documentation, and all eleven frozen hashes pass after rollback. The restored live prompt and rejected candidate retain their measured hashes; historical example formulation checks remain covered. All eight CDN SRI pins rechecked and matched on 2026-09-11.
 - Synthetic browser checks passed for editing/repair, manual exclusion, deletion, counts, global coverage/registry, filters, cloze switching/reveal, inert markup, warnings, escaped source exports, empty regeneration, KB replacement and late-result rejection.
-- The other ten frozen prompts, source packet, chunker, focus block, runtime adapter, API models/settings and transport remain unchanged. Only `ANKI_MASTER_PROMPT`'s baseline was deliberately updated for the exact approved example diff.
-- The user-approved paired live pilot completed 16 logical generation calls on one scoped KB. The revised example candidate failed: 147/311 notes had four fields versus 0/315 baseline, and 26 more revised rows put explanations in Tags. Existing structural checks excluded the 147 malformed notes. The exact inverse prompt diff is prepared, not applied; the current candidate is not ready for publication. Three baseline unmapped notes support a separately measured one-to-many adapter correction. See `ANKI-v15.17-validation.md` for counts, manual sampling and the baseline raw-response capture limitation. Actual Anki import remains outstanding. No unrelated course-file reads, publication or push occurred.
+- The other ten frozen prompts, source packet, chunker, focus block, runtime adapter, API models/settings and transport remain unchanged. Only the Anki baseline changed for the approved experiment and rollback; it now matches the pre-pilot prompt exactly.
+- The user-approved paired live pilot completed 16 logical generation calls on one scoped KB. The revised example candidate failed: 147/311 notes had four fields versus 0/315 baseline, and 26 more revised rows put explanations in Tags. Existing structural checks excluded the 147 malformed notes. The exact inverse prompt diff was applied after explicit approval, keeping all reliability improvements. Three baseline unmapped notes support a separately measured one-to-many adapter correction. See `ANKI-v15.17-validation.md` for counts, manual sampling and the baseline raw-response capture limitation. Actual Anki import remains outstanding. No additional live calls, unrelated course-file reads, publication or push occurred during rollback.
 
 ## [15.16] — 2026-09-09
 

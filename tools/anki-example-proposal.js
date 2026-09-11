@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 'use strict';
 
-// Reproduces the approved example diff before or after application.
+// Reproduces the historical example diff, rejected after its live pilot.
+// Retained for evidence and regression fixtures, not authorization to reapply it.
 // Never writes the application or prompt baseline.
 const fs=require('fs'),path=require('path'),{spawnSync}=require('child_process');
 const {extractPromptLiteral,resolveSuiteFile}=require('./repo-checks');
@@ -35,6 +36,6 @@ if(require.main===module){
   lines[0]='diff --git a/ANKI_MASTER_PROMPT b/ANKI_MASTER_PROMPT';
   for(let i=1;i<lines.length;i++){if(lines[i].startsWith('--- '))lines[i]='--- a/ANKI_MASTER_PROMPT';if(lines[i].startsWith('+++ '))lines[i]='+++ b/ANKI_MASTER_PROMPT';}
   fs.writeFileSync(path.join(root,'ANKI-v15.17-example-proposal.diff'),lines.join('\n'));
-  console.log('Prepared ANKI-v15.17-example-proposal.diff; live prompt and baseline unchanged.');
+  console.log('Reproduced historical ANKI-v15.17-example-proposal.diff; rejected candidate, live prompt and baseline unchanged.');
 }
 module.exports={buildAnkiExampleProposal};

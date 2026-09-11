@@ -2295,13 +2295,14 @@ section('v15.17 — optional source footers');
   t('deletion cannot rewrite the original post-dedupe baseline count',D.postDedupeNotes===3&&D.current.keptNotes===0);
 }
 
-section('v15.17 — approved live examples and replay evidence');
+section('v15.17 — approved rollback, historical examples and replay evidence');
 {
   const {buildAnkiExampleProposal}=require('./tools/anki-example-proposal');
   const {extractPromptLiteral,sha256}=require('./tools/repo-checks');
   const proposal=buildAnkiExampleProposal(S);
   const live=extractPromptLiteral(S,'ANKI_MASTER_PROMPT').declaration;
-  const prompt=new Function(live+';return ANKI_MASTER_PROMPT;')();
+  // The failed candidate remains a reproducible fixture; it is no longer the shipped prompt.
+  const prompt=new Function(proposal.proposed+';return ANKI_MASTER_PROMPT;')();
   const rows=prompt.match(/\[Example(?:Medication-A|Condition-B)\][^\n]*?Tier::[123]\b/g)||[];
   const facts=[
     {id:'fact-1',text:'Before ExampleMedication-A, count the pulse for one full minute.',tier:1,latteBucket:'Assess'},
@@ -2312,17 +2313,17 @@ section('v15.17 — approved live examples and replay evidence');
   ];
   const batch={snapshot:ANKI.ankiSourceSnapshot({conditions:[{facts}]})},ids=['fact-5','fact-1','fact-2','fact-3','fact-4'];
   const notes=rows.map((row,i)=>({...ANKI.ankiParseCards(row).cards[0],factIds:[ids[i]]}));
-  t('all five complete examples come from the actual shipped prompt',rows.length===5&&notes.every(c=>c.text&&c.pipeCount===2));
-  t('live examples have valid flat structure and no style warnings',notes.every(c=>ANKI.lintAnkiCard(c).length===0&&ANKI.ankiStyleWarnings(c).length===0));
-  t('live examples retain supplied LATTE and Tier tags',notes.every(c=>{const f=batch.snapshot.byId[c.factIds[0]];return c.tags.includes('Nursing::LATTE::'+f.bucket)&&c.tags.includes('Tier::'+f.tier);}));
-  t('live examples have no numeric findings against their fictional facts',notes.every(c=>ANKI.ankiNumericAudit(c,batch,true).findings.length===0));
-  t('live examples have no identical rendered fronts',ANKI.ankiCollisionGroups(notes).length===0);
-  t('fictional examples are explicitly excluded from generated source material',prompt.includes('fictional; never source material for the generated deck'));
-  t('shipped prompt contains exactly the approved example revision',proposal.applied&&live===proposal.proposed&&!S.includes(proposal.original));
-  t('reversing only the example diff recovers the historical frozen prompt',sha256(extractPromptLiteral(proposal.original,'ANKI_MASTER_PROMPT').body)==='353471cbee66c759341ad8f4d857fa75ea4051744a52771ce780fcf172efc548');
-  const replay=buildAnkiExampleProposal(proposal.original);
-  t('diff remains reproducible from either side without mutating input',!replay.applied&&replay.proposed===live&&replay.original===proposal.original);
-  let partialRejected=false;try{buildAnkiExampleProposal(live.replace('Complete format examples (fictional; never source material for the generated deck):','Examples of desired compression:'));}catch(e){partialRejected=/anchors changed or are partially applied/.test(e.message);}
+  t('all five complete examples come from the reconstructed historical candidate',rows.length===5&&notes.every(c=>c.text&&c.pipeCount===2));
+  t('candidate examples have valid flat structure and no style warnings',notes.every(c=>ANKI.lintAnkiCard(c).length===0&&ANKI.ankiStyleWarnings(c).length===0));
+  t('candidate examples retain supplied LATTE and Tier tags',notes.every(c=>{const f=batch.snapshot.byId[c.factIds[0]];return c.tags.includes('Nursing::LATTE::'+f.bucket)&&c.tags.includes('Tier::'+f.tier);}));
+  t('candidate examples have no numeric findings against their fictional facts',notes.every(c=>ANKI.ankiNumericAudit(c,batch,true).findings.length===0));
+  t('candidate examples have no identical rendered fronts',ANKI.ankiCollisionGroups(notes).length===0);
+  t('candidate explicitly excluded fictional examples from source material',prompt.includes('fictional; never source material for the generated deck'));
+  t('shipped prompt contains exactly the approved rollback',!proposal.applied&&live===proposal.original&&!S.includes(proposal.proposed));
+  t('restored prompt and rejected candidate retain their measured hashes',sha256(extractPromptLiteral(live,'ANKI_MASTER_PROMPT').body)==='353471cbee66c759341ad8f4d857fa75ea4051744a52771ce780fcf172efc548'&&sha256(extractPromptLiteral(proposal.proposed,'ANKI_MASTER_PROMPT').body)==='9d6c99229af067191df7b34d92c8ad98ff569870dd8f3be88634a5eb1a378b83');
+  const replay=buildAnkiExampleProposal(proposal.proposed);
+  t('diff remains reproducible from either side without mutating input',replay.applied&&replay.original===live&&replay.proposed===proposal.proposed);
+  let partialRejected=false;try{buildAnkiExampleProposal(proposal.proposed.replace('Complete format examples (fictional; never source material for the generated deck):','Examples of desired compression:'));}catch(e){partialRejected=/anchors changed or are partially applied/.test(e.message);}
   t('partial example edits cannot silently regenerate an approved diff',partialRejected);
   const fixturePage=require('./tools/anki-browser-fixture').page();
   t('browser fixture mounts real generator and blocks live network calls',fixturePage.includes('<AnkiGenerator/>')&&fixturePage.includes('window.fetch=()=>Promise.reject')&&fixturePage.includes('<SyntheticAnkiApp/>'));

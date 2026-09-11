@@ -232,7 +232,7 @@ HARD RULES
 
 ---
 
-## 2 · Anki Card Generator (`ANKI_MASTER_PROMPT`, 20,553 chars)
+## 2 · Anki Card Generator (`ANKI_MASTER_PROMPT`, 20,252 chars)
 
 **Runtime assembly** — each request the app sends is:
 
@@ -374,7 +374,7 @@ written in fast-review phrasing, not textbook prose
 
 Aim for about 15 words or fewer on each review front, including the anchor and counting a hidden gap as one word. This is a preference, never a hard limit: preserve every qualifier needed for accuracy and a uniquely correct answer.
 
-Avoid grammatical answer clues: move a/an inside the cloze, or rewrite in telegraphic label style. For a fictional format-only example, use [ExampleCondition-B] Lesion type: {{c1::an erythematous plaque}}||Nursing::LATTE::Look Condition::ExampleConditionB Tier::2. ExampleCondition-B is never source material for the generated deck. Do not remove a preposition, comparison word, unit, or qualifier needed to define the clinical relationship.
+Avoid grammatical answer clues: move a/an inside the cloze, or rewrite in telegraphic label style. For example, replace Characterized by an {{c1::erythematous plaque}} with Lesion type: {{c1::erythematous plaque}}. Do not remove a preposition, comparison word, unit, or qualifier needed to define the clinical relationship.
 
 Preferred style:
 
@@ -545,12 +545,11 @@ non-fluffy
 easy to scan
 still precise
 
-Complete format examples (fictional; never source material for the generated deck):
+Examples of desired compression:
 
-[ExampleMedication-A] Pre-dose pulse count duration: {{c1::one full minute}}||Nursing::LATTE::Assess Condition::ExampleMedicationA Tier::1
-[ExampleMedication-A] Hold parameter: pulse {{c1::<60 bpm}}||Nursing::LATTE::Treatments Condition::ExampleMedicationA Tier::1
-[ExampleCondition-B] Reportable weight gain: {{c1::2 lb in 24 hr}}||Nursing::LATTE::Educate Condition::ExampleConditionB Tier::1
-[ExampleMedication-A] Mechanism: {{c1::blocks Receptor-Z}}||Nursing::LATTE::Treatments Condition::ExampleMedicationA Tier::1
+"The patient should report weight gain of 2 lb in 24 hours" -> Report weight gain of {{c1::2 lb in 24 hr}}
+"Aspirin should be avoided in children with viral illness because of the risk of Reye syndrome" -> [Aspirin] Avoid in children with viral illness -> risk of {{c1::Reye syndrome}}
+"Monitor potassium levels while taking loop diuretics" -> [Loop diuretics] Monitor {{c1::potassium}}
 
 Do not write essay-like stems.
 Coverage-Over-Compression Rule

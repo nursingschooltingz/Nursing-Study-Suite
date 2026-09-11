@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "hash": "sha256",
   "scope": "UTF-8 bytes between each source template literal's backticks; JavaScript escape sequences remain source bytes",
-  "baseline": "Ten constants retain the frozen v14.x baseline captured at v15.15. ANKI_MASTER_PROMPT has two explicitly approved revisions: v15.16 text-only retrieval on 2026-09-09 (ANKI-v15.16-prompt.diff), then the v15.17 example-only proposal on 2026-09-11 under one-time user approval (ANKI-v15.17-example-proposal.diff). Only its hash was updated for each revision.",
+  "baseline": "Ten constants retain the frozen v14.x baseline captured at v15.15. ANKI_MASTER_PROMPT retains the approved v15.16 text-only retrieval revision (2026-09-09, ANKI-v15.16-prompt.diff). The v15.17 example proposal was applied under one-time approval on 2026-09-11, failed its live pilot, and was restored by separate explicit user approval of ANKI-v15.17-example-rollback.diff on 2026-09-11. Only the Anki hash changed for the proposal and exact rollback.",
   "prompts": {
     "KB_EXTRACTION_PROMPT": "dbba2eb43d7ca89c17350f392c0cf139de2128e15a8c6af94ef2cdbd4e64b74b",
     "KB_VERIFY_PROMPT": "9335f2c24af1d946f4e6a0f5d4bb4227d83173a070d097374fa68db25151aece",
-    "ANKI_MASTER_PROMPT": "9d6c99229af067191df7b34d92c8ad98ff569870dd8f3be88634a5eb1a378b83",
+    "ANKI_MASTER_PROMPT": "353471cbee66c759341ad8f4d857fa75ea4051744a52771ce780fcf172efc548",
     "NCLEX_INLINE_PROMPT": "c3b6a2f79519a04b4b2aa56a2d60a647e1c3021aec289d5c458ed27a933bf20e",
     "NCLEX_SPLIT_PROMPT": "8ee1deab184825d7ca6eed849b5b0411af9cb6d9cad1ef90f123b80beae5f338",
     "NCLEX_AI_PAIR_PROMPT": "0418d3c786b2c4896d5f483dd0a813606d9c2c7eb97bf7b222cf05700be813d9",
