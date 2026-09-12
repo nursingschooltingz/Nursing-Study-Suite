@@ -8,7 +8,9 @@ Turn your lecture PDFs and PowerPoints into a complete, source-cited study syste
 
 The whole suite is **one HTML file**. There is nothing to install, no account to create, and no website collecting your data. You open the file in your web browser, paste in a free Google Gemini API key, upload your study materials, and go.
 
-**v15.18 release:** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v15.18/Nursing-Study-Suite.v15.18.html). It fixes browser persistence and cancellation races, strengthens source and numeric checks, preserves audit status in exports, verifies PDF worker code, and reduces repeated Anki rendering. All 1,345 software assertions pass; the eleven frozen prompts remain unchanged. Save the file, then open it in your browser.
+**v16.0 release:** [Download the single HTML file](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v16.0/Nursing-Study-Suite.v16.0.html). The light interface uses blue primary actions, restrained orange accents, readable study output, labeled navigation and responsive forms. It preserves the existing source, generation, verification and export workflows, including all eleven frozen prompts. Save the file, then open it in your browser. See the [release notes](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/tag/v16.0) and [verification report](docs/reviews/visual-update-v16.0.md). The previously published [v15.18 download](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v15.18/Nursing-Study-Suite.v15.18.html) remains available.
+
+Use **Knowledge** to build or import your source, **Priority** to organize study time, **Anki** for recall, **NCLEX Extract** for existing questions, **NCLEX Generate** for new practice, and **Case Studies** for unfolding cases. **Settings** shows or hides the shared API/model panel. On phones and smaller tablets it starts collapsed; **Add API key** opens it directly. Switching tools preserves your inputs and outputs. A keyboard **Skip to study workspace** link bypasses navigation.
 
 See [the remediation ledger](docs/reviews/remediation-execution-v15.17.md) for browser evidence, migration details and remaining live-material, native Anki import and native printing checks. Export your KB and recovery copies before returning to an older version.
 
@@ -26,7 +28,7 @@ See [the remediation ledger](docs/reviews/remediation-execution-v15.17.md) for b
 
 1. **[Download the suite file](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/latest)** — grab the `.html` file from the latest release and save it somewhere you can find it. Your Desktop or a "Nursing" folder is fine.
 2. **Double-click the file.** It opens in your web browser like a webpage. That's the whole "installation."
-3. **Get a free Gemini API key** (5 minutes, instructions in the next section) and paste it into the **API Key** box in the left sidebar. The key is like a library card that lets the app talk to Google's AI.
+3. **Get a free Gemini API key** (5 minutes, instructions in the next section), select **Add API key**, and paste it into **Gemini API key** in Settings. The key is like a library card that lets the app talk to Google's AI.
 4. **Go to the first tab ("Knowledge")**, add the PDF or PowerPoint for your *current exam only* — just the relevant chapters, not the whole textbook — and click **Build Knowledge Base**. Wait a few minutes while it reads your material and extracts every testable fact, each one stamped with where it came from.
 5. **Use the other tabs.** Once the Knowledge Base exists, every other tool feeds from it: generate a prioritized study guide, Anki flashcards, practice questions, or a full clinical case study — all built from *your* lectures, not generic internet content.
 
@@ -46,7 +48,7 @@ An API key is a long code (it starts with `AIza...`) that lets the suite use Goo
 2. Sign in with your Google account.
 3. Look for **"Get API key"** (usually a button or a left-menu item), then **"Create API key."**
 4. Copy the key it shows you — the long code starting with `AIza`.
-5. Paste it into the **API Key** field in the suite's left sidebar.
+5. Select **Add API key** and paste it into **Gemini API key** in Settings.
 
 Notes worth knowing:
 
@@ -279,7 +281,7 @@ Use it as your reflexive "wait, is that true?" button. One honest limitation: th
 
 **Print/PDF export does nothing.** Your popup blocker ate the print window; the suite falls back to an in-page print automatically, but if a blocker notification appears, allow popups for the file.
 
-**Phone or tablet?** It runs, but building a KB and reviewing outputs is genuinely a laptop activity. Generate on the laptop, export, review anywhere.
+**Phone or tablet?** Navigation, settings, forms and fact review reflow for smaller screens. Wide study tables scroll within their own panels. A laptop still gives you more room for large source sets and detailed editing.
 
 **Privacy, one more time, plainly:** your files are read in your browser; extracted text goes to Google's Gemini API for generation and nowhere else; the suite has no server, no accounts, no analytics; your key and your KB stay on your machine. Don't feed it real patient information — it's a study tool for coursework materials.
 

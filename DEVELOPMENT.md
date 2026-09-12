@@ -4,7 +4,7 @@ This is the task map for maintainers and coding agents. `AGENTS.md` remains the 
 
 ## Repository shape
 
-- `Nursing-Study-Suite v15.18.html` is the complete application.
+- `Nursing-Study-Suite v16.0.html` is the complete application.
 - `latte-tests.js` is the deterministic regression harness and extracts live functions by anchor.
 - `verify-repo.js` is the only ordinary repository verification entry point.
 - `prompt-baseline.json` stores the 11 frozen prompt hashes.
@@ -69,6 +69,8 @@ Examples: `node davis-transcribe-test.js --dry-run --app-profile --runs 2 synthe
 `node tools/remediation-worksheet-browser-tests.js` covers interrupted/quota-stopped audits, immediate verdict updates, non-MCQ N/A outcomes, and malformed/ungrounded repair rejection using the same isolated App fixture and mocked responses.
 
 ## Release checklist
+
+`node tools/visual-browser-tests.js --screenshots scratch/visual-v16` checks the v16 interface on isolated real-App fixtures at 360, 768, 1024 and 1440 pixels. It uses the existing external Playwright runtime, synthetic sources and mocked generation; it never calls Gemini or serves the repository directory. The optional screenshot directory stays under ignored `scratch/`; the check report goes to standard output. This is optional browser acceptance, separate from the mandatory deterministic verifier.
 
 - Rename the one canonical suite file and update the matching top release comment.
 - Add the Keep a Changelog entry.

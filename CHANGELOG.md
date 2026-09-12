@@ -9,6 +9,21 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [16.0] — 2026-09-11
+
+Visual and usability redesign of the existing single-file study suite. The [v16.0 release](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/tag/v16.0) implements the approved visual-update brief; the archived selective PDF-vision proposal remains unapproved and unbuilt.
+
+### Changed
+- Replaced the dark stylesheet with a cohesive light design system: blue primary actions, restrained orange accents, separate semantic status colors, readable type, consistent controls, focus rings and reduced-motion support.
+- Added labeled workflow navigation, a workspace/source header, a keyboard skip link, and explicit settings visibility and focus handling. Small screens start with settings collapsed; all six tools remain mounted so switching tools retains inputs and outputs.
+- Reflowed forms, source/fact browsing, Priority controls and output toolbars for phone, tablet and desktop. Wide editable tables scroll inside their panels. Tool forms, selected views, filters, progress indicators, range removal and Anki editing controls have programmatic labels and state.
+- Increased small study/diagnostic text, removed low-contrast faded note states, and unified warnings, evidence surfaces, startup feedback and the Fact Inspector with the light theme.
+
+### Validation
+- The unified verifier passes 1,372 assertions, the full JSX Babel transform, LF/version agreement, generated documentation and all eleven frozen prompt hashes. All eight CDN script pins and both PDF worker pins were rehashed and match.
+- Isolated Chrome acceptance covers responsive empty and populated views, keyboard/settings/Fact Inspector interactions, synthetic import and output editing/export. Existing storage, source ownership, worksheet, resource-policy and synthetic PDF/photo browser suites pass. Details and limitations are in [the visual update report](docs/reviews/visual-update-v16.0.md).
+- Prompt bytes, generation/validation logic, model profiles, storage keys/schemas, import/export contracts and runtime dependencies are preserved. No private study material or live Gemini quota was used. Native Anki import, native print dialogs, live-generation accuracy and other browser engines remain unverified for this release.
+
 ## [15.18] — 2026-09-11
 
 Reliability and evidence remediation. The [v15.18 release](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/tag/v15.18) retains the frozen prompts and the single-file runtime. See [the execution ledger](docs/reviews/remediation-execution-v15.17.md) for verification and remaining acceptance.

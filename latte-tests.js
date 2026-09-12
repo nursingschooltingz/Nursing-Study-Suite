@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 1345;
+const EXPECTED_ASSERTIONS = 1372;
 
 let file;
 try {
@@ -2691,6 +2691,7 @@ section('v15.14 — clamps, backoff, storage');
   require('./tools/worksheet-remediation-tests')(S,t);
   require('./tools/numeric-boundary-tests')(S,t);
   require('./tools/neutral-weight-tests')(S,t);
+  require('./tools/visual-regression-tests')(S,t);
 
   console.log('\n════════════════════════════');
   const total = pass + fail;
