@@ -8,11 +8,9 @@ Turn your lecture PDFs and PowerPoints into a complete, source-cited study syste
 
 The whole suite is **one HTML file**. There is nothing to install, no account to create, and no website collecting your data. You open the file in your web browser, paste in a free Google Gemini API key, upload your study materials, and go.
 
-**v16.1 release:** [Download the single HTML file](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v16.1/Nursing-Study-Suite.v16.1.html). Anki now includes source/review inspection, advisory finding filters, and an optional check against the KB. Its instructions make Extra empty by default, reserving it for useful explanations or contrasts explicitly supplied by the source. Save the file, then open it in your browser. See the [release notes](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/tag/v16.1) and [verification record](docs/reviews/anki-v16.1-release.md). The previously published [v16.0 download](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v16.0/Nursing-Study-Suite.v16.0.html) remains available with the light interface described in its [visual verification report](docs/reviews/visual-update-v16.0.md).
+**v16.1 release:** [Download the single HTML file](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v16.1/Nursing-Study-Suite.v16.1.html). Anki now includes source/review inspection, advisory finding filters, and an optional check against the KB. Its instructions make Extra empty by default, reserving it for useful explanations or contrasts explicitly supplied by the source. Save the file, then open it in your browser. 
 
 Use **Knowledge** to build or import your source, **Priority** to organize study time, **Anki** for recall, **NCLEX Extract** for existing questions, **NCLEX Generate** for new practice, and **Case Studies** for unfolding cases. **Settings** shows or hides the shared API/model panel. On phones and smaller tablets it starts collapsed; **Add API key** opens it directly. Switching tools preserves your inputs and outputs. A keyboard **Skip to study workspace** link bypasses navigation.
-
-See [the remediation ledger](docs/reviews/remediation-execution-v15.17.md) for browser evidence, migration details and remaining live-material, native Anki import and native printing checks. Export your KB and recovery copies before returning to an older version.
 
 ---
 
