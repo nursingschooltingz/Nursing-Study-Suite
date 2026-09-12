@@ -5,14 +5,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 This file records release history. Deliberate engineering decisions live in `DECISIONS.md`; current evidence and open work live in `CURRENT_STATE.md`.
 
-Releases use the unified verifier for Babel parsing, regression assertions, prompt documentation, and all 11 frozen prompt hashes. Through v15.15, the constants retained their v14.x bytes. The published v16.0 release retains the approved v15.16 Anki prompt after the v15.17 example experiment and its explicitly approved rollback. The working-copy prompt update is recorded under Unreleased below.
+Releases use the unified verifier for Babel parsing, regression assertions, prompt documentation, and all 11 frozen prompt hashes. Through v15.15, the constants retained their v14.x bytes. The published v16.0 release retains the approved v15.16 Anki prompt after the v15.17 example experiment and its explicitly approved rollback. The approved source/retrieval and Extra updates are recorded under v16.1 below.
 
 ---
 
-## [Unreleased]
+## [16.1] — 2026-09-11
+
+Anki source/retrieval tools from the main-branch update at `6941e03`, plus the approved focused Extra revision.
 
 ### Changed
-- Applied the approved Anki prompt changes for source-supported Text/Extra, preserved source meaning, and independently gradable list targets. Extra remains empty when no useful explanation or contrast is supplied. The three-field output is preserved. Only the Anki baseline changed; the other ten frozen prompts are unchanged. [Exact prompt diff](docs/history/ANKI-source-retrieval-update.diff).
+- Made Extra explicitly empty by default. It accepts only useful source-supplied explanations or contrasts not already conveyed by Text; generic captions, restatements, and inferred nursing explanations are excluded. Removed six generic cue-caption examples while preserving Phase 3.75. [Exact focused prompt diff](docs/history/ANKI-v16.1-extra-default.diff).
+- Included the approved Anki prompt changes for source-supported Text/Extra, preserved source meaning, and independently gradable list targets. The three-field output is preserved. Only the Anki baseline changed; the other ten frozen prompts are unchanged. [Earlier source/retrieval diff](docs/history/ANKI-source-retrieval-update.diff).
 - The Anki mapping adapter explicitly allows one source fact to support multiple notes through repeated one-edge mapping lines. Linked-fact counts remain associations, not claims of complete retrieval or correct meaning. Anki Auto remains Flash / Low.
 
 ### Added
@@ -21,8 +24,8 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 - Optional **Prepare source check** and separate **Run source check** actions. Preparation is local, displays planned requests/model/thinking, and bounds groups to 24,000 serialized payload characters without truncating source relationships. Only Run uses Gemini quota. Findings cover source fidelity, substantive recall omissions, duplicate targets, priority loss, and source conflicts. Suggestions can propose source-supported wording or retrieval-target changes; originals remain intact, and no correction is proposed when the source cannot support one. Completed groups and private evidence survive interruption, while edits/source changes mark results outdated.
 
 ### Validation
-- The unified verifier passes 1,563 assertions, including nine suggestion-field checks, full JSX Babel parsing, LF/version agreement, generated prompt documentation, and all eleven approved prompt hashes. Isolated synthetic browser acceptance passes warning/export isolation, inspection/editing, explicit mocked audits, suggestion display and evidence export with intact originals, stale notes/KB, malformed evidence, cancellation/late replies, empty-batch controls, and the 360px layout using `tools/anki-source-review-browser-tests.js`.
-- No live Gemini calls were made for this implementation. The four paired thinking-level comparisons preceded these changes; new-prompt efficacy and source-check accuracy require a separately authorized paired pilot. Native Anki import/review remains outstanding. The user authorized committing and pushing this update; no version bump or tagged release was requested.
+- The unified verifier passes 1,579 assertions, full JSX Babel parsing, all eleven approved prompt hashes, live prompt documentation, and LF/version agreement. All eight script CDN resources and both PDF worker copies match their SRI pins. Isolated Chrome source-review acceptance passes using synthetic notes and mocked Gemini. See the [release verification record](docs/reviews/anki-v16.1-release.md).
+- Six user-supplied exports from that checkpoint comprised two matched Low/Medium pairs plus unpaired pharmacology Low and mental-health Medium runs. Source fidelity and retrieval gains were mixed, and Extra remained unreliable; these runs do not measure the focused v16.1 prompt change. No new live Gemini calls were made for release preparation. New-prompt efficacy, source-check accuracy, and native Anki import/review remain unmeasured. Flash / Low and all warning tiers are unchanged.
 
 ## [16.0] — 2026-09-11
 

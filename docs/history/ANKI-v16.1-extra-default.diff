@@ -1,0 +1,18 @@
+diff --git a/ANKI_MASTER_PROMPT b/ANKI_MASTER_PROMPT
+index 20d0d3a..4525bbd 100644
+--- a/ANKI_MASTER_PROMPT
++++ b/ANKI_MASTER_PROMPT
+@@ -439 +439,3 @@ PHASE 3.5 — EXTRA FIELD RULES (LEAN BY DEFAULT)
+-The Extra field should support retention, not slow the deck down.
++Default Extra to empty.
++Populate it only with a useful explanation or contrast explicitly stated in the supplied source and not already conveyed by Text.
++Do not fill an otherwise empty Extra with generic captions, restatements, or inferred nursing explanations.
+@@ -452,8 +453,0 @@ full sentences are uncommon
+-Examples:
+-
+-Bleeding risk
+-Monitor for sedation
+-Volume loss cue
+-Escalate worsening dyspnea
+-Teach home safety
+-Recheck labs

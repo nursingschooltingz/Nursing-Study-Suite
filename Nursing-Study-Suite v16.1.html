@@ -8,7 +8,8 @@
      Babel, so this adds narrow resource directives without a default-src/script-src migration. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net">
 <title>LATTE Study Suite</title>
-<!-- v16.0 (2026-09-11): light blue/orange study workspace; labeled workflow navigation, responsive settings and forms, accessible controls, readable study output and evidence panels. The single-file runtime, source processing, storage/export contracts and all 11 frozen prompts are preserved. Deterministic and isolated synthetic browser evidence: docs/reviews/visual-update-v16.0.md.
+<!-- v16.1 (2026-09-11): Anki source fidelity and review tools; explicit empty-Extra default, source-supported explanations, many-to-many fact mapping, answer-exposure and source warnings, and an optional source check with reviewable suggestions. Only the approved Anki prompt baseline changes; Flash/Low, advisory warnings and three-field exports are preserved. Verification and measurement limits: docs/reviews/anki-v16.1-release.md.
+     v16.0 (2026-09-11): light blue/orange study workspace; labeled workflow navigation, responsive settings and forms, accessible controls, readable study output and evidence panels. The single-file runtime, source processing, storage/export contracts and all 11 frozen prompts are preserved. Deterministic and isolated synthetic browser evidence: docs/reviews/visual-update-v16.0.md.
      v15.18 (2026-09-11): ordered KB persistence and recovery, operation/source ownership, complete numeric and worksheet contracts, honest audit exports, restricted generated resources, verified PDF worker bytes, robust SSE completion, and measured Anki rendering improvements. All 11 frozen prompts, transcription and resize settings, model profiles and token ceilings are unchanged. Verified by 1,345 assertions and isolated Chrome acceptance; live-material, native Anki import and native print acceptance remain outstanding.
      v15.17 (2026-09-11): text-only Anki reliability: shared flat cloze validation, immutable batch source binding, live note/review counts and linked coverage, numeric and identical-front warnings, optional source-pointer export. The example experiment was rolled back after its live pilot; the pre-pilot Anki prompt and all other frozen prompts and generation settings are preserved.
      v15.16 (2026-09-09): approved Anki prompt revision for text-only retrieval; cloze review preview and advisory style checks. Style warnings never uncheck notes or block export.
@@ -3513,6 +3514,7 @@ function PriorityAnalyzer(){
 // Approved prompt revision: consistent retrieval labels, article handling, per-card pivots, grounded Extra.
 // v15.17: approved rollback restores prior examples after the live pilot exposed four-field rows and explanation prose in Tags.
 // v16.0: source meaning and actual retrieval targets replace permissive fallback and grouping language.
+// v16.1: make empty Extra the default; generic caption examples competed with source-only grounding.
 const ANKI_MASTER_PROMPT=`SYSTEM / ROLE
 
 You are an elite Medical Education Specialist, Nursing Clinical Instructor, and Anki Expert. Your task is to convert the provided PDF text into high-quality Anki cloze notes for a nursing student.
@@ -3951,7 +3953,9 @@ Extract every patient/family teaching point, discharge instruction, self-managem
 
 PHASE 3.5 — EXTRA FIELD RULES (LEAN BY DEFAULT)
 
-The Extra field should support retention, not slow the deck down.
+Default Extra to empty.
+Populate it only with a useful explanation or contrast explicitly stated in the supplied source and not already conveyed by Text.
+Do not fill an otherwise empty Extra with generic captions, restatements, or inferred nursing explanations.
 Keep supporting mechanisms and explanations here, after answer reveal, when the supplied source states them. Do not invent a why when the source gives none.
 If a mechanism is itself a substantive testable fact, also give it a dedicated recall note in its appropriate LATTE bucket; mentioning it only in Extra does not replace testing it.
 For confusable pairs, prefer one brief source-supported contrast in Extra or a dedicated comparison note. Both sides must be supported by the supplied facts. Do not put a visible opposite answer on the front when it gives away the hidden target; do not force two unrelated answers into one review card.
@@ -3964,14 +3968,6 @@ usually 0-8 words
 phrase fragments are fine
 full sentences are uncommon
 
-Examples:
-
-Bleeding risk
-Monitor for sedation
-Volume loss cue
-Escalate worsening dyspnea
-Teach home safety
-Recheck labs
 Full-Sentence Extra Allowed Only If Needed
 
 Use one sentence only if necessary to:
@@ -9259,7 +9255,7 @@ function App(){
           <button ref={settingsTrigger} className={`nav-btn nav-btn-cfg ${showConfig?'active':''}`} aria-label="Study settings" aria-expanded={showConfig} aria-controls="suite-settings" onClick={()=>setShowConfig(s=>!s)} title="Show or hide study settings">
             <NavIcons.gear/><span className="nav-label">Settings<span className="nav-sublabel">API key & models</span></span>
           </button>
-          <div className="nav-footer">Version 16.0 <span>Built for your next step.</span></div>
+          <div className="nav-footer">Version 16.1 <span>Built for your next step.</span></div>
         </nav>
         {showConfig&&<ConfigSidebar onClose={closeSettings}/>}
         <main className="main-area" id="study-workspace" tabIndex={-1}>

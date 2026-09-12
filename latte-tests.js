@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 1563;
+const EXPECTED_ASSERTIONS = 1579;
 
 let file;
 try {
@@ -2318,7 +2318,7 @@ section('v15.17 — approved rollback, historical examples and replay evidence')
   t('candidate examples have no numeric findings against their fictional facts',notes.every(c=>ANKI.ankiNumericAudit(c,batch,true).findings.length===0));
   t('candidate examples have no identical rendered fronts',ANKI.ankiCollisionGroups(notes).length===0);
   t('candidate explicitly excluded fictional examples from source material',prompt.includes('fictional; never source material for the generated deck'));
-  t('shipped prompt contains the approved source/retrieval revision, not failed examples',!proposal.applied&&live!==proposal.original&&!S.includes(proposal.proposed)&&sha256(extractPromptLiteral(live,'ANKI_MASTER_PROMPT').body)==='00ad927f9df13bd487c916d35969c7babe69e927203a0610bbe8136166ecc781');
+  t('shipped prompt contains the current approved Anki revision, not failed examples',!proposal.applied&&live!==proposal.original&&!S.includes(proposal.proposed)&&sha256(extractPromptLiteral(live,'ANKI_MASTER_PROMPT').body)==='80de5dccc4d39ff2bfefc36a9f998e970358f06155ecc2ac01e9e5b53096c65a');
   t('restored prompt and rejected candidate retain their measured hashes',sha256(extractPromptLiteral(historical,'ANKI_MASTER_PROMPT').body)==='353471cbee66c759341ad8f4d857fa75ea4051744a52771ce780fcf172efc548'&&sha256(extractPromptLiteral(proposal.proposed,'ANKI_MASTER_PROMPT').body)==='9d6c99229af067191df7b34d92c8ad98ff569870dd8f3be88634a5eb1a378b83');
   const replay=buildAnkiExampleProposal(proposal.proposed);
   t('diff remains reproducible from either side without mutating input',replay.applied&&replay.original===proposal.original&&replay.proposed===proposal.proposed);
@@ -2694,6 +2694,7 @@ section('v15.14 — clamps, backoff, storage');
   require('./tools/numeric-boundary-tests')(S,t);
   require('./tools/neutral-weight-tests')(S,t);
   require('./tools/visual-regression-tests')(S,t);
+  require('./tools/anki-extra-default-tests').runAnkiExtraDefaultTests({S,t,section});
   require('./tools/anki-mapping-update-tests').runAnkiMappingUpdateTests({S,t,section});
   require('./tools/anki-local-checks-tests').runAnkiLocalChecksTests({S,t,section});
   require('./tools/anki-source-audit-tests').runAnkiSourceAuditTests({S,t,section});

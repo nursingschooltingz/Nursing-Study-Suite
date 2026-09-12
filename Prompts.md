@@ -1,6 +1,6 @@
 # Nursing Study Suite — Prompt Library
 
-The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, and the item-quality auditor, **extracted verbatim from the shipped v16.0 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
+The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, and the item-quality auditor, **extracted verbatim from the shipped v16.1 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
 
 > **Coverage.** All 12 named prompt constants are represented from live HTML bytes. Eleven are byte-frozen; `CARD_TRANSCRIBE_PROMPT` is deliberately tunable but requires two transcription runs per card after an edit. The generated appendix is maintained by `node tools/render-prompts.js --write` and checked by `node verify-repo.js`.
 
@@ -232,7 +232,7 @@ HARD RULES
 
 ---
 
-## 2 · Anki Card Generator (`ANKI_MASTER_PROMPT`, 20,686 chars)
+## 2 · Anki Card Generator (`ANKI_MASTER_PROMPT`, 20,762 chars)
 
 **Runtime assembly** — each request the app sends is:
 
@@ -242,7 +242,7 @@ ANKI_MASTER_PROMPT + focusBlock + kbAdapter + '\n\n' + sourceLabel + '\n\n' + ch
 
 where `focusBlock` renders your Outcomes / Points / Additional Context boxes (and, when the source is the structured Knowledge Base, instructs that KB-supplied LATTE/Tier tags take precedence), `kbAdapter` explains the structured FACT-line format, `sourceLabel` is the `═══ STRUCTURED LATTE KNOWLEDGE BASE ═══` header, and `chunk` is the source text itself.
 
-The working-copy adapter requires independently important recall targets and supports repeated single-edge fact-to-note mappings. A source link identifies support; it does not prove that every important part of the fact is tested. Local review checks do not make model calls.
+The runtime adapter requires independently important recall targets and supports repeated single-edge fact-to-note mappings. A source link identifies support; it does not prove that every important part of the fact is tested. Local review checks do not make model calls.
 
 The separate optional **Check against KB** flow uses `ankiBuildSourceAuditPrompt`, not the NCLEX item-audit prompt. Preparation captures bounded source/note packets locally; an explicit Run submits them using the captured Anki model and thinking level. The auditor returns advisory findings and source-supported suggested corrections, with strict schema and reference validation. Originals remain unchanged. Its packets include the actual review fronts, hidden answers, Text and Extra; source quotes are excluded because they were not generation input.
 
@@ -687,7 +687,9 @@ Extract every patient/family teaching point, discharge instruction, self-managem
 
 PHASE 3.5 — EXTRA FIELD RULES (LEAN BY DEFAULT)
 
-The Extra field should support retention, not slow the deck down.
+Default Extra to empty.
+Populate it only with a useful explanation or contrast explicitly stated in the supplied source and not already conveyed by Text.
+Do not fill an otherwise empty Extra with generic captions, restatements, or inferred nursing explanations.
 Keep supporting mechanisms and explanations here, after answer reveal, when the supplied source states them. Do not invent a why when the source gives none.
 If a mechanism is itself a substantive testable fact, also give it a dedicated recall note in its appropriate LATTE bucket; mentioning it only in Extra does not replace testing it.
 For confusable pairs, prefer one brief source-supported contrast in Extra or a dedicated comparison note. Both sides must be supported by the supplied facts. Do not put a visible opposite answer on the front when it gives away the hidden target; do not force two unrelated answers into one review card.
@@ -700,14 +702,6 @@ usually 0-8 words
 phrase fragments are fine
 full sentences are uncommon
 
-Examples:
-
-Bleeding risk
-Monitor for sedation
-Volume loss cue
-Escalate worsening dyspnea
-Teach home safety
-Recheck labs
 Full-Sentence Extra Allowed Only If Needed
 
 Use one sentence only if necessary to:
