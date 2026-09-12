@@ -316,7 +316,3 @@ Use it as your reflexive "wait, is that true?" button. One honest limitation: th
 **Your source materials.** Only process materials you lawfully have access to. Outputs generated from copyrighted textbooks and lectures are for your personal study — don't redistribute them — and what you feed the tool should comply with your program's academic-integrity and content-sharing policies (secure exam content, for example, is off-limits).
 
 **As-is, no warranty.** The suite is provided as-is, without warranty of any kind — including accuracy, fitness for a particular purpose, or uninterrupted operation. Use it at your own risk; your grades, your API bill, and your decisions remain your own.
-
----
-
-Good luck on your exam. Build the KB tonight; thank yourself Thursday.
