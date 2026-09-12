@@ -232,7 +232,7 @@ HARD RULES
 
 ---
 
-## 2 · Anki Card Generator (`ANKI_MASTER_PROMPT`, 20,252 chars)
+## 2 · Anki Card Generator (`ANKI_MASTER_PROMPT`, 20,686 chars)
 
 **Runtime assembly** — each request the app sends is:
 
@@ -241,6 +241,10 @@ ANKI_MASTER_PROMPT + focusBlock + kbAdapter + '\n\n' + sourceLabel + '\n\n' + ch
 ````
 
 where `focusBlock` renders your Outcomes / Points / Additional Context boxes (and, when the source is the structured Knowledge Base, instructs that KB-supplied LATTE/Tier tags take precedence), `kbAdapter` explains the structured FACT-line format, `sourceLabel` is the `═══ STRUCTURED LATTE KNOWLEDGE BASE ═══` header, and `chunk` is the source text itself.
+
+The working-copy adapter requires independently important recall targets and supports repeated single-edge fact-to-note mappings. A source link identifies support; it does not prove that every important part of the fact is tested. Local review checks do not make model calls.
+
+The separate optional **Check against KB** flow uses `ankiBuildSourceAuditPrompt`, not the NCLEX item-audit prompt. Preparation captures bounded source/note packets locally; an explicit Run submits them using the captured Anki model and thinking level. The auditor returns advisory findings and source-supported suggested corrections, with strict schema and reference validation. Originals remain unchanged. Its packets include the actual review fronts, hidden answers, Text and Extra; source quotes are excluded because they were not generation input.
 
 ### The master prompt
 
@@ -606,9 +610,9 @@ PHASE 1.75 — LIST HANDLING
 Never test 3+ items in one hidden cloze. Never drop list items.
 List Rules
 
-Group up to 3 items only if they genuinely belong together.
-Split independent items into separate notes.
-Split lists longer than 3 into multiple notes.
+Use up to 3 cloze indices on one note only for naturally related targets.
+Count independently gradable answers even when they share a cloze index or appear inside one slash/comma-separated answer.
+Split unrelated targets or long lists into separate notes; keep together only one inseparable clinical relationship.
 Monitoring Panel Exception
 
 If the PDF gives one unified monitoring directive, the stem may contain more than 3 visible items, but only 2-3 items may be cloze targets in that note.
@@ -725,13 +729,9 @@ Tier 1 (Preferred)
 Closely paraphrase the PDF's stated mechanism, reason, consequence, or nursing implication.
 Tier 2 (Fallback)
 
-If the PDF gives no stated why, use broad nursing logic only.
-
-Allowed style:
-
-Urgent change may need escalation
-Monitor closely for deterioration
-Teaching supports safe home use
+If the supplied source gives no useful supporting explanation or contrast, leave Extra empty.
+Do not substitute broad nursing logic or infer a mechanism.
+Keep the empty Extra field between the same two pipe separators; Tags remain the third field.
 Tier 3 (Prohibited Unless Explicitly in PDF)
 
 Do not introduce:
@@ -768,15 +768,9 @@ Coverage Calibration
 If output seems too short for the density of the PDF, re-audit for omitted numbers, meds, teaching points, thresholds, qualifiers, or repeated sections.
 
 Do not add filler to increase count.
-Specificity Re-Audit
+Source-Meaning Re-Audit
 
-Before output, re-check whether any shortened note lost a qualifier required to make the answer unique.
-
-If yes, revise by:
-
-adding a brief context cue,
-restoring the key qualifier, or
-splitting into separate atomic notes
+Before output, compare each note with its supporting source facts. Preserve certainty, population, timing, exceptions, and clinical relationships, including what each number measures. Do not turn an example into a threshold, add a waiting condition, or turn a check for a problem into a claim that it is ruled out. Correct unsupported wording in Text and Extra; retain the context needed for a uniquely answerable review.
 
 PHASE 5 — PRE-OUTPUT AUDIT
 

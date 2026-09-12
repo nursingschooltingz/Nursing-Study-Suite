@@ -1,0 +1,34 @@
+diff --git a/ANKI_MASTER_PROMPT b/ANKI_MASTER_PROMPT
+index ac71a4b..20d0d3a 100644
+--- a/ANKI_MASTER_PROMPT
++++ b/ANKI_MASTER_PROMPT
+@@ -362,3 +362,3 @@ List Rules
+-Group up to 3 items only if they genuinely belong together.
+-Split independent items into separate notes.
+-Split lists longer than 3 into multiple notes.
++Use up to 3 cloze indices on one note only for naturally related targets.
++Count independently gradable answers even when they share a cloze index or appear inside one slash/comma-separated answer.
++Split unrelated targets or long lists into separate notes; keep together only one inseparable clinical relationship.
+@@ -481,7 +481,3 @@ Tier 2 (Fallback)
+-If the PDF gives no stated why, use broad nursing logic only.
+-
+-Allowed style:
+-
+-Urgent change may need escalation
+-Monitor closely for deterioration
+-Teaching supports safe home use
++If the supplied source gives no useful supporting explanation or contrast, leave Extra empty.
++Do not substitute broad nursing logic or infer a mechanism.
++Keep the empty Extra field between the same two pipe separators; Tags remain the third field.
+@@ -524,5 +520 @@ Do not add filler to increase count.
+-Specificity Re-Audit
+-
+-Before output, re-check whether any shortened note lost a qualifier required to make the answer unique.
+-
+-If yes, revise by:
++Source-Meaning Re-Audit
+@@ -530,3 +522 @@ If yes, revise by:
+-adding a brief context cue,
+-restoring the key qualifier, or
+-splitting into separate atomic notes
++Before output, compare each note with its supporting source facts. Preserve certainty, population, timing, exceptions, and clinical relationships, including what each number measures. Do not turn an example into a threshold, add a waiting condition, or turn a check for a problem into a claim that it is ruled out. Correct unsupported wording in Text and Extra; retain the context needed for a uniquely answerable review.

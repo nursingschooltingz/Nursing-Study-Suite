@@ -156,15 +156,17 @@ This tab answers the question every nursing student asks the night before an exa
 
 Generates cloze-deletion flashcards ready for Anki, from your Knowledge Base. Optional boxes — **Outcomes**, **Points**, **Additional Context** (e.g., *"Exam is on cardiac meds only"*) — steer emphasis without you writing prompts.
 
+**Unreleased working-copy update:** the source/retrieval changes described here are not yet in a new published release. Anki's Auto profile remains **Flash / Low**. Four paired Low/Medium comparisons did not show a consistent source-fidelity advantage from raising the thinking level.
+
 ### Preview and style checks
 
 After generation, switch to **Preview**, select a cloze number (c1/c2/c3), and click **Show answer** to reveal the answer and Extra. Gaps sharing a number hide together; the other answers remain visible. Use **Edit in Table** to revise a note.
 
-Amber style warnings flag possible article clues, missing condition/topic labels, several gaps hidden together, or a review front longer than the soft 15-word target. These are suggestions: keep necessary clinical qualifiers and omit anchors that would reveal the answer. The warnings update as you edit and never uncheck notes or prevent export.
+Amber style warnings flag possible article clues, missing condition/topic labels, several gaps hidden together, a review front longer than the soft 15-word target, or an answer repeated on the visible front. The last check includes hints and other visible cloze answers. These are suggestions: keep necessary clinical qualifiers and omit anchors that would reveal the answer. The warnings update as you edit and never uncheck notes or prevent export.
 
-Use **Style warnings** to focus your review. This filter only changes which notes are shown; export includes every kept note in the selected tier.
+Use **Style warnings** or the **Review findings** dropdown to focus on a particular issue, possible duplicate, or source finding. These filters only change which notes are shown; export includes every kept note in the selected tier. Open a finding's note to inspect its review, then use **Edit in Table** to revise it.
 
-Cards now prefer consistent retrieval labels and one clinical decision per review. Supporting explanations and source-supported contrasts belong in Extra; testable mechanisms also receive their own recall notes.
+The generator instructions require source-supported Text and Extra, preserving certainty, population, timing, exceptions, and what each number measures. If the source supplies no useful explanation or contrast, Extra stays empty. Independent answers still count as separate targets when bundled into one comma/slash answer or hidden under the same cloze number; one inseparable clinical relationship can stay together. Testable mechanisms should receive recall notes of their own. These instructions still need review against the source.
 
 Notes with different Extra text, tags, priority, case, or selection remain separate. Only completely equivalent valid notes merge their source links. Tier tags must be complete whitespace-separated tags with one distinct `Tier::1`, `Tier::2`, or `Tier::3`; repeated copies of the same tier have one effective value.
 
@@ -176,9 +178,15 @@ The summary distinguishes **kept notes** from **review cards**: c1/c2/c3 makes t
 
 This suite supports flat `{{c1::answer}}` clozes and optional `{{c1::answer::hint}}` hints, with at most three distinct positive indices per note. Nested or malformed clozes, missing tier tags, pipes inside fields, and embedded line breaks must be corrected in Table before export. Invalid notes stay visible. Checkboxes record your choice: repairing a selected note restores eligibility, and repairing a manually unchecked note leaves it unchecked.
 
-**Facts linked to kept notes** is the global count across all tiers. It follows your edits, selection, and deletions, as do the Anki entries in the Fact Inspector. A link records the original source association; it does not prove that a later edit is accurate. Replacing the KB leaves old notes visible but disables their links, numeric checks, coverage, and export until a new batch is generated.
+**Facts linked to kept notes** is the global count across all tiers. It follows your edits, selection, and deletions, as do the Anki entries in the Fact Inspector. One source fact can support several notes. A link records a source association; even all facts linked does not establish that every substantive detail is tested or that the wording preserves its meaning. Replacing the KB leaves old notes visible but disables their active links, numeric checks, coverage, and export until a new batch is generated.
+
+Open **Review and source** to compare the actual masked review, its hidden answers, and the captured supporting fact text with its condition and tier. A detail shown on the front or only in Extra is not necessarily something the review asks you to recall. The captured fact text is the source supplied to generation; a quote or another KB table cannot supply missing support afterward.
 
 Expand a note's **numeric status** to inspect exact value/unit discrepancies, quote-only support, or missing/partial mappings. Unsupported numeric forms require source review. These warnings also check revealed Text and Extra, but cannot establish correct comparator direction, the roles of two values, or clinical meaning. Identical-front warnings show the actual masked front and expected answers, distinguishing possible ambiguity from redundancy. Neither warning changes selection.
+
+**Possible duplicate** findings also flag lightly reworded reviews with the same hidden answers and overlapping source associations. They require judgment and never merge notes automatically. Local source warnings can identify inconsistent explicit Fahrenheit/Celsius pairs in the supplied fact text, allowing for displayed rounding. They report a source conflict without deciding which temperature is correct. These local checks do not call the model.
+
+For an optional broader review, expand **Check against KB** and choose **Prepare source check**. Preparation is local and shows the number of model requests and the selected model/thinking level. Only the separate **Run … source check(s)** button sends those packets to Gemini and uses API quota; transport retries can add attempts. The check compares captured fact text with current notes and their actual recall targets, looking for unsupported wording, changed meaning, missing targets, duplicates, priority loss, and source conflicts. It accounts for the selected export tier and manually unchecked notes. A finding can propose source-supported revised wording or a different recall target; when the source cannot support a correction, its suggestion stays empty. Originals remain intact for you to review and edit. Findings are advisory and do not certify clinical correctness or complete coverage. Edits or source changes make old findings outdated; cancelled checks retain completed groups. **Save source-check evidence** downloads the private packet and responses for your own review.
 
 Turn on **Include source references** to append concise filename/location pointers to Extra during export. It defaults off and never changes the editable Extra field. Missing pointers appear as `Source: unavailable`; quotes are not exported. With **Anki header** enabled, Text and Extra are HTML-escaped and only the trusted source separator uses a line break.
 

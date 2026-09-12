@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 1372;
+const EXPECTED_ASSERTIONS = 1563;
 
 let file;
 try {
@@ -2296,7 +2296,9 @@ section('v15.17 — approved rollback, historical examples and replay evidence')
 {
   const {buildAnkiExampleProposal}=require('./tools/anki-example-proposal');
   const {extractPromptLiteral,sha256}=require('./tools/repo-checks');
-  const proposal=buildAnkiExampleProposal(S);
+  // The measured historical prompt stays pinned after the separately approved source/retrieval update.
+  const historical=fs.readFileSync('tools/fixtures/anki-v15.16-prompt.txt','utf8');
+  const proposal=buildAnkiExampleProposal(historical);
   const live=extractPromptLiteral(S,'ANKI_MASTER_PROMPT').declaration;
   // The failed candidate remains a reproducible fixture; it is no longer the shipped prompt.
   const prompt=new Function(proposal.proposed+';return ANKI_MASTER_PROMPT;')();
@@ -2316,10 +2318,10 @@ section('v15.17 — approved rollback, historical examples and replay evidence')
   t('candidate examples have no numeric findings against their fictional facts',notes.every(c=>ANKI.ankiNumericAudit(c,batch,true).findings.length===0));
   t('candidate examples have no identical rendered fronts',ANKI.ankiCollisionGroups(notes).length===0);
   t('candidate explicitly excluded fictional examples from source material',prompt.includes('fictional; never source material for the generated deck'));
-  t('shipped prompt contains exactly the approved rollback',!proposal.applied&&live===proposal.original&&!S.includes(proposal.proposed));
-  t('restored prompt and rejected candidate retain their measured hashes',sha256(extractPromptLiteral(live,'ANKI_MASTER_PROMPT').body)==='353471cbee66c759341ad8f4d857fa75ea4051744a52771ce780fcf172efc548'&&sha256(extractPromptLiteral(proposal.proposed,'ANKI_MASTER_PROMPT').body)==='9d6c99229af067191df7b34d92c8ad98ff569870dd8f3be88634a5eb1a378b83');
+  t('shipped prompt contains the approved source/retrieval revision, not failed examples',!proposal.applied&&live!==proposal.original&&!S.includes(proposal.proposed)&&sha256(extractPromptLiteral(live,'ANKI_MASTER_PROMPT').body)==='00ad927f9df13bd487c916d35969c7babe69e927203a0610bbe8136166ecc781');
+  t('restored prompt and rejected candidate retain their measured hashes',sha256(extractPromptLiteral(historical,'ANKI_MASTER_PROMPT').body)==='353471cbee66c759341ad8f4d857fa75ea4051744a52771ce780fcf172efc548'&&sha256(extractPromptLiteral(proposal.proposed,'ANKI_MASTER_PROMPT').body)==='9d6c99229af067191df7b34d92c8ad98ff569870dd8f3be88634a5eb1a378b83');
   const replay=buildAnkiExampleProposal(proposal.proposed);
-  t('diff remains reproducible from either side without mutating input',replay.applied&&replay.original===live&&replay.proposed===proposal.proposed);
+  t('diff remains reproducible from either side without mutating input',replay.applied&&replay.original===proposal.original&&replay.proposed===proposal.proposed);
   let partialRejected=false;try{buildAnkiExampleProposal(proposal.proposed.replace('Complete format examples (fictional; never source material for the generated deck):','Examples of desired compression:'));}catch(e){partialRejected=/anchors changed or are partially applied/.test(e.message);}
   t('partial example edits cannot silently regenerate an approved diff',partialRejected);
   const fixturePage=require('./tools/anki-browser-fixture').page();
@@ -2329,17 +2331,17 @@ section('v15.17 — approved rollback, historical examples and replay evidence')
   t('private replay evidence excludes credentials and mutable controllers',!JSON.stringify(evidence).includes('MUST-NOT-RETAIN')&&!('ctl' in evidence));
 }
 
-section('v15.17 — unchanged generation inputs and bounded pilot');
+section('generation input pins and bounded pilot');
 {
-  // Source hashes measured at the clean A0 checkout 21fb598; no baseline is refreshed here.
+  // Packet/chunker/focus retain measured A0 hashes; the mapping adapter pin records this approved revision.
   const inputs=[
     ['source packet','function kbForAnki(kb){','// ── KB source chunking','abf40adde002b03587eefe395958ec67de14c7bec5c1fee5db600cc527e74a71'],
     ['chunking','function splitOversizedConditionBlock(block,max){','function ankiParseCards(raw','b3d15fb1e63a7b1cdd49eb105db827debac59bd0340c282fdae5049989e42002'],
     ['focus block','  function buildFocusBlock(){','  const run=useCallback(async()=>{','b096b8eb8733da287a097a99ede3f3e233d8e413c01bdf5605376f516054094f'],
-    ['mapping adapter','        const kbAdapter=','        parts.push({text:ANKI_MASTER_PROMPT','5cc837d1317a87d3d58d2bc6ed7afef835dbace0b6d089167e83b354863b3836']
+    ['mapping adapter','        const kbAdapter=','        parts.push({text:ANKI_MASTER_PROMPT','33da0d50af94b7d6b1de75d413d93c2b049818a96454f11ed936c72c55052e7e']
   ];
   const {sha256}=require('./tools/repo-checks');
-  for(const [name,start,end,hash] of inputs){const a=S.indexOf(start,name==='focus block'?S.indexOf('function AnkiGenerator()'):0),b=S.indexOf(end,a);t('code-only generation input unchanged: '+name,a>=0&&b>a&&sha256(S.slice(a,b).trim())===hash);}
+  for(const [name,start,end,hash] of inputs){const a=S.indexOf(start,name==='focus block'?S.indexOf('function AnkiGenerator()'):0),b=S.indexOf(end,a);t('generation input matches its approved pin: '+name,a>=0&&b>a&&sha256(S.slice(a,b).trim())===hash);}
   const F=ankiSyntheticFixture(),before=JSON.stringify(F.kb),spec=require('./tools/anki-pilot-spec').makeAnkiPilotSpec(F.kb,S);
   t('pilot planner derives exact call counts from the live chunker',spec.facts===5&&spec.chunkCount===1&&spec.expectedGenerationCalls===1&&spec.maximumAttempts===3);
   t('pilot planner preserves the recommended model and token contract',spec.model==='gemini-3.8-flash'&&spec.thinkingLevel==='low'&&spec.maxOutputTokensPerAttempt===65536&&spec.additionalAuditCalls===0);
@@ -2435,7 +2437,7 @@ section('v15.14 — tier 3');
   t('all five tool logs and the KB-replacement notice are capped', S.split('p.slice(-200)').length - 1 === 6);
   // T3.13i — ten positional parameters, one of them inert since v15.
   t('callGemini takes an options object', S.includes('async function callGemini(apiKey,model,parts,opts={}){'));
-  t('no positional call site survives the migration, including source-owned wrappers', !S.includes('],true,') && [...S.matchAll(/\b(?:ownedCallGemini|callGemini)\(/g)].length === 12);
+  t('no positional call site survives the migration, including source-owned wrappers', !S.includes('],true,') && [...S.matchAll(/\b(?:ownedCallGemini|callGemini)\(/g)].length === 13);
   t('a missed migration fails loudly instead of binding a boolean to opts',
     S.includes("throw new Error('callGemini: pass an options object"));
   t('the inert useThinking parameter is gone from the signature and every call site',
@@ -2692,6 +2694,10 @@ section('v15.14 — clamps, backoff, storage');
   require('./tools/numeric-boundary-tests')(S,t);
   require('./tools/neutral-weight-tests')(S,t);
   require('./tools/visual-regression-tests')(S,t);
+  require('./tools/anki-mapping-update-tests').runAnkiMappingUpdateTests({S,t,section});
+  require('./tools/anki-local-checks-tests').runAnkiLocalChecksTests({S,t,section});
+  require('./tools/anki-source-audit-tests').runAnkiSourceAuditTests({S,t,section});
+  await require('./tools/anki-source-ui-tests').runAnkiSourceUiTests({S,t,section});
 
   console.log('\n════════════════════════════');
   const total = pass + fail;

@@ -5,7 +5,7 @@
 // Retained for evidence and regression fixtures, not authorization to reapply it.
 // Never writes the application or prompt baseline.
 const fs=require('fs'),path=require('path'),{spawnSync}=require('child_process');
-const {extractPromptLiteral,resolveSuiteFile}=require('./repo-checks');
+const {extractPromptLiteral}=require('./repo-checks');
 function buildAnkiExampleProposal(source){
   const live=extractPromptLiteral(source,'ANKI_MASTER_PROMPT').declaration;
   const replacements=[[
@@ -26,7 +26,7 @@ function buildAnkiExampleProposal(source){
   return {original,proposed,applied};
 }
 if(require.main===module){
-  const root=path.join(__dirname,'..'),{original,proposed}=buildAnkiExampleProposal(fs.readFileSync(resolveSuiteFile({rootDir:root}),'utf8'));
+  const root=path.join(__dirname,'..'),{original,proposed}=buildAnkiExampleProposal(fs.readFileSync(path.join(__dirname,'fixtures','anki-v15.16-prompt.txt'),'utf8'));
   const scratch=path.join(root,'scratch');fs.mkdirSync(scratch,{recursive:true});
   const before=path.join(scratch,'anki-example-before.txt'),after=path.join(scratch,'anki-example-after.txt');
   fs.writeFileSync(before,original+'\n');fs.writeFileSync(after,proposed+'\n');

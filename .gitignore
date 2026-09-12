@@ -40,6 +40,8 @@ NCLEX-Audit-Trail*.txt
 priority-analysis*.md
 priority-analysis*.txt
 anki*.txt
+# Public historical prompt fixture used by the rejected-example regression replay.
+!tools/fixtures/anki-v15.16-prompt.txt
 anki-batch-diagnostics*.json
 *-anki.txt
 

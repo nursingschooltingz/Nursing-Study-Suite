@@ -5,9 +5,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 This file records release history. Deliberate engineering decisions live in `DECISIONS.md`; current evidence and open work live in `CURRENT_STATE.md`.
 
-Releases use the unified verifier for Babel parsing, regression assertions, prompt documentation, and all 11 frozen prompt hashes. Through v15.15, the constants retained their v14.x bytes. The approved v15.16 Anki prompt remains current after the v15.17 example experiment and its explicitly approved rollback.
+Releases use the unified verifier for Babel parsing, regression assertions, prompt documentation, and all 11 frozen prompt hashes. Through v15.15, the constants retained their v14.x bytes. The published v16.0 release retains the approved v15.16 Anki prompt after the v15.17 example experiment and its explicitly approved rollback. The working-copy prompt update is recorded under Unreleased below.
 
 ---
+
+## [Unreleased]
+
+### Changed
+- Applied the approved Anki prompt changes for source-supported Text/Extra, preserved source meaning, and independently gradable list targets. Extra remains empty when no useful explanation or contrast is supplied. The three-field output is preserved. Only the Anki baseline changed; the other ten frozen prompts are unchanged. [Exact prompt diff](docs/history/ANKI-source-retrieval-update.diff).
+- The Anki mapping adapter explicitly allows one source fact to support multiple notes through repeated one-edge mapping lines. Linked-fact counts remain associations, not claims of complete retrieval or correct meaning. Anki Auto remains Flash / Low.
+
+### Added
+- Review/source inspection of actual masked fronts, hidden answers, and captured fact text; finding filters and note links for review/editing.
+- Advisory local checks for answers exposed on the visible front, conservative possible repeated targets, and inconsistent explicit Fahrenheit/Celsius source pairs with rounding tolerance. They do not change selection, export eligibility, or exact dedupe.
+- Optional **Prepare source check** and separate **Run source check** actions. Preparation is local, displays planned requests/model/thinking, and bounds groups to 24,000 serialized payload characters without truncating source relationships. Only Run uses Gemini quota. Findings cover source fidelity, substantive recall omissions, duplicate targets, priority loss, and source conflicts. Suggestions can propose source-supported wording or retrieval-target changes; originals remain intact, and no correction is proposed when the source cannot support one. Completed groups and private evidence survive interruption, while edits/source changes mark results outdated.
+
+### Validation
+- The unified verifier passes 1,563 assertions, including nine suggestion-field checks, full JSX Babel parsing, LF/version agreement, generated prompt documentation, and all eleven approved prompt hashes. Isolated synthetic browser acceptance passes warning/export isolation, inspection/editing, explicit mocked audits, suggestion display and evidence export with intact originals, stale notes/KB, malformed evidence, cancellation/late replies, empty-batch controls, and the 360px layout using `tools/anki-source-review-browser-tests.js`.
+- No live Gemini calls were made for this implementation. The four paired thinking-level comparisons preceded these changes; new-prompt efficacy and source-check accuracy require a separately authorized paired pilot. Native Anki import/review remains outstanding. The user authorized committing and pushing this update; no version bump or tagged release was requested.
 
 ## [16.0] — 2026-09-11
 
@@ -102,7 +117,7 @@ NCLEX Question Extractor. Three faults found by running v15.14 against a real qu
 
 ---
 
-## [Unreleased]
+## Repository tooling — historical unreleased notes before v15.16
 
 ### Added
 - **One deterministic repository gate:** `node verify-repo.js` resolves one canonical suite HTML, rejects Proton Drive Name clash copies, checks LF/version agreement, verifies the 11 frozen prompt hashes, checks the generated prompt documentation, enforces the regression assertion total, and Babel-transforms the full JSX block. `--setup-babel` installs the pinned scratch parser under the operating-system temp directory, never in the repository.
