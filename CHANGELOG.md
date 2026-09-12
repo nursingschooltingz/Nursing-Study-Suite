@@ -9,9 +9,27 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [15.18] — 2026-09-11
+
+Reliability and evidence remediation. The [v15.18 release](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/tag/v15.18) retains the frozen prompts and the single-file runtime. See [the execution ledger](docs/reviews/remediation-execution-v15.17.md) for verification and remaining acceptance.
+
+### Fixed
+- Ordered KB saves and clears, current-save status, hydration/replacement races, and ambiguous legacy storage recovery. Concurrent browser changes are reported instead of silently overwritten. Raw KB exports remain compatible; export active/recovery copies before downgrading because older code cannot interpret the new save metadata and fallback tombstones.
+- Build/import ownership, Priority reentry while streaming, removed-photo transcript resurrection, and unresolved card-face/category/number comparisons. Card prompts and image resize settings are unchanged.
+- Source-bound case/worksheet outputs and registry entries; Unicode-preserving fact/condition identity; complete numeric-value/unit evidence and safe invalid-case inspection. Worksheet checks retain the actual supplied packet, validate explicit concept references and answer structure, and reject malformed/ungrounded repair candidates before replacing usable output. Existing warning tiers and calculation/threshold exceptions remain.
+- Anki equivalence now includes Extra, effective tags, and manual selection. Complete tier tags drive eligibility, display, filtering and export consistently. Plain and HTML import encoding retain their established meanings.
+- Audit/completeness/stale-source notices survive worksheet/case exports, including case JSON Copy. Completed worksheets and finished verdicts remain available when an audit is interrupted; non-MCQ exclusions retain N/A status. Damaged or unterminated SSE responses cannot masquerade as completed artifacts; owned readers, abort listeners and timers are released before retry.
+- Generated output cannot auto-load media or styles. DOMPurify 3.4.15 is pinned on both CDNs; PDF worker code is integrity-checked before a shared Blob worker executes. The PDF.js major migration is explicitly deferred.
+- Collision groups render once, unchanged Anki notes reuse numeric checks, and original batch diagnostics no longer rerun on each edit. Inspector labels and links still follow meaningful changes.
+- Measurement CLIs validate arguments, import without execution, support offline dry runs and require explicit live opt-in. Incomplete measurements cannot report conclusive stability. Removed unused helper wrappers while keeping production regression coverage.
+
+### Validation
+- All eleven prompt hashes and their baseline remain unchanged. Unified verification includes extracted live-function regression modules and the full JSX Babel transform. Isolated real-App Chrome tests cover storage/ownership/source races, output resources, verified worker fallback/cleanup and actual photo decoding. Exact totals and browser performance measurements are in the ledger.
+- No private source files or live Gemini calls were used. Native Anki import/review and native printing remain unverified. The user separately authorized committing and publishing this release; publication does not close the remaining acceptance checks.
+
 ## [15.17] — 2026-09-11
 
-Published as the [latest GitHub release](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/tag/v15.17), with the exact pre-pilot Anki prompt restored. Actual Anki import verification remains outstanding.
+Published as the [v15.17 GitHub release](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/tag/v15.17), with the exact pre-pilot Anki prompt restored. Actual Anki import verification remains outstanding.
 
 ### Fixed
 - Flat cloze structure now drives preview, index counting, numeric scanning, collisions, and export validation. Malformed delimiters, nesting, empty/nonpositive indices, and edits that insert pipes/newlines cannot silently export. Structural eligibility is independent of manual selection.

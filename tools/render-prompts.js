@@ -61,7 +61,9 @@ function generatedSpan(doc) {
     throw new Error('Prompts.md must contain exactly one generated appendix marker pair');
   }
   const start = doc.indexOf(START);
-  const end = doc.indexOf(END, start) + END.length;
+  const endAt = doc.indexOf(END, start);
+  if (endAt < 0) throw new Error('Prompts.md generated appendix end marker precedes its start marker');
+  const end = endAt + END.length;
   return { start, end, value: doc.slice(start, end) };
 }
 

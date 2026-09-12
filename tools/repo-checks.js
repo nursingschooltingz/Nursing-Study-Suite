@@ -95,9 +95,13 @@ function extractPromptLiteral(source, name) {
     }
     if (source[i] === '`') {
       const semicolonEnd = source[i + 1] === ';' ? i + 2 : i + 1;
+      const body = source.slice(literalStart + 1, i);
+      if (DOCUMENTED_PROMPTS.includes(name) && !body.trim()) {
+        throw new Error('Empty documented prompt body: ' + name);
+      }
       return {
         name,
-        body: source.slice(literalStart + 1, i),
+        body,
         declaration: source.slice(declarationStart, semicolonEnd),
       };
     }
@@ -116,15 +120,122 @@ function suiteVersionFromFilename(file) {
   return match[1];
 }
 
+// Explicit diagnostics for the harness's live contraindication regex extraction.
+function extractAnchoredRegex(source, anchor, startMarker, endMarker, flags = '') {
+  const at = source.indexOf(anchor);
+  if (at < 0) throw new Error('Regex anchor missing: ' + anchor);
+  const end = source.indexOf('\n', at);
+  const line = source.slice(source.lastIndexOf('\n', at) + 1, end < 0 ? source.length : end);
+  const start = line.indexOf(startMarker);
+  if (start < 0) throw new Error('Regex start marker missing after anchor: ' + anchor);
+  const stop = line.indexOf(endMarker, start + startMarker.length);
+  if (stop < 0) throw new Error('Regex end marker missing after anchor: ' + anchor);
+  const body = line.slice(start + startMarker.length, stop);
+  if (!body) throw new Error('Empty regex body after anchor: ' + anchor);
+  return new RegExp(body, flags);
+}
+
+// Manual measurement tools share strict parsing; importing this module does no I/O.
+// Bounds keep typo-driven work lists and timer delays finite and reviewable.
+function parseMeasurementArgs(argv, kind) {
+  if (!['davis', 'neia'].includes(kind)) throw new Error('Unknown measurement tool: ' + kind);
+  const davis = kind === 'davis';
+  const config = { runs: davis ? 2 : 3, model: davis ? 'gemini-3.7-flash' : 'gemini-3.1-pro-preview',
+    level: davis ? 'low' : 'high', width: davis ? 1 : 3, retryms: 20000, rpm: davis ? 15 : 0,
+    out: davis ? 'davis-transcribe-report.json' : 'neia-retest-report.json',
+    suite: '', only: [], images: [], dryRun: false, live: false, appProfile: false, help: false };
+  const names = new Set(['runs', 'model', 'level', 'out', 'retryms', 'rpm', davis ? 'app' : 'html',
+    ...(davis ? [] : ['width', 'only'])]);
+  const flags = { '--dry-run': 'dryRun', '--live': 'live', '--app-profile': 'appProfile', '--help': 'help' };
+  const seen = new Set();
+  let positionalOnly = false;
+  for (let i = 0; i < argv.length; i++) {
+    const value = argv[i];
+    if (!positionalOnly && value === '--') { positionalOnly = true; continue; }
+    if (!positionalOnly && value.startsWith('-')) {
+      if (seen.has(value)) throw new Error('Duplicate option: ' + value);
+      seen.add(value);
+      if (flags[value]) { config[flags[value]] = true; continue; }
+      const name = value.slice(2);
+      if (!value.startsWith('--') || !names.has(name)) throw new Error('Unknown option: ' + value);
+      const next = argv[++i];
+      if (next === undefined || !next.trim() || next.startsWith('--')) throw new Error('Missing value for ' + value);
+      if (name === 'app' || name === 'html') config.suite = next;
+      else if (name === 'only') config.only = next.split(',').map(s => s.trim()).filter(Boolean);
+      else config[name] = next;
+    } else {
+      if (!davis || !/\.(jpe?g|png|webp|heic|heif)$/i.test(value)) throw new Error('Unexpected input: ' + value);
+      config.images.push(value);
+    }
+  }
+  const number = (name, min, max, integer) => {
+    const n = Number(config[name]);
+    if (!Number.isFinite(n) || (integer && !Number.isInteger(n)) || n < min || n > max) {
+      throw new Error('--' + name + ' must be ' + (integer ? 'an integer' : 'finite') + ' from ' + min + ' to ' + max);
+    }
+    config[name] = n;
+  };
+  number('runs', 2, 100, true);
+  number('width', 1, 100, true);
+  number('retryms', 0, 600000, true);
+  number('rpm', 0, 60000, false);
+  if (!['minimal', 'low', 'medium', 'high'].includes(config.level)) throw new Error('--level must be minimal, low, medium, or high');
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(config.model)) throw new Error('Invalid model ID');
+  if (config.dryRun && config.live) throw new Error('Choose --dry-run or --live, not both');
+  if (config.appProfile && (seen.has('--model') || seen.has('--level'))) throw new Error('--app-profile cannot be combined with --model or --level');
+  if (davis && !config.images.length && !config.help) throw new Error('Pass at least one image path');
+  if (seen.has('--only') && !config.only.length) throw new Error('--only requires at least one item ID');
+  return config;
+}
+
+function resolveMeasurementProfile(config, source, tool) {
+  if (!config.appProfile) return { model: config.model, level: config.level, profile: 'CLI baseline (explicit overrides allowed)' };
+  if (!['cardTranscribe', 'itemAudit'].includes(tool)) throw new Error('Unknown app profile: ' + tool);
+  const profiles = source.match(/const TOOL_PROFILE_DEFAULTS=\{([\s\S]*?)\n\};/);
+  if (!profiles) throw new Error('App profile registry anchor missing');
+  const row = profiles[1].match(new RegExp('\\b' + tool + ":\\{m:'(flash|pro)',lv:'([^']+)'\\}"));
+  if (!row) throw new Error('App profile row missing: ' + tool);
+  const family = row[1];
+  const model = source.match(new RegExp('const \\[' + family + "Model,set[A-Za-z]+Model\\]=useState\\('([^']+)'\\)"));
+  if (!model) throw new Error('App model default anchor missing: ' + family);
+  return { model: model[1], level: row[2], family, profile: 'shipped-default:' + tool,
+    profileCaveat: 'Shipped defaults only; saved browser profile overrides are not read.' };
+}
+
+function measurementPlan(config, count, profile) {
+  if (!Number.isInteger(count) || count < 1) throw new Error('No measurement inputs selected');
+  return { ...profile, runs: config.runs, logicalOperations: count * config.runs,
+    maximumAttempts: count * config.runs * 4, maxAttemptsPerOperation: 4,
+    retryPolicy: 'At most 3 retries after HTTP 429 or 5xx; other failures stop that operation.',
+    width: config.width, rpm: config.rpm, retryms: config.retryms, maxOutputTokens: 65536,
+    caveat: 'These are planned operations and an attempt ceiling, not exact HTTP calls or a price estimate.' };
+}
+
+function createMeasurementPacer(rpm, { now = Date.now, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)) } = {}) {
+  let lastStart = null;
+  return async function pace() {
+    if (!rpm) return;
+    const current = now();
+    const wait = lastStart === null ? 0 : Math.max(0, lastStart + 60000 / rpm - current);
+    lastStart = current + wait;
+    if (wait > 0) await sleep(wait);
+  };
+}
+
 module.exports = {
   DOCUMENTED_PROMPTS,
   FROZEN_PROMPTS,
   NAME_CLASH_RE,
   SUITE_FILE_RE,
   countExact,
+  createMeasurementPacer,
+  extractAnchoredRegex,
   extractPromptLiteral,
   listSuiteFiles,
   resolveSuiteFile,
+  measurementPlan,
+  parseMeasurementArgs,
+  resolveMeasurementProfile,
   sha256,
   suiteVersionFromFilename,
 };

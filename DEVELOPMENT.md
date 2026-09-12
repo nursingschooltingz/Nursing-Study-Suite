@@ -4,7 +4,7 @@ This is the task map for maintainers and coding agents. `AGENTS.md` remains the 
 
 ## Repository shape
 
-- `Nursing-Study-Suite v15.17.html` is the complete application.
+- `Nursing-Study-Suite v15.18.html` is the complete application.
 - `latte-tests.js` is the deterministic regression harness and extracts live functions by anchor.
 - `verify-repo.js` is the only ordinary repository verification entry point.
 - `prompt-baseline.json` stores the 11 frozen prompt hashes.
@@ -12,6 +12,7 @@ This is the task map for maintainers and coding agents. `AGENTS.md` remains the 
 - `tools/check-prompts.js` enforces the frozen hashes.
 - `tools/render-prompts.js` checks or regenerates the generated prompt appendix.
 - `neia-retest.js` and `davis-transcribe-test.js` are explicitly authorized, live-API measurement tools.
+- The remediation regression modules under `tools/` are imported by `latte-tests.js` and exercise extracted shipped functions using synthetic data. Their assertions contribute to the enforced harness total.
 - `docs/history/` preserves historical prompt diffs and the dormant v16 design/benchmark. These are reference records, not current implementation instructions.
 
 ## Safe workflow
@@ -55,11 +56,23 @@ The harness comments identify its extraction anchors. If a refactor moves one, u
 - `node tools/anki-example-proposal.js` reproduces the historical example-only diff at `docs/history/ANKI-v15.17-example-proposal.diff` from either side. That candidate failed its live pilot and was rolled back with explicit approval; the tool is retained for evidence, not authorization to reapply it. It rejects partially applied examples and never changes the app or prompt baseline. The harness validates all five examples reconstructed from the historical candidate and pins both its measured hash and the exact restored live prompt hash.
 - See `ANKI-v15.17-validation.md` for the completed pilot, approved rollback, capture limitations and outstanding mapping/import work. Completed and interrupted generation diagnostics can be saved privately from the UI, including original responses and their source snapshot; keep these files out of Git.
 
+## Offline measurement planning and synthetic acceptance
+
+Both manual measurement tools now require `--live` to execute API calls, in addition to the project's explicit per-run human authorization. `--dry-run` needs no API key, sends nothing, reads no image payloads, and writes no measurement report. It prints the chosen model/profile, prompt hash, logical operations, and maximum attempts under retries. Actual HTTP calls can be fewer.
+
+Examples: `node davis-transcribe-test.js --dry-run --app-profile --runs 2 synthetic.png` and `node neia-retest.js --dry-run --app-profile --runs 2`. Davis keeps original image bytes; this is distinct from the app's resize path. Neither tool measures accuracy merely by observing stable output. Invalid/missing option values and unknown flags fail before execution; incomplete measurements return nonzero status. Imported helpers have no executable-main side effects.
+
+`node tools/remediation-browser-tests.js --self-test` verifies fixture isolation offline. Browser acceptance requires an existing external Playwright installation and Chrome, configured through `NODE_PATH` and optionally `REMEDIATION_BROWSER_EXECUTABLE`; it introduces no repository dependency. `node tools/remediation-browser-tests.js` mounts the real App on fresh loopback origins and tests mocked generation and isolated browser stores. Add `--output-policy` for popup/frame/resource checks. Only the fixture route is served, never the repository directory. Context-wide request interception blocks unexpected Gemini and resource requests. The browser needs network access for the pinned startup CDNs.
+
+`node tools/remediation-pdf-browser-tests.js` exercises native worker integrity, both CDNs, failure/retry/cleanup, multi-document text extraction on loopback and `file://`, and actual synthetic photo decoding/resizing. `node tools/remediation-anki-performance.js 315 single` or `1000 small` measures the mounted Anki interface with synthetic collision groups. These are explicit browser checks, not live Gemini measurements or ordinary verifier dependencies. See the remediation validation records under `docs/reviews/` for measured results and native Anki/print limits.
+
+`node tools/remediation-worksheet-browser-tests.js` covers interrupted/quota-stopped audits, immediate verdict updates, non-MCQ N/A outcomes, and malformed/ungrounded repair rejection using the same isolated App fixture and mocked responses.
+
 ## Release checklist
 
 - Rename the one canonical suite file and update the matching top release comment.
 - Add the Keep a Changelog entry.
 - Regenerate/check `Prompts.md`; frozen hashes must remain unchanged unless an edit was explicitly approved.
-- Re-hash all eight SRI-pinned CDN resources on any application version bump.
+- Re-hash all eight SRI-pinned script resources and both separately pinned worker CDN copies on any application version bump.
 - Run `node verify-repo.js`.
 - Run live-material checks only when the changed pipeline requires them and the user explicitly authorizes the API calls.

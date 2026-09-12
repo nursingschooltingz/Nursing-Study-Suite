@@ -1,0 +1,41 @@
+'use strict';
+async function runTests(S,t){
+  const a=S.indexOf('function createOperationSlot(){'),b=S.indexOf('function KnowledgeBaseBuilder(){',a);
+  if(a<0||b<0)throw Error('Operation helper anchors missing');
+  const id=f=>f.name+':'+f.size+':'+f.lastModified;
+  const H=new Function('cardIsImage','cardFileId',S.slice(a,b)+';return {createOperationSlot,cardCurrentEntries,cardPublishTranscript,cardIdentityConflict};')(f=>/\.png$/.test(f.name),id);
+  const slot=H.createOperationSlot(),build=slot.start(),importB=slot.start();
+  t('accepted import supersedes and aborts pending build synchronously',build.ctl.signal.aborted&&!slot.current(build)&&slot.current(importB));
+  t('old finally cannot release a newer operation',!slot.finish(build)&&slot.active===importB);
+  slot.cancel();t('reset cancels the current operation and rejects late publication',!slot.current(importB)&&importB.ctl.signal.aborted&&!slot.active);
+  const run=slot.start();run.ctl.abort();t('cancelled operation owns teardown but cannot publish success',slot.owns(run)&&!slot.current(run)&&slot.finish(run));
+  const f={name:'one.png',size:1,lastModified:1},g={name:'two.png',size:2,lastModified:2},pdf={name:'retained.pdf',size:3,lastModified:3};
+  const one={file:f.name,transcript:{face:'front'}},two={file:g.name,transcript:{face:'back'}};
+  let transcripts={[id(f)]:one};
+  transcripts=H.cardPublishTranscript(transcripts,id(g),two,[g,pdf]);
+  t('completed-photo removal cannot be reversed by another transcript completion',!transcripts[id(f)]&&transcripts[id(g)]===two);
+  transcripts=H.cardPublishTranscript(transcripts,id(f),one,[g,pdf]);
+  t('removed pending photo cannot publish transcript',!transcripts[id(f)]);
+  t('retained PDF cannot make removed last photo buildable',H.cardCurrentEntries({[id(f)]:one},[pdf]).length===0);
+  t('new same-name photo does not inherit a removed photo transcript',H.cardCurrentEntries({[id(f)]:one},[{...f,lastModified:2}]).length===0);
+  t('current face provenance is retained',H.cardCurrentEntries(transcripts,[g])[0]===two);
+  t('face disagreement blocks structural identity',H.cardIdentityConflict({agreement:{facesDisagree:true}}));
+  t('category or number disagreement blocks structural identity',H.cardIdentityConflict({agreement:{idsDisagree:true}}));
+  t('incomplete requested repeat cannot claim stable identity',H.cardIdentityConflict({comparisonIncomplete:true}));
+  t('matching completed comparisons retain pairing eligibility',!H.cardIdentityConflict({agreement:{idsDisagree:false,facesDisagree:false},comparisonIncomplete:false}));
+  const start=S.indexOf('  const importJSON=async file=>{'),end=S.indexOf('\n  // v15.3 ',start);
+  if(start<0||end<0)throw Error('Import closure anchors missing');
+  const imported=[],errors=[],busy=[];let resolveA,resolveB;
+  const slot2=H.createOperationSlot();
+  const importJSON=new Function('replacementSlot','abortRef','setBusy','kbConfirmReplace','KB_IMPORT_MAX_BYTES','formatSize','kbNormalizeImported','K','setCourse','setExam','setSelected','setError','setWarnings',S.slice(start,end)+';return importJSON;')(
+    {current:slot2},{current:null},v=>busy.push(v),()=>true,1000,String,v=>({kb:v,dropped:{}}),{setKnowledgeBase:v=>imported.push(v)},()=>{},()=>{},()=>{},e=>errors.push(e),()=>{});
+  const file=text=>({size:1,text}),ka={metadata:{},conditions:[{id:'A',facts:[]}]},kb={metadata:{},conditions:[{id:'B',facts:[]}]};
+  const pA=importJSON(file(()=>new Promise(r=>resolveA=r))),pB=importJSON(file(()=>new Promise(r=>resolveB=r)));
+  resolveB(JSON.stringify(kb));await pB;resolveA(JSON.stringify(ka));await pA;
+  t('live import closure publishes newest reversed completion only',imported.length===1&&imported[0].conditions[0].id==='B');
+  await importJSON(file(async()=>'{broken'));
+  t('failed accepted import reports error and releases current busy slot',errors.at(-1).startsWith('Import failed:')&&busy.at(-1)===false&&!slot2.active);
+  t('Priority reentry and unmount use synchronous live operation ownership',S.includes('if(!cfg.apiKey||analysisSlot.current.active)return;')&&S.includes('useEffect(()=>()=>analysisSlot.current.cancel(),[]);')&&S.includes('||analysisBusy} onClick={runAnalysis}'));
+  t('ownership extraction reaches identity-conflict tail',typeof H.cardIdentityConflict==='function');
+}
+module.exports={runTests};

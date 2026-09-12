@@ -1,187 +1,110 @@
 #!/usr/bin/env node
 /*
- * NEIA audit — Gemini test-retest harness (v15.6, item 8)
+ * NEIA audit: manually authorized, quota-consuming Gemini test-retest measurement.
+ * node neia-retest.js --dry-run [--app-profile] [--only sound-1,sound-2]
+ * GEMINI_API_KEY=... node neia-retest.js --live [--runs 3] [--width 3]
+ * Options: --runs 2..100, --width 1..100, --model ID, --level minimal|low|medium|high,
+ * --html <suite.html>, --app-profile, --only <id,id>, --out <report.json>,
+ * --retryms 0..600000, --rpm 0..60000 (0 = unthrottled; fractional rates allowed).
  *
- * Usage:
- *   GEMINI_API_KEY=... node neia-retest.js [--runs 3] [--model gemini-3.1-pro-preview]
- *                                          [--level high] [--width 3] [--html <file>]
- *                                          [--only <id,id>] [--out <file.json>]
- *
- * WHY THIS EXISTS
- * No published figure establishes audit reliability for this build. The June 2026
- * reliability study tested five OpenAI and two Anthropic configurations and ZERO Gemini,
- * and it lists intra-rater reliability as unmeasured while calling it "a foundational
- * property for operational use". Whether one configuration scores the same item the same
- * way twice is the most operationally relevant unknown for a gate you run continuously.
- * Nothing this script reports may be compared to any published ICC or accuracy figure.
- *
- * WHAT IT DOES NOT DO
- * It does not decide anything. It measures flip rates so a human can decide which criteria
- * are stable enough to keep at FAIL. Per the brief: any criterion whose verdict flips
- * across identical runs is demoted from FAIL to WARN until it stabilises.
- *
- * COST WARNING: runs (fixture items x runs) live API calls. Default 10 x 3 = 30 calls, at
- * Pro + high reasoning. This is NOT part of `node latte-tests.js` and never runs in CI.
- *
- * Like latte-tests.js, this extracts the REAL prompt builders from the shipped HTML by
- * anchor string and never keeps a copy — if an anchor moves it fails loudly at extraction.
- * Built-in modules only; no dependencies.
+ * Historical CLI baseline remains Pro/high. --app-profile resolves the shipped
+ * itemAudit model/level, not saved browser overrides. No profile is changed in the app.
+ * --dry-run needs no key, sends nothing, and writes no report.
+ * --live prevents accidents; per-run human authorization is still required.
+ * Exit 0: complete measurement/dry-run/help; 1: fatal; 2: invalid invocation;
+ * 3: incomplete measurement. Errors never count as verdict flips.
+ * Importing this module is offline and has no filesystem/output side effects.
+ * No result is comparable to published ICC or external accuracy figures.
  */
 'use strict';
 const fs = require('fs');
-const { resolveSuiteFile } = require('./tools/repo-checks');
+const path = require('path');
+const { resolveSuiteFile, sha256, parseMeasurementArgs, resolveMeasurementProfile,
+  measurementPlan, createMeasurementPacer } = require('./tools/repo-checks');
+const parseArgs = argv => parseMeasurementArgs(argv, 'neia');
+const SAFETY = ['HARM_CATEGORY_HARASSMENT', 'HARM_CATEGORY_HATE_SPEECH',
+  'HARM_CATEGORY_SEXUALLY_EXPLICIT', 'HARM_CATEGORY_DANGEROUS_CONTENT']
+  .map(category => ({ category, threshold: 'BLOCK_NONE' }));
 
-/* ── args ── */
-const argv = process.argv.slice(2);
-const arg = (name, dflt) => {
-  const i = argv.indexOf('--' + name);
-  return i >= 0 && argv[i + 1] ? argv[i + 1] : dflt;
-};
-const RUNS = Number(arg('runs', 3));
-const MODEL = arg('model', 'gemini-3.1-pro-preview');
-const LEVEL = arg('level', 'high');
-const WIDTH = Number(arg('width', 3));
-const ONLY = (arg('only', '') || '').split(',').map(s => s.trim()).filter(Boolean);
-const OUT = arg('out', 'neia-retest-report.json');
-const RETRY_MS = Number(arg('retryms', 20000)); // base backoff; doubles each attempt
-const RPM = Number(arg('rpm', 0)); // 0 = unthrottled; otherwise cap request STARTS per minute
-
-// Global pacer. Free-tier Gemini limits are per-minute and per-day, and a concurrency pool
-// alone cannot respect either: width 3 at ~6s latency bursts ~28 requests/minute. This
-// serialises the *start* of every request so the pool still overlaps waiting, but never
-// exceeds the requested rate. --rpm 10 is a reasonable free-tier Pro setting.
-let _lastStart = 0;
-async function pace() {
-  if (!RPM) return;
-  const gap = 60000 / RPM;
-  const wait = Math.max(0, _lastStart + gap - Date.now());
-  _lastStart = Date.now() + wait;
-  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+function spanFrom(source, startAnchor, endAnchor) {
+  const a = source.indexOf(startAnchor);
+  if (a < 0) throw new Error('Start anchor missing: ' + startAnchor);
+  const b = source.indexOf(endAnchor, a + startAnchor.length);
+  if (b < 0) throw new Error('End anchor missing after: ' + startAnchor);
+  return source.slice(a, b + endAnchor.length);
 }
-const KEY = process.env.GEMINI_API_KEY || '';
-
-if (!KEY) {
-  console.error('Set GEMINI_API_KEY in the environment. The key is never written to the report.');
-  process.exit(2);
+function extractAudit(source) {
+  const markdown = spanFrom(source, 'function caseToMarkdown(', "\n  return L.join('\\n');\n}");
+  const audit = spanFrom(source, 'function caseIsGateEligible(', 'function CaseStudyGenerator()')
+    .replace(/function CaseStudyGenerator\(\)$/, '');
+  const result = new Function('CASE_QUESTION_RULES', 'caseRenderFactPacket', markdown + audit +
+    ';return {caseAuditPayload,itemBuildAuditPrompt,itemParseAuditVerdict,caseIsGateEligible,itemAuditSummary};')('', () => '');
+  if (typeof result.itemAuditSummary !== 'function') throw new Error('Audit extraction tail missing: itemAuditSummary');
+  return result;
 }
-
-let htmlFile;
-try {
-  htmlFile = resolveSuiteFile({ rootDir: process.cwd(), explicit: arg('html', '') });
-} catch (error) {
-  console.error(error.message); process.exit(2);
-}
-if (!fs.existsSync('neia-fixture.json')) { console.error('neia-fixture.json not found.'); process.exit(2); }
-
-const S = fs.readFileSync(htmlFile, 'utf8');
-const FIX = JSON.parse(fs.readFileSync('neia-fixture.json', 'utf8'));
-
-/* ── extraction: the real functions, never a copy ── */
-function spanFrom(startAnchor, endAnchor) {
-  const a = S.indexOf(startAnchor); if (a < 0) throw new Error('start anchor missing: ' + startAnchor);
-  const b = S.indexOf(endAnchor, a + startAnchor.length); if (b < 0) throw new Error('end anchor missing after: ' + startAnchor);
-  return S.slice(a, b + endAnchor.length);
-}
-const AUDIT = new Function('CASE_QUESTION_RULES', 'caseRenderFactPacket',
-  spanFrom('function caseToMarkdown(', '\n  return L.join(\'\\n\');\n}') +
-  spanFrom('function caseIsGateEligible(', 'function CaseStudyGenerator()')
-    .replace(/function CaseStudyGenerator\(\)$/, '') +
-  ';return {caseAuditPayload,itemBuildAuditPrompt,itemParseAuditVerdict,caseIsGateEligible};'
-)('', () => '');
-
-const SAFETY = [
-  { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-  { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-  { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-  { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-];
-
-// Matches the app's request shape. Transport differs from the in-app wrapper (no streaming,
-// no watchdog) on purpose — what is being measured is verdict stability, not transport.
-async function callOnce(prompt) {
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + MODEL + ':generateContent';
-  const body = {
-    contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: { maxOutputTokens: 65536, thinkingConfig: { thinkingLevel: LEVEL } },
-    safetySettings: SAFETY,
-  };
-  // Retry on 429/5xx with backoff. The first run of this harness lost 4 of 30 calls to
-  // free-tier quota exhaustion, and a lost call is worse than a slow one here: it reads to
-  // the analysis as a rater who changed their mind, which is exactly the thing being measured.
-  const t0 = Date.now();
-  let resp, lastBody = '';
-  for (let attempt = 0; attempt <= 3; attempt++) {
-    await pace();
-    resp = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': KEY },
-      body: JSON.stringify(body),
-    });
-    if (resp.ok) break;
-    lastBody = (await resp.text()).slice(0, 300);
-    if (resp.status !== 429 && resp.status < 500) break; // not retryable
-    if (attempt === 3) break;
-    const wait = RETRY_MS * Math.pow(2, attempt);
-    process.stdout.write('r');
-    await new Promise(r => setTimeout(r, wait));
+function selectItems(fixture, only, audit) {
+  if (!fixture || !Array.isArray(fixture.items)) throw new Error('Fixture has no items array');
+  const missing = only.filter(id => !fixture.items.some(item => item.id === id));
+  if (missing.length) throw new Error('Unknown fixture item ID(s): ' + missing.join(', '));
+  const items = fixture.items.filter(item => !only.length || only.includes(item.id));
+  if (!items.length) throw new Error('No fixture items selected');
+  for (const item of items) {
+    const q = item.case && item.case.stages && item.case.stages[0] && item.case.stages[0].questions && item.case.stages[0].questions[0];
+    if (!q || !audit.caseIsGateEligible(q)) throw new Error('Fixture item ' + item.id + ' is not gate-eligible');
   }
-  const ms = Date.now() - t0;
-  if (!resp.ok) throw new Error('HTTP ' + resp.status + ' ' + lastBody);
-  const j = await resp.json();
-  const text = (((j.candidates || [])[0] || {}).content || {}).parts
-    ? j.candidates[0].content.parts.map(p => p.text || '').join('')
-    : '';
-  const um = j.usageMetadata || {};
-  return { text, ms, tokensIn: um.promptTokenCount || 0, tokensOut: um.candidatesTokenCount || 0,
-    tokensThought: um.thoughtsTokenCount || 0 };
+  return items;
 }
-
+function prepareJobs(items, runs, audit) {
+  const jobs = [];
+  for (const item of items) {
+    const question = item.case.stages[0].questions[0];
+    const prompt = audit.itemBuildAuditPrompt(audit.caseAuditPayload(item.case, 1, question));
+    if (!prompt.trim()) throw new Error('Empty item audit prompt: ' + item.id);
+    for (let run = 0; run < runs; run++) jobs.push({ item, run, prompt, promptHash: sha256(prompt) });
+  }
+  return jobs;
+}
+function createAuditCaller(config, key, deps = {}) {
+  const fetchFn = deps.fetch || globalThis.fetch;
+  const sleep = deps.sleep || (ms => new Promise(resolve => setTimeout(resolve, ms)));
+  const now = deps.now || Date.now, pace = createMeasurementPacer(config.rpm, { now, sleep });
+  return async function callOnce(prompt, observation) {
+    if (!config.live || config.dryRun) throw new Error('Live audit requires --live and per-run human authorization');
+    const body = { contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { maxOutputTokens: 65536, thinkingConfig: { thinkingLevel: config.level } }, safetySettings: SAFETY };
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + config.model + ':generateContent';
+    const started = now();
+    let resp;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      await pace();
+      observation.attempts++;
+      resp = await fetchFn(url, { method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body: JSON.stringify(body) });
+      if (resp.ok) break;
+      if ((resp.status !== 429 && resp.status < 500) || attempt === 3) throw new Error('HTTP ' + resp.status);
+      await sleep(config.retryms * Math.pow(2, attempt));
+    }
+    const response = await resp.json(), candidate = (response.candidates || [])[0] || {};
+    observation.finishReason = candidate.finishReason || '';
+    if (candidate.finishReason === 'MAX_TOKENS') throw new Error('Output truncated (MAX_TOKENS)');
+    const text = ((candidate.content || {}).parts || []).filter(p => !p.thought).map(p => p.text || '').join('');
+    if (!text.trim()) throw new Error('Empty audit response');
+    const usage = response.usageMetadata || {};
+    return { text, ms: now() - started, tokensIn: usage.promptTokenCount || 0,
+      tokensOut: usage.candidatesTokenCount || 0, tokensThought: usage.thoughtsTokenCount || 0 };
+  };
+}
 async function pool(items, width, worker) {
+  if (!Number.isInteger(width) || width < 1) throw new Error('Pool width must be a positive integer');
   const out = new Array(items.length);
   let next = 0;
-  await Promise.all(Array.from({ length: Math.max(1, Math.min(width, items.length || 1)) }, async () => {
+  await Promise.all(Array.from({ length: Math.min(width, items.length) }, async () => {
     for (;;) { const i = next++; if (i >= items.length) return; out[i] = await worker(items[i], i); }
   }));
   return out;
 }
-
-/* ── build the work list ── */
-const items = FIX.items.filter(it => !ONLY.length || ONLY.includes(it.id));
-for (const it of items) {
-  const q = it.case.stages[0].questions[0];
-  if (!AUDIT.caseIsGateEligible(q)) { console.error('Fixture item ' + it.id + ' is not gate-eligible.'); process.exit(2); }
-}
-const jobs = [];
-for (const it of items) for (let r = 0; r < RUNS; r++) jobs.push({ it, run: r });
-
-console.log('NEIA test-retest — ' + items.length + ' item(s) x ' + RUNS + ' run(s) = ' + jobs.length + ' live API calls');
-console.log('model=' + MODEL + '  thinkingLevel=' + LEVEL + '  width=' + WIDTH + '  html=' + htmlFile);
-console.log('Reference classifications are in-house; see referenceStandardCaveat in the fixture.\n');
-
-/* ── run ── */
-(async () => {
-  const results = await pool(jobs, WIDTH, async (job) => {
-    const q = job.it.case.stages[0].questions[0];
-    const payload = AUDIT.caseAuditPayload(job.it.case, 1, q);
-    const prompt = AUDIT.itemBuildAuditPrompt(payload);
-    try {
-      const r = await callOnce(prompt);
-      const v = AUDIT.itemParseAuditVerdict(r.text);
-      process.stdout.write(v.status === 'PASS' ? '.' : v.status === 'FAIL' ? 'F' : v.status === 'REVIEW' ? '?' : 'x');
-      return { id: job.it.id, band: job.it.band, seeded: job.it.seededCriterion, run: job.run,
-        status: v.status, criterion: v.criterion, detail: v.detail,
-        warnCriteria: (v.warns || []).map(w => w.criterion),
-        ms: r.ms, tokensIn: r.tokensIn, tokensOut: r.tokensOut, tokensThought: r.tokensThought, raw: r.text };
-    } catch (e) {
-      process.stdout.write('!');
-      return { id: job.it.id, band: job.it.band, seeded: job.it.seededCriterion, run: job.run,
-        status: 'ERROR', criterion: '', detail: e.message || String(e), warnCriteria: [], ms: 0,
-        tokensIn: 0, tokensOut: 0, tokensThought: 0, raw: '' };
-    }
-  });
-  console.log('\n');
-
-  /* ── analysis ── */
+function analyzeResults(results, requestedRuns, expectedIds) {
+  if (!Number.isInteger(requestedRuns) || requestedRuns < 2) throw new Error('At least two requested runs are required');
   const byItem = new Map();
   for (const r of results) { if (!byItem.has(r.id)) byItem.set(r.id, []); byItem.get(r.id).push(r); }
 
@@ -267,71 +190,107 @@ console.log('Reference classifications are in-house; see referenceStandardCaveat
     .filter(([, v]) => v.firedOnUnstable > 0 && v.firedOnUnstable < v.ofUnstable)
     .map(([k, v]) => ({ criterion: k, firedIn: v.firedOnUnstable + '/' + v.ofUnstable }));
 
-  const sound = soundRuns, seededN = seededRuns;
-  const pad = (s, n) => String(s).padEnd(n);
 
-  console.log('── per item ──');
-  console.log(pad('id', 34) + pad('band', 12) + pad('verdicts', 22) + 'flip');
-  for (const r of rows)
-    console.log(pad(r.id, 34) + pad(r.band, 12) + pad(r.statuses.join(','), 22) + (!r.measurable ? 'n/a' : r.flipped ? 'YES' : '-'));
-
-  console.log('\n── stability ──');
-  console.log('  items with enough successful runs to judge consistency    : ' + (rows.length - insufficient) + '/' + rows.length);
-  console.log('  items whose overall verdict flipped across identical runs : ' + statusFlips + '/' + (rows.length - insufficient));
-  console.log('  items where the FAIL label drifted (verdict still stable)  : ' + criterionFlips + '/' + (rows.length - insufficient));
-  console.log('  answer-accuracy disagreement (raised in some runs only)   : ' + accuracyDisagree + '/' + (rows.length - insufficient));
-  console.log('  distractor-plausibility disagreement                      : ' + plausibilityDisagree + '/' + (rows.length - insufficient));
-
-  console.log('\n── accuracy against the in-house reference ──');
-  console.log('  false fatal failures on sound items  : ' + falseFatal + '/' + sound);
-  console.log('  missed defects on seeded items       : ' + missedDefect + '/' + seededN);
-  console.log('  call errors                          : ' + errors + '/' + results.length);
-  console.log('  (borderline items are deliberately excluded from both rates)');
-
-  const allMs = results.filter(r => r.ms).map(r => r.ms);
-  if (allMs.length) {
-    const mean = Math.round(allMs.reduce((a, b) => a + b, 0) / allMs.length);
-    console.log('\n── cost ──');
-    console.log('  mean latency per audit : ' + (mean / 1000).toFixed(1) + 's  (min ' +
-      (Math.min(...allMs) / 1000).toFixed(1) + 's, max ' + (Math.max(...allMs) / 1000).toFixed(1) + 's)');
-    console.log('  mean tokens in/out/thought : ' +
-      Math.round(results.reduce((a, r) => a + r.tokensIn, 0) / results.length) + ' / ' +
-      Math.round(results.reduce((a, r) => a + r.tokensOut, 0) / results.length) + ' / ' +
-      Math.round(results.reduce((a, r) => a + r.tokensThought, 0) / results.length));
-  }
-
-  if (unstable.length) {
-    console.log('\n── DEMOTION CANDIDATES ──');
-    console.log('  These criteria fired inconsistently across identical runs. Per the v15.6 brief,');
-    console.log('  demote each from FAIL to WARN until it stabilises:');
-    for (const u of unstable) console.log('    · ' + u.criterion + '  (fired in ' + u.firedIn + ' runs of the items it touched)');
+  const ids = expectedIds || [...byItem.keys()];
+  const completeItems = ids.filter(id => {
+    const rs = byItem.get(id) || [];
+    return rs.length === requestedRuns && rs.every(r => r.status !== 'ERROR') &&
+      new Set(rs.map(r => r.run)).size === requestedRuns;
+  }).length;
+  const conclusive = ids.length > 0 && completeItems === ids.length;
+  return { rows, demotionCandidates: unstable, labelDrift, conclusive, exitCode: conclusive ? 0 : 3,
+    conclusion: conclusive ? 'Requested repeated audits completed; stability is not external accuracy.'
+      : 'INCOMPLETE: requested successful audit count was not reached for every item; no overall stability conclusion.',
+    totals: { items: ids.length, measurableItems: rows.length - insufficient, completeItems,
+      incompleteItems: ids.length - completeItems, logicalOperations: results.length,
+      observedAttempts: results.reduce((n, r) => n + (r.attempts || 0), 0),
+      statusFlips, criterionFlips, falseFatal, falseFatalOf: soundRuns, missedDefect, missedDefectOf: seededRuns,
+      accuracyDisagree, plausibilityDisagree, errors } };
+}
+async function runMeasurement(config, jobs, audit, callOnce) {
+  const results = await pool(jobs, config.width, async job => {
+    const observation = { attempts: 0, finishReason: '' };
+    const base = { id: job.item.id, band: job.item.band, seeded: job.item.seededCriterion,
+      run: job.run, promptHash: job.promptHash };
+    try {
+      const result = await callOnce(job.prompt, observation);
+      // The app keeps malformed verdicts inspectable as REVIEW. A measurement must not
+      // treat a missing verdict as a completed rating merely because of that UI fallback.
+      if (!/^(?:PASS\b|FAIL\s*[—–\-:]\s*\S|REVIEW\s*[—–\-:]\s*\S)/im.test(result.text)) {
+        throw new Error('Audit response has no explicit verdict');
+      }
+      const verdict = audit.itemParseAuditVerdict(result.text);
+      return { ...base, ...observation, status: verdict.status, criterion: verdict.criterion,
+        detail: verdict.detail, warnCriteria: (verdict.warns || []).map(w => w.criterion),
+        ms: result.ms, tokensIn: result.tokensIn, tokensOut: result.tokensOut,
+        tokensThought: result.tokensThought, raw: result.text };
+    } catch (error) {
+      return { ...base, ...observation, status: 'ERROR', criterion: '', detail: String(error.message || error),
+        warnCriteria: [], ms: 0, tokensIn: 0, tokensOut: 0, tokensThought: 0, raw: '' };
+    }
+  });
+  return { ...analyzeResults(results, config.runs, [...new Set(jobs.map(job => job.item.id))]), raw: results };
+}
+function printSummary(summary, log) {
+  log(summary.conclusion);
+  log(JSON.stringify(summary.totals, null, 2));
+  for (const row of summary.rows) log(row.id + ': ' + row.statuses.join(', ') +
+    (row.measurable ? row.flipped ? ' (verdict flip)' : '' : ' (insufficient comparison)'));
+  if (summary.demotionCandidates.length) {
+    log('Criteria with observed verdict instability (human review required):');
+    for (const candidate of summary.demotionCandidates) log(candidate.criterion + ': ' + candidate.firedIn);
   } else {
-    console.log('\n── DEMOTION CANDIDATES ──\n  None: every criterion that fired did so in every run of the items it touched.');
+    log(summary.conclusive ? 'No verdict-instability candidates observed in the completed comparisons.'
+      : 'No verdict-instability candidates observed in available comparisons; incomplete evidence cannot establish stability.');
   }
-
-  if (labelDrift.length) {
-    console.log('\n── label drift (informational, NOT a demotion trigger) ──');
-    console.log('  Verdict was stable across all runs; only the named criterion changed.');
-    console.log('  A defect can satisfy two criteria at once, so this is not a disagreement');
-    console.log('  about whether the item is broken.');
-    for (const d of labelDrift)
-      console.log('    · ' + d.id + '  ' + d.verdict + ' in ' + d.runs + '/' + d.runs + ' runs, labelled: ' + d.criteria.join(' / '));
+  for (const row of summary.labelDrift) log('Label drift only: ' + row.id + ': ' + row.criteria.join(' / '));
+}
+async function main(argv = process.argv.slice(2), deps = {}) {
+  const log = deps.log || console.log, errorLog = deps.error || console.error;
+  const readFile = deps.readFile || fs.readFileSync, writeFile = deps.writeFile || fs.writeFileSync;
+  let config, measuring = false;
+  try {
+    config = parseArgs(argv);
+    if (config.help) {
+      log('NEIA: --dry-run | --live [--runs 2..100] [--width 1..100] [--app-profile | --model ID --level high] [--only id,id] [--html suite.html] [--out report.json] [--retryms 0..600000] [--rpm 0..60000]. Exit 3 means incomplete measurement.');
+      return 0;
+    }
+    if (!config.live && !config.dryRun) throw new Error('Use --dry-run to inspect the plan, or --live only after per-run human authorization');
+    const key = (deps.env || process.env).GEMINI_API_KEY || '';
+    if (config.live && !key) throw new Error('Set GEMINI_API_KEY in the environment');
+    const root = deps.cwd || process.cwd();
+    const suiteFile = (deps.resolveSuite || resolveSuiteFile)({ rootDir: root, explicit: config.suite });
+    const source = readFile(suiteFile, 'utf8'), audit = extractAudit(source);
+    const fixture = JSON.parse(readFile(path.join(root, 'neia-fixture.json'), 'utf8'));
+    const items = selectItems(fixture, config.only, audit), jobs = prepareJobs(items, config.runs, audit);
+    const profile = resolveMeasurementProfile(config, source, 'itemAudit');
+    config = { ...config, ...profile };
+    const plan = { ...measurementPlan(config, items.length, profile),
+      promptHashes: jobs.filter(job => job.run === 0).map(job => ({ id: job.item.id, sha256: job.promptHash })) };
+    log(JSON.stringify(plan, null, 2));
+    if (config.dryRun) return 0;
+    log('--live does not replace the required human authorization for this run.');
+    measuring = true;
+    const summary = await runMeasurement(config, jobs, audit, createAuditCaller(config, key, deps));
+    const report = { generatedAt: new Date().toISOString(),
+      config: { model: config.model, thinkingLevel: config.level, runs: config.runs,
+        width: config.width, html: path.basename(suiteFile), profile: config.profile }, plan,
+      caveat: fixture.referenceStandardCaveat,
+      noPublishedComparison: 'No figure here may be compared to any published ICC or accuracy value. The June 2026 study tested zero Gemini configurations.',
+      ...summary };
+    const reportText = JSON.stringify(report, null, 2).split(key).join('[REDACTED]');
+    writeFile(config.out, reportText, 'utf8');
+    printSummary(JSON.parse(reportText), log);
+    log('Full private report: ' + config.out);
+    return summary.exitCode;
+  } catch (error) {
+    const key = (deps.env || process.env).GEMINI_API_KEY || '';
+    const message = String(error.message || error);
+    errorLog(key ? message.split(key).join('[REDACTED]') : message);
+    return measuring ? 1 : 2;
   }
-
-  const report = {
-    generatedAt: new Date().toISOString(),
-    config: { model: MODEL, thinkingLevel: LEVEL, runs: RUNS, width: WIDTH, html: htmlFile },
-    caveat: FIX.referenceStandardCaveat,
-    noPublishedComparison: 'No figure here may be compared to any published ICC or accuracy value. The June 2026 study tested zero Gemini configurations.',
-    totals: { items: rows.length, measurableItems: rows.length - insufficient, calls: results.length, statusFlips, criterionFlips,
-      falseFatal, falseFatalOf: sound, missedDefect, missedDefectOf: seededN,
-      accuracyDisagree, plausibilityDisagree, errors },
-    demotionCandidates: unstable,
-    labelDrift,
-    rows,
-    raw: results,
-  };
-  fs.writeFileSync(OUT, JSON.stringify(report, null, 2));
-  console.log('\nFull report (including raw model output) written to ' + OUT);
-  console.log('This file is gitignored — it contains model output, not source material.');
-})().catch(e => { console.error('\n' + (e.stack || e.message || e)); process.exit(1); });
+}
+module.exports = { parseArgs, spanFrom, extractAudit, selectItems, prepareJobs, createAuditCaller,
+  pool, analyzeResults, runMeasurement, printSummary, main };
+if (require.main === module) main().then(code => { process.exitCode = code; },
+  error => { console.error(String(error.message || error)); process.exitCode = 1; });

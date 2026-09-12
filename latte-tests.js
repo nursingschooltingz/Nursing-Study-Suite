@@ -8,15 +8,15 @@
  * The harness extracts the REAL functions from the shipped HTML (no copies to drift) and
  * exercises the deterministic logic that must never regress silently. It depends on these
  * anchors surviving future versions: CASE_CLINICAL_TOKEN_RE, validateStageTiming,
- * nclexChunkText, nclexDedup, the kbSourceUnits PPTX split, the caseStudies registry
+ * nclexChunkText, nclexAccumulate, the kbSourceUnits PPTX split, the caseStudies registry
  * builder ("const entries=[];let qi=0;"), and the KB critical-fact regex line
  * (contains "contraindicat|"). If an anchor moves, the harness fails loudly at extraction
  * — that is itself a useful signal.
  */
 'use strict';
 const fs = require('fs');
-const { NAME_CLASH_RE, resolveSuiteFile } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 904;
+const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
+const EXPECTED_ASSERTIONS = 1345;
 
 let file;
 try {
@@ -47,13 +47,11 @@ const CASE = new Function(
   ';return {CASE_CLINICAL_TOKEN_RE,CASE_CLINICAL_TERM_RE,scanUncitedProse,caseNormalizeClinical,caseAuditTextValues,caseAuditDatumValues,validateCaseStudy,validateStageTiming,NEIA_TERMINOLOGY_RULES,neiaTerminologyScan,CASE_SUPPORT_TYPES,caseParseThreshold,caseSplitValue,caseUnitsCompatible,caseThresholdSatisfied,itemHeuristics,caseContentWords,caseDifficultySignals};'
 )();
 const nclexChunkText = new Function(spanFrom('function nclexChunkText', '\n  return chunks;\n}') + ';return nclexChunkText;')();
-// v15.14: the span starts at nclexKey now. nclexDedup delegates to it, and the incremental
-// accumulator that shares it has to be tested against the SAME key function — two
-// normalizations would be free to drift, which is the whole reason it was lifted out.
+// v15.17: test production accumulation directly; the unused dedup wrapper was removed.
 const NX = new Function(
   spanFrom('function nclexKey', 'return allQ;\n}') +
-  ';return {nclexKey,nclexDedup,nclexAccumulate};')();
-const nclexDedup = NX.nclexDedup;
+  ';return {nclexKey,nclexAccumulate};')();
+const nclexDedup = questions=>NX.nclexAccumulate(new Set(),[],questions);
 // v15.15: the choice-aware question splitter, the stem/choice parser and the split-mode
 // repair all come out as ONE span — they share NCLEX_OPTION_RUN_MIN, and extracting them
 // separately would let the shared constant drift out from under the tests. The span ends on
@@ -70,8 +68,7 @@ const nclexToTxt = new Function('filtered', 'nclexSplitStemOptions',
   'let CAP=null;const Blob=function(p){this.p=p;};const downloadBlob=(b)=>{CAP=b.p[0];};' +
   spanFrom('const nclexQText=q=>', "'nclex_questions.txt');\n  };") + ';exportTxt();return CAP;');
 
-const kbLine = (() => { const i = S.indexOf('contraindicat|'); return S.slice(S.lastIndexOf('\n', i) + 1, S.indexOf('\n', i)); })();
-const KB_RE = new RegExp(kbLine.slice(kbLine.indexOf('||/') + 3, kbLine.indexOf('/i.test')), 'i');
+const KB_RE = extractAnchoredRegex(S, 'contraindicat|', '||/', '/i.test', 'i');
 const pptxSplit = new Function('text', spanFrom("const parts=String(text||'').split(/(?=--- SLIDE", 'text:t};});'));
 const provSpan = spanFrom('const entries=[];let qi=0;const claimed=new Set();', 'if(residual.length)', "const caseId='case-'")
   .replace(/if\(residual\.length\)$/, '') +
@@ -570,9 +567,8 @@ const FK = new Function(spanFrom('function kbFactKey', "].join('|');}") + ';retu
     key('Monitor daily weights') === key('Monitor  daily   weights'));
   t('bucket and subtype still lead the key',
     FK.kbFactKey({ latteBucket: 'Look', subtype: 'early', text: 'x y z' }).startsWith('Look|early|'));
-  // A '-' anywhere but last in a character class silently becomes a range.
-  t("the '-' stays last in the class, so it is a literal and not a range",
-    S.includes("replace(/[^a-z0-9.%/<>≤≥↑↓+-]+/g,' ')"));
+  t('fact identity preserves a literal minus sign',
+    FK.kbFactKey({text:'-5'})!==FK.kbFactKey({text:'5'}));
 }
 
 /* ── 10d-ter. v15.14: operator agreement on already-verified quotes ── */
@@ -1010,10 +1006,10 @@ section('v15.6 — instantiated values');
   t('direct with an uncited value → error', has(audit('Potassium 2.4 mEq/L', ['t-none'], 'direct'), 'does not appear', 'error'));
   t('combined with an uncited value → error', has(audit('Potassium 2.4 mEq/L', ['t-none'], 'combined'), 'does not appear', 'error'));
   t('inference with an uncited value → error', has(audit('Potassium 2.4 mEq/L', ['t-none'], 'inference'), 'does not appear', 'error'));
-  t('neutral-framing returns early even with a value and IDs', audit('Potassium 2.4 mEq/L', ['t-none'], 'neutral-framing').length === 0);
+  t('neutral-framing cannot exempt an arbitrary lab value', has(audit('Potassium 2.4 mEq/L', ['t-none'], 'neutral-framing'),'cannot exempt','error'));
   t('no factIds → still silent', audit('Potassium 2.4 mEq/L', [], 'direct').length === 0);
-  t('a value present verbatim in its cited fact → clean regardless of type',
-    audit('Report urine output below 30 mL', ['t-lt'], 'direct').length === 0);
+  t('a value-unit prefix is not direct evidence for a different complete unit',
+    has(audit('Report urine output below 30 mL', ['t-lt'], 'direct'),'does not appear','error'));
 
   // Enum + prompt contract.
   t('"instantiated" is a valid supportType', CASE.CASE_SUPPORT_TYPES.has('instantiated'));
@@ -1545,8 +1541,9 @@ section('v15.6 — retest fixture');
   // API calls. A documentation mention (e.g. in the HTML header comment) is fine; an
   // invocation is not.
   t('the retest runner exists', fs.existsSync('neia-retest.js'));
-  t('the retest runner is never invoked from this harness',
-    !/require\(['"].*neia-retest/.test(fs.readFileSync('latte-tests.js', 'utf8')));
+  t('the imported retest runner executes only through its explicit main guard',
+    fs.readFileSync('neia-retest.js','utf8').includes('if (require.main === module)') &&
+    !/require\(['"].*neia-retest[^\n]+\.main\(/.test(fs.readFileSync('latte-tests.js','utf8')));
   t('the app never invokes the retest runner', !/neia-retest\.js['"]\s*\)/.test(S));
   // v15.7: the first live run lost 4 of 30 calls to HTTP 429 and the analysis counted each
   // lost call as a rater who changed their mind, producing three bogus demotion candidates.
@@ -1558,8 +1555,8 @@ section('v15.6 — retest fixture');
     t('accuracy denominators count answered runs only', R.includes('soundRuns += ok.length;') && R.includes('seededRuns += ok.length;'));
     t('demotion denominators skip items with under two answered runs', R.includes('if (ok.length < 2) continue;'));
     t('verdict instability and label drift are distinguished', R.includes('const critRuns = new Map(), labelDrift = [];'));
-    t('label drift is explicitly not a demotion trigger', R.includes('NOT a demotion trigger'));
-    t('429 and 5xx are retried with backoff', R.includes("if (resp.status !== 429 && resp.status < 500) break;"));
+    t('label drift is explicitly not a demotion trigger', require('./neia-retest').analyzeResults(['A','B'].map((criterion,run)=>({id:'x',run,band:'sound',status:'FAIL',criterion,warnCriteria:[],ms:1,tokensIn:1,tokensOut:1,tokensThought:0})),2).demotionCandidates.length===0);
+    t('429 and 5xx are retried with backoff', R.includes('(resp.status !== 429 && resp.status < 500) || attempt === 3') && R.includes('config.retryms * Math.pow(2, attempt)'));
   }
   t('retest reports are gitignored', /neia-retest-report/.test(fs.readFileSync('.gitignore', 'utf8')));
 }
@@ -1856,7 +1853,7 @@ section('v15.8 — presented-data grounding');
   {
     const i=[];CASE.caseAuditTextValues('Hemoglobin is 8 g/dL',['f-tired'],FI,'X',i,'direct');
     t('omitting the presented set preserves the old behaviour',has(i,'does not appear','error'));
-    const j=[];CASE.caseAuditTextValues('Hemoglobin is 8 g/dL',['f-tired'],FI,'X',j,'direct',new Set(['8g']));
+    const j=[];CASE.caseAuditTextValues('Hemoglobin is 8 g/dL',['f-tired'],FI,'X',j,'direct',new Set(['8g/dl']));
     t('supplying the presented set clears it',j.length===0);
   }
 }
@@ -2049,20 +2046,20 @@ section('v15.8 — Phase 3 hardening');
     SN(doc(['  1. stem','     A. option'])).length===1);
 }
 {
-  t('PDF documents are tracked for bulk release',S.includes('const _pdfLiveDocs=new Set();'));
+  t('PDF documents are tracked for bulk release',S.includes('_pdfLiveDocs=new Set()'));
   // v15.14: the v15.8 unmount cleanup was UNREACHABLE. App keeps all six tools mounted for
   // the whole session (display:contents/none), so neither effect could ever fire, and
   // destroyAllPdfDocs was cross-tool global besides — had either component unmounted it
   // would have destroyed the other's open documents. Deleted. What actually releases a
   // document is destroyPdfDoc on the x / Clear buttons, and that had the real leak: it
   // destroyed the proxy but never removed it from the Set.
-  t('the unreachable unmount cleanup is gone',
-    !S.includes('destroyAllPdfDocs') && !S.includes('_pdfLiveDocs.clear();'));
+  t('page-owned cleanup replaces the unreachable cross-tool unmount cleanup',
+    !S.includes('destroyAllPdfDocs') && S.includes("window.addEventListener('pagehide',event=>{if(!event.persisted)pdfDisposeWorker();})"));
   t('destroying one document prunes it from the live set',
-    S.includes('p.then(pdf=>{_pdfLiveDocs.delete(pdf);return pdf.destroy();}).catch(()=>{});'));
+    S.includes('entry.promise.then(pdf=>{_pdfLiveDocs.delete(pdf);return pdf.destroy();}).catch(()=>{});'));
   t('the live set is still populated on load, so the prune has something to remove',
-    S.includes('.then(doc=>{_pdfLiveDocs.add(doc);return doc;})'));
-  t('the cache stays a WeakMap so Files are never pinned',S.includes('const _pdfDocCache=new WeakMap();'));
+    S.includes('_pdfLiveDocs.add(doc);return doc;'));
+  t('the cache stays a WeakMap so Files are never pinned',S.includes('const _pdfDocCache=new WeakMap()'));
 }
 
 /* ── v15.16 — Anki text retrieval, advisory-only checks and export isolation ── */
@@ -2192,11 +2189,11 @@ section('v15.17 — batch provenance and live counts');
   t('snapshot retains original source and leaves KB bytes unchanged',snapshot.facts[0].text.includes('60 bpm')&&JSON.stringify(F.kb)===original);
   let registry={ankiNotes:[{id:'old'}],nclexQuestions:[{id:'q'}],caseStudies:[{id:'case'}]};
   const registerSource=spanFrom('const registerArtifact=useCallback(', '  },[]);','function App()');
-  const register=new Function('useCallback','setArtifactRegistry',registerSource+';return registerArtifact;')(f=>f,f=>{registry=f(registry);});
+  const register=new Function('useCallback','setArtifactRegistry','currentKnowledge',registerSource+';return registerArtifact;')(f=>f,f=>{registry=f(registry);},{current:F.kb});
   register('ankiNotes',summary.entries);
   t('registry replaces only Anki entries across all tiers',registry.ankiNotes.length===3&&registry.nclexQuestions[0].id==='q'&&registry.caseStudies[0].id==='case');
   register('ankiNotes',[]);t('empty publication preserves other artifact kinds',registry.ankiNotes.length===0&&registry.caseStudies.length===1);
-  t('registry effect depends on stable callback and derived entries',S.includes("useEffect(()=>{if(registerAnki)registerAnki('ankiNotes',coverage.entries);},[registerAnki,coverage.entries]);"));
+  t('registry effect depends on stable callback, current source and derived entries',S.includes('const registerAnki=K.registerArtifact;')&&S.includes('[registerAnki,coverage.entries,batch?.sourceKB,K.knowledgeBase]'));
   t('selected tier changes exports but not global registry',ANKI.ankiSelection(dedup,true,'2').kept.length===1&&summary.entries.length===3);
   t('style view does not modify current workload or coverage',ANKI.ankiReviewFilter(dedup,'all',true).length===0&&summary.reviews===4&&summary.coveredCount===3);
   const unmapped=[F.note('none','[Example] Finding: {{c1::answer}}')];
@@ -2438,7 +2435,7 @@ section('v15.14 — tier 3');
   t('all five tool logs and the KB-replacement notice are capped', S.split('p.slice(-200)').length - 1 === 6);
   // T3.13i — ten positional parameters, one of them inert since v15.
   t('callGemini takes an options object', S.includes('async function callGemini(apiKey,model,parts,opts={}){'));
-  t('no positional call site survives the migration', !S.includes('],true,') && S.split('callGemini(').length - 1 === 10);
+  t('no positional call site survives the migration, including source-owned wrappers', !S.includes('],true,') && [...S.matchAll(/\b(?:ownedCallGemini|callGemini)\(/g)].length === 12);
   t('a missed migration fails loudly instead of binding a boolean to opts',
     S.includes("throw new Error('callGemini: pass an options object"));
   t('the inert useThinking parameter is gone from the signature and every call site',
@@ -2475,16 +2472,16 @@ section('v15.14 — tier 3');
   // T3.7 — narrow by design. The value is connect-src; the omissions are the point.
   t('a CSP is present and pins where the page can send data',
     S.includes("connect-src 'self' blob: data: https://generativelanguage.googleapis.com"));
-  t('the CSP omits default-src, which would fall through to worker-src and kill pdf.js under file://',
-    !/Content-Security-Policy[^>]*default-src/.test(S));
+  t('the application CSP preserves Babel startup and explicitly limits workers to verified Blobs',
+    !/default-src/.test(S.match(/<meta http-equiv="Content-Security-Policy"[^>]*>/)[0]) && S.includes('worker-src blob:'));
   t('object-src, base-uri and form-action are locked, since none of them is used at all',
     S.includes("object-src 'none'; base-uri 'none'; form-action 'none'"));
-  t('there is still exactly one fetch for connect-src to govern', S.split('fetch(').length - 1 === 1);
+  t('connect-src governs Gemini and the integrity-checked worker fetch', S.split('fetch(').length - 1 === 2 && S.includes('integrity:PDF_WORKER_INTEGRITY'));
   t('and still no form, object, embed or base tag to need the other three',
     !S.includes('<form') && !S.includes('<object') && !S.includes('<embed') && !S.includes('<base '));
   // T3.8 — the shared DOMPurify hash was an assumption; it is now a measurement.
   t('the shared SRI hash is recorded as measured, not assumed',
-    S.includes('Measured 2026-08-29: both') && S.includes('29,209 identical bytes'));
+    S.includes('Measured 2026-09-11: both') && S.includes('29,369 identical bytes'));
 }
 {
   // T3.10 — a single-unit chunk used to return null, and the caller then discarded it.
@@ -2584,8 +2581,9 @@ section('v15.14 — clamps, backoff, storage');
     }
     return out;
   })();
-  t('all three storage helpers route through one transaction runner',
-    S.split('return kbRunTx(db,').length - 1 === 3);
+  t('storage reads and compare-and-set writes use the transaction runner; deletes use ordered writes',
+    S.includes("return kbRunTx(db,'readonly'") && S.includes("const result=await kbRunTx(db,'readwrite'") &&
+    S.includes('return kbSavePersisted({...record,kb:null,meta:'));
 }
 
 (async () => {
@@ -2602,8 +2600,9 @@ section('v15.14 — clamps, backoff, storage');
       Array.isArray(r.partial) && r.partial.length === 2);
     t('the preserved results are the ones that actually finished',
       r.partial.join(',') === 'done1,done2');
-    t('callers read the partials rather than dropping them',
-      S.split('=(e.partial||[]).filter(Boolean)').length - 1 === 2);
+    t('callers retain partial audit verdicts through interruption',
+      S.split('=(e.partial||[]).filter(Boolean)').length - 1 === 1 &&
+      S.includes('auditRows=[...auditRows.filter(row=>row.num!==g.num),completed];publishBatch();'));
   }
   // v15.8: the case must be published BEFORE the audit pool, or auditRows short-circuits on
   // !caseStudy and no per-item verdict can render while the audit is running.
@@ -2618,7 +2617,7 @@ section('v15.14 — clamps, backoff, storage');
   t('the second publish is inside the repair path, after the audit gate',
     S.indexOf('setCaseStudy(parsed);', S.indexOf('if(runAudit&&errCount===0){')) > 0);
   t('the repair rebuilds the case instead of writing into React state',
-    !S.includes('st.questions[ix]=fixed;') && S.includes('parsed={...parsed,stages:parsed.stages.map('));
+    !S.includes('st.questions[ix]=fixed;') && S.includes('const candidate={...parsed,stages:parsed.stages.map(') && S.includes("revalidate(candidate).some(i=>i.sev==='error')") && S.includes('parsed=candidate;'));
 
   {
     const im = await global.__imgChecks;
@@ -2679,6 +2678,19 @@ section('v15.14 — clamps, backoff, storage');
   t('the unified verifier wires prompt hashes, prompt docs, the harness and Babel parse',
     ['checkFrozenPrompts','checkPromptDoc','runHarness','presets: [\'react\']']
       .every(anchor => verifier.includes(anchor)));
+
+  section('remediation persistence');
+  await require('./tools/remediation-storage-tests').runTests(S,t);
+  await require('./tools/remediation-ownership-tests').runTests(S,t);
+  require('./tools/evidence-regression-tests')(S,t);
+  await require('./tools/remediation-tooling-tests').runTests({source:S,test:t});
+  require('./tools/remediation-artifact-tests')(S,t,ANKI);
+  await require('./tools/transport-regression-tests')(S,t);
+  await require('./tools/remediation-resource-tests').runTests(S,t);
+  require('./tools/remediation-anki-performance-tests')(S,t);
+  require('./tools/worksheet-remediation-tests')(S,t);
+  require('./tools/numeric-boundary-tests')(S,t);
+  require('./tools/neutral-weight-tests')(S,t);
 
   console.log('\n════════════════════════════');
   const total = pass + fail;

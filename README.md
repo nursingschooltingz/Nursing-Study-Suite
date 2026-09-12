@@ -8,7 +8,9 @@ Turn your lecture PDFs and PowerPoints into a complete, source-cited study syste
 
 The whole suite is **one HTML file**. There is nothing to install, no account to create, and no website collecting your data. You open the file in your web browser, paste in a free Google Gemini API key, upload your study materials, and go.
 
-**v15.17 release:** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v15.17/Nursing-Study-Suite.v15.17.html). It includes the Anki validation, source tracking, review counts and export improvements with the restored pre-pilot prompt. All 904 software assertions pass; an actual Anki import check remains outstanding. Save the file, then open it in your browser.
+**v15.18 release:** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v15.18/Nursing-Study-Suite.v15.18.html). It fixes browser persistence and cancellation races, strengthens source and numeric checks, preserves audit status in exports, verifies PDF worker code, and reduces repeated Anki rendering. All 1,345 software assertions pass; the eleven frozen prompts remain unchanged. Save the file, then open it in your browser.
+
+See [the remediation ledger](docs/reviews/remediation-execution-v15.17.md) for browser evidence, migration details and remaining live-material, native Anki import and native printing checks. Export your KB and recovery copies before returning to an older version.
 
 ---
 
@@ -61,11 +63,11 @@ Notes worth knowing:
 
 When you build the Knowledge Base, the suite extracts your material into individual **facts**, organized by condition using the **LATTE method** (Straight A Nursing's framework): **L**ook, **A**ssess, **T**ests, **T**reatments, **E**ducate, plus a Brief Patho intro for each condition. Every fact gets:
 
-- a **fact ID** (like `FACT-12`) — its permanent name inside the suite
+- a **fact ID** (like `FACT-12`) — its name within this Knowledge Base
 - a **tier** (1 = must-know, 2 = supporting, 3 = nice-to-know)
 - a **verbatim quote** from your source and a pointer to the exact **file and page/slide**
 
-Those fact IDs then appear throughout everything the suite generates — practice questions cite them, case studies cite them, rationales cite them. **Click any fact ID anywhere** and the Fact Inspector opens showing the original quote and source page. If the AI ever says something, you can check the receipt in two seconds. That's the entire trust model of this suite: nothing has to be taken on faith.
+Those fact IDs then appear throughout everything the suite generates — practice questions cite them, case studies cite them, rationales cite them. **Click a current fact reference** and the Fact Inspector opens showing the original quote and source page. References from an earlier KB are marked and disabled after replacement, so a reused ID cannot open an unrelated fact. Source links help you check the model's claims; they do not establish clinical correctness.
 
 ---
 
@@ -128,9 +130,13 @@ Two other things worth knowing:
 
 **Photograph both sides.** The back of a card doesn't have the condition's name printed on it — only the running header and the card number. The suite pairs the two faces automatically using those, but a back on its own has nothing to attach its facts to.
 
+Removing a photo also removes its transcript from build inputs. If repeat transcriptions disagree about the face, category, or card number—or the requested comparison did not finish—the affected card stays blocked until re-transcribed. The conflicting runs remain available for inspection.
+
 **Set "Runs per card" to 2** if you want a second opinion. Each card gets transcribed twice and anything that differs between the two is flagged. It costs a second call per card, and it catches wobbly reads — but it can't catch a card that gets misread the same way twice. The eye check in step 2 is still the one that counts.
 
 **Saving and backups.** The KB auto-saves in your browser and survives closing it — but it lives *in that browser on that computer*. **Export JSON** regularly (before exams, before rebuilding) — that file is your backup and your way to move between computers via **Import JSON**. Clearing your browser data deletes the KB; your exported JSON is the safety net.
+
+The Knowledge tab shows the current browser-save status. If older saved copies disagree, it preserves them and offers **Inspect**, **Export copy**, and **Use this copy**. Choosing a copy first archives both candidates; if that archive cannot be saved, neither candidate is overwritten. Saving stops on a detected conflict with another tab. Export your in-memory KB before closing, then reload to reconcile. Before opening an older suite version, export the current KB and any recovery copies: older versions cannot interpret the new fallback/save-order metadata.
 
 **Rebuilding replaces.** Building or importing over an existing KB *replaces* it — the suite will show you exactly what you're about to lose ("3 conditions, 147 facts") and ask you to confirm. When in doubt: export first.
 
@@ -157,6 +163,10 @@ Amber style warnings flag possible article clues, missing condition/topic labels
 Use **Style warnings** to focus your review. This filter only changes which notes are shown; export includes every kept note in the selected tier.
 
 Cards now prefer consistent retrieval labels and one clinical decision per review. Supporting explanations and source-supported contrasts belong in Extra; testable mechanisms also receive their own recall notes.
+
+Notes with different Extra text, tags, priority, case, or selection remain separate. Only completely equivalent valid notes merge their source links. Tier tags must be complete whitespace-separated tags with one distinct `Tier::1`, `Tier::2`, or `Tier::3`; repeated copies of the same tier have one effective value.
+
+When importing intentional equal-Text variants into Anki, choose to **import duplicates as new notes**. Anki normally matches the first field and updates an existing note, which can replace its Extra text. Use the Cloze note type, Pipe separator and Text/Extra/Tags mapping; disable HTML for plain exports and enable it for headered exports. See [Anki's import guidance](https://docs.ankiweb.net/importing/text-files.html#duplicates-and-updating). Actual desktop import/review acceptance remains outstanding.
 
 ### Counts, validation, and sources
 
@@ -223,6 +233,10 @@ This writes **brand-new** NCLEX-style questions from your Knowledge Base — and
 
 Skeptical of any answer? Click its fact IDs — the source quote is one tap away.
 
+Replacing the KB cancels pending worksheet/case generation from the old source. Completed outputs remain inspectable, but their earlier-source badges cannot open facts in the replacement KB. Worksheet and case exports state source staleness, requested/actual question counts, and incomplete or unresolved item-audit results. A repaired item is explicitly **not re-audited**; deterministic source checks do not establish clinical accuracy.
+
+Cancelling an item audit keeps the completed worksheet and any finished verdicts. Non-MCQ questions show **N/A**, and a rejected repair keeps the previous item. Case JSON Copy retains the case fields and adds `_suiteReview` with source/audit notices and validation findings.
+
 ## Tab 6 — Clinical Case Study Generator
 
 *Source-grounded unfolding nursing cases.*
@@ -234,7 +248,7 @@ Builds an unfolding case — a patient whose situation evolves across stages, wi
 **Why you can trust what it produces** — this tab has the strictest checking in the suite, and it runs automatically in code after every generation:
 
 - Every clinical value and every rationale must **cite fact IDs from your KB packet** — citations to facts that weren't supplied are hard errors.
-- Numeric values are **audited against the cited facts' actual text**: a made-up "K⁺ 2.4 mEq/L" pinned to a fact that only says "monitor potassium" gets an amber warning.
+- Numeric values are **audited against complete values and units in cited facts or source quotes**: a made-up "K⁺ 2.4 mEq/L" pinned to a fact that only says "monitor potassium" is an error. The established threshold-instantiation exceptions remain; values outside a cited threshold can describe deterioration and warn. An assumed calculation weight stays separately identified and must be used consistently.
 - Narrative prose is scanned for smuggled clinical findings; question formats are checked structurally (a SATA must have 2–4 correct answers, an Ordering answer must use every step exactly once, and so on).
 
 A validation panel reports the results: **errors** mean the case broke the rules (it's still viewable/exportable, but it's excluded from the trusted fact-link registry and stamped as failed); **amber warnings** are advisories worth a glance — sometimes they flag a real fabrication, sometimes just a legitimately derived value. Either way, you can see exactly why.
