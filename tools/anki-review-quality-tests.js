@@ -1,0 +1,83 @@
+'use strict';
+
+// Synthetic offline assertions against the shipped helpers and profile resolution.
+function runAnkiReviewQualityTests({S,t,section}){
+  if(section)section('Anki advisory review quality and recommended profile');
+  const extract=(start,end)=>{
+    const a=S.indexOf(start),b=S.indexOf(end,a+start.length);
+    if(a<0||b<0||S.indexOf(start,a+start.length)>=0||S.indexOf(end,b+end.length)>=0)throw new Error('Anki review-quality extraction anchors missing or ambiguous: '+start);
+    return S.slice(a,b);
+  };
+  const source=extract('function ankiParseCards(raw','function AnkiStyleBadges');
+  const H=new Function('uid',source+';return {ankiStyleWarnings,ankiReviewFilter,ankiSelection,ankiExportText,ankiBatchDiagnostics,ankiSourceSnapshot};')(()=> 'synthetic-note');
+  const note=(id,text,changes={})=>({id,text,extra:'',tags:'Tier::1',keep:true,factIds:['fact-1'],pipeCount:2,mappingIssues:[],...changes});
+  const codes=card=>H.ankiStyleWarnings(card).map(x=>x.code);
+  const two=note('two','[Example] Pair: {{c2::alpha}} and {{c2::beta}}.');
+  const three=note('three','[Example] Set: {{c2::alpha}}, {{c2::beta}}, and {{c2::gamma}}.');
+  const separate=note('separate','[Example] Set: {{c1::alpha}}, {{c2::beta}}, and {{c3::gamma}}.');
+  const compound=note('compound','[Example] Set: {{c1::alpha, beta, and gamma}}.');
+  const noLabel=note('label','[Example] {{c1::alpha}}.');
+  const noCue=note('cue','Findings suggest {{c1::Example}}.');
+  const complete=note('complete','[Example] Finding: {{c1::alpha}}.');
+  t('Anki two shared spans retain the existing shared-gaps warning without the new threshold',codes(two).includes('shared-gaps')&&!codes(two).includes('list-recall'));
+  const list=H.ankiStyleWarnings(three).find(x=>x.code==='list-recall');
+  t('Anki three same-index spans identify the review and exact span count',list&&list.indices.join(',')==='2'&&list.msg.includes('c2: 3 gaps'));
+  t('Anki three-span warning stays advisory about whether targets need splitting',list&&list.msg.includes('whether they form one useful retrieval target')&&list.msg.includes('if needed'));
+  t('Anki list-recall preserves the compatible shared-gaps warning',codes(three).includes('shared-gaps'));
+  t('Anki independent indices do not become shared-gap or list-recall warnings',!codes(separate).includes('shared-gaps')&&!codes(separate).includes('list-recall'));
+  t('Anki span count does not claim to detect a list inside one answer',!codes(compound).includes('list-recall'));
+  const repeated=note('multi','[Example] Sets: {{c1::a}}, {{c1::b}}, {{c1::c}}; {{c3::d}}, {{c3::e}}, {{c3::f}}, {{c3::g}}.');
+  const repeatedWarning=H.ankiStyleWarnings(repeated).find(x=>x.code==='list-recall');
+  t('Anki multiple shared groups report all qualifying indices and counts once',repeatedWarning&&repeatedWarning.indices.join(',')==='1,3'&&repeatedWarning.msg.includes('c1: 3 gaps; c3: 4 gaps')&&codes(repeated).filter(c=>c==='list-recall').length===1);
+  const edited={...three,text:'[Example] Set: {{c1::alpha}}, {{c2::beta}}, and {{c3::gamma}}.'};
+  t('Anki list-recall disappears immediately after an edit separates the targets',!codes(edited).includes('list-recall')&&H.ankiReviewFilter([edited],'all','list-recall').length===0);
+  t('Anki missing retrieval label is distinct from a missing condition cue',codes(noLabel).includes('front-label')&&!codes(noLabel).includes('front-anchor'));
+  t('Anki missing condition cue does not also produce the label-only warning',codes(noCue).includes('front-anchor')&&!codes(noCue).includes('front-label'));
+  t('Anki condition-answer retrieval exceptions remain explicit in cue guidance',H.ankiStyleWarnings(noCue).some(x=>x.code==='front-anchor'&&x.msg.includes('reveal the answer')));
+  t('Anki complete cue and label avoid both formatting findings',!codes(complete).includes('front-anchor')&&!codes(complete).includes('front-label'));
+  t('Anki blank brackets are not a supplied condition cue',codes(note('blank','[  ] Finding: {{c1::alpha}}.')).includes('front-anchor'));
+  t('Anki a colon inside an answer or hint cannot supply the retrieval label',codes(note('hint','[Example] {{c1::alpha: beta::label:}}.')).includes('front-label'));
+  t('Anki adding a retrieval label immediately clears the corresponding filter',H.ankiReviewFilter([{...noLabel,text:complete.text}],'all','front-label').length===0);
+  const rows=[two,three,separate,compound,noLabel,noCue,complete];
+  t('Anki new list-recall filter narrows review to matching rows',H.ankiReviewFilter(rows,'all','list-recall').map(c=>c.id).join(',')==='three');
+  t('Anki label filter remains separate from the cue filter',H.ankiReviewFilter(rows,'all','front-label')[0]===noLabel&&H.ankiReviewFilter(rows,'all','front-anchor')[0]===noCue);
+  t('Anki new warning filters continue to honor tier selection',H.ankiReviewFilter([three,{...three,id:'t2',tags:'Tier::2'}],'2','list-recall').map(c=>c.id).join(',')==='t2');
+  const kb={conditions:[{name:'Example',facts:[{id:'fact-1',text:'Synthetic supplied fact.',tier:1,latteBucket:'Look',sources:[]}]}]};
+  const snapshot=H.ankiSourceSnapshot(kb),batch={snapshot,sourceKB:kb,rawCards:rows,postDedupeNotes:rows.length};
+  const before=JSON.stringify({rows,snapshot}),exportBefore=H.ankiExportText(rows,batch,true,'all',false,false);
+  const D=H.ankiBatchDiagnostics([complete],batch,true);
+  t('Anki original-response diagnostics distinguish missing cues and missing labels',D.frontAnchor.warned===1&&D.frontLabel.warned===1&&D.frontAnchor.withText===rows.length&&D.frontLabel.withText===rows.length);
+  t('Anki original-response diagnostics distinguish repeated spans from the three-span threshold',D.sharedGaps.warned===2&&D.listRecall.warned===1&&D.parsedNotes===rows.length&&D.current.keptNotes===1);
+  t('Anki advisory diagnostics do not mutate cards or captured sources',JSON.stringify({rows,snapshot})===before);
+  t('Anki warnings never change structural eligibility or keep state',H.ankiSelection(rows).kept.length===rows.length&&rows.every(c=>c.keep));
+  t('Anki warning filters and counters preserve exact export bytes',H.ankiExportText(rows,batch,true,'all',false,false)===exportBefore);
+  t('Anki manually excluded warned notes remain excluded',H.ankiSelection([{...three,keep:false}]).kept.length===0);
+  t('Anki malformed clozes stay structurally ineligible without a fabricated list count',H.ankiSelection([note('bad','[Example] Set: {{c1::a}}, {{c1::b}}, {{c1::c}')]).kept.length===0&&!codes(note('bad','[Example] Set: {{c1::a}}, {{c1::b}}, {{c1::c}')).includes('list-recall'));
+  t('Anki review dropdown exposes the new advisory filters',S.includes('<option value="list-recall">3+ gaps hide together</option>')&&S.includes('<option value="front-label">Retrieval label</option>'));
+  t('Anki warning extraction reaches the live filter tail',source.includes('function ankiReviewFilter')&&H.ankiReviewFilter([three],'1','list-recall')[0]===three);
+
+  const defaults=new Function(extract('const TOOL_PROFILE_DEFAULTS=','const PROFILE_ROWS=')+';return TOOL_PROFILE_DEFAULTS;')();
+  t('Anki recommended Auto profile uses Flash Medium',defaults.anki.m==='flash'&&defaults.anki.lv==='medium');
+  const otherDefaults={knowledge:['flash','medium'],knowledgeAudit:['flash','medium'],cardTranscribe:['flash','low'],priorityHarvest:['flash','low'],priority:['flash','medium'],nclex:['flash','medium'],nclexgen:['flash','high'],cases:['flash','high'],itemAudit:['flash','high']};
+  t('Anki recommendation leaves every other tool default unchanged',Object.entries(otherDefaults).every(([id,[m,lv]])=>defaults[id].m===m&&defaults[id].lv===lv));
+  const savedSource=extract('  const [profiles,setProfiles]=useState(','  useEffect(()=>{try{localStorage.setItem(\'latte_auto_profile_v1\'');
+  const loadProfiles=stored=>new Function('TOOL_PROFILE_DEFAULTS','localStorage','useState',savedSource+';return profiles;')(defaults,{getItem:()=>stored},fn=>[fn(),()=>{}]);
+  t('Anki missing saved profile receives the new recommendation',loadProfiles(null).anki.lv==='medium');
+  t('Anki existing saved Low override survives the recommendation change',loadProfiles(JSON.stringify({anki:{m:'flash',lv:'low'}})).anki.lv==='low');
+  t('Anki saved model and thinking customizations remain intact',loadProfiles(JSON.stringify({anki:{m:'pro',lv:'high'}})).anki.m==='pro'&&loadProfiles(JSON.stringify({anki:{m:'pro',lv:'high'}})).anki.lv==='high');
+  t('Anki partial saved tables fill only missing profiles from current defaults',loadProfiles(JSON.stringify({nclex:{m:'pro',lv:'low'}})).anki.lv==='medium'&&loadProfiles(JSON.stringify({nclex:{m:'pro',lv:'low'}})).nclex.lv==='low');
+  t('Anki malformed saved profile recovers the current recommendation',loadProfiles('{').anki.lv==='medium'&&loadProfiles('[]').anki.lv==='medium');
+  t('Anki profile loading preserves the existing audit-key migration',loadProfiles(JSON.stringify({casesAudit:{m:'pro',lv:'medium'}})).itemAudit.m==='pro'&&!Object.hasOwn(loadProfiles(JSON.stringify({casesAudit:{m:'pro',lv:'medium'}})),'casesAudit'));
+  const resolveSource=extract('  const forTool=useCallback(id=>{','  const cfg=useMemo');
+  const resolve=(autoProfile,profiles,thinkingMode=false)=>new Function('autoProfile','profiles','TOOL_PROFILE_DEFAULTS','thinkingMode','flashModel','proModel','flashLevel','proLevel','useCallback',resolveSource+';return forTool;')(autoProfile,profiles,defaults,thinkingMode,'synthetic-flash','synthetic-pro','low','high',fn=>fn);
+  t('Anki live Auto resolution uses the Medium recommendation',resolve(true,defaults)('anki').model==='synthetic-flash'&&resolve(true,defaults)('anki').level==='medium');
+  t('Anki live Auto resolution respects an existing saved Low override',resolve(true,loadProfiles(JSON.stringify({anki:{m:'flash',lv:'low'}})))('anki').level==='low');
+  t('Anki Manual Flash still uses the global Low setting',resolve(false,defaults)('anki').level==='low'&&resolve(false,defaults)('anki').auto===false);
+  t('Anki Manual Pro still uses the global High setting',resolve(false,defaults,true)('anki').model==='synthetic-pro'&&resolve(false,defaults,true)('anki').level==='high');
+  const resetSource=extract('  const resetProfiles=useCallback(', '  const [activeTool,setActiveTool]');
+  let resetValue=null;
+  new Function('useCallback','setProfiles','TOOL_PROFILE_DEFAULTS',resetSource+';resetProfiles();')(fn=>fn,value=>{resetValue=value;},defaults);
+  t('Anki Reset to recommended applies the current Medium default',resetValue===defaults&&resetValue.anki.lv==='medium');
+}
+
+module.exports={runAnkiReviewQualityTests};

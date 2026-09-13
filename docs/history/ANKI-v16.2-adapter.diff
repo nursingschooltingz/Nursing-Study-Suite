@@ -1,0 +1,6 @@
+--- v16.1 dynamic structured-KB adapter
++++ v16.2 dynamic structured-KB adapter
+@@ -3,0 +3,3 @@
++- Keep Extra empty unless the supplied FACT text explicitly gives a useful supporting explanation or contrast. Do not add cue captions or move unsupported claims into Text. A term listed without a definition must not become a definition card unless this input actually defines it; do not supply missing mechanisms, frequency rankings, severity labels, or durations from memory.
++- Before combining FACTs, preserve each fact's independent population, trigger, action, timing and certainty (may, often, as prescribed, if indicated). Separate notes when a merger would change AND/OR, preparation versus administration, or distinct eligibility criteria. A lower-priority repetition must not hide a higher-priority source target in the selected tier.
++- Never leave a substantive list member permanently visible merely to satisfy a cloze limit. Test that target elsewhere when needed, preserving equivalent units and inseparable clinical decisions.

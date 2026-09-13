@@ -3,6 +3,7 @@
 // Synthetic, offline tests of the shipped Anki audit helpers. No generator calls.
 function runAnkiSourceAuditTests({S,t,section}){
   if(section)section('Anki optional source audit');
+  const {validReceipt}=require('./fixtures/anki-audit-response');
   const start=S.indexOf('function ankiParseCards(raw'),end=S.indexOf('function AnkiStyleBadges',start);
   if(start<0||end<0)throw new Error('Anki source-audit extraction anchors moved.');
   const source=S.slice(start,end);
@@ -61,12 +62,12 @@ function runAnkiSourceAuditTests({S,t,section}){
   t('audit prompt permits an empty suggestion for unresolved source conflicts',prompt.includes('Use an empty suggestion when no source-supported correction can be established, including an unresolved source conflict'));
   t('audit prompt includes the exact grouped current packet',prompt.endsWith(JSON.stringify(first)));
 
-  const finding=(code='changed-meaning',factIds=['fact-1'],noteIds=['one'],message='The supplied modifier was changed.',suggestion='Preserve the supplied modifier.')=>({code,factIds,noteIds,message,suggestion});
-  const parse=findings=>H.ankiParseSourceAudit(JSON.stringify({findings}),first);
+  const finding=(code='changed-meaning',factIds=['fact-1'],noteIds=['one'],message='The supplied modifier was changed.',suggestion=code==='source-conflict'?'':'Preserve the supplied modifier.')=>({code,factIds,noteIds,message,suggestion});
+  const parse=findings=>H.ankiParseSourceAudit(JSON.stringify(validReceipt(first,findings)),first);
   const valid=[finding(),finding('unsupported',[],['one']),finding('missing-target',['fact-1'],[]),finding('duplicate-target',[],['one','cross']),finding('priority-loss',['fact-1'],['other-tier']),finding('source-conflict',['fact-1'],[])];
   t('audit parser accepts all six defined finding categories',parse(valid).findings.length===6);
   t('audit parser accepts an explicit no-findings result',parse([]).findings.length===0);
-  t('audit parser accepts exactly one optional JSON fence',H.ankiParseSourceAudit('```json\n{"findings":[]}\n```',first).findings.length===0);
+  t('audit parser accepts exactly one optional JSON fence',H.ankiParseSourceAudit('```json\n'+JSON.stringify(validReceipt(first))+'\n```',first).findings.length===0);
   t('priority loss may cite an out-of-tier note containing a selected fact',parse([finding('priority-loss',['fact-1'],['other-tier'])]).findings[0].noteIds[0]==='other-tier');
   t('audit parser trims explanatory whitespace only',parse([finding('unsupported',[],['one'],'  Explain this.  ')]).findings[0].message==='Explain this.');
   t('audit parser retains a source-supported suggestion after trimming',parse([finding('changed-meaning',['fact-1'],['one'],'Explain this.','  Retain may in the note.  ')]).findings[0].suggestion==='Retain may in the note.');
@@ -100,7 +101,7 @@ function runAnkiSourceAuditTests({S,t,section}){
   for(const [label,item] of rejected)t('audit parser rejects '+label,throws(()=>parse([item])));
   t('one malformed finding rejects the entire result without partial acceptance',throws(()=>parse([valid[0],finding('unknown')])));
   for(const raw of ['{}','[]','{"findings":null}','{"findings":[],"pass":true}','before {"findings":[]}','```json\n{"findings":[]}\n```\nafter','{"findings": [}'])t('audit parser rejects malformed response '+raw,throws(()=>H.ankiParseSourceAudit(raw,first)));
-  t('audit helper extraction reaches the complete parser tail',source.includes('return {findings:parsed.findings.map')&&parse([finding('source-conflict',['fact-1'],[])]).findings[0].code==='source-conflict');
+  t('audit helper extraction reaches the complete parser tail',source.includes('return {factReviews:parsed.factReviews,noteReviews:parsed.noteReviews,findings:parsed.findings.map')&&parse([finding('source-conflict',['fact-1'],[])]).findings[0].code==='source-conflict'&&parse([]).noteReviews.length===first.scopeNoteIds.length);
 }
 
 module.exports={runAnkiSourceAuditTests};

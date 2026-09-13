@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 1579;
+const EXPECTED_ASSERTIONS = 1775;
 
 let file;
 try {
@@ -2090,7 +2090,7 @@ section('v15.16 — Anki preview and style checks');
   t('a and uppercase AN are detected',codes(note('A {{c1::finding}}')).includes('article-clue')&&codes(note('AN {{c1::answer}}')).includes('article-clue'));
   t('article detection does not match word suffixes',!codes(note('Scan {{c1::finding}}')).includes('article-clue'));
   t('a consistent anchor and label avoid the anchor warning',!codes(good).includes('front-anchor'));
-  t('missing retrieval label is advisory',codes(note('[Example] {{c1::finding}}')).includes('front-anchor'));
+  t('missing retrieval label is advisory',codes(note('[Example] {{c1::finding}}')).includes('front-label'));
   t('a diagnosis-retrieval exception is explained by the warning',A.ankiStyleWarnings(note('Findings suggest {{c1::Example}}')).some(x=>x.code==='front-anchor'&&x.msg.includes('reveal the answer')));
   t('independent indices do not trigger a same-gap warning',!codes(note(two)).includes('shared-gaps'));
   t('same-index gaps identify the index needing review',A.ankiStyleWarnings(note('[Example] Pair: {{c2::alpha}} + {{c2::beta}}')).some(x=>x.code==='shared-gaps'&&x.msg.startsWith('c2:')));
@@ -2333,18 +2333,18 @@ section('v15.17 — approved rollback, historical examples and replay evidence')
 
 section('generation input pins and bounded pilot');
 {
-  // Packet/chunker/focus retain measured A0 hashes; the mapping adapter pin records this approved revision.
+  // Packet/chunker/focus retain measured A0 hashes; the adapter pin records the approved v16.2 source-fidelity revision and local hash capture.
   const inputs=[
     ['source packet','function kbForAnki(kb){','// ── KB source chunking','abf40adde002b03587eefe395958ec67de14c7bec5c1fee5db600cc527e74a71'],
     ['chunking','function splitOversizedConditionBlock(block,max){','function ankiParseCards(raw','b3d15fb1e63a7b1cdd49eb105db827debac59bd0340c282fdae5049989e42002'],
     ['focus block','  function buildFocusBlock(){','  const run=useCallback(async()=>{','b096b8eb8733da287a097a99ede3f3e233d8e413c01bdf5605376f516054094f'],
-    ['mapping adapter','        const kbAdapter=','        parts.push({text:ANKI_MASTER_PROMPT','33da0d50af94b7d6b1de75d413d93c2b049818a96454f11ed936c72c55052e7e']
+    ['mapping adapter','        const kbAdapter=','        parts.push({text:ANKI_MASTER_PROMPT','746f695f57c1e5c4a7fab99e9185ac46e9c95b6d81fdc59e390a93d17d2a4159']
   ];
   const {sha256}=require('./tools/repo-checks');
   for(const [name,start,end,hash] of inputs){const a=S.indexOf(start,name==='focus block'?S.indexOf('function AnkiGenerator()'):0),b=S.indexOf(end,a);t('generation input matches its approved pin: '+name,a>=0&&b>a&&sha256(S.slice(a,b).trim())===hash);}
   const F=ankiSyntheticFixture(),before=JSON.stringify(F.kb),spec=require('./tools/anki-pilot-spec').makeAnkiPilotSpec(F.kb,S);
   t('pilot planner derives exact call counts from the live chunker',spec.facts===5&&spec.chunkCount===1&&spec.expectedGenerationCalls===1&&spec.maximumAttempts===3);
-  t('pilot planner preserves the recommended model and token contract',spec.model==='gemini-3.8-flash'&&spec.thinkingLevel==='low'&&spec.maxOutputTokensPerAttempt===65536&&spec.additionalAuditCalls===0);
+  t('pilot planner preserves the recommended model and token contract',spec.model==='gemini-3.8-flash'&&spec.thinkingLevel==='medium'&&spec.maxOutputTokensPerAttempt===65536&&spec.additionalAuditCalls===0);
   t('pilot planning does not modify source facts or authorize execution',JSON.stringify(F.kb)===before&&spec.status.startsWith('PLANNED ONLY'));
 }
 
@@ -2698,6 +2698,10 @@ section('v15.14 — clamps, backoff, storage');
   require('./tools/anki-mapping-update-tests').runAnkiMappingUpdateTests({S,t,section});
   require('./tools/anki-local-checks-tests').runAnkiLocalChecksTests({S,t,section});
   require('./tools/anki-source-audit-tests').runAnkiSourceAuditTests({S,t,section});
+  require('./tools/anki-review-quality-tests').runAnkiReviewQualityTests({S,t,section});
+  require('./tools/anki-audit-receipt-tests').runAnkiAuditReceiptTests({S,t,section});
+  require('./tools/anki-condition-tag-tests').runAnkiConditionTagTests({S,t,section});
+  await require('./tools/anki-review-evidence-tests').runAnkiReviewEvidenceTests({S,t,section});
   await require('./tools/anki-source-ui-tests').runAnkiSourceUiTests({S,t,section});
 
   console.log('\n════════════════════════════');

@@ -1,5 +1,15 @@
 # Current maintainer state
 
+## v16.2 Anki release (2026-09-13)
+
+The user approved the follow-up improvements and Flash / Medium Anki default after eight v16.1 exports from four paired subjects, then explicitly authorized committing, pushing and publishing v16.2 as the latest release. The canonical application is `Nursing-Study-Suite v16.2.html`; its release asset is `Nursing-Study-Suite.v16.2.html`. Saved custom profiles remain intact; the Anki panel can apply the recommendation independently. Manual and other tool profiles are unchanged.
+
+The implementation adds conservative alias-tag normalization, separate retrieval-label/cue and shared-gap diagnostics, manual source-link repair with history, independent checker settings, per-fact target and per-note field receipts, and status-aware private reports with timestamps and hashes. The dynamic KB adapter reinforces source-only Extra, supplied definitions, qualifiers and list recall; all eleven frozen constants and their baseline remain unchanged. Warnings remain advisory and no automatic semantic rewrite, new dedupe, or model call is added.
+
+The paired evidence favors Medium for gradability, with no general source-fidelity winner. Only one supplied source check was complete; seven were unrun packets. The [release verification record](docs/reviews/anki-v16.2-implementation.md) distinguishes those findings from deterministic software acceptance: 1,775 assertions, full JSX parsing, unchanged frozen prompts, synthetic Chrome acceptance and all ten CDN checks pass. No new live Gemini calls are authorized or performed for this release. New generator/checker quality and native Anki import still require measurement.
+
+Earlier sections below preserve their named release checkpoints and do not override this release scope.
+
 ## v16.1 Anki release (2026-09-11)
 
 The user approved v16.1 to release the Anki source/retrieval and review tools committed at `6941e03`, together with a focused change to Extra. The canonical application is `Nursing-Study-Suite v16.1.html`; the intended release asset is `Nursing-Study-Suite.v16.1.html`. This supersedes the main-branch-only status of the checkpoint below. **Flash / Low remains the Anki Auto profile, and all advisory warning tiers remain unchanged.**

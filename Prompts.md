@@ -1,6 +1,6 @@
 # Nursing Study Suite — Prompt Library
 
-The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, and the item-quality auditor, **extracted verbatim from the shipped v16.1 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
+The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, and the item-quality auditor, **extracted verbatim from the shipped v16.2 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
 
 > **Coverage.** All 12 named prompt constants are represented from live HTML bytes. Eleven are byte-frozen; `CARD_TRANSCRIBE_PROMPT` is deliberately tunable but requires two transcription runs per card after an edit. The generated appendix is maintained by `node tools/render-prompts.js --write` and checked by `node verify-repo.js`.
 
@@ -242,9 +242,9 @@ ANKI_MASTER_PROMPT + focusBlock + kbAdapter + '\n\n' + sourceLabel + '\n\n' + ch
 
 where `focusBlock` renders your Outcomes / Points / Additional Context boxes (and, when the source is the structured Knowledge Base, instructs that KB-supplied LATTE/Tier tags take precedence), `kbAdapter` explains the structured FACT-line format, `sourceLabel` is the `═══ STRUCTURED LATTE KNOWLEDGE BASE ═══` header, and `chunk` is the source text itself.
 
-The runtime adapter requires independently important recall targets and supports repeated single-edge fact-to-note mappings. A source link identifies support; it does not prove that every important part of the fact is tested. Local review checks do not make model calls.
+The runtime adapter requires independently important recall targets and supports repeated single-edge fact-to-note mappings. In v16.2 it reinforces empty/source-only Extra, rejects definitions or rankings absent from the input, preserves population/trigger/action/timing/qualifiers, and rejects permanently visible substantive list targets. Equivalent units and inseparable decisions remain together when appropriate. A source link identifies support; it does not prove that every important part of the fact is tested. Local review checks do not make model calls. [Exact adapter change](docs/history/ANKI-v16.2-adapter.diff).
 
-The separate optional **Check against KB** flow uses `ankiBuildSourceAuditPrompt`, not the NCLEX item-audit prompt. Preparation captures bounded source/note packets locally; an explicit Run submits them using the captured Anki model and thinking level. The auditor returns advisory findings and source-supported suggested corrections, with strict schema and reference validation. Originals remain unchanged. Its packets include the actual review fronts, hidden answers, Text and Extra; source quotes are excluded because they were not generation input.
+The separate optional **Check against KB** flow uses `ankiBuildSourceAuditPrompt`, not the NCLEX item-audit prompt. Preparation captures bounded source/note packets locally; an explicit Run submits them using independently selected checker settings captured at preparation. The auditor must return one target record for each selected primary fact, separate Text/Extra support records for each in-scope note, and advisory findings with source-supported suggestions. Literal source spans, note/cloze references, scope and receipt accounting are validated; a findings-only response is incomplete. This validates declared evidence, not exhaustive target decomposition or semantic entailment. Originals remain unchanged. Its packets include the actual review fronts, hidden answers, Text and Extra; source quotes are excluded because they were not generation input.
 
 ### The master prompt
 

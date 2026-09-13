@@ -9,6 +9,21 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [16.2] — 2026-09-13
+
+### Changed
+- Anki Auto now defaults to Flash / Medium, with an Anki-only reset for saved profiles and independent settings for the optional source checker. Other tool defaults remain unchanged.
+- Reinforced source-supported Extra/Text, supplied definitions, clinical qualifiers and list recall in the dynamic KB adapter. All eleven frozen constants and the baseline are unchanged. [Exact adapter diff](docs/history/ANKI-v16.2-adapter.diff).
+- Separated missing topic cues from retrieval labels and added advisory three-or-more shared-gap review. Normalized only unambiguous source-condition aliases after existing deduplication, retaining original tags.
+
+### Added
+- Explicit source-link diagnostics and manual repair against captured facts, with edit history and stale-check invalidation.
+- Required per-fact recall-target and per-note Text/Extra source records for a completed AI check, with strict literal-reference and scope validation.
+- Distinct unrun packet, incomplete and completed report downloads with captured generation/checker profiles, timestamps, source/note/prompt hashes and currentness.
+
+### Validation
+- The unified verifier passes 1,775 assertions, all eleven unchanged frozen prompt hashes, full JSX Babel transformation, prompt documentation and LF/version agreement. Synthetic Chrome acceptance and all ten CDN integrity checks pass. See the [release verification record](docs/reviews/anki-v16.2-implementation.md) for paired-export evidence and remaining generation/native-import measurements. No new live Gemini calls.
+
 ## [16.1] — 2026-09-11
 
 Anki source/retrieval tools from the main-branch update at `6941e03`, plus the approved focused Extra revision.
