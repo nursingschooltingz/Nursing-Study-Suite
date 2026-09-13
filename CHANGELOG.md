@@ -9,6 +9,22 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [16.4] — 2026-09-13
+
+### Changed
+- Source checking uses exact short note handles and app-owned source-token addresses, preserving original capitalization, units and internal note identity without guessed repairs.
+- Required source inventories account for every source token as a recall target or explained context. The dynamic audit prompt separates list members and compares complete source propositions, including actor, modality and frequency.
+- Independently valid records survive partial group failures. Explicit retry keeps accepted work while unresolved required records and malformed findings prevent completion.
+- Packet sizing measures the actual addressed payload under the existing 24,000-character limit. The added inventory can increase planned requests; preparation shows the count before Run.
+
+### Added
+- Separate tested and contextual references, inspectable inventory decisions and unresolved record locations.
+- Advisory whole-deck candidate links with tier/selection context, broad tested-list warnings and review of facts classified entirely as context.
+- Private report schema 4 with exact note-handle maps, unresolved issues and retained-group counts.
+
+### Validation
+- See [implementation checks and limits](docs/reviews/anki-v16.4-implementation.md). No live Gemini calls or native Anki import; all eleven frozen prompts, the generation adapter, Flash / Medium default and advisory export policy remain unchanged.
+
 ## [16.3] — 2026-09-13
 
 ### Changed

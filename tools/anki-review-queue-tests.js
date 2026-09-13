@@ -1,7 +1,7 @@
 'use strict';
 
 async function runAnkiReviewQueueTests({S,t,section}){
-  section('Anki advisory review decisions and v16.3 evidence');
+  section('Anki advisory review decisions and v16.4 evidence');
   const a=S.indexOf('function ankiParseCards(raw'),b=S.indexOf('function AnkiStyleBadges',a);
   if(a<0||b<=a||S.indexOf('function ankiParseCards(raw',a+1)>=0)throw Error('Review queue extraction anchors moved');
   const H=new Function('uid','globalThis','TextEncoder',S.slice(a,b)+';return {ankiMakeReviewDecision,ankiReviewDecisionCurrent,ankiReviewDecisionEvidence,ankiSourceAuditEvidence,ankiSourceAuditLabel,suiteVersion};')(()=> 'synthetic',{crypto:require('crypto').webcrypto},TextEncoder);
@@ -53,7 +53,7 @@ async function runAnkiReviewQueueTests({S,t,section}){
   const replaced=await H.ankiSourceAuditEvidence(run,()=>({...exportInputs,reviewRun:laterRun,reviewDecisions:[laterDecision]}));
   t('a later prepared audit cannot lend current decisions to an earlier exported run',replaced.metadata.preparedAt===run.preparedAt&&!replaced.reviewDecisions[0].current);
   t('partial status label is distinct from completion',H.ankiSourceAuditLabel(run).startsWith('Partial —')&&H.ankiSourceAuditLabel(run).includes('1/2 groups'));
-  t('visible footer and reports share the canonical release version',H.suiteVersion()==='16.3'&&S.includes('Version {suiteVersion()} <span>Built for your next step.</span>')&&evidence.metadata.suiteVersion==='16.3');
+  t('visible footer and reports share the canonical release version',H.suiteVersion()==='16.4'&&S.includes('Version {suiteVersion()} <span>Built for your next step.</span>')&&evidence.metadata.suiteVersion==='16.4');
   t('queue rows are bounded and decisions stay separate from card state',S.includes('shown.slice(0,limit)')&&S.includes('setReviewDecisions(previous=>[...previous,decision])'));
   t('review UI labels manual fixed decisions without implying an AI pass',S.includes('Fixed — reviewed manually')&&S.includes('it does not mean an AI recheck passed'));
   t('queue can inspect captured source facts even for findings with no note references',S.includes('<summary>Captured source facts ({item.factIds.length})</summary>')&&S.includes('snapshot={inputs.batch?.snapshot}'));

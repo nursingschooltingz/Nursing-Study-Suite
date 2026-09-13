@@ -26,6 +26,16 @@ function validReceipt(group,findings=[]){
     output.noteReviews.push({noteId:id,text:field(),extra:note.extra.trim()?field():{status:'empty',evidence:[]}});
     if(!fact&&!output.findings.some(f=>f.code==='unsupported'&&f.noteIds.includes(id)))output.findings.push({code:'unsupported',factIds:[],noteIds:[id],message:'Synthetic fixture has no supplied fact for this note.',suggestion:''});
   }
+  // v16.4: transport fixtures use the same exact token addresses and short handles
+  // as real packets. Whole-fact targets here exercise protocol shape, not quality.
+  if(group.protocolVersion===4){
+    const range=id=>({start:1,end:byFact.get(id).text.match(/\S+/gu).length});
+    for(const review of output.factReviews){
+      review.inventory=[{sourceRef:range(review.factId),role:'target',reason:'Synthetic fixture target; not a semantic judgment.'}];
+      review.targets=review.targets.map(({sourceSpan,...target})=>({...target,sourceRef:range(review.factId),contextRefs:[]}));
+    }
+    for(const review of output.noteReviews)for(const field of ['text','extra'])review[field].evidence=review[field].evidence.map(e=>({factId:e.factId,sourceRef:range(e.factId)}));
+  }
   return output;
 }
 

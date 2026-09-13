@@ -32,6 +32,7 @@ This is the task map for maintainers and coding agents. `AGENTS.md` remains the 
 - `CARD_TRANSCRIBE_PROMPT` is tunable but must preserve: never guess a number, never expand an abbreviation, preserve symbols exactly, and route unknown headings to `other`. Rerun two transcriptions per card after an edit.
 - The approved v16.2 structured-KB adapter change is recorded in `docs/history/ANKI-v16.2-adapter.diff`; its harness pin is deliberately updated separately from the unchanged frozen baseline.
 - The approved v16.3 dynamic source-check suggestion constraints are recorded in `docs/history/ANKI-v16.3-audit-builder.diff`; generation prompts and baseline are unchanged.
+- The approved v16.4 dynamic source-check contract uses a source-first token inventory, exact note/source addresses and role-separated references. Its exact builder diff is `docs/history/ANKI-v16.4-audit-builder.diff`; the frozen constants and generation adapter remain unchanged. The legacy parser remains strict for historical regression checks; the new decoder validates independent records before retaining them.
 - `Prompts.md` also documents dynamic prompt builders; the generated appendix guarantees that all 12 named constants appear verbatim.
 - The focused v16.1 Extra change is recorded in `docs/history/ANKI-v16.1-extra-default.diff`; the preceding source/retrieval change is in `docs/history/ANKI-source-retrieval-update.diff`. These approved diffs do not authorize further prompt changes. Empty Extra must retain the same two pipe separators and third-field Tags.
 

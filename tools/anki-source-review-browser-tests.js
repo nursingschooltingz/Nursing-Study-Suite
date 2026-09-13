@@ -27,11 +27,8 @@ callGemini=async(apiKey,model,parts,options={})=>{
     probe.calls.push({model,level:options.thinkingLevel,packet,prompt:parts[0].text});
     const findings=probe.auditMode==='finding'?[{code:'missing-target',factIds:[packet.sourceFactIds[0]],noteIds:[],message:'Synthetic source target needs review.',suggestion:'Ask for the supplied timing without adding a new value.'}]:[];
     const receipt=validReceipt(packet,findings);
-    if(probe.auditMode==='quarantine'&&packet.id===probe.recoverGroupId){
-      const target=receipt.factReviews.find(r=>r.factId==='fact-5').targets[0];target.sourceSpan=target.sourceSpan[0].toLowerCase()+target.sourceSpan.slice(1);
-    }
     if(probe.auditMode==='quarantine'&&packet.id===probe.faultGroupId){
-      receipt.noteReviews[0].text.evidence[0].sourceSpan+=' inserted-token';
+      receipt.noteReviews[0].text.evidence[0].sourceRef.end=999999;
     }
     if(probe.auditMode==='transport')throw Error('Synthetic transport interruption.');
     const response=probe.auditMode==='invalid'?'invalid audit response':probe.auditMode==='no-receipts'?'{"findings":[]}':JSON.stringify(receipt);
@@ -113,7 +110,9 @@ async function main(){
     assert.equal(evidence.metadata.checkComplete,true);assert.equal(evidence.metadata.currentAtExport,true);assert(evidence.metadata.startedAt&&evidence.metadata.finishedAt);
     assert.equal(evidence.metadata.sourceSnapshotSha256,packet.metadata.sourceSnapshotSha256);assert.equal(evidence.metadata.cardSnapshotSha256,packet.metadata.cardSnapshotSha256);
     assert(evidence.results.every(g=>Array.isArray(g.factReviews)&&Array.isArray(g.noteReviews)),'completed report retains every returned review receipt');
-    assert.equal(evidence.metadata.schemaVersion,3);assert.equal(evidence.metadata.suiteVersion,'16.3');
+    assert.equal(evidence.metadata.schemaVersion,4);assert.equal(evidence.metadata.suiteVersion,'16.4');
+    assert(evidence.noteHandleMaps.every(g=>g.notes.every(n=>/^n[1-9]\d*$/.test(n.handle))),'private report retains exact local-to-internal handle maps');
+    assert(evidence.results.every(g=>g.complete&&g.factReviews.every(f=>f.inventory.length>0)),'completed groups account for every selected source fact');
     await view.getByText('Checked targets and note fields ·',{exact:false}).first().click();
     await view.getByText("These are the checker's judgments.",{exact:false}).first().waitFor({state:'visible'});
     assert((await view.getByText('Text: supported',{exact:true}).count())>0);assert((await view.getByText('Extra: empty',{exact:true}).count())>0);
@@ -139,9 +138,9 @@ async function main(){
     assert.equal(await view.evaluate(()=>window.__ankiReviewFixture.calls.length),callsBeforeDecision,'queue decisions do not call a model');
     await view.setViewportSize({width:360,height:900});
     assert(!(await view.evaluate(()=>document.documentElement.scrollWidth>innerWidth+2)),'active review decisions fit a mobile viewport');
-    fs.mkdirSync('scratch/anki-v16.3/browser',{recursive:true});
-    await view.screenshot({path:'scratch/anki-v16.3/browser/review-decision-mobile.png',fullPage:true});
-    await view.locator('[data-anki-review-decision]').screenshot({path:'scratch/anki-v16.3/browser/review-decision-panel-mobile.png'});
+    fs.mkdirSync('scratch/anki-v16.4/browser',{recursive:true});
+    await view.screenshot({path:'scratch/anki-v16.4/browser/review-decision-mobile.png',fullPage:true});
+    await view.locator('[data-anki-review-decision]').screenshot({path:'scratch/anki-v16.4/browser/review-decision-panel-mobile.png'});
     await view.setViewportSize({width:1280,height:900});
     const reviewedEvidence=await download('complete');
     assert(reviewedEvidence.reviewDecisions.some(d=>d.disposition==='covered-elsewhere'&&d.coveredBy===coveringId&&d.current),'report retains the current explicit review decision');
@@ -154,23 +153,26 @@ async function main(){
     assert.notEqual(failedId,recoveredId,'synthetic corruption and canonical recovery exercise separate groups');
     const partialStart=await view.evaluate(()=>window.__ankiReviewFixture.calls.length);
     await view.evaluate(({failedId,recoveredId})=>{Object.assign(window.__ankiReviewFixture,{auditMode:'quarantine',faultGroupId:failedId,recoverGroupId:recoveredId});},{failedId,recoveredId});
-    await run();await view.getByText(/^Partial — review rejected groups and retry/).waitFor();
+    await run();await view.getByText(/^Partial — review unresolved records and retry/).waitFor();
     const partial=await download('partial');
-    assert.equal(partial.results.length,partialPacket.groups.length-1);assert.equal(partial.responses.length,partialPacket.groups.length);
+    assert.equal(partial.results.length,partialPacket.groups.length);assert.equal(partial.responses.length,partialPacket.groups.length);
+    assert.equal(partial.metadata.checkedGroups,partialPacket.groups.length-1);
+    assert(partial.results.find(g=>g.groupId===failedId).factReviews.length>0,'an invalid field receipt does not discard valid source target records');
     assert.equal(partial.metadata.checkComplete,false);assert.equal(partial.failures.length,1);assert.equal(partial.failures[0].groupId,failedId);
-    assert.match(partial.failures[0].detail.path,/^noteReviews\[0\]\.text\.evidence\[0\]\.sourceSpan$/);
-    assert(partial.responses.find(r=>r.groupId===failedId).raw.includes('inserted-token'),'quarantined raw remains intact');
+    assert.match(partial.failures[0].detail.path,/^noteReviews\[0\]\.text\.evidence\[0\]\.sourceRef$/);
+    assert(partial.responses.find(r=>r.groupId===failedId).raw.includes('999999'),'unresolved raw address remains intact');
     assert.deepEqual((await view.evaluate(()=>window.__ankiReviewFixture.calls)).slice(partialStart).map(c=>c.packet.id),partialPacket.groups.map(g=>g.id),'a rejected middle group does not stop later requests');
-    assert.equal(partial.metadata.recoveredCitations,1);assert.equal(partial.results.find(r=>r.groupId===recoveredId).citationRecoveries[0].method,'sentence-initial-case');
-    await view.getByText('Rejected or failed groups (1)',{exact:true}).click();
-    await view.getByText(/Rejected citation:.*inserted-token/).waitFor();
-    await view.getByText('Canonical citation matches recorded',{exact:true}).click();
-    await view.getByText(/^Returned: report weight/).waitFor();await view.getByText(/^Captured source: Report weight/).waitFor();
+    assert.equal(partial.metadata.recoveredCitations,0);
+    assert(partial.results.find(r=>r.groupId===recoveredId).factReviews.find(r=>r.factId==='fact-5').targets[0].sourceSpan.startsWith('Report weight'),'source ranges retain original capitals without model retyping or case recovery');
+    await view.getByText('Unresolved or failed groups (1)',{exact:true}).click();
+    await view.getByText('Checked targets and note fields ·',{exact:false}).filter({hasText:'incomplete group'}).click();
+    await view.locator('[data-anki-unresolved-records] summary').click();
+    await view.locator('[data-anki-unresolved-records]').waitFor({state:'visible'});
     await view.setViewportSize({width:360,height:900});
     assert(!(await view.evaluate(()=>document.documentElement.scrollWidth>innerWidth+2)),'rejected and recovered citation evidence fits a mobile viewport');
-    await view.screenshot({path:'scratch/anki-v16.3/browser/partial-mobile.png',fullPage:true});
-    await view.getByText('Rejected or failed groups (1)',{exact:true}).locator('..').screenshot({path:'scratch/anki-v16.3/browser/rejected-group-mobile.png'});
-    await view.getByText('Canonical citation matches recorded',{exact:true}).locator('..').screenshot({path:'scratch/anki-v16.3/browser/citation-recovery-mobile.png'});
+    await view.screenshot({path:'scratch/anki-v16.4/browser/partial-mobile.png',fullPage:true});
+    await view.getByText('Unresolved or failed groups (1)',{exact:true}).locator('..').screenshot({path:'scratch/anki-v16.4/browser/rejected-group-mobile.png'});
+    await view.locator('[data-anki-unresolved-records]').screenshot({path:'scratch/anki-v16.4/browser/unresolved-record-mobile.png'});
     await view.setViewportSize({width:1280,height:900});
     const callsBeforeResume=await view.evaluate(()=>window.__ankiReviewFixture.calls.length);
     await view.evaluate(()=>{window.__ankiReviewFixture.auditMode='valid';});
@@ -180,7 +182,7 @@ async function main(){
     assert.equal(resumed.results.length,partialPacket.groups.length);assert.equal(resumed.failures.length,0);assert.equal(resumed.failureHistory.length,1);
     assert.equal(resumed.responses.length,partialPacket.groups.length+1);assert.equal(resumed.sessions.length,2);assert.equal(resumed.responses.at(-1).attempt,2);
     assert.equal(retryCalls[0].prompt,(await view.evaluate(()=>window.__ankiReviewFixture.calls)).slice(partialStart).find(c=>c.packet.id===failedId).prompt,'resume uses the exact captured request');
-    assert.deepEqual(resumed.results.filter(r=>r.groupId!==failedId),partial.results,'accepted results are retained without rechecking or rewriting');
+    assert.deepEqual(resumed.results.filter(r=>r.groupId!==failedId),partial.results.filter(r=>r.groupId!==failedId),'completed results are retained without rechecking or rewriting');
 
     // Source links are explicit user edits; they invalidate the old report while
     // keeping its captured evidence and the original response independent.
@@ -215,10 +217,10 @@ async function main(){
     await view.getByText(/outdated for the current notes or source/).waitFor();
     await view.evaluate(()=>{window.__ankiReviewFixture.auditMode='invalid';});
     await prepare();await run();
-    await view.getByText(/^Partial — review rejected groups and retry/).waitFor();
+    await view.getByText(/^Partial — review unresolved records and retry/).waitFor();
     const invalid=await download('partial');assert.equal(invalid.responses[0].raw,'invalid audit response');assert.equal(invalid.failures.length,invalid.groups.length);
     await view.evaluate(()=>{window.__ankiReviewFixture.auditMode='no-receipts';});await prepare();await run();
-    await view.getByText(/^Partial — review rejected groups and retry/).waitFor();
+    await view.getByText(/^Partial — review unresolved records and retry/).waitFor();
     const incomplete=await download('partial');
     assert.equal(incomplete.results.length,0);assert.equal(incomplete.responses[0].raw,'{"findings":[]}');assert.equal(incomplete.metadata.checkComplete,false,'findings-only output cannot count as a completed source check');
     await view.evaluate(()=>{window.__ankiReviewFixture.auditMode='transport';});await prepare();await run();
@@ -237,8 +239,8 @@ async function main(){
     assert(await view.getByRole('button',{name:'⬇ Export .txt',exact:true}).isDisabled());
     await view.setViewportSize({width:360,height:900});
     const overflow=await view.evaluate(()=>document.documentElement.scrollWidth>innerWidth+2);assert(!overflow,'mobile viewport does not overflow');
-    fs.mkdirSync('scratch/anki-v16.3/browser',{recursive:true});
-    await view.screenshot({path:'scratch/anki-v16.3/browser/mobile.png',fullPage:true});
+    fs.mkdirSync('scratch/anki-v16.4/browser',{recursive:true});
+    await view.screenshot({path:'scratch/anki-v16.4/browser/mobile.png',fullPage:true});
     await view.getByLabel('Empty fixture response',{exact:true}).check();
     await view.getByRole('button',{name:'▶ Generate Cards',exact:true}).click();
     await view.getByText('Optional · Check against KB',{exact:true}).waitFor();

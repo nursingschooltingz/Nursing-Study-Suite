@@ -12,14 +12,14 @@ async function runAnkiSourceUiTests({ S, t, section }) {
     return S.slice(a, includeEnd ? b + end.length : b);
   };
   const helpers = span('function ankiParseCards(raw', 'function AnkiStyleBadges');
-  const H = new Function('uid', helpers + ';return {ankiSourceAuditCurrent,ankiSourceAuditPending,ankiSourceAuditState,ankiAuditGroups,ankiBuildSourceAuditPrompt,ankiParseSourceAudit};')(() => 'synthetic-id');
+  const H = new Function('uid', helpers + ';return {ankiSourceAuditCurrent,ankiSourceAuditPending,ankiSourceAuditState,ankiAuditGroups,ankiBuildSourceAuditPrompt,ankiBuildSourceAuditPromptV4,ankiAuditPacket,ankiAuditSourceTokens,ankiParseSourceAudit,ankiParseSourceAuditV4,ankiMergeSourceAuditResult};')(() => 'synthetic-id');
   const callbacks = span('  const prepareSourceAudit=()=>{', '  const openNote=');
   const invalidation = span('  useEffect(()=>{\n    const run=auditRun.current;', '  },[cards,batch,tierFilter,current]);', true);
   const cleanup = '  useEffect(()=>()=>{auditRun.current?.ctl.abort();auditRun.current=null;},[]);';
   if (S.split(cleanup).length !== 2) throw new Error('Anki source-check unmount extraction anchor moved');
   const capture = new Function('state', 'services', `
     const {cards,batch,tierFilter,current,busy,auditBusy,sourceAudit,model,toolLevel,auditModel,auditLevel,cfg}=state;
-    const {auditRun,auditInputs,setSourceAudit,setAuditBusy,callGemini,ankiSourceAuditCurrent,ankiSourceAuditPending,ankiSourceAuditState,ankiAuditGroups,ankiBuildSourceAuditPrompt,ankiParseSourceAudit}=services;
+    const {auditRun,auditInputs,setSourceAudit,setAuditBusy,callGemini,ankiSourceAuditCurrent,ankiSourceAuditPending,ankiSourceAuditState,ankiAuditGroups,ankiBuildSourceAuditPrompt,ankiBuildSourceAuditPromptV4,ankiAuditPacket,ankiAuditSourceTokens,ankiParseSourceAudit,ankiParseSourceAuditV4,ankiMergeSourceAuditResult}=services;
     const effects=[];const useEffect=fn=>effects.push(fn);
     ${callbacks}
     ${invalidation}
@@ -146,7 +146,7 @@ async function runAnkiSourceUiTests({ S, t, section }) {
   const capturedPrompts = captured.state.sourceAudit.prompts.map(p=>p.text);
   captured.services.ankiBuildSourceAuditPrompt = () => { throw Error('A captured request must not be rebuilt.'); };
   await captured.render().runSourceAudit();
-  t('execution uses prepared prompt text even if the currently available builder changes', captured.state.sourceAudit.status === 'complete' && captured.calls.every((c,i)=>c[2][0].text === capturedPrompts[i]) && captured.state.sourceAudit.builderSource === originalBuilder.toString());
+  t('execution uses prepared prompt text even if the currently available builder changes', captured.state.sourceAudit.status === 'complete' && captured.calls.every((c,i)=>c[2][0].text === capturedPrompts[i]) && captured.state.sourceAudit.builderSource === [originalBuilder,H.ankiBuildSourceAuditPromptV4,H.ankiAuditPacket,H.ankiAuditSourceTokens].map(fn=>fn.toString()).join('\n'));
 
   let firstValidation = true;
   const continued = create(async (_key,_model,parts)=>{if(firstValidation){firstValidation=false;return 'INVALID_FIRST_GROUP';}return clean(parts);});
@@ -205,8 +205,8 @@ async function runAnkiSourceUiTests({ S, t, section }) {
   doubleStart.render().cancelSourceAudit();parallel.requests[0].resolve(clean(parallel.requests[0].args[2]));await Promise.all([firstStart,secondStart]);
 
   const diagnostic = create(async (_key,_model,parts)=>clean(parts)); diagnostic.prepare();
-  const originalParser = diagnostic.services.ankiParseSourceAudit; let rejectOne = true;
-  diagnostic.services.ankiParseSourceAudit=(raw,group)=>{
+  const originalParser = diagnostic.services.ankiParseSourceAuditV4; let rejectOne = true;
+  diagnostic.services.ankiParseSourceAuditV4=(raw,group)=>{
     if(rejectOne){rejectOne=false;const e=Error('Synthetic invalid citation');e.code='anki-audit-validation';e.detail={groupId:group.id,path:'factReviews[0].targets[0].sourceSpan',factId:'fact-1',noteId:'note-1',sourceSpan:'Synthetic unmatched span'};throw e;}
     return {...originalParser(raw,group),citationRecoveries:[{path:'synthetic-location',method:'synthetic-test'}]};
   };
@@ -214,6 +214,40 @@ async function runAnkiSourceUiTests({ S, t, section }) {
   t('typed validation details survive quarantine and accepted citation recovery metadata survives publication', diagnostic.state.sourceAudit.failures[0].detail.path === 'factReviews[0].targets[0].sourceSpan' && diagnostic.state.sourceAudit.failures[0].detail.sourceSpan === 'Synthetic unmatched span' && diagnostic.state.sourceAudit.results[0].citationRecoveries[0].method === 'synthetic-test');
   const secretError = create(async()=>{throw Error('Synthetic request rejected '+credential);});await secretError.prepare().runSourceAudit();
   t('transport error evidence redacts the captured credential instead of persisting it', !JSON.stringify(secretError.state.sourceAudit).includes(credential) && secretError.state.sourceAudit.failures[0].error.includes('[redacted]'));
+
+  // v16.4: a partial group is retained but cannot leave the pending queue merely
+  // because it has a result object. A fresh attempt can resolve only its bad record.
+  let damage=true;
+  const salvage=create(async (_key,_model,parts)=>{
+    const group=JSON.parse(parts[0].text.split('AUDIT PACKET:')[1]),receipt=validReceipt(group);
+    if(damage&&receipt.noteReviews.length)receipt.noteReviews[0].text.evidence[0].sourceRef.end=999999;
+    return JSON.stringify(receipt);
+  });
+  await salvage.prepare().runSourceAudit();
+  const partialSalvage=salvage.state.sourceAudit,partialGroup=partialSalvage.results.find(r=>r.complete===false);
+  t('a bad note citation retains the independently valid fact receipt in its incomplete group',partialSalvage.status==='partial'&&partialGroup.factReviews.length===1&&partialGroup.noteReviews.length===0&&partialGroup.unresolved.length>0);
+  t('partial groups remain pending even when every group has a retained result object',partialSalvage.results.length===partialSalvage.groups.length&&H.ankiSourceAuditPending(partialSalvage).length===1);
+  t('wire requests use exact short handles while retained receipts restore captured internal note IDs',salvage.calls.every(c=>JSON.parse(c[2][0].text.split('AUDIT PACKET:')[1]).notes.every(n=>/^n[1-9]\d*$/.test(n.id)))&&partialGroup.factReviews[0].targets[0].noteRefs[0].noteId==='note-1');
+  t('a partial attempt records retained counts and unresolved paths without reporting full acceptance',partialSalvage.responses[0].accepted===false&&partialSalvage.responses[0].retainedRecords.facts===1&&partialSalvage.responses[0].unresolved.length>0);
+  damage=false;await salvage.render().runSourceAudit();
+  t('explicit retry completes the remaining record and does not repeat the other group',salvage.calls.length===3&&salvage.state.sourceAudit.status==='complete'&&H.ankiSourceAuditPending(salvage.state.sourceAudit).length===0);
+  t('retry preserves partial raw evidence and its diagnostic history',salvage.state.sourceAudit.responses[0].raw.includes('999999')&&salvage.state.sourceAudit.failureHistory.length===1&&salvage.state.sourceAudit.failures.length===0&&partialGroup.noteReviews.length===0);
+
+  let complementaryAttempt=0;
+  const complementary=create(async (_key,_model,parts)=>{
+    const packet=JSON.parse(parts[0].text.split('AUDIT PACKET:')[1]),receipt=validReceipt(packet);
+    if(packet.sourceFactIds.includes('fact-1')){
+      if(++complementaryAttempt===1)receipt.noteReviews[0].text.evidence[0].sourceRef.end=999999;
+      else receipt.factReviews[0].targets[0].sourceRef.end=999999;
+    }
+    return JSON.stringify(receipt);
+  });
+  await complementary.prepare().runSourceAudit();await complementary.render().runSourceAudit();
+  const complement=complementary.state.sourceAudit,lastAttempt=complement.responses.at(-1);
+  t('complementary partial attempts can complete required group records without an extra request',complement.status==='complete'&&complementary.calls.length===3&&complement.failures.length===0&&H.ankiSourceAuditPending(complement).length===0);
+  t('a completed merged group does not mislabel the current partial raw response accepted',lastAttempt.groupComplete===true&&lastAttempt.accepted===false&&lastAttempt.unresolved.length>0);
+  t('attempt evidence distinguishes newly accepted records from cumulative retained records',lastAttempt.acceptedRecords.facts===0&&lastAttempt.acceptedRecords.notes===1&&lastAttempt.retainedRecords.facts===1&&lastAttempt.retainedRecords.notes===1);
+  t('complementary completion keeps both unmodified raw attempts and earlier failure history',complement.responses[0].raw.includes('999999')&&lastAttempt.raw.includes('999999')&&complement.failureHistory.length===1&&complement.sessions.at(-1).status==='complete');
 
   const empty = create(async()=>{throw Error('Empty capture must not use transport.');},{cards:[],batch:{snapshot:{facts:[]},chunkIds:[]},cfg:{apiKey:''}});
   await empty.prepare().runSourceAudit();

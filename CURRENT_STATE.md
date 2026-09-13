@@ -1,5 +1,17 @@
 # Current maintainer state
 
+## v16.4 Anki audit release (2026-09-13)
+
+The user approved implementation of the recommendations adjudicated against four supplied v16.3 tests, then explicitly authorized committing, pushing and publishing v16.4 as the latest release. The canonical application is `Nursing-Study-Suite v16.4.html`; its release asset is `Nursing-Study-Suite.v16.4.html`. Flash / Medium, the generation adapter, all eleven frozen constants and their baseline remain unchanged.
+
+- **Failure evidence.** All 72 supplied groups returned valid JSON; 64 passed validation and eight failed on five source-capital copying differences, two corrupted note IDs and one mixed hidden/context reference group. No truncation or transport failure was recorded. The 24,000-character packet ceiling remains; actual new wire payloads include the added source-address inventory and may require more groups. Private course material and per-card examples stay outside Git.
+- **Exact addressing.** New requests use packet-local note handles and numbered source-token ranges. The app restores captured note IDs and exact source bytes. It does not infer an intended UUID, fold source units/capitalization or invent a cloze index. Hidden and contextual references remain distinct.
+- **Accounted-for source.** The dynamic checker prompt starts with a complete source-token inventory, assigns each range to a target or explained context, separates meaningful list members, and compares full propositions including actor, modality, frequency and conditions. Accounting gaps fail that fact record. This is an explicit model inventory, not an independent semantic oracle: classifying an important detail as context can still be wrong. All-context facts enter advisory review; mixed inventories remain inspectable.
+- **Partial evidence.** Independently valid fact/note records and findings survive malformed neighbors. Missing required records and invalid findings keep a group pending; explicit retries retain accepted work and exact captured requests. The private schema-4 report retains unresolved issues, original attempts and local note-handle maps. Transport and stale-source guards remain in force.
+- **Whole-deck review.** The local queue searches captured notes across chunks and tiers for bounded literal candidates related to a flagged target. It reports candidate counts and eligibility, and warns about broad list-target receipts. No candidate automatically proves coverage or clears a finding. Warnings and review decisions never change notes, selection or export eligibility.
+
+Validation and remaining measurements are recorded in [the implementation note](docs/reviews/anki-v16.4-implementation.md). No live Gemini calls or native Anki import were authorized or performed during implementation. New audit completion rates, target quality, latency and quota cost require a separate measured run.
+
 ## v16.3 Anki release (2026-09-13)
 
 The user approved the follow-up audit and review changes and requested v16.3, including the previously stale visible version label, then explicitly authorized committing, pushing and publishing a new release. The canonical application is `Nursing-Study-Suite v16.3.html`; the release asset is `Nursing-Study-Suite.v16.3.html`. Flash / Medium remains the Anki default. All eleven frozen prompts and their baseline remain unchanged.

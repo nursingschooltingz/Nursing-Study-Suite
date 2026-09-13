@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 1969;
+const EXPECTED_ASSERTIONS = 2175;
 
 let file;
 try {
@@ -2706,6 +2706,10 @@ section('v15.14 — clamps, backoff, storage');
   require('./tools/anki-citation-recovery-tests').runAnkiCitationRecoveryTests({S,t,section});
   await require('./tools/anki-review-queue-tests').runAnkiReviewQueueTests({S,t,section});
   require('./tools/anki-recall-review-tests').runAnkiRecallReviewTests({S,t,section});
+  require('./tools/anki-audit-wire-tests').runAnkiAuditWireTests({S,t,section});
+  require('./tools/anki-audit-packet-size-tests').runAnkiAuditPacketSizeTests({S,t,section});
+  require('./tools/anki-audit-partial-tests').runAnkiAuditPartialTests({S,t,section});
+  require('./tools/anki-audit-reconcile-tests').runAnkiAuditReconcileTests({S,t,section});
 
   console.log('\n════════════════════════════');
   const total = pass + fail;
