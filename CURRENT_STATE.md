@@ -1,5 +1,16 @@
 # Current maintainer state
 
+## v16.3 Anki release (2026-09-13)
+
+The user approved the follow-up audit and review changes and requested v16.3, including the previously stale visible version label, then explicitly authorized committing, pushing and publishing a new release. The canonical application is `Nursing-Study-Suite v16.3.html`; the release asset is `Nursing-Study-Suite.v16.3.html`. Flash / Medium remains the Anki default. All eleven frozen prompts and their baseline remain unchanged.
+
+- **Audit recovery and retries.** Exact citations remain preferred. Unambiguous whitespace differences and a small explicit set of fact-initial prose capitals can recover to captured source bytes with a recorded diff; unknown words, units, numbers, symbols and inserted text remain strict. Malformed or truncated groups are quarantined while independent groups continue. Explicit Retry / resume reuses captured prompts/settings and skips accepted groups; transport failures stop the session. Reports retain attempts, failures, session history, canonical matches and pending groups.
+- **Recall review stays advisory.** Local checks cover equivalent numeric ranges exposed on a front, numerical targets marked tested without the numeric target hidden, unexpected scripts absent from reliable linked sources, and suspect proposed fixes. Both visible-only and Extra-only targets enter review, with covered-elsewhere, intentional-context and manually fixed decisions. Decisions are bound to exact notes/source/tier and the applicable audit; edits invalidate them. They never change selection or block export.
+- **Prompt scope.** Only the dynamic source-check builder gains suggestion constraints: preserve the three-cloze contract, avoid adding independent targets to existing bundles or answer-bearing hints, and preserve active higher-priority coverage when proposing duplicate removal. The generation adapter and frozen master are unchanged.
+- **Evidence limits.** The supplied v16.2 tests comprised 1,188 notes across four subjects, two complete source checks and two failures. Offline replay recovered the isolated case-only citation failure and continued rejecting inserted text. These findings motivate software changes, not a clinical accuracy claim. No new live Gemini calls or native Anki import are authorized or performed. Verification is recorded in [the v16.3 implementation note](docs/reviews/anki-v16.3-implementation.md).
+
+Earlier sections preserve their named release checkpoints.
+
 ## v16.2 Anki release (2026-09-13)
 
 The user approved the follow-up improvements and Flash / Medium Anki default after eight v16.1 exports from four paired subjects, then explicitly authorized committing, pushing and publishing v16.2 as the latest release. The canonical application is `Nursing-Study-Suite v16.2.html`; its release asset is `Nursing-Study-Suite.v16.2.html`. Saved custom profiles remain intact; the Anki panel can apply the recommendation independently. Manual and other tool profiles are unchanged.

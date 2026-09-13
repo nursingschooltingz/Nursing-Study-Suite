@@ -9,6 +9,22 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [16.3] — 2026-09-13
+
+### Changed
+- Source checking continues past malformed or truncated groups. Explicit retry/resume retains accepted groups and uses the captured prompts and settings; transport failures stop the session.
+- Citation failures identify the exact group, receipt path, note, fact and rejected text. Limited unambiguous whitespace and fact-initial prose-capital recovery records the original and canonical source spans.
+- Strengthened dynamic checker instructions for proposed fixes, preserving the three-cloze limit and higher-priority coverage. All eleven frozen prompts and the generation adapter remain unchanged.
+- Unified the visible sidebar and private evidence version as 16.3; the previous sidebar still displayed 16.1.
+
+### Added
+- Advisory checks for exposed numeric ranges, suspect numerical tested-target receipts, unexpected scripts and suggested fixes that may add bundles, invalid clozes, answer hints or priority loss.
+- A bounded review queue with covered-elsewhere, intentional-context and manually fixed decisions. Decisions become outdated after relevant changes and never block export.
+- Private report schema 3 includes pending/failed groups, attempt/session history, recovered citations and review-decision history.
+
+### Validation
+- The unified verifier passes 1,969 assertions, all eleven unchanged frozen prompt hashes, full JSX transformation and prompt/version checks. Synthetic Chrome acceptance, the actual sidebar version check and all ten CDN integrity checks pass. [Verification and limits](docs/reviews/anki-v16.3-implementation.md). No live Gemini calls or native Anki import are part of this update.
+
 ## [16.2] — 2026-09-13
 
 ### Changed

@@ -8,7 +8,8 @@
      Babel, so this adds narrow resource directives without a default-src/script-src migration. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net">
 <title>LATTE Study Suite</title>
-<!-- v16.2 (2026-09-13): Anki Flash/Medium default; source-only dynamic adapter, advisory retrieval/tag diagnostics, editable source links, explicit target/field check records, and reproducible private reports. All 11 frozen prompts, warning tiers and three-field exports are preserved. Local verification and measurement limits: docs/reviews/anki-v16.2-implementation.md.
+<!-- v16.3 (2026-09-13): resumable source checks, conservative citation recovery, recall/suggestion diagnostics and an advisory review queue. The sidebar and evidence version now agree. All 11 frozen prompts and export warning tiers are preserved. Verification: docs/reviews/anki-v16.3-implementation.md.
+     v16.2 (2026-09-13): Anki Flash/Medium default; source-only dynamic adapter, advisory retrieval/tag diagnostics, editable source links, explicit target/field check records, and reproducible private reports. All 11 frozen prompts, warning tiers and three-field exports are preserved. Local verification and measurement limits: docs/reviews/anki-v16.2-implementation.md.
      v16.1 (2026-09-11): Anki source fidelity and review tools; explicit empty-Extra default, source-supported explanations, many-to-many fact mapping, answer-exposure and source warnings, and an optional source check with reviewable suggestions. Only the approved Anki prompt baseline changes; Flash/Low, advisory warnings and three-field exports are preserved. Verification and measurement limits: docs/reviews/anki-v16.1-release.md.
      v16.0 (2026-09-11): light blue/orange study workspace; labeled workflow navigation, responsive settings and forms, accessible controls, readable study output and evidence panels. The single-file runtime, source processing, storage/export contracts and all 11 frozen prompts are preserved. Deterministic and isolated synthetic browser evidence: docs/reviews/visual-update-v16.0.md.
      v15.18 (2026-09-11): ordered KB persistence and recovery, operation/source ownership, complete numeric and worksheet contracts, honest audit exports, restricted generated resources, verified PDF worker bytes, robust SSE completion, and measured Anki rendering improvements. All 11 frozen prompts, transcription and resize settings, model profiles and token ceilings are unchanged. Verified by 1,345 assertions and isolated Chrome acceptance; live-material, native Anki import and native print acceptance remain outstanding.
@@ -4451,6 +4452,7 @@ function ankiExportText(cards,batch,current,tier,html,references){
 }
 // v16.0: actual review fronts can reveal an answer in another cloze or plain text.
 // Match complete literal tokens only; do not erase case, punctuation, units or signs.
+// v16.3: range connector equivalence can expose an answer while units and comparators still matter.
 function ankiAnswerExposure(card){
   const parsed=parseAnkiClozes(card&&card.text),out=[],normalize=s=>String(s||'').replace(/\s+/g,' ').trim();
   if(parsed.issues.length)return out;
@@ -4460,7 +4462,7 @@ function ankiAnswerExposure(card){
       const end=at+answer.length,before=front[at-1]||'',after=front[end]||'';
       if(joined(answer[0])&&joined(before)||joined(answer[answer.length-1])&&joined(after))continue;
       // A suffix of a decimal, signed value, fraction or compound unit is not the answer.
-      if(/^[+−-]?\d/.test(answer)&&/[\d.+−\/-]/.test(before))continue;
+      if(/^[+−-]?\d/.test(answer)&&(/[\d.+−–—\/-]/.test(before)||/[<>=≤≥]\s*$/.test(front.slice(0,at))))continue;
       if(/\d$/.test(answer)&&after==='.'&&/\d/.test(front[end+1]||''))continue;
       return true;
     }
@@ -4469,7 +4471,7 @@ function ankiAnswerExposure(card){
   for(const index of parsed.indices){
     const front=normalize(ankiRenderClozes(parsed,index));
     const answers=[...new Set(parsed.spans.filter(s=>s.index===index).map(s=>normalize(s.answer)))];
-    for(const answer of answers)if(answer&&occurs(front,answer))out.push({index,answer,front});
+    for(const answer of answers)if(answer&&occurs(ankiRecallRangeText(front),ankiRecallRangeText(answer)))out.push({index,answer,front});
   }
   return out;
 }
@@ -4648,84 +4650,149 @@ For targets present in several places, prefer tested active coverage over visibl
 noteReviews: exactly one receipt for every scopeNoteIds entry and no others. Each has exactly {"noteId":"eligible scoped note ID","text":{"status":"supported","evidence":[{"factId":"existing supplied fact ID","sourceSpan":"exact nonempty substring of that fact's text"}]},"extra":{"status":"empty","evidence":[]}}. Review every checkable assertion in revealed Text and Extra separately, including qualifiers, mechanisms, numbers and implied clinical relationships. Evidence spans come only from the supplied fact.text, never from the note itself, a source quote, or outside knowledge. Cite enough specific source spans to justify the field's claims; a shared condition or fact ID is not support. Preserve source wording exactly in evidence spans.
 Field status rules: supported requires nonempty evidence; unsupported may have empty evidence when no source supports the added claim; changed-meaning requires evidence showing what the source actually says; source-conflict requires source evidence and a matching source-conflict finding. For a field with several issues, use its most consequential status and explain all supported findings. Each unsupported or changed-meaning field requires a matching finding for that note. Only genuinely empty Extra uses status empty with empty evidence; Text cannot use empty. Do not infer a mechanism to justify a generic caption or restatement. Explain any unsupported clinical claim in findings; do not manufacture evidence spans for it.
 
-findings: [{"code":"unsupported|changed-meaning|missing-target|duplicate-target|priority-loss|source-conflict","factIds":["existing fact ID"],"noteIds":["existing note ID"],"message":"Specific short explanation quoting the changed or missing detail and its source context.","suggestion":"Concise source-supported revised wording or retrieval-target change; otherwise an empty string."}]. Use one allowed code per finding, not the pipe-separated string. All IDs must exist in this packet. unsupported needs an eligible note; changed-meaning needs an eligible note and a fact; priority-loss needs an existing note (even if out of tier) and a selected primary fact; missing-target needs a selected primary fact; duplicate-target needs at least two eligible notes; source-conflict needs at least one fact. Arrays may otherwise be empty. suggestion must be a string: propose concise revised wording or a retrieval-target change supported only by the supplied facts, without adding facts or automatically applying anything. Keep the original note intact. Use an empty suggestion when no source-supported correction can be established, including an unresolved source conflict; do not choose which conflicting source claim is clinically correct. source-conflict suggestions must be empty. Never create placeholder IDs.
+findings: [{"code":"unsupported|changed-meaning|missing-target|duplicate-target|priority-loss|source-conflict","factIds":["existing fact ID"],"noteIds":["existing note ID"],"message":"Specific short explanation quoting the changed or missing detail and its source context.","suggestion":"Concise source-supported revised wording or retrieval-target change; otherwise an empty string."}]. Use one allowed code per finding, not the pipe-separated string. All IDs must exist in this packet. unsupported needs an eligible note; changed-meaning needs an eligible note and a fact; priority-loss needs an existing note (even if out of tier) and a selected primary fact; missing-target needs a selected primary fact; duplicate-target needs at least two eligible notes; source-conflict needs at least one fact. Arrays may otherwise be empty. suggestion must be a string: propose concise revised wording or a retrieval-target change supported only by the supplied facts, without adding facts or automatically applying anything. Keep the original note intact. Any proposed complete note must use at most three distinct cloze indices (c1, c2, c3). When another independent target would exceed this limit or expand a shared-answer bundle, propose a separate note. Do not put the answer in its own hint. For duplicate removal or merging, identify the surviving kept note and preserve the substantive target in the selected tier, especially Tier 1; if coverage is uncertain, recommend review rather than deletion. Use an empty suggestion when no source-supported correction can be established, including an unresolved source conflict; do not choose which conflicting source claim is clinically correct. source-conflict suggestions must be empty. Never create placeholder IDs.
 
 If the group has no selected primary facts and no scoped notes, factReviews and noteReviews are empty arrays. If it also has no supported finding, return {"factReviews":[],"noteReviews":[],"findings":[]}. Otherwise all required receipts remain mandatory even with findings: []. Completed receipts show what was checked; they do not certify clinical correctness, complete target decomposition, or source entailment.
 
 AUDIT PACKET:
 `+JSON.stringify(group);
 }
-// v16.0: reject the complete audit response if any finding is malformed or references
-// material outside its packet; accepting a valid-looking subset hides audit failures.
+// v16.3: keep exact citations first; recover only uniquely located whitespace or
+// the first prose word's initial capital, never general case, symbols or wording.
+function ankiMatchSourceSpan(factText,span){
+  if(typeof factText!=='string'||typeof span!=='string'||!span.trim()||span.length>2000)return {ok:false,reason:'invalid-span'};
+  if(factText.includes(span))return {ok:true,sourceSpan:span,method:null};
+  const normalize=text=>{
+    let value='';const starts=[],ends=[];
+    for(let i=0;i<text.length;){
+      const start=i;if(/\s/.test(text[i])){while(i<text.length&&/\s/.test(text[i]))i++;value+=' ';}else{value+=text[i];i++;}
+      starts.push(start);ends.push(i);
+    }
+    return {value,starts,ends};
+  };
+  const source=normalize(factText),query=normalize(span).value;
+  const locations=needle=>{
+    const found=[];let pos=source.value.indexOf(needle);
+    while(pos>=0){found.push(pos);if(found.length>1)break;pos=source.value.indexOf(needle,pos+1);}
+    return found;
+  };
+  const originalAt=(pos,length)=>factText.slice(source.starts[pos],source.ends[pos+length-1]);
+  const recovered=(canonical,method)=>canonical.length<=2000?{ok:true,sourceSpan:canonical,method}:{ok:false,reason:'invalid-span'};
+  const white=locations(query);
+  if(white.length>1)return {ok:false,reason:'ambiguous-span'};
+  if(white.length===1)return recovered(originalAt(white[0],query.length),'whitespace');
+  // The case exception is deliberately narrower than lowercasing either string:
+  // only a complete, lowercased prose word at the start of the fact may recover.
+  const word=query.match(/^([a-z]{4,})\b/);
+  // v16.3: unit abbreviations cannot be exhaustively blacklisted. Only named prose words admit case recovery.
+  const prose=/^(?:lanugo|assess|assessment|administer|avoid|check|findings|maintain|management|monitor|observe|protect|report|symptoms|treatment)$/;
+  if(!word||!prose.test(word[1]))return {ok:false,reason:'no-source-match'};
+  const candidate=query[0].toUpperCase()+query.slice(1),positions=locations(candidate);
+  if(positions.length>1)return {ok:false,reason:'ambiguous-span'};
+  if(positions.length!==1||source.value.slice(0,positions[0]).trim()||/[A-Za-z0-9_]/.test(source.value[positions[0]+word[1].length]||''))return {ok:false,reason:'no-source-match'};
+  const canonical=originalAt(positions[0],candidate.length);
+  return recovered(canonical,span.slice(1)===canonical.slice(1)?'sentence-initial-case':'whitespace-and-sentence-initial-case');
+}
+// v16.3: a failed receipt needs a precise location for quarantine and an explicit
+// retry; the provider's untouched raw response remains the evidence of the attempt.
+function ankiAuditValidationError(group,path,reason,context={}){
+  const detail={groupId:typeof group?.id==='string'?group.id:null,path,factId:typeof context.factId==='string'?context.factId:null,noteId:typeof context.noteId==='string'?context.noteId:null,sourceSpan:typeof context.sourceSpan==='string'?context.sourceSpan:null,reason};
+  if(typeof context.matchReason==='string')detail.matchReason=context.matchReason;
+  const location=[detail.groupId,path,detail.factId,detail.noteId].filter(Boolean).join(' · ');
+  const error=new Error('Anki audit '+reason+(location?' ('+location+')':''));
+  error.code='anki-audit-validation';error.detail=detail;return error;
+}
 function ankiParseSourceAudit(raw,group){
-  // v16.2: findings-only replies hid skipped facts and notes; require scoped receipts
-  // and exact source spans without treating valid citations as semantic proof.
+  // v16.3: canonicalize only this parsed copy, recording every proven citation
+  // recovery; any schema, ID, coverage or unresolved citation error rejects it all.
+  const fail=(path,reason,context)=>{throw ankiAuditValidationError(group,path,reason,context);};
   let text=String(raw||'').trim();
   const fence=text.match(/^```(?:json)?\s*\n([\s\S]*?)\n```$/i);if(fence)text=fence[1].trim();
-  let parsed;try{parsed=JSON.parse(text);}catch(e){throw new Error('Anki audit returned invalid JSON.');}
+  let parsed;try{parsed=JSON.parse(text);}catch(e){fail('$','returned invalid JSON.');}
   const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x),exact=(x,keys)=>obj(x)&&Object.keys(x).length===keys.length&&keys.every(k=>Object.prototype.hasOwnProperty.call(x,k));
-  if(!exact(parsed,['factReviews','noteReviews','findings'])||!Array.isArray(parsed.findings)||parsed.findings.length>500||!Array.isArray(parsed.factReviews)||!Array.isArray(parsed.noteReviews))throw new Error('Anki audit returned an invalid receipt/findings schema.');
+  if(!exact(parsed,['factReviews','noteReviews','findings'])||!Array.isArray(parsed.findings)||parsed.findings.length>500||!Array.isArray(parsed.factReviews)||!Array.isArray(parsed.noteReviews))fail('$','returned an invalid receipt/findings schema.');
   const codes=new Set(['unsupported','changed-meaning','missing-target','duplicate-target','priority-loss','source-conflict']);
-  const facts=new Map(group.facts.map(f=>[f.id,f])),notes=new Map(group.notes.map(n=>[n.id,n])),primary=new Set(group.sourceFactIds),scope=new Set(group.scopeNoteIds);
+  const facts=new Map(group.facts.map(f=>[f.id,f])),notes=new Map(group.notes.map(n=>[n.id,n])),primary=new Set(group.sourceFactIds),scope=new Set(group.scopeNoteIds),citationRecoveries=[];
   const refs=(value,known)=>Array.isArray(value)&&new Set(value).size===value.length&&value.every(id=>typeof id==='string'&&known.has(id));
   for(let i=0;i<parsed.findings.length;i++){
-    const f=parsed.findings[i],bad=()=>{throw new Error('Anki audit finding '+(i+1)+' has an invalid schema, scope, or source reference.');};
+    const f=parsed.findings[i],path='findings['+i+']',bad=reason=>fail(path,reason||'finding has an invalid schema, scope, or source reference.');
     if(!exact(f,['code','factIds','noteIds','message','suggestion'])||!codes.has(f.code)||typeof f.message!=='string'||!f.message.trim()||f.message.length>2000||typeof f.suggestion!=='string'||f.suggestion.length>2000||!refs(f.factIds,facts)||!refs(f.noteIds,notes))bad();
     const active=f.noteIds.filter(id=>scope.has(id)&&notes.get(id).eligible);
-    if(f.code==='unsupported'&&!active.length)bad();
-    if(f.code==='changed-meaning'&&(!f.factIds.length||!active.length))bad();
-    if(f.code==='priority-loss'&&(!f.noteIds.length||!f.factIds.some(id=>primary.has(id)&&facts.get(id).inSelectedTier)))bad();
-    if(f.code==='missing-target'&&(!f.factIds.length||!f.factIds.some(id=>primary.has(id)&&facts.get(id).inSelectedTier)))bad();
-    if(f.code==='duplicate-target'&&active.length<2)bad();
-    if(f.code==='source-conflict'&&(!f.factIds.length||f.suggestion.trim()))bad();
+    if(f.code==='unsupported'&&!active.length)bad('unsupported finding needs an eligible scoped note.');
+    if(f.code==='changed-meaning'&&(!f.factIds.length||!active.length))bad('changed-meaning finding needs supplied facts and an eligible scoped note.');
+    if(f.code==='priority-loss'&&(!f.noteIds.length||!f.factIds.some(id=>primary.has(id)&&facts.get(id).inSelectedTier)))bad('priority-loss finding needs a selected primary fact and a note.');
+    if(f.code==='missing-target'&&(!f.factIds.length||!f.factIds.some(id=>primary.has(id)&&facts.get(id).inSelectedTier)))bad('missing-target finding needs a selected primary fact.');
+    if(f.code==='duplicate-target'&&active.length<2)bad('duplicate-target finding needs two eligible scoped notes.');
+    if(f.code==='source-conflict'&&(!f.factIds.length||f.suggestion.trim()))bad('source-conflict finding needs supplied facts and an empty suggestion.');
   }
   const selected=new Set([...primary].filter(id=>facts.get(id)?.inSelectedTier));
-  const receiptBad=label=>{throw new Error('Anki audit '+label+' has invalid or incomplete review receipts.');};
   const hasFinding=(code,factId,noteId)=>parsed.findings.some(f=>f.code===code&&(!factId||f.factIds.includes(factId))&&(!noteId||f.noteIds.includes(noteId)));
-  const sourceSpan=(id,span)=>facts.has(id)&&typeof span==='string'&&!!span.trim()&&span.length<=2000&&String(facts.get(id).text).includes(span);
-  const evidenceValid=value=>Array.isArray(value)&&value.length<=100&&new Set(value.map(e=>obj(e)?JSON.stringify([e.factId,e.sourceSpan]):null)).size===value.length&&value.every(e=>exact(e,['factId','sourceSpan'])&&sourceSpan(e.factId,e.sourceSpan));
-  if(parsed.factReviews.length!==selected.size||parsed.noteReviews.length!==scope.size)receiptBad('coverage');
+  const sourceSpan=(factId,span,path,noteId)=>{
+    const context={factId,noteId,sourceSpan:span};
+    if(!facts.has(factId))fail(path,'citation references an unknown source fact.',context);
+    const match=ankiMatchSourceSpan(facts.get(factId).text,span);
+    if(!match.ok)fail(path,match.reason==='ambiguous-span'?'citation has more than one possible source location; exact wording is required.':match.reason==='invalid-span'?'citation must be a nonempty source span of at most 2000 characters.':'citation is not an exact or safely recoverable substring of its source fact.',{...context,matchReason:match.reason});
+    if(match.method)citationRecoveries.push({groupId:typeof group.id==='string'?group.id:null,path,factId,noteId:typeof noteId==='string'?noteId:null,originalSourceSpan:span,sourceSpan:match.sourceSpan,method:match.method});
+    return match.sourceSpan;
+  };
+  if(parsed.factReviews.length!==selected.size)fail('factReviews','fact receipt count does not match the selected primary facts.');
+  if(parsed.noteReviews.length!==scope.size)fail('noteReviews','note receipt count does not match the scoped notes.');
   const seenFacts=new Set(),targetStatuses=new Set(['tested','visible-only','extra-only','missing','source-conflict','manual-excluded','out-of-tier','invalid-note']);
-  for(const review of parsed.factReviews){
-    if(!exact(review,['factId','targets'])||!selected.has(review.factId)||seenFacts.has(review.factId)||!Array.isArray(review.targets)||!review.targets.length||review.targets.length>100)receiptBad('fact');
+  for(const [i,review] of parsed.factReviews.entries()){
+    const path='factReviews['+i+']',context={factId:review?.factId};
+    if(!exact(review,['factId','targets'])||!selected.has(review.factId)||seenFacts.has(review.factId)||!Array.isArray(review.targets)||!review.targets.length||review.targets.length>100)fail(path,'fact receipt must uniquely cover a selected primary fact with 1–100 targets.',context);
     seenFacts.add(review.factId);const seenSpans=new Set();
-    for(const target of review.targets){
-      if(!exact(target,['sourceSpan','status','noteRefs'])||!sourceSpan(review.factId,target.sourceSpan)||seenSpans.has(target.sourceSpan)||!targetStatuses.has(target.status)||!Array.isArray(target.noteRefs))receiptBad('target');
+    for(const [j,target] of review.targets.entries()){
+      const targetPath=path+'.targets['+j+']';
+      if(!exact(target,['sourceSpan','status','noteRefs'])||!targetStatuses.has(target.status)||!Array.isArray(target.noteRefs))fail(targetPath,'target has an invalid schema or status.',context);
+      target.sourceSpan=sourceSpan(review.factId,target.sourceSpan,targetPath+'.sourceSpan',target.noteRefs[0]?.noteId);
+      if(seenSpans.has(target.sourceSpan))fail(targetPath+'.sourceSpan','target repeats a source span after citation recovery.',{...context,sourceSpan:target.sourceSpan});
       seenSpans.add(target.sourceSpan);const seenNotes=new Set();
-      for(const ref of target.noteRefs){
-        if(!exact(ref,['noteId','clozeIndices'])||!notes.has(ref.noteId)||seenNotes.has(ref.noteId)||!Array.isArray(ref.clozeIndices)||new Set(ref.clozeIndices).size!==ref.clozeIndices.length)receiptBad('target note');
+      for(const [k,ref] of target.noteRefs.entries()){
+        const refPath=targetPath+'.noteRefs['+k+']',refContext={...context,noteId:ref?.noteId,sourceSpan:target.sourceSpan};
+        if(!exact(ref,['noteId','clozeIndices'])||!notes.has(ref.noteId)||seenNotes.has(ref.noteId)||!Array.isArray(ref.clozeIndices)||new Set(ref.clozeIndices).size!==ref.clozeIndices.length)fail(refPath,'target note reference has an invalid schema, unknown ID or duplicate.',refContext);
         seenNotes.add(ref.noteId);const note=notes.get(ref.noteId),indices=new Set((note.reviewTargets||[]).map(r=>r.index));
-        if(ref.clozeIndices.some(index=>!Number.isSafeInteger(index)||index<1||!indices.has(index)))receiptBad('target cloze');
+        if(ref.clozeIndices.some(index=>!Number.isSafeInteger(index)||index<1||!indices.has(index)))fail(refPath+'.clozeIndices','target cites a cloze index absent from this note.',refContext);
         const active=scope.has(ref.noteId)&&note.eligible;
-        if(['tested','visible-only','extra-only'].includes(target.status)&&!active)receiptBad('target scope');
-        if(target.status==='tested'&&!ref.clozeIndices.length)receiptBad('tested target');
-        if(['visible-only','extra-only'].includes(target.status)&&ref.clozeIndices.length)receiptBad('untested target');
-        if(target.status==='extra-only'&&!String(note.extra||'').trim())receiptBad('Extra target');
-        if(target.status==='manual-excluded'&&note.keep)receiptBad('manual selection');
-        if(target.status==='out-of-tier'&&(!note.keep||!note.structurallyValid||note.inSelectedTier))receiptBad('tier selection');
-        if(target.status==='invalid-note'&&(!note.keep||note.structurallyValid))receiptBad('invalid note');
+        if(['tested','visible-only','extra-only'].includes(target.status)&&!active)fail(refPath,'active target status cites a note outside the eligible scope.',refContext);
+        if(target.status==='tested'&&!ref.clozeIndices.length)fail(refPath+'.clozeIndices','tested target needs at least one existing cloze index.',refContext);
+        if(['visible-only','extra-only'].includes(target.status)&&ref.clozeIndices.length)fail(refPath+'.clozeIndices','untested target must not claim a hidden cloze index.',refContext);
+        if(target.status==='extra-only'&&!String(note.extra||'').trim())fail(refPath,'Extra-only target cites an empty Extra field.',refContext);
+        if(target.status==='manual-excluded'&&note.keep)fail(refPath,'manual-excluded target cites a kept note.',refContext);
+        if(target.status==='out-of-tier'&&(!note.keep||!note.structurallyValid||note.inSelectedTier))fail(refPath,'out-of-tier target does not match the note selection.',refContext);
+        if(target.status==='invalid-note'&&(!note.keep||note.structurallyValid))fail(refPath,'invalid-note target does not match the note validity.',refContext);
       }
       if(target.status==='missing'){
-        if(target.noteRefs.length||!hasFinding('missing-target',review.factId))receiptBad('missing target');
+        if(target.noteRefs.length||!hasFinding('missing-target',review.factId))fail(targetPath,'missing target needs no note references and a matching missing-target finding.',context);
       }else if(target.status==='source-conflict'){
-        if(!hasFinding('source-conflict',review.factId))receiptBad('source conflict');
-      }else if(!target.noteRefs.length)receiptBad('target note coverage');
+        if(!hasFinding('source-conflict',review.factId))fail(targetPath,'source-conflict target needs a matching source-conflict finding.',context);
+      }else if(!target.noteRefs.length)fail(targetPath+'.noteRefs','target status needs a supporting note reference.',context);
     }
   }
   const seenNotes=new Set(),fieldStatuses=new Set(['supported','unsupported','changed-meaning','source-conflict']);
-  for(const review of parsed.noteReviews){
-    if(!exact(review,['noteId','text','extra'])||!scope.has(review.noteId)||!notes.get(review.noteId)?.eligible||seenNotes.has(review.noteId))receiptBad('note');
+  for(const [i,review] of parsed.noteReviews.entries()){
+    const path='noteReviews['+i+']',context={noteId:review?.noteId};
+    if(!exact(review,['noteId','text','extra'])||!scope.has(review.noteId)||!notes.get(review.noteId)?.eligible||seenNotes.has(review.noteId))fail(path,'note receipt must uniquely cover an eligible scoped note.',context);
     seenNotes.add(review.noteId);const note=notes.get(review.noteId);
     for(const field of ['text','extra']){
-      const receipt=review[field],empty=field==='extra'&&!String(note.extra||'').trim();
-      if(!exact(receipt,['status','evidence'])||!evidenceValid(receipt.evidence))receiptBad(field+' evidence');
-      if(empty){if(receipt.status!=='empty'||receipt.evidence.length)receiptBad('empty Extra');continue;}
-      if(!fieldStatuses.has(receipt.status)||(receipt.status!=='unsupported'&&!receipt.evidence.length))receiptBad(field+' status');
-      if(['unsupported','changed-meaning'].includes(receipt.status)&&!hasFinding(receipt.status,null,review.noteId))receiptBad(field+' finding');
-      if(receipt.status==='source-conflict'&&!receipt.evidence.some(e=>hasFinding('source-conflict',e.factId)))receiptBad(field+' source conflict');
+      const receipt=review[field],fieldPath=path+'.'+field,empty=field==='extra'&&!String(note.extra||'').trim();
+      if(!exact(receipt,['status','evidence'])||!Array.isArray(receipt.evidence)||receipt.evidence.length>100)fail(fieldPath,'field receipt needs a status and at most 100 evidence citations.',context);
+      const seenEvidence=new Set();
+      for(const [j,evidence] of receipt.evidence.entries()){
+        const evidencePath=fieldPath+'.evidence['+j+']';
+        if(!exact(evidence,['factId','sourceSpan']))fail(evidencePath,'evidence citation must contain only factId and sourceSpan.',context);
+        evidence.sourceSpan=sourceSpan(evidence.factId,evidence.sourceSpan,evidencePath+'.sourceSpan',review.noteId);
+        const key=JSON.stringify([evidence.factId,evidence.sourceSpan]);
+        if(seenEvidence.has(key))fail(evidencePath,'field repeats a source citation after recovery.',{...context,factId:evidence.factId,sourceSpan:evidence.sourceSpan});
+        seenEvidence.add(key);
+      }
+      if(empty){if(receipt.status!=='empty'||receipt.evidence.length)fail(fieldPath,'empty Extra requires status empty and no evidence.',context);continue;}
+      if(!fieldStatuses.has(receipt.status)||(receipt.status!=='unsupported'&&!receipt.evidence.length))fail(fieldPath,'field status is invalid or lacks required source evidence.',context);
+      if(['unsupported','changed-meaning'].includes(receipt.status)&&!hasFinding(receipt.status,null,review.noteId))fail(fieldPath,'field verdict needs a matching '+receipt.status+' finding.',context);
+      if(receipt.status==='source-conflict'&&!receipt.evidence.some(e=>hasFinding('source-conflict',e.factId)))fail(fieldPath,'field verdict needs a matching source-conflict finding.',context);
     }
   }
-  return {factReviews:parsed.factReviews,noteReviews:parsed.noteReviews,findings:parsed.findings.map(f=>({...f,factIds:[...f.factIds],noteIds:[...f.noteIds],message:f.message.trim(),suggestion:f.suggestion.trim()}))};
+  return {factReviews:parsed.factReviews,noteReviews:parsed.noteReviews,findings:parsed.findings.map(f=>({...f,factIds:[...f.factIds],noteIds:[...f.noteIds],message:f.message.trim(),suggestion:f.suggestion.trim()})),citationRecoveries};
 }
 
 // v16.2: complete fact coverage can coexist with an unmapped note. Manual link edits
@@ -4747,9 +4814,11 @@ function ankiSetSourceLinks(card,ids,snapshot,at=new Date().toISOString()){
 async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
+// v16.3: one runtime release value keeps the visible footer and private evidence aligned.
+function suiteVersion(){return '16.3';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
-  const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
+  const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review rejected groups and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
   return (current?'':'Outdated — ')+(labels[run.status]||'Check incomplete')+' · '+(run.results||[]).length+'/'+(run.groups||[]).length+' groups checked';
 }
 async function ankiSourceAuditEvidence(run,getInputs,exportedAt=new Date().toISOString()){
@@ -4757,16 +4826,160 @@ async function ankiSourceAuditEvidence(run,getInputs,exportedAt=new Date().toISO
   const cards=(run.cards||Array.from(new Map(groups.flatMap(g=>g.notes).map(n=>[n.id,n])).values())).map(c=>({id:c.id,chunk:c.chunk,sourceLine:c.sourceLine,text:c.text,extra:c.extra,tags:c.tags,keep:c.keep,factIds:[...(c.factIds||[])],mappingIssues:(c.mappingIssues||[]).map(x=>({...x})),sourceLinkEdits:c.sourceLinkEdits||[],conditionTagNormalization:c.conditionTagNormalization||null}));
   const [sourceSnapshotSha256,cardSnapshotSha256,builderSha256]=await Promise.all([ankiSha256(JSON.stringify(facts)),ankiSha256(JSON.stringify(cards)),run.builderSource?ankiSha256(run.builderSource):Promise.resolve(null)]);
   const inputs=typeof getInputs==='function'?getInputs():getInputs,current=ankiSourceAuditCurrent(run,inputs),checked=(run.results||[]).length,total=groups.length;
-  const status=current?run.status:'outdated',isComplete=current&&run.status==='complete'&&checked===total;
-  const metadata={schemaVersion:2,suiteVersion:'16.2',exportedAt,preparedAt:run.preparedAt||null,startedAt:run.startedAt||null,finishedAt:run.finishedAt||null,currentAtExport:current,checkComplete:isComplete,checkedGroups:checked,totalGroups:total,sourceSnapshotSha256,cardSnapshotSha256,hashEncoding:'SHA-256 of UTF-8 JSON: ordered captured fact context and current note fields; not the uploaded KB file bytes.',hashesAvailable:!!sourceSnapshotSha256&&!!cardSnapshotSha256,
+  // v16.3: equal counts alone could conceal duplicate or unresolved groups.
+  const pendingGroups=ankiSourceAuditPending(run).map(g=>g.id),status=current?run.status:'outdated',isComplete=current&&run.status==='complete'&&checked===total&&!pendingGroups.length&&!(run.failures||[]).length;
+  const metadata={schemaVersion:3,suiteVersion:suiteVersion(),exportedAt,preparedAt:run.preparedAt||null,startedAt:run.startedAt||null,finishedAt:run.finishedAt||null,currentAtExport:current,checkComplete:isComplete,checkedGroups:checked,totalGroups:total,pendingGroups,failedGroups:(run.failures||[]).map(f=>f.groupId),recoveredCitations:(run.results||[]).reduce((n,g)=>n+(g.citationRecoveries||[]).length,0),sourceSnapshotSha256,cardSnapshotSha256,hashEncoding:'SHA-256 of UTF-8 JSON: ordered captured fact context and current note fields; not the uploaded KB file bytes.',hashesAvailable:!!sourceSnapshotSha256&&!!cardSnapshotSha256,
     generation:{model:run.batch?.model||null,thinkingLevel:run.batch?.thinkingLevel||null,startedAt:run.batch?.startedAt||null,completedAt:run.batch?.completedAt||null,context:{outcomes:run.batch?.context?.outcomes||'',points:run.batch?.context?.points||'',focusContext:run.batch?.context?.focusContext||''},promptHashes:run.batch?.promptHashes||null},
     audit:{model:run.model||null,thinkingLevel:run.thinkingLevel||null,tier:run.tier,builderSha256,contract:'factReviews, noteReviews, findings; source support and actual recall targets',limitations:'Model judgments remain advisory; validated references and completed requests do not certify correctness or completeness.'}};
-  return {status,runStatus:run.status,message:run.message||'',model:run.model,thinkingLevel:run.thinkingLevel,tier:run.tier,metadata,groups,mappingDiagnostics:cards.map(c=>({noteId:c.id,factIds:c.factIds,mappingIssues:c.mappingIssues})),results:run.results||[],responses:run.responses||[],noteEdits:cards.filter(c=>c.sourceLinkEdits.length||c.conditionTagNormalization).map(c=>({noteId:c.id,sourceLinkEdits:c.sourceLinkEdits,conditionTagNormalization:c.conditionTagNormalization})),filename:'anki-source-'+(run.status==='prepared'?'packet':isComplete?'report':'incomplete')+'-'+status+'.json'};
+  return {status,runStatus:run.status,message:run.message||'',model:run.model,thinkingLevel:run.thinkingLevel,tier:run.tier,metadata,groups,mappingDiagnostics:cards.map(c=>({noteId:c.id,factIds:c.factIds,mappingIssues:c.mappingIssues})),results:run.results||[],responses:run.responses||[],failures:run.failures||[],failureHistory:run.failureHistory||[],sessions:run.sessions||[],reviewDecisions:ankiReviewDecisionEvidence(inputs?.reviewDecisions||[],inputs?.reviewItems||[],{...inputs,current},run),noteEdits:cards.filter(c=>c.sourceLinkEdits.length||c.conditionTagNormalization).map(c=>({noteId:c.id,sourceLinkEdits:c.sourceLinkEdits,conditionTagNormalization:c.conditionTagNormalization})),filename:'anki-source-'+(run.status==='prepared'?'packet':isComplete?'report':'incomplete')+'-'+status+'.json'};
 }
 
 // v16.0: audit validity follows the exact captured notes, source batch and export tier.
+// v16.3: normalize only explicit numeric range connectors for advisory exposure checks.
+// Values, signs, unit text, comparator direction, case and other punctuation remain intact.
+function ankiRecallRangeText(value){
+  return String(value||'').replace(/([+−-]?\d+(?:\.\d+)?)\s*(?:to|[–—-])\s*([+−-]?\d+(?:\.\d+)?)/g,'$1–$2');
+}
+// v16.3: a copied source span may name values that its cited cloze does not hide.
+// This is a literal-number cross-check, not a claim that every contextual number needs a card.
+function ankiRecallNumbers(value){
+  // v16.3: a space around a numeric slash does not change a ratio or compound range.
+  const text=ankiRecallRangeText(value).replace(/(\d)\s*\/\s*(?=\d)/g,'$1/'),out=[],seen=new Set();
+  for(const match of text.matchAll(/[+−-]?\d+(?:,\d{3})*(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?/g)){
+    const at=match.index,before=text[at-1]||'',after=text[at+match[0].length]||'';
+    if(/[\p{L}\p{N}_.]/u.test(before)||/^(?:st|nd|rd|th)\b/.test(text.slice(at+match[0].length)))continue;
+    if(after==='.'&&/\d/.test(text[at+match[0].length+1]||''))continue;
+    const token=match[0].replace(/,/g,'').replace('−','-');
+    if(!seen.has(token)){seen.add(token);out.push(token);}
+  }
+  return out;
+}
+// v16.3: build indexes once for each queue render; never scan the entire registry per finding.
+function ankiRecallContext(run,cards,batch){
+  const notes=cards||run?.cards||[...new Map((run?.groups||[]).flatMap(g=>g.notes||[]).map(n=>[n.id,n])).values()];
+  const facts=batch?.snapshot?.facts||run?.batch?.snapshot?.facts||[...new Map((run?.groups||[]).flatMap(g=>g.facts||[]).map(f=>[f.id,f])).values()];
+  const noteById=new Map(notes.map(n=>[n.id,n])),factById=new Map(facts.map(f=>[f.id,f])),byId=Object.create(null);
+  for(const fact of facts)byId[fact.id]=fact;
+  const noteSignatures=new Map(notes.map(n=>[n.id,JSON.stringify([n.text,n.extra,n.tags,!!n.keep,n.factIds||[],n.mappingIssues||[]])])),factSignatures=new Map(facts.map(f=>[f.id,JSON.stringify([f.condition,f.aliases||[],f.subtype,f.text,f.tier,f.bucket])])),parsedById=new Map(notes.map(n=>[n.id,parseAnkiClozes(n.text)]));
+  return {notes,facts,noteById,factById,noteSignatures,factSignatures,parsedById,snapshot:{facts,byId}};
+}
+function ankiRecallIssues(card,snapshot){
+  if(!card||lintAnkiCard(card).length)return [];
+  const ids=[...new Set(card.factIds||[])],noteIds=[card.id],indices=list=>(list||[]).map(index=>({noteId:card.id,index}));
+  const issues=ankiStyleWarnings(card).filter(w=>w.code==='answer-visible'||w.code==='list-recall').map(w=>({code:w.code,message:w.msg,noteIds,factIds:ids,clozeIndices:indices(w.indices),sourceSpan:''}));
+  const byId=snapshot?.byId||Object.fromEntries((snapshot?.facts||[]).map(f=>[f.id,f]));
+  if(!ids.length||ids.some(id=>!byId[id])||(card.mappingIssues||[]).length)return issues;
+  const source=ids.map(id=>{const f=byId[id];return [f.text,f.condition,...(f.aliases||[])].join(' ');}).join('\n'),text=String(card.text||'')+'\n'+String(card.extra||'');
+  // Latin accents and Greek medical symbols/units are deliberately not treated as foreign text.
+  // Common/Inherited punctuation and combining marks are also preserved without a warning.
+  const scripts=[['Cyrillic',/\p{Script=Cyrillic}/u],['Han',/\p{Script=Han}/u],['Hiragana',/\p{Script=Hiragana}/u],['Katakana',/\p{Script=Katakana}/u],['Hangul',/\p{Script=Hangul}/u],['Arabic',/\p{Script=Arabic}/u],['Hebrew',/\p{Script=Hebrew}/u],['Devanagari',/\p{Script=Devanagari}/u],['Bengali',/\p{Script=Bengali}/u],['Thai',/\p{Script=Thai}/u],['Armenian',/\p{Script=Armenian}/u],['Georgian',/\p{Script=Georgian}/u]];
+  const unexpected=scripts.filter(([,pattern])=>pattern.test(text)&&!pattern.test(source)).map(([name])=>name);
+  if(unexpected.length)issues.push({code:'unexpected-script',message:unexpected.join(', ')+' script appears in this note but not its linked source context. Review the wording; multilingual source text may be intentional.',noteIds,factIds:ids,clozeIndices:[],sourceSpan:''});
+  return issues;
+}
+function ankiReceiptRecallIssues(target,factId,run,context){
+  if(!target||target.status!=='tested')return [];
+  const ctx=context||ankiRecallContext(run),fact=ctx.factById.get(factId);
+  if(!fact||typeof target.sourceSpan!=='string'||!String(fact.text).includes(target.sourceSpan)||!Array.isArray(target.noteRefs)||!target.noteRefs.length)return [];
+  const sourceNumbers=ankiRecallNumbers(target.sourceSpan);if(!sourceNumbers.length)return [];
+  const hidden=[],clozeIndices=[],noteIds=[];
+  for(const ref of target.noteRefs){
+    const parsed=ctx.parsedById.get(ref.noteId);
+    if(!parsed||parsed.issues.length||!Array.isArray(ref.clozeIndices)||!ref.clozeIndices.length||ref.clozeIndices.some(index=>!parsed.indices.includes(index)))return [];
+    noteIds.push(ref.noteId);
+    for(const index of ref.clozeIndices){clozeIndices.push({noteId:ref.noteId,index});hidden.push(...parsed.spans.filter(s=>s.index===index).map(s=>s.answer));}
+  }
+  const hiddenNumbers=new Set(hidden.flatMap(ankiRecallNumbers)),missing=sourceNumbers.filter(n=>!hiddenNumbers.has(n));
+  if(!missing.length)return [];
+  return [{code:'receipt-number-mismatch',message:'The receipt marks this target tested, but source number(s) '+missing.join(', ')+' are absent from its referenced hidden answers. Check whether these are necessary context or missed recall targets; references alone do not prove recall.',noteIds:[...new Set(noteIds)],factIds:[factId],clozeIndices,sourceSpan:target.sourceSpan}];
+}
+function ankiSuggestionWarnings(finding,run,context){
+  const suggestion=String(finding?.suggestion||'');if(!suggestion.trim())return [];
+  const ctx=context||ankiRecallContext(run),notes=(finding.noteIds||[]).map(id=>ctx.noteById.get(id)).filter(Boolean),parsed=parseAnkiClozes(suggestion),out=[];
+  const add=(code,message)=>{if(!out.some(w=>w.code===code))out.push({code,message});};
+  const proposed=[...new Set(parsed.spans.map(s=>s.index))],fullReplacement=/^\s*\[[^\]{}]+\]/.test(suggestion),addition=/\b(?:add|append|include|insert|alongside)\b/i.test(suggestion);
+  // v16.3: malformed cloze syntax in a suggested edit needs review before manual copying.
+  if(/\{\{|\}\}/.test(suggestion)&&parsed.issues.length)add('suggestion-cloze-syntax','The proposed text contains malformed cloze syntax. Review or rewrite it before applying it to a note.');
+  if(proposed.length>3)add('suggestion-cloze-limit','The proposed text contains more than three distinct cloze indices. Split or replace targets deliberately before applying it.');
+  for(const note of notes){
+    const existing=ctx.parsedById.get(note.id);if(!existing||existing.issues.length)continue;
+    if(!fullReplacement&&proposed.some(n=>!existing.indices.includes(n))&&new Set([...existing.indices,...proposed]).size>3)add('suggestion-cloze-limit','Inserting the proposed cloze into the referenced note would exceed three distinct indices. Check whether a replacement or a separate note is intended.');
+    const before={},after={};for(const s of existing.spans)before[s.index]=(before[s.index]||0)+1;for(const s of parsed.spans)after[s.index]=(after[s.index]||0)+1;
+    if(proposed.some(n=>fullReplacement?(after[n]||0)>(before[n]||0)&&(after[n]||0)>=3:addition&&(before[n]||0)>=2))add('suggestion-shared-bundle','The suggestion may increase the number of answers hidden together under one index. Check independently gradable targets before applying it.');
+  }
+  for(const span of parsed.spans)if(span.hint&&ankiAnswerExposure({text:suggestion.slice(span.start,span.end)}).length)add('suggestion-answer-hint','A proposed hint includes a hidden answer. Check whether that recognition cue is intentional; it may give the answer away.');
+  if(finding.code==='duplicate-target'&&/\b(?:remove|retire|delete|drop|consolidate|merge)\b/i.test(suggestion)&&notes.some(n=>ankiTier(n.tags)==='1')&&notes.some(n=>['2','3'].includes(ankiTier(n.tags))))add('suggestion-tier-loss','The referenced duplicates span Tier 1 and a lower tier. Preserve needed Tier 1 recall before removing, replacing or consolidating a note.');
+  return out;
+}
+function ankiAuditReviewItems(run,cards,batch,tier='all'){
+  const rows=cards||[],ctx=ankiRecallContext(run,rows,batch),items=new Map(),sortIds=ids=>[...new Set(ids||[])].sort(),selected=ankiSelection(rows,true,tier).kept,active=new Set(selected.map(n=>n.id));
+  const add=(issue,source,suggestion='',suggestionWarnings=[])=>{
+    const noteIds=sortIds(issue.noteIds).filter(id=>ctx.noteById.has(id)),factIds=sortIds(issue.factIds).filter(id=>ctx.factById.has(id)),clozeIndices=[...new Map((issue.clozeIndices||[]).map(ref=>[JSON.stringify([ref.noteId,ref.index]),{noteId:ref.noteId,index:ref.index}])).values()].sort((a,b)=>a.noteId.localeCompare(b.noteId)||a.index-b.index),sourceSpan=issue.sourceSpan||'';
+    // Findings have no sourceSpan field; keep different claims about the same notes separate.
+    const key=JSON.stringify([source,issue.code,noteIds,factIds,clozeIndices,sourceSpan,source==='finding'?issue.message:'']);
+    const item={key,code:issue.code,message:issue.message,noteIds,factIds,clozeIndices,sourceSpan,suggestion,suggestionWarnings,source};
+    item.signature=JSON.stringify([key,item.message,suggestion,suggestionWarnings,tier,noteIds.map(id=>ctx.noteSignatures.get(id)),factIds.map(id=>ctx.factSignatures.get(id))]);
+    if(!items.has(key))items.set(key,item);
+  };
+  // Stale audit claims stay in their report; only current validated results enter the active queue.
+  if(ankiSourceAuditCurrent(run,{cards,batch,tier,current:true})){
+    const codes=new Set(['unsupported','changed-meaning','missing-target','duplicate-target','priority-loss','source-conflict']);
+    for(const result of run.results||[]){
+      for(const finding of result.findings||[]){
+        if(!codes.has(finding.code)||typeof finding.message!=='string'||!finding.message.trim()||typeof finding.suggestion!=='string'||!Array.isArray(finding.noteIds)||!Array.isArray(finding.factIds)||finding.noteIds.some(id=>!ctx.noteById.has(id))||finding.factIds.some(id=>!ctx.factById.has(id)))continue;
+        add({...finding,clozeIndices:[],sourceSpan:''},'finding',finding.suggestion||'',ankiSuggestionWarnings(finding,run,ctx));
+      }
+      for(const factReview of result.factReviews||[]){
+        const fact=ctx.factById.get(factReview.factId);if(!fact)continue;
+        for(const target of factReview.targets||[]){
+          if(typeof target.sourceSpan!=='string'||!target.sourceSpan.trim()||!String(fact.text).includes(target.sourceSpan)||!Array.isArray(target.noteRefs)||!target.noteRefs.length||target.noteRefs.some(ref=>!active.has(ref.noteId)||!Array.isArray(ref.clozeIndices)))continue;
+          if(['visible-only','extra-only'].includes(target.status)&&target.noteRefs.some(ref=>ref.clozeIndices.length||target.status==='extra-only'&&!String(ctx.noteById.get(ref.noteId).extra||'').trim()))continue;
+          if(target.status==='visible-only'||target.status==='extra-only')add({code:target.status,message:target.status==='visible-only'?'This source detail is visible context in the cited review. Decide whether it needs separate recall or is already tested elsewhere.':'This source detail is only in Extra in the cited review. Decide whether it is useful explanation or a substantive target needing recall.',noteIds:target.noteRefs.map(r=>r.noteId),factIds:[factReview.factId],clozeIndices:[],sourceSpan:target.sourceSpan},'receipt');
+          for(const issue of ankiReceiptRecallIssues(target,factReview.factId,run,ctx))add(issue,'receipt');
+        }
+      }
+    }
+  }
+  for(const card of selected)for(const issue of ankiRecallIssues(card,ctx.snapshot))add(issue,'local');
+  return [...items.values()];
+}
+
 function ankiSourceAuditCurrent(run,inputs){
   return !!run&&!!run.batch&&!!inputs&&!!inputs.current&&run.cards===inputs.cards&&run.batch===inputs.batch&&run.tier===inputs.tier;
+}
+// v16.3: accepted groups are durable; explicit resume retries only unaccepted groups.
+function ankiSourceAuditPending(run){
+  const accepted=new Set((run?.results||[]).map(r=>r.groupId));
+  return (run?.groups||[]).filter(g=>!accepted.has(g.id));
+}
+// v16.3: publish independent snapshots and close the active session/attempt on every stop.
+function ankiSourceAuditState(run,status,message='',at=new Date().toISOString()){
+  run.status=status;run.message=message;run.finishedAt=status==='running'?null:at;
+  if(status!=='running'){
+    run.sessions=(run.sessions||[]).map((s,i)=>i===(run.sessions||[]).length-1&&!s.finishedAt?{...s,status,finishedAt:at}:s);
+    run.responses=(run.responses||[]).map(r=>r.finishedAt?r:{...r,finishedAt:at,aborted:status==='cancelled'||status==='interrupted',error:message||'Source check stopped before a response was accepted.',type:'transport'});
+  }
+  return {...run,ctl:undefined,results:[...(run.results||[])],responses:(run.responses||[]).map(r=>({...r,usage:r.usage?{...r.usage}:null})),failures:(run.failures||[]).map(f=>({...f})),failureHistory:(run.failureHistory||[]).map(f=>({...f})),sessions:(run.sessions||[]).map(s=>({...s,groupIds:[...s.groupIds]}))};
+}
+// v16.3: acknowledgements describe an exact selection; a note edit or new audit cannot inherit clearance.
+function ankiReviewDecisionCurrent(decision,item,inputs,run){
+  if(!decision||!item||!inputs?.current||decision.key!==item.key||decision.signature!==item.signature)return false;
+  const scope=decision.scope;
+  if(!scope||scope.cards!==inputs.cards||scope.batch!==inputs.batch||scope.tier!==inputs.tier)return false;
+  if(item.source!=='local'&&(!ankiSourceAuditCurrent(run,inputs)||scope.preparedAt!==run.preparedAt))return false;
+  return true;
+}
+function ankiMakeReviewDecision(item,disposition,coveredBy,reason,inputs,run,at=new Date().toISOString()){
+  if(!item||!inputs?.current)throw Error('Review the current notes and source first.');
+  if(!['covered-elsewhere','intentional-context','fixed','unresolved'].includes(disposition))throw Error('Choose a review decision.');
+  if(item.source!=='local'&&!ankiSourceAuditCurrent(run,inputs))throw Error('Prepare a new check before resolving an outdated audit item.');
+  if(disposition==='covered-elsewhere'&&!ankiSelection(inputs.cards,true,inputs.tier).kept.some(c=>c.id===coveredBy))throw Error('Choose an eligible kept note in the selected export tier.');
+  return {key:item.key,signature:item.signature,code:item.code,noteIds:[...item.noteIds],factIds:[...item.factIds],disposition,coveredBy:disposition==='covered-elsewhere'?coveredBy:null,reason:String(reason||'').trim(),at,scope:{cards:inputs.cards,batch:inputs.batch,tier:inputs.tier,preparedAt:item.source==='local'?null:run.preparedAt}};
+}
+function ankiReviewDecisionEvidence(decisions,items,inputs,run){
+  const indexed=new Map(items.map(item=>[item.key,item])),latest=new Map(decisions.map(d=>[d.key,d]));
+  // v16.3: export explicit review records without source object references or runtime credentials.
+  return decisions.map(d=>({key:d.key,code:d.code,noteIds:[...d.noteIds],factIds:[...d.factIds],disposition:d.disposition,coveredBy:d.coveredBy,reason:d.reason,at:d.at,current:latest.get(d.key)===d&&ankiReviewDecisionCurrent(d,indexed.get(d.key),inputs,run),superseded:latest.get(d.key)!==d,tier:d.scope.tier,auditPreparedAt:d.scope.preparedAt}));
 }
 function AnkiStyleBadges({issues}){
   return issues.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:4,marginTop:5}}>{issues.map(x=><span key={x.code} title={x.msg} style={{fontSize:12,color:'var(--accent-warm)'}}>⚠ {x.msg}</span>)}</div>;
@@ -4865,6 +5078,36 @@ function TierBadge({tier}){
   return <span className={`tier-badge ${cls}`}>{label}</span>;
 }
 
+// v16.3: bounded review rows keep large decks usable; decisions never mutate notes or export eligibility.
+function AnkiReviewQueue({items,decisions,inputs,run,eligible,onDecision,onOpen,onEdit,disabled}){
+  const [showResolved,setShowResolved]=useState(false),[limit,setLimit]=useState(25),[activeKey,setActiveKey]=useState(null);
+  const latest=useMemo(()=>{const map=new Map();for(const d of decisions)map.set(d.key,d);return map;},[decisions]);
+  const resolved=item=>{const d=latest.get(item.key);return ankiReviewDecisionCurrent(d,item,inputs,run)&&d.disposition!=='unresolved'?d:null;};
+  const unresolved=items.filter(item=>!resolved(item)),shown=(showResolved?items:unresolved),active=items.find(item=>item.key===activeKey);
+  return <details data-anki-review-queue style={{margin:'12px 0',padding:10,border:'1px solid var(--border)',borderRadius:8}}><summary>Review queue · {unresolved.length} unresolved / {items.length} items</summary>
+    <p>Local checks and accepted source-check records identify possible recall gaps. Review the source and other kept notes before deciding. These are advisory; your decisions do not change the cards or block export.</p>
+    <label><input type="checkbox" checked={showResolved} onChange={e=>setShowResolved(e.target.checked)}/>Show resolved items</label>
+    {!items.length&&<p>No current queue items. This does not certify recall coverage.</p>}
+    <div>{shown.slice(0,limit).map(item=><div key={item.key} style={{padding:8,borderBottom:'1px solid var(--border)'}}><button className="btn-ghost" aria-pressed={item.key===activeKey} onClick={()=>setActiveKey(item.key)}>{item.code} · {item.noteIds.join(', ')||item.factIds.join(', ')}</button><span>{resolved(item)?' · '+resolved(item).disposition:' · unresolved'}</span><div>{item.message}</div></div>)}</div>
+    {shown.length>limit&&<button className="btn-secondary" onClick={()=>setLimit(n=>n+25)}>Show 25 more review items</button>}
+    {active&&<AnkiReviewDecisionForm key={active.key+active.signature} item={active} decision={resolved(active)} snapshot={inputs.batch?.snapshot} eligible={eligible} onSave={onDecision} onOpen={onOpen} onEdit={onEdit} disabled={disabled}/>}
+  </details>;
+}
+function AnkiReviewDecisionForm({item,decision,snapshot,eligible,onSave,onOpen,onEdit,disabled}){
+  const [disposition,setDisposition]=useState(decision?.disposition||'intentional-context'),[coveredBy,setCoveredBy]=useState(decision?.coveredBy||''),[reason,setReason]=useState(decision?.reason||''),[search,setSearch]=useState(''),[error,setError]=useState('');
+  const choices=useMemo(()=>eligible.filter(c=>!search||[c.id,c.text].join(' ').toLowerCase().includes(search.toLowerCase())).slice(0,50),[eligible,search]);
+  return <div data-anki-review-decision style={{marginTop:12,padding:10,border:'1px solid var(--accent)',borderRadius:8}}>
+    <b>{item.code}</b><p>{item.message}</p><details><summary>Captured source facts ({item.factIds.length})</summary>{(snapshot?.facts||[]).filter(f=>item.factIds.includes(f.id)).map(f=><div key={f.id} style={{padding:8,whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}><b>{f.id} · {f.condition} · Tier {f.tier}</b><p>{f.text}</p></div>)}</details>{item.sourceSpan&&<p style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>Source target: {item.sourceSpan}</p>}
+    <div>{item.noteIds.map(id=><span key={id}><button className="btn-ghost" onClick={()=>onOpen(id,item.clozeIndices.find(x=>x.noteId===id)?.index)}>Open {id}</button><button className="btn-ghost" onClick={()=>onEdit(id)}>Edit {id} in Table</button></span>)}</div>
+    {item.suggestion&&<p style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}><strong>Proposed edit to review:</strong> {item.suggestion}</p>}
+    {item.suggestionWarnings.map((w,i)=><p key={i} style={{color:'var(--accent-warm)'}}>⚠ {w.message}</p>)}
+    <p>“Fixed” records your review; it does not mean an AI recheck passed. Editing a note, changing tiers or replacing the source makes earlier decisions outdated.</p>
+    <label>Review decision <select aria-label="Review decision" value={disposition} disabled={disabled} onChange={e=>setDisposition(e.target.value)}><option value="intentional-context">Intentional context</option><option value="covered-elsewhere">Covered elsewhere</option><option value="fixed">Fixed — reviewed manually</option><option value="unresolved">Leave unresolved</option></select></label>
+    {disposition==='covered-elsewhere'&&<div><label>Find a kept note <input aria-label="Find a kept note" value={search} onChange={e=>setSearch(e.target.value)}/></label><label>Covered by note <select aria-label="Covered by note" value={coveredBy} onChange={e=>setCoveredBy(e.target.value)}><option value="">Choose a kept note</option>{coveredBy&&!choices.some(c=>c.id===coveredBy)&&eligible.some(c=>c.id===coveredBy)&&<option value={coveredBy}>{coveredBy}</option>}{choices.map(c=><option key={c.id} value={c.id}>{c.id} · {c.text.slice(0,120)}</option>)}</select></label><p>Showing up to 50 matches from the selected export tier. Confirm that the chosen cloze actually tests this target.</p>{coveredBy&&<button className="btn-ghost" onClick={()=>onOpen(coveredBy)}>Review covering note</button>}</div>}
+    <label>Review reason (optional) <textarea aria-label="Review reason" value={reason} onChange={e=>setReason(e.target.value)} rows={2}/></label>
+    <button className="btn-secondary" disabled={disabled} onClick={()=>{try{onSave(item,disposition,coveredBy,reason);setError('');}catch(e){setError(e.message);}}}>Save review decision</button>{decision&&<p role="status">Saved: {decision.disposition}</p>}{error&&<p role="alert">{error}</p>}
+  </div>;
+}
 function AnkiGenerator(){
   // v16.0: full-opacity text preserves contrast; background and checkboxes convey exclusions.
   // v16.0: named controls, visible selection states, and reflowing groups replace inaccessible fixed layouts.
@@ -4888,6 +5131,7 @@ function AnkiGenerator(){
   const [inspectNote,setInspectNote]=useState(null);
   const [editFocus,setEditFocus]=useState(null);
   const [sourceAudit,setSourceAudit]=useState(null);
+  const [reviewDecisions,setReviewDecisions]=useState([]);
   const [auditBusy,setAuditBusy]=useState(false);
   // v16.2: source checking has its own explicit settings; changing generation settings is not an audit experiment.
   const [auditFamily,setAuditFamily]=useState('flash'),[auditLevel,setAuditLevel]=useState('medium');
@@ -4905,7 +5149,7 @@ function AnkiGenerator(){
     const run=auditRun.current;
     if(run&&!ankiSourceAuditCurrent(run,auditInputs.current)){
       run.ctl.abort();auditRun.current=null;setAuditBusy(false);
-      setSourceAudit(p=>p?{...p,status:'interrupted',finishedAt:new Date().toISOString(),message:'Notes, tier selection or Knowledge Base changed. Prepare a new check.'}:p);
+      setSourceAudit(ankiSourceAuditState(run,'interrupted','Notes, tier selection or Knowledge Base changed. Prepare a new check.'));
     }
   },[cards,batch,tierFilter,current]);
   useEffect(()=>()=>{auditRun.current?.ctl.abort();auditRun.current=null;},[]);
@@ -4920,6 +5164,15 @@ function AnkiGenerator(){
   const sourceLinkIssues=useMemo(()=>new Map(cards.map(c=>[c.id,ankiSourceLinkStatus(c,batch?.snapshot)])),[cards,batch]);
   const conditionTagIssues=useMemo(()=>new Map(cards.map(c=>[c.id,ankiConditionTagCheck(c,batch?.snapshot,conditionIndex)])),[cards,batch,conditionIndex]);
   const selected=useMemo(()=>ankiSelection(cards,current,tierFilter),[cards,current,tierFilter]);
+  // v16.3: stale checks retain downloadable evidence but cannot contribute current queue claims.
+  const reviewItems=useMemo(()=>current?ankiAuditReviewItems(ankiSourceAuditCurrent(sourceAudit,{cards,batch,tier:tierFilter,current})?sourceAudit:null,cards,batch,tierFilter):[],[sourceAudit,cards,batch,tierFilter,current]);
+  auditInputs.current={...auditInputs.current,reviewItems,reviewDecisions,reviewRun:sourceAudit};
+  useEffect(()=>setReviewDecisions([]),[batch]);
+  const saveReviewDecision=(item,disposition,coveredBy,reason)=>{
+    if(busy||!reviewItems.some(x=>x.key===item.key&&x.signature===item.signature))throw Error('Review this item again after the notes finish changing.');
+    const decision=ankiMakeReviewDecision(item,disposition,coveredBy,reason,auditInputs.current,sourceAudit);
+    setReviewDecisions(previous=>[...previous,decision]);
+  };
   // v15.17: changing one note previously reparsed every unchanged note and linked source.
   const numericCache=useMemo(()=>new WeakMap(),[batch,current]);
   const numericAudits=useMemo(()=>new Map(cards.map(c=>{if(!numericCache.has(c))numericCache.set(c,ankiNumericAudit(c,batch,current));return[c.id,numericCache.get(c)];})),[cards,batch,current,numericCache]);
@@ -4971,37 +5224,67 @@ function AnkiGenerator(){
 
   // v16.0: preparing a source check is local; only its explicit Run button consumes API quota.
   const prepareSourceAudit=()=>{
-    if(!current||busy||auditBusy)return;
+    if(!current||busy||auditBusy||auditRun.current)return;
     try{
       const groups=ankiAuditGroups(cards,batch,tierFilter);
-      setSourceAudit({cards,batch,tier:tierFilter,model:auditModel,thinkingLevel:auditLevel,groups,status:'prepared',preparedAt:new Date().toISOString(),builderSource:ankiBuildSourceAuditPrompt.toString(),results:[],responses:[],message:''});
-    }catch(e){setSourceAudit({cards,batch,tier:tierFilter,status:'failed',groups:[],results:[],responses:[],message:e.message});}
+      // v16.3: capture exact request text now so a resume cannot silently rebuild another prompt.
+      const prompts=groups.map(group=>({groupId:group.id,text:ankiBuildSourceAuditPrompt(group)}));
+      setSourceAudit({cards,batch,tier:tierFilter,model:auditModel,thinkingLevel:auditLevel,groups,prompts,status:'prepared',preparedAt:new Date().toISOString(),builderSource:ankiBuildSourceAuditPrompt.toString(),results:[],responses:[],failures:[],failureHistory:[],sessions:[],message:''});
+    }catch(e){setSourceAudit({cards,batch,tier:tierFilter,status:'failed',groups:[],results:[],responses:[],failures:[],failureHistory:[],sessions:[],message:e.message});}
   };
   const runSourceAudit=async()=>{
-    if(!sourceAudit||auditBusy||busy||!ankiSourceAuditCurrent(sourceAudit,auditInputs.current))return;
-    if(!cfg.apiKey){setSourceAudit(p=>({...p,message:'Enter an API key before running the source check.'}));return;}
-    // v16.2: capture execution timestamps separately from local preparation.
-    const run={...sourceAudit,startedAt:new Date().toISOString(),finishedAt:null,ctl:new AbortController(),results:[],responses:[]};auditRun.current=run;setAuditBusy(true);
-    const publish=(status,message='')=>setSourceAudit({...run,ctl:undefined,status,message,finishedAt:status==='running'?null:new Date().toISOString(),results:[...run.results],responses:[...run.responses]});
+    if(!sourceAudit||!sourceAudit.preparedAt||auditBusy||busy||auditRun.current||!ankiSourceAuditCurrent(sourceAudit,auditInputs.current))return;
+    const pending=ankiSourceAuditPending(sourceAudit);
+    if(!pending.length&&sourceAudit.status==='complete')return;
+    if(pending.length&&!cfg.apiKey){setSourceAudit(p=>({...p,message:'Enter an API key before running the source check.'}));return;}
+    if(pending.some(group=>!(sourceAudit.prompts||[]).some(p=>p.groupId===group.id&&typeof p.text==='string'))){setSourceAudit(p=>({...p,message:'Captured request text is unavailable. Prepare a new source check.'}));return;}
+    // v16.3: preserve accepted results and every prior attempt while starting a new explicit session.
+    const at=new Date().toISOString(),apiKey=cfg.apiKey;
+    const run={...sourceAudit,startedAt:sourceAudit.startedAt||at,finishedAt:null,ctl:new AbortController(),results:[...(sourceAudit.results||[])],responses:(sourceAudit.responses||[]).map(r=>({...r})),failures:[...(sourceAudit.failures||[])],failureHistory:[...(sourceAudit.failureHistory||[])],sessions:[...(sourceAudit.sessions||[]),{session:(sourceAudit.sessions||[]).length+1,groupIds:pending.map(g=>g.id),startedAt:at,finishedAt:null,status:'running'}]};
+    auditRun.current=run;setAuditBusy(true);
+    const publish=(status,message='')=>setSourceAudit(ankiSourceAuditState(run,status,message));
+    const guard=()=>{
+      if(auditRun.current!==run)return false;
+      if(!ankiSourceAuditCurrent(run,auditInputs.current)){run.ctl.abort();publish('interrupted','Notes or source changed. Prepare a new check.');return false;}
+      return true;
+    };
+    const errorText=e=>{const message=String(e?.message||e||'Source check failed.');return apiKey?message.split(apiKey).join('[redacted]'):message;};
+    const failure=(group,response,type,e)=>{
+      const item={groupId:group.id,error:errorText(e),detail:e?.detail||{groupId:group.id},attempt:response.attempt,at:new Date().toISOString(),type};
+      response.error=item.error;response.detail=item.detail;response.type=type;
+      run.failures=[...run.failures.filter(f=>f.groupId!==group.id),item];run.failureHistory.push(item);
+    };
     publish('running');
     try{
-      for(const group of run.groups){
-        if(auditRun.current!==run)return;
-        if(!ankiSourceAuditCurrent(run,auditInputs.current)){publish('interrupted','Notes or source changed. Prepare a new check.');return;}
-        let usage=null,truncated=false;
-        const raw=await callGemini(cfg.apiKey,run.model,[{text:ankiBuildSourceAuditPrompt(group)}],{thinkingLevel:run.thinkingLevel,signal:run.ctl.signal,onMeta:m=>{if(m.usage)usage=m.usage;if(m.truncated)truncated=true;}});
-        if(auditRun.current!==run)return;
-        if(!ankiSourceAuditCurrent(run,auditInputs.current)){publish('interrupted','Notes or source changed. Prepare a new check.');return;}
-        run.responses.push({groupId:group.id,raw,usage,truncated});
-        if(truncated)throw Error('Source check was truncated; completed groups are retained.');
-        const result=ankiParseSourceAudit(raw,group);
-        run.results.push({groupId:group.id,...result});publish('running');
+      for(const group of pending){
+        if(!guard())return;
+        const previous=run.responses.filter(r=>r.groupId===group.id),attempt=Math.max(0,...previous.map((r,i)=>Number.isInteger(r.attempt)?r.attempt:i+1))+1;
+        const response={groupId:group.id,attempt,startedAt:new Date().toISOString(),finishedAt:null,raw:null,usage:null,truncated:false};
+        run.responses.push(response);publish('running');
+        let raw;
+        try{
+          raw=await callGemini(apiKey,run.model,[{text:run.prompts.find(p=>p.groupId===group.id).text}],{thinkingLevel:run.thinkingLevel,signal:run.ctl.signal,onMeta:m=>{if(auditRun.current===run&&!run.ctl.signal.aborted){if(m.usage)response.usage={...m.usage};if(m.truncated)response.truncated=true;}}});
+        }catch(e){
+          if(!guard())return;
+          response.finishedAt=new Date().toISOString();if(e.name==='AbortError')response.aborted=true;
+          failure(group,response,'transport',e);publish(e.name==='AbortError'?'cancelled':'failed',errorText(e));return;
+        }
+        if(!guard())return;
+        response.raw=raw;response.finishedAt=new Date().toISOString();
+        // v16.3: a malformed or truncated group is quarantined; other independent groups still run.
+        if(response.truncated){failure(group,response,'truncated',Error('Source-check response was truncated.'));publish('running');continue;}
+        try{
+          const result=ankiParseSourceAudit(raw,group);
+          run.results.push({groupId:group.id,...result});run.failures=run.failures.filter(f=>f.groupId!==group.id);response.accepted=true;
+        }catch(e){failure(group,response,'validation',e);}
+        publish('running');
       }
-      publish('complete');
-    }catch(e){if(auditRun.current===run)publish(e.name==='AbortError'?'cancelled':'failed',e.message);}
+      const remaining=ankiSourceAuditPending(run).length;
+      publish(remaining?'partial':'complete',remaining?'Some groups need another check. Accepted results and all attempts are retained.':'');
+    }catch(e){if(guard())publish(e.name==='AbortError'?'cancelled':'failed',errorText(e));}
     finally{if(auditRun.current===run){auditRun.current=null;setAuditBusy(false);}}
   };
-  const cancelSourceAudit=()=>{const run=auditRun.current;if(run){run.ctl.abort();auditRun.current=null;setAuditBusy(false);setSourceAudit(p=>({...p,status:'cancelled',finishedAt:new Date().toISOString(),message:'Completed source-check groups are retained.'}));}};
+  const cancelSourceAudit=()=>{const run=auditRun.current;if(run){run.ctl.abort();auditRun.current=null;setAuditBusy(false);setSourceAudit(ankiSourceAuditState(run,'cancelled','Completed source-check groups are retained.'));}};
   const openNote=(id,index)=>{setInspectNote({id,index});};
   const editNote=id=>{setView('table');setStyleOnly(false);setWarningFilter('all');setEditFocus(id);};
   const saveSourceAudit=async()=>{
@@ -5245,12 +5528,15 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
           {sourceAudit&&<div>
             <p role="status">{ankiSourceAuditLabel(sourceAudit,ankiSourceAuditCurrent(sourceAudit,auditInputs.current))}{!ankiSourceAuditCurrent(sourceAudit,auditInputs.current)&&' · outdated for the current notes or source'}</p>
             {sourceAudit.message&&<p>{sourceAudit.message}</p>}
-            {sourceAudit.status==='prepared'&&<><p>{sourceAudit.groups.length} model request(s) · {sourceAudit.model} / {sourceAudit.thinkingLevel}. Run uses API quota; transport retries may add attempts. Settings are captured when you prepare; prepare again to use a different checker.</p><button className="btn-secondary" disabled={!sourceAudit.groups.length||busy||auditBusy||!ankiSourceAuditCurrent(sourceAudit,auditInputs.current)} onClick={runSourceAudit}>Run {sourceAudit.groups.length} source check(s)</button></>}
+            {!auditBusy&&ankiSourceAuditPending(sourceAudit).length>0&&<><p>{ankiSourceAuditPending(sourceAudit).length} remaining model request(s) · {sourceAudit.model} / {sourceAudit.thinkingLevel}. Run uses API quota; transport retries may add attempts. Captured settings and prompts are reused; accepted groups are retained.</p><button className="btn-secondary" disabled={busy||!ankiSourceAuditCurrent(sourceAudit,auditInputs.current)} onClick={runSourceAudit}>{sourceAudit.status==='prepared'?'Run':'Retry / resume'} {ankiSourceAuditPending(sourceAudit).length} source check(s)</button></>}
+            {(sourceAudit.failures||[]).length>0&&<details><summary>Rejected or failed groups ({sourceAudit.failures.length})</summary>{sourceAudit.failures.map(f=><div key={f.groupId} style={{padding:8,overflowWrap:'anywhere'}}><b>{f.groupId} · {f.type} · attempt {f.attempt}</b><p>{f.error}</p>{f.detail&&<div>Location: {f.detail.path}{f.detail.factId&&' · '+f.detail.factId}{f.detail.noteId&&' · '+f.detail.noteId}{f.detail.sourceSpan&&<p style={{whiteSpace:'pre-wrap'}}>Rejected citation: {f.detail.sourceSpan}</p>}</div>}</div>)}</details>}
+            {(sourceAudit.results||[]).some(g=>g.citationRecoveries?.length>0)&&<details><summary>Canonical citation matches recorded</summary>{sourceAudit.results.flatMap(g=>(g.citationRecoveries||[]).map((r,i)=><div key={g.groupId+':'+i} style={{padding:8,overflowWrap:'anywhere'}}>{g.groupId} · {r.path} · {r.factId} · {r.method}<p>Returned: {r.originalSourceSpan}</p><p>Captured source: {r.sourceSpan}</p></div>))}</details>}
             {auditBusy&&<button className="btn-secondary" onClick={cancelSourceAudit}>Cancel source check</button>}
             {sourceAudit.results.map(g=><div key={g.groupId} style={{marginTop:8}}><b>{g.groupId}</b><AnkiAuditReceipts result={g} onOpen={openNote} canOpen={sourceAudit.cards===cards&&sourceAudit.batch===batch&&current}/>{!g.findings.length&&<p>No issues reported in this group; this does not certify completeness.</p>}{g.findings.map((f,i)=><div key={i} style={{padding:8,border:'1px solid var(--border)',marginTop:6}}><b>{f.code}</b> — {f.message}{f.suggestion&&<p style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}><strong>Suggested correction:</strong> {f.suggestion}</p>}<div>{f.factIds.join(', ')}</div>{f.noteIds.map(id=><button key={id} className="btn-ghost" disabled={sourceAudit.cards!==cards||sourceAudit.batch!==batch} onClick={()=>openNote(id)}>{id}</button>)}</div>)}</div>)}
             <button className="btn-secondary" disabled={savingEvidence} onClick={saveSourceAudit}>{savingEvidence?'Saving evidence...':sourceAudit.status==='prepared'?'Download unrun review packet':'Download source-check report'}</button>{evidenceError&&<p role="alert">{evidenceError}</p>}
           </div>}
         </details>
+        <AnkiReviewQueue items={reviewItems} decisions={reviewDecisions} inputs={auditInputs.current} run={sourceAudit} eligible={selected.kept} onDecision={saveReviewDecision} onOpen={openNote} onEdit={editNote} disabled={busy||!current}/>
         {inspectNote&&cards.find(c=>c.id===inspectNote.id)&&<div style={{padding:12,border:'1px solid var(--accent)',borderRadius:8,marginBottom:12}}><button className="btn-secondary" onClick={()=>setInspectNote(null)}>Close selected review</button><AnkiReviewSource conditionCheck={conditionTagIssues.get(inspectNote.id)} key={inspectNote.id} card={cards.find(c=>c.id===inspectNote.id)} batch={batch} current={current} initialIndex={inspectNote.index} expanded onSourcesChange={busy?null:updateSourceLinks}/></div>}
         <p style={{fontSize:12}}>Excluded from export: {selected.invalid} structural · {selected.manualExcluded} manually unchecked. Structural repairs restore eligibility; checkboxes record your choice.</p>
         <p style={{fontSize:12,color:'var(--text-dim)',margin:'0 0 10px'}}>Style warnings are suggestions; notes stay exportable. The style filter affects review only. Export includes all kept notes in the selected tier.</p>
@@ -5296,7 +5582,7 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
       </details>}
       {batch&&<details style={{marginTop:14}}><summary>Batch diagnostics · original responses before edits and exclusions</summary>
         <pre style={{fontSize:12,whiteSpace:'pre-wrap'}}>{JSON.stringify(diagnostics,null,2)}</pre>
-        <button className="btn-secondary" onClick={()=>downloadBlob(new Blob([JSON.stringify({suiteVersion:'16.2',model:batch.model,thinkingLevel:batch.thinkingLevel,startedAt:batch.startedAt,completedAt:batch.completedAt,promptHashes:batch.promptHashes,context:batch.context,snapshot:batch.snapshot,chunkIds:batch.chunkIds,mappingIssues:batch.mappingIssues,conditionTagChanges:batch.conditionTagChanges,diagnostics,rawResponses:batch.rawResponses},null,2)],{type:'application/json'}),'anki-batch-diagnostics.json')}>Save diagnostics and original responses</button>
+        <button className="btn-secondary" onClick={()=>downloadBlob(new Blob([JSON.stringify({suiteVersion:suiteVersion(),model:batch.model,thinkingLevel:batch.thinkingLevel,startedAt:batch.startedAt,completedAt:batch.completedAt,promptHashes:batch.promptHashes,context:batch.context,snapshot:batch.snapshot,chunkIds:batch.chunkIds,mappingIssues:batch.mappingIssues,conditionTagChanges:batch.conditionTagChanges,diagnostics,rawResponses:batch.rawResponses},null,2)],{type:'application/json'}),'anki-batch-diagnostics.json')}>Save diagnostics and original responses</button>
       </details>}
       {batch&&batch.mappingIssues.length>0&&<details style={{marginTop:14}}><summary>Mapping diagnostics ({batch.mappingIssues.length}) · {batch.parsedNotes} parsed notes</summary>{batch.mappingIssues.map((x,i)=><div key={i} style={{fontSize:12}}>{x.code} — {x.id||x.noteId} · chunk {x.chunk}, line {Number.isFinite(x.line)?x.line:x.code==='missing-id'?'missing':'invalid'}</div>)}</details>}
       {ledger&&<div style={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:16,marginTop:14}}>
@@ -9503,7 +9789,7 @@ function App(){
           <button ref={settingsTrigger} className={`nav-btn nav-btn-cfg ${showConfig?'active':''}`} aria-label="Study settings" aria-expanded={showConfig} aria-controls="suite-settings" onClick={()=>setShowConfig(s=>!s)} title="Show or hide study settings">
             <NavIcons.gear/><span className="nav-label">Settings<span className="nav-sublabel">API key & models</span></span>
           </button>
-          <div className="nav-footer">Version 16.1 <span>Built for your next step.</span></div>
+          <div className="nav-footer">Version {suiteVersion()} <span>Built for your next step.</span></div>
         </nav>
         {showConfig&&<ConfigSidebar onClose={closeSettings}/>}
         <main className="main-area" id="study-workspace" tabIndex={-1}>

@@ -4,7 +4,7 @@ This is the task map for maintainers and coding agents. `AGENTS.md` remains the 
 
 ## Repository shape
 
-- `Nursing-Study-Suite v16.2.html` is the complete application.
+- `Nursing-Study-Suite v16.3.html` is the complete application.
 - `latte-tests.js` is the deterministic regression harness and extracts live functions by anchor.
 - `verify-repo.js` is the only ordinary repository verification entry point.
 - `prompt-baseline.json` stores the 11 frozen prompt hashes.
@@ -31,6 +31,7 @@ This is the task map for maintainers and coding agents. `AGENTS.md` remains the 
 - After an approved prompt edit, regenerate the appendix with `node tools/render-prompts.js --write`, then deliberately update only the approved baseline hash.
 - `CARD_TRANSCRIBE_PROMPT` is tunable but must preserve: never guess a number, never expand an abbreviation, preserve symbols exactly, and route unknown headings to `other`. Rerun two transcriptions per card after an edit.
 - The approved v16.2 structured-KB adapter change is recorded in `docs/history/ANKI-v16.2-adapter.diff`; its harness pin is deliberately updated separately from the unchanged frozen baseline.
+- The approved v16.3 dynamic source-check suggestion constraints are recorded in `docs/history/ANKI-v16.3-audit-builder.diff`; generation prompts and baseline are unchanged.
 - `Prompts.md` also documents dynamic prompt builders; the generated appendix guarantees that all 12 named constants appear verbatim.
 - The focused v16.1 Extra change is recorded in `docs/history/ANKI-v16.1-extra-default.diff`; the preceding source/retrieval change is in `docs/history/ANKI-source-retrieval-update.diff`. These approved diffs do not authorize further prompt changes. Empty Extra must retain the same two pipe separators and third-field Tags.
 
@@ -77,6 +78,7 @@ Examples: `node davis-transcribe-test.js --dry-run --app-profile --runs 2 synthe
 `node tools/visual-browser-tests.js --screenshots scratch/visual-v16` checks the v16 interface on isolated real-App fixtures at 360, 768, 1024 and 1440 pixels. It uses the existing external Playwright runtime, synthetic sources and mocked generation; it never calls Gemini or serves the repository directory. The optional screenshot directory stays under ignored `scratch/`; the check report goes to standard output. This is optional browser acceptance, separate from the mandatory deterministic verifier.
 
 - Rename the one canonical suite file and update the matching top release comment.
+- Update `suiteVersion()` so the visible sidebar and private report versions agree with the filename.
 - Add the Keep a Changelog entry.
 - Regenerate/check `Prompts.md`; frozen hashes must remain unchanged unless an edit was explicitly approved.
 - Re-hash all eight SRI-pinned script resources and both separately pinned worker CDN copies on any application version bump.
