@@ -110,7 +110,7 @@ async function main(){
     assert.equal(evidence.metadata.checkComplete,true);assert.equal(evidence.metadata.currentAtExport,true);assert(evidence.metadata.startedAt&&evidence.metadata.finishedAt);
     assert.equal(evidence.metadata.sourceSnapshotSha256,packet.metadata.sourceSnapshotSha256);assert.equal(evidence.metadata.cardSnapshotSha256,packet.metadata.cardSnapshotSha256);
     assert(evidence.results.every(g=>Array.isArray(g.factReviews)&&Array.isArray(g.noteReviews)),'completed report retains every returned review receipt');
-    assert.equal(evidence.metadata.schemaVersion,4);assert.equal(evidence.metadata.suiteVersion,'16.4');
+    assert.equal(evidence.metadata.schemaVersion,4);assert.equal(evidence.metadata.suiteVersion,'16.5');
     assert(evidence.noteHandleMaps.every(g=>g.notes.every(n=>/^n[1-9]\d*$/.test(n.handle))),'private report retains exact local-to-internal handle maps');
     assert(evidence.results.every(g=>g.complete&&g.factReviews.every(f=>f.inventory.length>0)),'completed groups account for every selected source fact');
     await view.getByText('Checked targets and note fields ·',{exact:false}).first().click();
@@ -138,9 +138,9 @@ async function main(){
     assert.equal(await view.evaluate(()=>window.__ankiReviewFixture.calls.length),callsBeforeDecision,'queue decisions do not call a model');
     await view.setViewportSize({width:360,height:900});
     assert(!(await view.evaluate(()=>document.documentElement.scrollWidth>innerWidth+2)),'active review decisions fit a mobile viewport');
-    fs.mkdirSync('scratch/anki-v16.4/browser',{recursive:true});
-    await view.screenshot({path:'scratch/anki-v16.4/browser/review-decision-mobile.png',fullPage:true});
-    await view.locator('[data-anki-review-decision]').screenshot({path:'scratch/anki-v16.4/browser/review-decision-panel-mobile.png'});
+    fs.mkdirSync('scratch/anki-next/browser',{recursive:true});
+    await view.screenshot({path:'scratch/anki-next/browser/review-decision-mobile.png',fullPage:true});
+    await view.locator('[data-anki-review-decision]').screenshot({path:'scratch/anki-next/browser/review-decision-panel-mobile.png'});
     await view.setViewportSize({width:1280,height:900});
     const reviewedEvidence=await download('complete');
     assert(reviewedEvidence.reviewDecisions.some(d=>d.disposition==='covered-elsewhere'&&d.coveredBy===coveringId&&d.current),'report retains the current explicit review decision');
@@ -170,9 +170,9 @@ async function main(){
     await view.locator('[data-anki-unresolved-records]').waitFor({state:'visible'});
     await view.setViewportSize({width:360,height:900});
     assert(!(await view.evaluate(()=>document.documentElement.scrollWidth>innerWidth+2)),'rejected and recovered citation evidence fits a mobile viewport');
-    await view.screenshot({path:'scratch/anki-v16.4/browser/partial-mobile.png',fullPage:true});
-    await view.getByText('Unresolved or failed groups (1)',{exact:true}).locator('..').screenshot({path:'scratch/anki-v16.4/browser/rejected-group-mobile.png'});
-    await view.locator('[data-anki-unresolved-records]').screenshot({path:'scratch/anki-v16.4/browser/unresolved-record-mobile.png'});
+    await view.screenshot({path:'scratch/anki-next/browser/partial-mobile.png',fullPage:true});
+    await view.getByText('Unresolved or failed groups (1)',{exact:true}).locator('..').screenshot({path:'scratch/anki-next/browser/rejected-group-mobile.png'});
+    await view.locator('[data-anki-unresolved-records]').screenshot({path:'scratch/anki-next/browser/unresolved-record-mobile.png'});
     await view.setViewportSize({width:1280,height:900});
     const callsBeforeResume=await view.evaluate(()=>window.__ankiReviewFixture.calls.length);
     await view.evaluate(()=>{window.__ankiReviewFixture.auditMode='valid';});
@@ -239,8 +239,8 @@ async function main(){
     assert(await view.getByRole('button',{name:'⬇ Export .txt',exact:true}).isDisabled());
     await view.setViewportSize({width:360,height:900});
     const overflow=await view.evaluate(()=>document.documentElement.scrollWidth>innerWidth+2);assert(!overflow,'mobile viewport does not overflow');
-    fs.mkdirSync('scratch/anki-v16.4/browser',{recursive:true});
-    await view.screenshot({path:'scratch/anki-v16.4/browser/mobile.png',fullPage:true});
+    fs.mkdirSync('scratch/anki-next/browser',{recursive:true});
+    await view.screenshot({path:'scratch/anki-next/browser/mobile.png',fullPage:true});
     await view.getByLabel('Empty fixture response',{exact:true}).check();
     await view.getByRole('button',{name:'▶ Generate Cards',exact:true}).click();
     await view.getByText('Optional · Check against KB',{exact:true}).waitFor();

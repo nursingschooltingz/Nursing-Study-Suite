@@ -4,7 +4,7 @@ This is the task map for maintainers and coding agents. `AGENTS.md` remains the 
 
 ## Repository shape
 
-- `Nursing-Study-Suite v16.3.html` is the complete application.
+- `Nursing-Study-Suite v16.5.html` is the complete application.
 - `latte-tests.js` is the deterministic regression harness and extracts live functions by anchor.
 - `verify-repo.js` is the only ordinary repository verification entry point.
 - `prompt-baseline.json` stores the 11 frozen prompt hashes.
@@ -36,6 +36,8 @@ This is the task map for maintainers and coding agents. `AGENTS.md` remains the 
 - `Prompts.md` also documents dynamic prompt builders; the generated appendix guarantees that all 12 named constants appear verbatim.
 - The focused v16.1 Extra change is recorded in `docs/history/ANKI-v16.1-extra-default.diff`; the preceding source/retrieval change is in `docs/history/ANKI-source-retrieval-update.diff`. These approved diffs do not authorize further prompt changes. Empty Extra must retain the same two pipe separators and third-field Tags.
 
+The approved v16.5 Anki master and runtime adapter changes are recorded in `docs/history/ANKI-v16.5-target-allocation.diff` and `docs/history/ANKI-v16.5-adapter.diff`. Internal target planning and reconciliation keep the same two-block response contract. Prompt-contract assertions protect instructions and formatting, not model adherence.
+
 ## Stable landmarks inside the HTML
 
 | Area | Useful anchors |
@@ -58,7 +60,8 @@ The harness comments identify its extraction anchors. If a refactor moves one, u
 - `node tools/anki-browser-fixture.js 4173` serves only a synthetic fixture at `http://127.0.0.1:4173/`. It uses the shipped generator and the harness mini-KB, mocks generation, and blocks fetch. It never serves repository files. Stop it after checking the UI.
 - `node tools/anki-pilot-spec.js <explicitly-authorized-KB.json>` computes the exact chunk/call count with the shipped packet and chunker. This reads the named KB and makes no API request. Obtain authorization for that material before running it; obtain separate authorization for the resulting live run.
 - `node tools/anki-example-proposal.js` reproduces the historical example-only diff at `docs/history/ANKI-v15.17-example-proposal.diff` from the public `tools/fixtures/anki-v15.16-prompt.txt` fixture. Its helper accepts either historical side. That candidate failed its live pilot and was rolled back with explicit approval; the tool is retained for evidence, not authorization to reapply it. It rejects partially applied examples and never changes the app or prompt baseline. The harness validates all five historical examples and pins the measured original/candidate hashes separately from the approved current Anki prompt hash.
-- `node tools/anki-source-review-browser-tests.js` checks source-review filters, note inspection/editing, and the optional source-check lifecycle with synthetic notes and mocked Gemini. It uses the existing external Playwright runtime and Chrome, sends no live Gemini requests, and leaves screenshots under ignored `scratch/anki-update/browser/`.
+- `node tools/anki-source-review-browser-tests.js` checks source-review filters, note inspection/editing, and the optional source-check lifecycle with synthetic notes and mocked Gemini. It uses the existing external Playwright runtime and Chrome, sends no live Gemini requests, and leaves screenshots under ignored `scratch/anki-next/browser/`.
+- `node tools/anki-generation-quality-browser-tests.js` checks scoped tag exclusion/repair, preserved manual selection, custom hierarchies, and generation-versus-audit normalization diagnostics in the live UI. It uses synthetic notes, mocked generation and the existing external Playwright/Chrome runtime; private evidence goes to ignored `scratch/anki-next/browser/`. Preparation makes no source-check call.
 - Record the suite commit/prompt hash, source KB hash, model/thinking level, focus, and export filters for each live comparison. Match exports by source content as well as filename; the latest six-export review contained two matched pairs and two unpaired subject runs. Evaluate supplied facts, Text, Extra, actual hidden targets, and the intended tier subset separately. A linked-fact count or empty-Extra count cannot establish semantic accuracy.
 - See `ANKI-v15.17-validation.md` for the historical pilot, approved rollback, and capture limitations; `CURRENT_STATE.md` records the current mapping implementation and remaining live-pilot/native-import checks. Completed and interrupted generation diagnostics can be saved privately from the UI, including original responses and their source snapshot; keep these files out of Git.
 

@@ -8,7 +8,8 @@
      Babel, so this adds narrow resource directives without a default-src/script-src migration. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net">
 <title>LATTE Study Suite</title>
-<!-- v16.4 (2026-09-13): exact audit note/source addresses, source inventory accounting, independent record recovery, and whole-deck recall review. All 11 frozen prompts, generation settings and export warning tiers are preserved. Verification: docs/reviews/anki-v16.4-implementation.md.
+<!-- v16.5 (2026-09-13): scoped generated-tag validation, per-note normalization decisions, and target-allocation/qualifier prompt clarification. Only the approved Anki master baseline and adapter change; Flash/Medium, semantic warning tiers, and conservative mapping guards remain. Verification: docs/reviews/anki-v16.5-implementation.md.
+     v16.4 (2026-09-13): exact audit note/source addresses, source inventory accounting, independent record recovery, and whole-deck recall review. All 11 frozen prompts, generation settings and export warning tiers are preserved. Verification: docs/reviews/anki-v16.4-implementation.md.
      v16.2 (2026-09-13): Anki Flash/Medium default; source-only dynamic adapter, advisory retrieval/tag diagnostics, editable source links, explicit target/field check records, and reproducible private reports. All 11 frozen prompts, warning tiers and three-field exports are preserved. Local verification and measurement limits: docs/reviews/anki-v16.2-implementation.md.
      v16.1 (2026-09-11): Anki source fidelity and review tools; explicit empty-Extra default, source-supported explanations, many-to-many fact mapping, answer-exposure and source warnings, and an optional source check with reviewable suggestions. Only the approved Anki prompt baseline changes; Flash/Low, advisory warnings and three-field exports are preserved. Verification and measurement limits: docs/reviews/anki-v16.1-release.md.
      v16.0 (2026-09-11): light blue/orange study workspace; labeled workflow navigation, responsive settings and forms, accessible controls, readable study output and evidence panels. The single-file runtime, source processing, storage/export contracts and all 11 frozen prompts are preserved. Deterministic and isolated synthetic browser evidence: docs/reviews/visual-update-v16.0.md.
@@ -3518,6 +3519,7 @@ function PriorityAnalyzer(){
 // v15.17: approved rollback restores prior examples after the live pilot exposed four-field rows and explanation prose in Tags.
 // v16.0: source meaning and actual retrieval targets replace permissive fallback and grouping language.
 // v16.1: make empty Extra the default; generic caption examples competed with source-only grounding.
+// v16.5: visible list context and fact links did not establish hidden-target coverage; preserve each target and its source meaning.
 const ANKI_MASTER_PROMPT=`SYSTEM / ROLE
 
 You are an elite Medical Education Specialist, Nursing Clinical Instructor, and Anki Expert. Your task is to convert the provided PDF text into high-quality Anki cloze notes for a nursing student.
@@ -3884,7 +3886,7 @@ Count independently gradable answers even when they share a cloze index or appea
 Split unrelated targets or long lists into separate notes; keep together only one inseparable clinical relationship.
 Monitoring Panel Exception
 
-If the PDF gives one unified monitoring directive, the stem may contain more than 3 visible items, but only 2-3 items may be cloze targets in that note.
+If the PDF gives one unified monitoring directive, the stem may contain more than 3 visible items, but only 2-3 items may be cloze targets in that note. Assign every remaining substantive item to a hidden target in another note; visible Text or Extra alone does not complete its recall coverage. Keep separate notes when needed to preserve those targets, even when their necessary context repeats. Target coverage takes precedence over the anti-redundancy and anti-overfragmentation preferences below.
 
 PHASE 1.9 — ANTI-REDUNDANCY + ANTI-OVERFRAGMENTATION
 Anti-Redundancy
@@ -4033,7 +4035,7 @@ If output seems too short for the density of the PDF, re-audit for omitted numbe
 Do not add filler to increase count.
 Source-Meaning Re-Audit
 
-Before output, compare each note with its supporting source facts. Preserve certainty, population, timing, exceptions, and clinical relationships, including what each number measures. Do not turn an example into a threshold, add a waiting condition, or turn a check for a problem into a claim that it is ruled out. Correct unsupported wording in Text and Extra; retain the context needed for a uniquely answerable review.
+Before output, compare each note's full proposition with its supporting source facts, including its anchor, retrieval label, visible Text, hidden answers and Extra. Preserve who acts, action, population, certainty, frequency, modality, route, trigger, timing and its starting event, exceptions, AND/OR, and what each number measures. Do not change may to must or often, potential to definite, or a high-risk condition into a contraindication. Do not turn an example into a threshold, add a waiting condition, or turn a check for a problem into a claim that it is ruled out. Do not invent a named syndrome, formal cluster, ranking, or explanatory relationship in a heading or Extra. Correct unsupported wording and retain the source context needed for a uniquely answerable review.
 
 PHASE 5 — PRE-OUTPUT AUDIT
 
@@ -4081,8 +4083,8 @@ Specificity: shortened wording did not remove the context needed for one uniquel
 CRITICAL REMINDERS
 
 LATTE belongs in tags and organization first. Prefer consistent condition/topic anchors and specific retrieval labels without revealing the answer.
-One fact = one punchy card.
-Coverage is enforced by the ledger, not by making cards wordy.
+One independently gradable clinical target per review card; one source fact may require several notes.
+A ledger link records source support, not complete recall coverage. Verify each planned target's hidden destination after shortening, splitting or combining notes.
 Never drop list items.
 Never add unsourced facts.
 Keep Extra lean unless clarity truly requires more.
@@ -4131,12 +4133,13 @@ function ankiChunkText(text,max=12000,overlapPages=2){
   return chunks;
 }
 
-function ankiParseCards(raw,chunkNo=1){
+function ankiParseCards(raw,chunkNo=1,tagFormatContract=null){
+  // v16.5: only callers with a captured generation contract may reject stray tag tokens.
   const cbr=/```[\s\S]*?\n([\s\S]*?)```/g;const blocks=[];let m;while((m=cbr.exec(raw))!==null)blocks.push(m[1].trim());
   const ankiBlock=blocks[0]||raw;const cards=[];let noteLine=0;
   ankiBlock.split('\n').forEach(line=>{
     const t=line.trim();if(!t||!t.includes('|'))return;noteLine++;const pts=t.split('|');
-    if(pts.length>=2){const malformed=pts.length!==3;cards.push({id:uid(),chunk:chunkNo,sourceLine:noteLine,text:pts[0].trim(),extra:(pts[1]||'').trim(),tags:pts.slice(2).join('|').trim(),pipeCount:pts.length-1,needsReview:malformed,keep:true,factIds:[]});}
+    if(pts.length>=2){const malformed=pts.length!==3;cards.push({id:uid(),chunk:chunkNo,sourceLine:noteLine,text:pts[0].trim(),extra:(pts[1]||'').trim(),tags:pts.slice(2).join('|').trim(),pipeCount:pts.length-1,needsReview:malformed,keep:true,factIds:[],...(tagFormatContract==='hierarchical-v1'?{tagFormatContract}:{})});}
   });
   return{cards,ledger:blocks[1]||''};
 }
@@ -4256,17 +4259,30 @@ function ankiConditionTagCheck(card,snapshot,capturedIndex){
   const after=before.replace(/\S+/g,token=>token===actualTags[0]?result.canonicalTag:token);
   return {...result,status:'alias',code:'source-alias',message:'A supplied name or alias can use the canonical source Condition tag.',after};
 }
+// v16.5: an empty edit list cannot distinguish canonical tags from a skipped repair.
+// Capture every normalization decision without copying runtime fields or changing its policy.
+function ankiConditionTagDiagnostic(card,check){
+  const string=value=>typeof value==='string'?value:'';
+  return {noteId:string(card.id),chunk:Number.isSafeInteger(card.chunk)?card.chunk:null,sourceLine:Number.isSafeInteger(card.sourceLine)?card.sourceLine:null,status:check.status==='alias'?'repaired':string(check.status),code:string(check.code),message:string(check.message),condition:string(check.condition),canonicalTag:string(check.canonicalTag),actualTags:Array.isArray(check.actualTags)?check.actualTags.filter(x=>typeof x==='string'):[],factIds:Array.isArray(check.factIds)?check.factIds.filter(x=>typeof x==='string'):[],before:string(check.before),after:string(check.after)};
+}
 function ankiNormalizeConditionTags(cards,snapshot){
-  const index=ankiConditionTagIndex(snapshot),changes=[],issues=[];
+  const index=ankiConditionTagIndex(snapshot),changes=[],issues=[],outcomes=[];
   const output=cards.map(card=>{
     const check=ankiConditionTagCheck(card,snapshot,index);
+    outcomes.push(ankiConditionTagDiagnostic(card,check));
     if(check.status==='review'){issues.push({noteId:card.id,...check});return card;}
     if(check.status!=='alias')return card;
     const change={noteId:card.id,before:check.before,after:check.after,from:check.actualTags[0],to:check.canonicalTag,condition:check.condition,factIds:[...check.factIds]};
     changes.push(change);
     return {...card,tags:check.after,conditionTagNormalization:{...change,factIds:[...change.factIds]}};
   });
-  return {cards:output,changes,issues};
+  return {cards:output,changes,issues,outcomes};
+}
+// v16.5: old batches did not capture every outcome; a later check must not invent that history.
+// Audit-snapshot checks are descriptive only: an available alias remains a candidate, not a new edit.
+function ankiConditionTagDiagnostics(cards,batch){
+  const captured=Array.isArray(batch?.conditionTagOutcomes),snapshot=batch?.snapshot,index=ankiConditionTagIndex(snapshot);
+  return {generation:{status:captured?'captured':'unavailable',stage:'post-dedupe generation before user edits',outcomes:captured?batch.conditionTagOutcomes.map(item=>ankiConditionTagDiagnostic({id:item.noteId,chunk:item.chunk,sourceLine:item.sourceLine},item)):[]},auditSnapshot:{stage:'captured source-check notes; no tag edits applied',outcomes:cards.map(card=>{const check=ankiConditionTagCheck(card,snapshot,index);return ankiConditionTagDiagnostic(card,{...check,status:check.status==='alias'?'alias-available':check.status,after:check.before});})}};
 }
 
 function ankiBatchSummary(cards,batch,current){
@@ -4304,18 +4320,26 @@ function clozeNums(text){const p=parseAnkiClozes(text);return p.issues.length?[]
 // v15.17: substring tier tags and multiple distinct tiers made badges/filter/export disagree.
 // Repeated copies of one complete tier tag have one effective tier.
 function ankiTier(tags){const tiers=[...new Set(String(tags||'').trim().split(/\s+/).filter(t=>/^Tier::[123]$/.test(t)))];return tiers.length===1?tiers[0].slice(-1):'?';}
+// v16.5: generated hierarchical tags must not split into bare tokens such as
+// Condition::Panic + Disorder. Namespace/name semantics remain advisory; ungoverned
+// manual/custom tags are preserved rather than subjected to a nursing whitelist.
+function ankiTagFormatIssues(card){
+  if(card.tagFormatContract!=='hierarchical-v1')return [];
+  return (String(card.tags||'').match(/\S+/g)||[]).filter(token=>!/^[^:\s]+(?:::[^:\s]+)+$/u.test(token));
+}
 function lintAnkiCard(c){
   const p=parseAnkiClozes(c.text),issues=[];
   if(!p.spans.length)issues.push('no-cloze');
   if(p.issues.length)issues.push('cloze-structure');
   if(ankiTier(c.tags)==='?')issues.push('no-tier');
+  if(ankiTagFormatIssues(c).length)issues.push('tag-format');
   if(p.indices.length>3)issues.push('many-cloze');
   // v15.17: cached pipeCount alone let edits insert separators/newlines into an export.
   if(c.pipeCount!==2||[c.text,c.extra,c.tags].some(x=>/[|\r\n]/.test(String(x||''))))issues.push('pipe-format');
   if(parseAnkiClozes(c.extra).issues.length)issues.push('cloze-structure');
   return [...new Set(issues)];
 }
-const LINT_LABEL={'no-cloze':'no {{c…}} cloze','cloze-structure':'invalid flat cloze syntax','no-tier':'requires one complete Tier::1–3 tag','many-cloze':'>3 cloze indices','pipe-format':'each field must be one line without pipes'};
+const LINT_LABEL={'no-cloze':'no {{c…}} cloze','cloze-structure':'invalid flat cloze syntax','no-tier':'requires one complete Tier::1–3 tag','many-cloze':'>3 cloze indices','tag-format':'generated tags require nonempty ::-separated names; repair stray words','pipe-format':'each field must be one line without pipes'};
 function ankiRenderClozes(parsed,index,revealed=false){
   if(parsed.issues.length)return 'Structural error: '+parsed.issues.join('; ')+'. Edit in Table.';
   let out='',cursor=0;
@@ -4576,8 +4600,9 @@ function ankiAuditGroups(cards,batch,tier='all',protocolVersion=3){
   if(byFact.size!==facts.length||facts.some(f=>!f.id))throw new Error('Anki audit source has missing or duplicate fact IDs.');
   const notes=(cards||[]).map(c=>{
     const parsed=parseAnkiClozes(c.text),valid=!lintAnkiCard(c).length,noteTier=ankiTier(c.tags),inSelectedTier=tier==='all'||noteTier===tier;
+    // v16.5: retain the captured format scope alongside eligibility in audit groups.
     const ids=[...new Set((c.factIds||[]).map(String))];
-    return {id:String(c.id||''),chunk:Number.isSafeInteger(c.chunk)&&c.chunk>0?c.chunk:0,sourceLine:Number.isSafeInteger(c.sourceLine)?c.sourceLine:0,text:String(c.text||''),extra:String(c.extra||''),tags:String(c.tags||''),tier:noteTier,keep:!!c.keep,structurallyValid:valid,inSelectedTier,eligible:!!c.keep&&valid&&inSelectedTier,factIds:ids.filter(id=>byFact.has(id)),unresolvedFactIds:ids.filter(id=>!byFact.has(id)),reviewTargets:parsed.issues.length?[]:parsed.indices.map(index=>({index,front:ankiRenderClozes(parsed,index),answers:parsed.spans.filter(s=>s.index===index).map(s=>s.answer)}))};
+    return {id:String(c.id||''),chunk:Number.isSafeInteger(c.chunk)&&c.chunk>0?c.chunk:0,sourceLine:Number.isSafeInteger(c.sourceLine)?c.sourceLine:0,text:String(c.text||''),extra:String(c.extra||''),tags:String(c.tags||''),tagFormatContract:c.tagFormatContract||null,tier:noteTier,keep:!!c.keep,structurallyValid:valid,inSelectedTier,eligible:!!c.keep&&valid&&inSelectedTier,factIds:ids.filter(id=>byFact.has(id)),unresolvedFactIds:ids.filter(id=>!byFact.has(id)),reviewTargets:parsed.issues.length?[]:parsed.indices.map(index=>({index,front:ankiRenderClozes(parsed,index),answers:parsed.spans.filter(s=>s.index===index).map(s=>s.answer)}))};
   });
   const byNote=new Map(notes.map(n=>[n.id,n]));
   if(byNote.size!==notes.length||notes.some(n=>!n.id))throw new Error('Anki audit notes have missing or duplicate IDs.');
@@ -4643,7 +4668,7 @@ function ankiAuditPacket(group){
     if(!handles.has(id))throw new Error('Anki audit packet references an unavailable note.');
     return handles.get(id);
   });
-  return {protocolVersion:4,id:group.id,chunk:group.chunk,part:group.part,parts:group.parts,tier:group.tier,sourceFactIds:[...(group.sourceFactIds||[])],scopeNoteIds:mapped(group.scopeNoteIds),facts:(group.facts||[]).map(fact=>({id:fact.id,condition:fact.condition,aliases:[...(fact.aliases||[])],subtype:fact.subtype,text:fact.text,tier:fact.tier,bucket:fact.bucket,inSelectedTier:fact.inSelectedTier,sourceTokens:ankiAuditSourceTokens(fact.text).map(token=>({id:token.id,text:token.text}))})),notes:notes.map(note=>({id:handles.get(note.id),chunk:note.chunk,sourceLine:note.sourceLine,text:note.text,extra:note.extra,tags:note.tags,tier:note.tier,keep:note.keep,structurallyValid:note.structurallyValid,inSelectedTier:note.inSelectedTier,eligible:note.eligible,factIds:[...(note.factIds||[])],unresolvedFactIds:[...(note.unresolvedFactIds||[])],reviewTargets:(note.reviewTargets||[]).map(target=>({index:target.index,front:target.front,answers:[...(target.answers||[])]}))}))};
+  return {protocolVersion:4,id:group.id,chunk:group.chunk,part:group.part,parts:group.parts,tier:group.tier,sourceFactIds:[...(group.sourceFactIds||[])],scopeNoteIds:mapped(group.scopeNoteIds),facts:(group.facts||[]).map(fact=>({id:fact.id,condition:fact.condition,aliases:[...(fact.aliases||[])],subtype:fact.subtype,text:fact.text,tier:fact.tier,bucket:fact.bucket,inSelectedTier:fact.inSelectedTier,sourceTokens:ankiAuditSourceTokens(fact.text).map(token=>({id:token.id,text:token.text}))})),notes:notes.map(note=>({id:handles.get(note.id),chunk:note.chunk,sourceLine:note.sourceLine,text:note.text,extra:note.extra,tags:note.tags,tagFormatContract:note.tagFormatContract||null,tier:note.tier,keep:note.keep,structurallyValid:note.structurallyValid,inSelectedTier:note.inSelectedTier,eligible:note.eligible,factIds:[...(note.factIds||[])],unresolvedFactIds:[...(note.unresolvedFactIds||[])],reviewTargets:(note.reviewTargets||[]).map(target=>({index:target.index,front:target.front,answers:[...(target.answers||[])]}))}))};
 }
 function ankiBuildSourceAuditPromptV4(group){
   // v16.4: receipts must account for the source before matching cards; selecting
@@ -5030,7 +5055,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '16.4';}
+function suiteVersion(){return '16.5';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -5038,7 +5063,10 @@ function ankiSourceAuditLabel(run,current=true){
 }
 async function ankiSourceAuditEvidence(run,getInputs,exportedAt=new Date().toISOString()){
   const groups=run.groups||[],facts=(run.batch?.snapshot?.facts||Array.from(new Map(groups.flatMap(g=>g.facts).map(f=>[f.id,f])).values())).map(f=>({id:f.id,condition:f.condition,aliases:[...(f.aliases||[])],subtype:f.subtype,text:f.text,tier:f.tier,bucket:f.bucket}));
-  const cards=(run.cards||Array.from(new Map(groups.flatMap(g=>g.notes).map(n=>[n.id,n])).values())).map(c=>({id:c.id,chunk:c.chunk,sourceLine:c.sourceLine,text:c.text,extra:c.extra,tags:c.tags,keep:c.keep,factIds:[...(c.factIds||[])],mappingIssues:(c.mappingIssues||[]).map(x=>({...x})),sourceLinkEdits:c.sourceLinkEdits||[],conditionTagNormalization:c.conditionTagNormalization||null}));
+  // v16.5: private evidence hashes include the format contract used for note eligibility.
+  const cards=(run.cards||Array.from(new Map(groups.flatMap(g=>g.notes).map(n=>[n.id,n])).values())).map(c=>({id:c.id,chunk:c.chunk,sourceLine:c.sourceLine,text:c.text,extra:c.extra,tags:c.tags,tagFormatContract:c.tagFormatContract||null,keep:c.keep,factIds:[...(c.factIds||[])],mappingIssues:(c.mappingIssues||[]).map(x=>({...x})),sourceLinkEdits:c.sourceLinkEdits||[],conditionTagNormalization:c.conditionTagNormalization||null}));
+  // v16.5: preserve generation decisions separately from a read-only check of captured audit notes.
+  const conditionTagDiagnostics=ankiConditionTagDiagnostics(run.cards||Array.from(new Map(groups.flatMap(g=>g.notes).map(n=>[n.id,n])).values()),run.batch);
   const [sourceSnapshotSha256,cardSnapshotSha256,builderSha256]=await Promise.all([ankiSha256(JSON.stringify(facts)),ankiSha256(JSON.stringify(cards)),run.builderSource?ankiSha256(run.builderSource):Promise.resolve(null)]);
   const inputs=typeof getInputs==='function'?getInputs():getInputs,current=ankiSourceAuditCurrent(run,inputs),checked=groups.length-ankiSourceAuditPending(run).length,total=groups.length;
   // v16.3: equal counts alone could conceal duplicate or unresolved groups.
@@ -5046,7 +5074,7 @@ async function ankiSourceAuditEvidence(run,getInputs,exportedAt=new Date().toISO
   const metadata={schemaVersion:4,suiteVersion:suiteVersion(),exportedAt,preparedAt:run.preparedAt||null,startedAt:run.startedAt||null,finishedAt:run.finishedAt||null,currentAtExport:current,checkComplete:isComplete,checkedGroups:checked,totalGroups:total,retainedGroups:(run.results||[]).length,unresolvedRecords:(run.results||[]).flatMap(r=>r.unresolved||[]),pendingGroups,failedGroups:(run.failures||[]).map(f=>f.groupId),recoveredCitations:(run.results||[]).reduce((n,g)=>n+(g.citationRecoveries||[]).length,0),sourceSnapshotSha256,cardSnapshotSha256,hashEncoding:'SHA-256 of UTF-8 JSON: ordered captured fact context and current note fields; not the uploaded KB file bytes.',hashesAvailable:!!sourceSnapshotSha256&&!!cardSnapshotSha256,
     generation:{model:run.batch?.model||null,thinkingLevel:run.batch?.thinkingLevel||null,startedAt:run.batch?.startedAt||null,completedAt:run.batch?.completedAt||null,context:{outcomes:run.batch?.context?.outcomes||'',points:run.batch?.context?.points||'',focusContext:run.batch?.context?.focusContext||''},promptHashes:run.batch?.promptHashes||null},
     audit:{model:run.model||null,thinkingLevel:run.thinkingLevel||null,tier:run.tier,builderSha256,contract:'v4 exact packet-local note handles and source token ranges; complete source inventory, role-separated target references, independently validated records',limitations:'Model judgments remain advisory; validated references and completed requests do not certify correctness or completeness.'}};
-  return {status,runStatus:run.status,message:run.message||'',model:run.model,thinkingLevel:run.thinkingLevel,tier:run.tier,metadata,groups,noteHandleMaps:groups.filter(g=>g.protocolVersion===4).map(g=>({groupId:g.id,notes:g.notes.map((n,i)=>({handle:'n'+(i+1),noteId:n.id}))})),mappingDiagnostics:cards.map(c=>({noteId:c.id,factIds:c.factIds,mappingIssues:c.mappingIssues})),results:run.results||[],responses:run.responses||[],failures:run.failures||[],failureHistory:run.failureHistory||[],sessions:run.sessions||[],reviewDecisions:ankiReviewDecisionEvidence(inputs?.reviewDecisions||[],inputs?.reviewItems||[],{...inputs,current},run),noteEdits:cards.filter(c=>c.sourceLinkEdits.length||c.conditionTagNormalization).map(c=>({noteId:c.id,sourceLinkEdits:c.sourceLinkEdits,conditionTagNormalization:c.conditionTagNormalization})),filename:'anki-source-'+(run.status==='prepared'?'packet':isComplete?'report':'incomplete')+'-'+status+'.json'};
+  return {status,runStatus:run.status,message:run.message||'',model:run.model,thinkingLevel:run.thinkingLevel,tier:run.tier,metadata,groups,noteHandleMaps:groups.filter(g=>g.protocolVersion===4).map(g=>({groupId:g.id,notes:g.notes.map((n,i)=>({handle:'n'+(i+1),noteId:n.id}))})),conditionTagDiagnostics,mappingDiagnostics:cards.map(c=>({noteId:c.id,factIds:c.factIds,mappingIssues:c.mappingIssues})),results:run.results||[],responses:run.responses||[],failures:run.failures||[],failureHistory:run.failureHistory||[],sessions:run.sessions||[],reviewDecisions:ankiReviewDecisionEvidence(inputs?.reviewDecisions||[],inputs?.reviewItems||[],{...inputs,current},run),noteEdits:cards.filter(c=>c.sourceLinkEdits.length||c.conditionTagNormalization).map(c=>({noteId:c.id,sourceLinkEdits:c.sourceLinkEdits,conditionTagNormalization:c.conditionTagNormalization})),filename:'anki-source-'+(run.status==='prepared'?'packet':isComplete?'report':'incomplete')+'-'+status+'.json'};
 }
 
 // v16.0: audit validity follows the exact captured notes, source batch and export tier.
@@ -5657,13 +5685,17 @@ function AnkiGenerator(){
         const sourceLabel='═══ STRUCTURED LATTE KNOWLEDGE BASE ═══'; // v15: v14 shipped a literal template placeholder as the header the model saw above every KB
         // v16.0: the former primary-note map concealed valid split-note support and visible-only coverage.
         // v16.2: source fidelity failures included invented definitions, lost qualifiers and visible-only list targets.
+        // v16.5: allocate targets before composing, then reconcile actual masked reviews without changing the mapping wire format.
         const kbAdapter=`\n\nKNOWLEDGE BASE ADAPTER — THIS RUN USES A STRUCTURED KNOWLEDGE BASE, NOT RAW PDF TEXT.
 - The structured FACT lines below are the sole source of truth. Each already carries a source-grounded meaning, exactly one LATTE bucket, and exactly one Tier.
 - Keep Extra empty unless the supplied FACT text explicitly gives a useful supporting explanation or contrast. Do not add cue captions or move unsupported claims into Text. A term listed without a definition must not become a definition card unless this input actually defines it; do not supply missing mechanisms, frequency rankings, severity labels, or durations from memory.
 - Before combining FACTs, preserve each fact's independent population, trigger, action, timing and certainty (may, often, as prescribed, if indicated). Separate notes when a merger would change AND/OR, preparation versus administration, or distinct eligibility criteria. A lower-priority repetition must not hide a higher-priority source target in the selected tier.
 - Never leave a substantive list member permanently visible merely to satisfy a cloze limit. Test that target elsewhere when needed, preserving equivalent units and inseparable clinical decisions.
 - CODE BLOCK #1 (ANKI IMPORT): keep the master-prompt rules and the Text | Extra | Tags format EXACTLY. Use each fact's supplied LATTE bucket and Tier tag verbatim — never reassign a bucket or downgrade a tier.
-- For each substantive FACT, retain its source details and identify the independently important clinical target(s). A target is rehearsed only when it must be recalled on a cloze review; appearing only in visible Text or Extra is supporting context. Create additional notes when important targets would otherwise remain untested. Generic supporting directives without a distinct clinical target may remain as context on a related note; map their IDs there. Do not create a cloze whose label or visible wording already supplies its answer.
+- Before composing notes, internally allocate each FACT's independently important clinical targets to planned note(s) and cloze index/indices, retaining the relation and qualifiers needed to test each target. Distinguish necessary supporting context from substantive actions, findings, adverse effects, values and list members; do not classify an important target as context merely to reduce note count. Generic supporting directives without a distinct clinical target may remain as context on a related note; map their IDs there.
+- After shortening, splitting or combining notes, reconcile that allocation against the final note lines and actual masked review fronts. Every planned target needs a hidden destination with its required relation and source priority preserved; add or restore notes when a target became only visible Text, Extra, or absent. A fact-id link alone does not satisfy this check. Do not create a cloze whose label, hint or visible sibling already supplies its answer.
+- When the source gives alternative unit representations of the same quantity, hide answer-equivalent representations together under the same cloze index whenever an exposed representation would reveal the answer. Do not confuse equal numbers serving different clinical roles with equivalent representations, and do not calculate replacement source values.
+- Keep the allocation and reconciliation internal. Return only the existing two code blocks; do not add target inventories, cloze indices, commentary or extra fields to the FACT COVERAGE MAP.
 
 CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMAT" SECTION ABOVE (Drug Names, Numeric Values, etc. do NOT apply to structured input).
 - CODE BLOCK #2 is a FACT COVERAGE MAP: one line per distinct fact-to-note association, ordered by supplied FACT id and then note line, formatted EXACTLY as:
@@ -5680,7 +5712,8 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
         const resp=await callGemini(cfg.apiKey,model,parts,{thinkingLevel:toolLevel,signal:ctl.signal,onUpdate:t=>{if(isCurrent()){runState.partialResponse=t;setLiveKB(Math.round(t.length/102.4)/10);}},onMeta:m=>{if(isCurrent()&&m.truncated){runState.truncated=true;const th=m.usage?.thoughtsTokenCount||0;log(`  \u26a0 Chunk ${i+1} hit the 65,536-token ceiling \u2014 cards are missing from the end.`+(th?` Thinking used ${th.toLocaleString()} tok of that budget.`:' Lower the chunk size.'),'err');}}});
         if(!isCurrent()){if(activeRun.current===runState)setInterruptedRun(ankiRunEvidence(runState,'cancelled'));return;}
         runState.rawResponses.push(resp);runState.partialResponse='';
-        const{cards:cc,ledger:cl}=ankiParseCards(resp,i+1);ledgers.push({chunk:i+1,text:cl});all=[...all,...cc];allLedg+=cl?'\n--- Chunk '+(i+1)+' ---\n'+cl:'';
+        // v16.5: this structured-KB run owns the hierarchical tag contract; generic parser calls do not.
+        const{cards:cc,ledger:cl}=ankiParseCards(resp,i+1,'hierarchical-v1');ledgers.push({chunk:i+1,text:cl});all=[...all,...cc];allLedg+=cl?'\n--- Chunk '+(i+1)+' ---\n'+cl:'';
         setProg(((i+1)/n)*100);log(`Chunk ${i+1} done — ${cc.length} received notes`,'ok');
       }
       // Key on the FULL normalized text. The old 120-char prefix key silently dropped
@@ -5707,7 +5740,7 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
       if(abbrevCount)log(`⚠ ${abbrevCount} card(s) contain an error-prone dose abbreviation (q.d., IU, bare U, trailing/missing zero). They are still exportable — fix the transcription before drilling them.`,'warn');
       const lintCount=deduped.filter(c=>c.lint.length).length;
       if(!isCurrent())return;
-      const completed={sourceKB,snapshot,chunkIds,context:runState.context,parsedNotes:all.length,rawCards:all,postDedupeNotes:deduped.length,rawResponses:runState.rawResponses,mappingIssues,truncated:runState.truncated,model,thinkingLevel:toolLevel,startedAt:runState.startedAt,completedAt:new Date().toISOString(),promptHashes:runState.promptHashes,conditionTagChanges:normalized.changes};
+      const completed={sourceKB,snapshot,chunkIds,context:runState.context,parsedNotes:all.length,rawCards:all,postDedupeNotes:deduped.length,rawResponses:runState.rawResponses,mappingIssues,truncated:runState.truncated,model,thinkingLevel:toolLevel,startedAt:runState.startedAt,completedAt:new Date().toISOString(),promptHashes:runState.promptHashes,conditionTagChanges:normalized.changes,conditionTagOutcomes:normalized.outcomes};
       const summary=ankiBatchSummary(deduped,completed,true);
       setBatch(completed);setCards(deduped);setLedger(allLedg);
       log('Complete! '+all.length+' received notes; '+deduped.length+' after dedupe; '+summary.kept.length+' kept notes → '+summary.reviews+' review cards.','ok');
@@ -5893,7 +5926,7 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
       </details>}
       {batch&&<details style={{marginTop:14}}><summary>Batch diagnostics · original responses before edits and exclusions</summary>
         <pre style={{fontSize:12,whiteSpace:'pre-wrap'}}>{JSON.stringify(diagnostics,null,2)}</pre>
-        <button className="btn-secondary" onClick={()=>downloadBlob(new Blob([JSON.stringify({suiteVersion:suiteVersion(),model:batch.model,thinkingLevel:batch.thinkingLevel,startedAt:batch.startedAt,completedAt:batch.completedAt,promptHashes:batch.promptHashes,context:batch.context,snapshot:batch.snapshot,chunkIds:batch.chunkIds,mappingIssues:batch.mappingIssues,conditionTagChanges:batch.conditionTagChanges,diagnostics,rawResponses:batch.rawResponses},null,2)],{type:'application/json'}),'anki-batch-diagnostics.json')}>Save diagnostics and original responses</button>
+        <button className="btn-secondary" onClick={()=>downloadBlob(new Blob([JSON.stringify({suiteVersion:suiteVersion(),model:batch.model,thinkingLevel:batch.thinkingLevel,startedAt:batch.startedAt,completedAt:batch.completedAt,promptHashes:batch.promptHashes,context:batch.context,snapshot:batch.snapshot,chunkIds:batch.chunkIds,mappingIssues:batch.mappingIssues,conditionTagChanges:batch.conditionTagChanges,conditionTagOutcomes:batch.conditionTagOutcomes||null,diagnostics,rawResponses:batch.rawResponses},null,2)],{type:'application/json'}),'anki-batch-diagnostics.json')}>Save diagnostics and original responses</button>
       </details>}
       {batch&&batch.mappingIssues.length>0&&<details style={{marginTop:14}}><summary>Mapping diagnostics ({batch.mappingIssues.length}) · {batch.parsedNotes} parsed notes</summary>{batch.mappingIssues.map((x,i)=><div key={i} style={{fontSize:12}}>{x.code} — {x.id||x.noteId} · chunk {x.chunk}, line {Number.isFinite(x.line)?x.line:x.code==='missing-id'?'missing':'invalid'}</div>)}</details>}
       {ledger&&<div style={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:16,marginTop:14}}>

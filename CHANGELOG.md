@@ -9,6 +9,17 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [16.5] — 2026-09-13
+
+### Changed
+- Validate complete hierarchical tags for newly generated structured-KB notes. Stray words require repair before export; Topic/custom namespaces remain supported and manual selection is preserved.
+- Capture per-note condition-normalization decisions, including canonical tags and skipped repairs, in generation diagnostics. Source-check reports distinguish generation history from read-only checks of the captured audit notes and identify unavailable legacy history.
+- Clarify the approved Anki master and adapter: allocate source targets before composing, restore targets displaced during compression, preserve source qualifiers and timing origins, and hide equivalent representations together. The existing two-block output remains unchanged.
+- Update the filename, visible version and evidence version to 16.5. Flash / Medium and conservative condition-mapping guards remain unchanged.
+
+### Verification
+- See [implementation checks and measurement limits](docs/reviews/anki-v16.5-implementation.md). No live Gemini measurement or native Anki import is part of this implementation.
+
 ## [16.4] — 2026-09-13
 
 ### Changed

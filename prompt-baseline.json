@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "hash": "sha256",
   "scope": "UTF-8 bytes between each source template literal's backticks; JavaScript escape sequences remain source bytes",
-  "baseline": "Ten constants retain their frozen baseline. The approved Anki source/retrieval update is recorded in docs/history/ANKI-source-retrieval-update.diff. The user approved the focused v16.1 empty-Extra default and removal of generic caption examples on 2026-09-11; its exact diff is docs/history/ANKI-v16.1-extra-default.diff. The measured v15.16 prompt and rejected v15.17 example candidate remain historical regression fixtures.",
+  "baseline": "Ten constants retain their frozen baseline. The approved Anki source/retrieval update is recorded in docs/history/ANKI-source-retrieval-update.diff. The user approved the focused v16.1 empty-Extra default and removal of generic caption examples on 2026-09-11; its exact diff is docs/history/ANKI-v16.1-extra-default.diff. The measured v15.16 prompt and rejected v15.17 example candidate remain historical regression fixtures. The user approved v16.5 target-allocation and qualifier preservation after the four v16.4 export reviews; exact master diff: docs/history/ANKI-v16.5-target-allocation.diff. Only ANKI_MASTER_PROMPT changes in this checkpoint.",
   "prompts": {
     "KB_EXTRACTION_PROMPT": "dbba2eb43d7ca89c17350f392c0cf139de2128e15a8c6af94ef2cdbd4e64b74b",
     "KB_VERIFY_PROMPT": "9335f2c24af1d946f4e6a0f5d4bb4227d83173a070d097374fa68db25151aece",
-    "ANKI_MASTER_PROMPT": "80de5dccc4d39ff2bfefc36a9f998e970358f06155ecc2ac01e9e5b53096c65a",
+    "ANKI_MASTER_PROMPT": "007ebc2733f898a2c08b770b1d4b95c52e1eb66787d0325f944ddbdafa30f869",
     "NCLEX_INLINE_PROMPT": "c3b6a2f79519a04b4b2aa56a2d60a647e1c3021aec289d5c458ed27a933bf20e",
     "NCLEX_SPLIT_PROMPT": "8ee1deab184825d7ca6eed849b5b0411af9cb6d9cad1ef90f123b80beae5f338",
     "NCLEX_AI_PAIR_PROMPT": "0418d3c786b2c4896d5f483dd0a813606d9c2c7eb97bf7b222cf05700be813d9",

@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 2175;
+const EXPECTED_ASSERTIONS = 2265;
 
 let file;
 try {
@@ -2318,7 +2318,7 @@ section('v15.17 — approved rollback, historical examples and replay evidence')
   t('candidate examples have no numeric findings against their fictional facts',notes.every(c=>ANKI.ankiNumericAudit(c,batch,true).findings.length===0));
   t('candidate examples have no identical rendered fronts',ANKI.ankiCollisionGroups(notes).length===0);
   t('candidate explicitly excluded fictional examples from source material',prompt.includes('fictional; never source material for the generated deck'));
-  t('shipped prompt contains the current approved Anki revision, not failed examples',!proposal.applied&&live!==proposal.original&&!S.includes(proposal.proposed)&&sha256(extractPromptLiteral(live,'ANKI_MASTER_PROMPT').body)==='80de5dccc4d39ff2bfefc36a9f998e970358f06155ecc2ac01e9e5b53096c65a');
+  t('shipped prompt contains the current approved Anki revision, not failed examples',!proposal.applied&&live!==proposal.original&&!S.includes(proposal.proposed)&&sha256(extractPromptLiteral(live,'ANKI_MASTER_PROMPT').body)==='007ebc2733f898a2c08b770b1d4b95c52e1eb66787d0325f944ddbdafa30f869');
   t('restored prompt and rejected candidate retain their measured hashes',sha256(extractPromptLiteral(historical,'ANKI_MASTER_PROMPT').body)==='353471cbee66c759341ad8f4d857fa75ea4051744a52771ce780fcf172efc548'&&sha256(extractPromptLiteral(proposal.proposed,'ANKI_MASTER_PROMPT').body)==='9d6c99229af067191df7b34d92c8ad98ff569870dd8f3be88634a5eb1a378b83');
   const replay=buildAnkiExampleProposal(proposal.proposed);
   t('diff remains reproducible from either side without mutating input',replay.applied&&replay.original===proposal.original&&replay.proposed===proposal.proposed);
@@ -2338,7 +2338,7 @@ section('generation input pins and bounded pilot');
     ['source packet','function kbForAnki(kb){','// ── KB source chunking','abf40adde002b03587eefe395958ec67de14c7bec5c1fee5db600cc527e74a71'],
     ['chunking','function splitOversizedConditionBlock(block,max){','function ankiParseCards(raw','b3d15fb1e63a7b1cdd49eb105db827debac59bd0340c282fdae5049989e42002'],
     ['focus block','  function buildFocusBlock(){','  const run=useCallback(async()=>{','b096b8eb8733da287a097a99ede3f3e233d8e413c01bdf5605376f516054094f'],
-    ['mapping adapter','        const kbAdapter=','        parts.push({text:ANKI_MASTER_PROMPT','746f695f57c1e5c4a7fab99e9185ac46e9c95b6d81fdc59e390a93d17d2a4159']
+    ['mapping adapter','        const kbAdapter=','        parts.push({text:ANKI_MASTER_PROMPT','5f961b6c70580db1ea4ee519c9541363412b56bb24c74850067a233f2643920c']
   ];
   const {sha256}=require('./tools/repo-checks');
   for(const [name,start,end,hash] of inputs){const a=S.indexOf(start,name==='focus block'?S.indexOf('function AnkiGenerator()'):0),b=S.indexOf(end,a);t('generation input matches its approved pin: '+name,a>=0&&b>a&&sha256(S.slice(a,b).trim())===hash);}
@@ -2701,6 +2701,9 @@ section('v15.14 — clamps, backoff, storage');
   require('./tools/anki-review-quality-tests').runAnkiReviewQualityTests({S,t,section});
   require('./tools/anki-audit-receipt-tests').runAnkiAuditReceiptTests({S,t,section});
   require('./tools/anki-condition-tag-tests').runAnkiConditionTagTests({S,t,section});
+  require('./tools/anki-tag-format-tests').runAnkiTagFormatTests({S,t,section});
+  await require('./tools/anki-normalization-diagnostics-tests').runAnkiNormalizationDiagnosticsTests({S,t,section});
+  require('./tools/anki-target-allocation-tests').runAnkiTargetAllocationTests({S,t,section});
   await require('./tools/anki-review-evidence-tests').runAnkiReviewEvidenceTests({S,t,section});
   await require('./tools/anki-source-ui-tests').runAnkiSourceUiTests({S,t,section});
   require('./tools/anki-citation-recovery-tests').runAnkiCitationRecoveryTests({S,t,section});

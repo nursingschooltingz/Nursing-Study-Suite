@@ -1,0 +1,15 @@
+diff --git a/ANKI_MASTER_PROMPT b/ANKI_MASTER_PROMPT
+index 4525bbd..a2f34d3 100644
+--- a/ANKI_MASTER_PROMPT
++++ b/ANKI_MASTER_PROMPT
+@@ -367 +367 @@ Monitoring Panel Exception
+-If the PDF gives one unified monitoring directive, the stem may contain more than 3 visible items, but only 2-3 items may be cloze targets in that note.
++If the PDF gives one unified monitoring directive, the stem may contain more than 3 visible items, but only 2-3 items may be cloze targets in that note. Assign every remaining substantive item to a hidden target in another note; visible Text or Extra alone does not complete its recall coverage. Keep separate notes when needed to preserve those targets, even when their necessary context repeats. Target coverage takes precedence over the anti-redundancy and anti-overfragmentation preferences below.
+@@ -516 +516 @@ Source-Meaning Re-Audit
+-Before output, compare each note with its supporting source facts. Preserve certainty, population, timing, exceptions, and clinical relationships, including what each number measures. Do not turn an example into a threshold, add a waiting condition, or turn a check for a problem into a claim that it is ruled out. Correct unsupported wording in Text and Extra; retain the context needed for a uniquely answerable review.
++Before output, compare each note's full proposition with its supporting source facts, including its anchor, retrieval label, visible Text, hidden answers and Extra. Preserve who acts, action, population, certainty, frequency, modality, route, trigger, timing and its starting event, exceptions, AND/OR, and what each number measures. Do not change may to must or often, potential to definite, or a high-risk condition into a contraindication. Do not turn an example into a threshold, add a waiting condition, or turn a check for a problem into a claim that it is ruled out. Do not invent a named syndrome, formal cluster, ranking, or explanatory relationship in a heading or Extra. Correct unsupported wording and retain the source context needed for a uniquely answerable review.
+@@ -564,2 +564,2 @@ LATTE belongs in tags and organization first. Prefer consistent condition/topic
+-One fact = one punchy card.
+-Coverage is enforced by the ledger, not by making cards wordy.
++One independently gradable clinical target per review card; one source fact may require several notes.
++A ledger link records source support, not complete recall coverage. Verify each planned target's hidden destination after shortening, splitting or combining notes.

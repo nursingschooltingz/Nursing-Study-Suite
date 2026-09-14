@@ -8,7 +8,7 @@ Turn your lecture PDFs and PowerPoints into a complete, source-cited study syste
 
 The whole suite is **one HTML file**. There is nothing to install, no account to create, and no website collecting your data. You open the file in your web browser, paste in a free Google Gemini API key, upload your study materials, and go.
 
-**Latest release: v16.4.** [Download the single HTML file](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v16.4/Nursing-Study-Suite.v16.4.html), save it, then open it in your browser. The [current repository HTML](Nursing-Study-Suite%20v16.4.html) contains the same application, with source inventory accounting, exact audit references, preservation of valid partial records and whole-deck review candidates. Flash / Medium remains the Anki default. Existing saved profiles stay intact; choose **Use recommended Anki profile** to update yours.
+**Latest release: v16.5.** [Download the single HTML file](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v16.5/Nursing-Study-Suite.v16.5.html), save it, then open it in your browser. The [current repository HTML](Nursing-Study-Suite%20v16.5.html) contains the same application, with scoped tag-format validation, per-note normalization diagnostics and revised target-allocation instructions. Flash / Medium remains the Anki default. Existing saved profiles stay intact; choose **Use recommended Anki profile** to update yours.
 
 Use **Knowledge** to build or import your source, **Priority** to organize study time, **Anki** for recall, **NCLEX Extract** for existing questions, **NCLEX Generate** for new practice, and **Case Studies** for unfolding cases. **Settings** shows or hides the shared API/model panel. On phones and smaller tablets it starts collapsed; **Add API key** opens it directly. Switching tools preserves your inputs and outputs. A keyboard **Skip to study workspace** link bypasses navigation.
 
@@ -156,6 +156,10 @@ Generates cloze-deletion flashcards ready for Anki, from your Knowledge Base. Op
 
 Anki's Auto profile defaults to **Flash / Medium** in v16.2. The paired tests favored easier-to-grade reviews at Medium, while both settings still needed source review. Existing saved choices are preserved; use **Use recommended Anki profile** in Anki to update just that tool, or reset all profiles in Settings. Manual mode continues to use its shared settings.
 
+The generator now plans each substantive source target before writing and rechecks its hidden destination after shortening or combining notes. It explicitly preserves qualifiers, timing origins and equivalent-unit masking. These are generation instructions, not a guarantee of source coverage; review the resulting cards against your KB.
+
+**Batch diagnostics → Save diagnostics and original responses** records a normalization outcome for every processed note, including canonical tags and skipped repairs with their reasons. Source-check downloads keep those generation decisions separate from read-only checks of the captured audit notes. Older batches without that history report it as unavailable.
+
 ### Preview and style checks
 
 After generation, switch to **Preview**, select a cloze number (c1/c2/c3), and click **Show answer** to reveal the answer and Extra. Gaps sharing a number hide together; the other answers remain visible. Use **Edit in Table** to revise a note.
@@ -165,6 +169,8 @@ Amber style warnings separately flag missing condition/topic cues and retrieval 
 Use **Style warnings** or the **Review findings** dropdown to focus on a particular issue, possible duplicate, or source finding. These filters only change which notes are shown; export includes every kept note in the selected tier. Open a finding's note to inspect its review, then use **Edit in Table** to revise it.
 
 The generator instructions require source-supported Text and Extra, preserving certainty, population, timing, exceptions, and what each number measures. **Extra is empty by default.** It is populated only with a useful explanation or contrast explicitly supplied by the source and not already conveyed by Text; generic captions, restatements, and inferred nursing explanations do not belong there. Independent answers still count as separate targets when bundled into one comma/slash answer or hidden under the same cloze number; one inseparable clinical relationship can stay together. Testable mechanisms should receive recall notes of their own. These instructions still need review against the source; the supplied v16.1 tests still found source-fidelity errors, and the new v16.2 adapter requires another measured comparison.
+
+New structured-KB runs capture a hierarchical tag contract. A stray word such as `Disorder` after `Condition::Panic` makes that note structurally ineligible for export until repaired. Complete `Topic::` and custom domain hierarchies remain allowed. Repairing a tag restores structural eligibility while preserving your Keep choice; existing unscoped notes remain compatible. Unknown condition names and mixed source conditions remain advisory discrepancies, with no majority-based relabeling.
 
 Notes with different Extra text, tags, priority, case, or selection remain separate. Only completely equivalent valid notes merge their source links. Tier tags must be complete whitespace-separated tags with one distinct `Tier::1`, `Tier::2`, or `Tier::3`; repeated copies of the same tier have one effective value.
 

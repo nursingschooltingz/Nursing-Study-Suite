@@ -1,5 +1,14 @@
 # Current maintainer state
 
+## v16.5 Anki release (2026-09-13)
+
+The user approved the adjudicated implementation after four v16.4 subject exports and the follow-up external review, then explicitly authorized committing, pushing and publishing v16.5 as the latest release. The canonical application is `Nursing-Study-Suite v16.5.html`; its release asset is `Nursing-Study-Suite.v16.5.html`.
+
+- **Scoped structural tags.** New structured-KB generation captures a hierarchical tag contract. Stray bare tokens are structurally ineligible; Topic/custom namespaces and existing unscoped records remain compatible. Repair preserves manual selection. Unknown names, disputed mappings and mixed conditions remain advisory; no majority-condition fallback is added.
+- **Normalization evidence.** Every post-dedupe generation note retains its outcome and reason, before/after tags, mapped IDs and source location. Batch downloads preserve canonical/no-op and skipped outcomes as well as repairs. Source-check reports distinguish that capture from read-only checks of audit-snapshot notes; legacy history is unavailable rather than inferred from an empty edit list.
+- **Approved generation instructions.** Only ANKI_MASTER_PROMPT changes among the eleven frozen constants, with an intentional baseline update and [exact diff](docs/history/ANKI-v16.5-target-allocation.diff). The [adapter diff](docs/history/ANKI-v16.5-adapter.diff) requires internal target allocation before composition, reconciliation after compression, preserved source relations/priority and equivalent-unit masking. The two-block fact-to-note map stays unchanged; no new target-output protocol, API call, model setting or semantic gate is introduced.
+- **Evidence boundary.** The supplied exports demonstrate missing or untested targets and tag discrepancies, not a measured v16.5 improvement. Internal model planning is not an independently validated target inventory. Verification and remaining live measurements are recorded in [the implementation note](docs/reviews/anki-v16.5-implementation.md). Private course material remains outside Git.
+
 ## v16.4 Anki audit release (2026-09-13)
 
 The user approved implementation of the recommendations adjudicated against four supplied v16.3 tests, then explicitly authorized committing, pushing and publishing v16.4 as the latest release. The canonical application is `Nursing-Study-Suite v16.4.html`; its release asset is `Nursing-Study-Suite.v16.4.html`. Flash / Medium, the generation adapter, all eleven frozen constants and their baseline remain unchanged.

@@ -1,6 +1,6 @@
 # Nursing Study Suite — Prompt Library
 
-The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, and the item-quality auditor, **extracted verbatim from the shipped v16.4 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
+The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, and the item-quality auditor, **extracted verbatim from the shipped v16.5 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
 
 > **Coverage.** All 12 named prompt constants are represented from live HTML bytes. Eleven are byte-frozen; `CARD_TRANSCRIBE_PROMPT` is deliberately tunable but requires two transcription runs per card after an edit. The generated appendix is maintained by `node tools/render-prompts.js --write` and checked by `node verify-repo.js`.
 
@@ -232,7 +232,7 @@ HARD RULES
 
 ---
 
-## 2 · Anki Card Generator (`ANKI_MASTER_PROMPT`, 20,762 chars)
+## 2 · Anki Card Generator (`ANKI_MASTER_PROMPT`, 21,646 chars)
 
 **Runtime assembly** — each request the app sends is:
 
@@ -244,7 +244,9 @@ where `focusBlock` renders your Outcomes / Points / Additional Context boxes (an
 
 The runtime adapter requires independently important recall targets and supports repeated single-edge fact-to-note mappings. In v16.2 it reinforces empty/source-only Extra, rejects definitions or rankings absent from the input, preserves population/trigger/action/timing/qualifiers, and rejects permanently visible substantive list targets. Equivalent units and inseparable decisions remain together when appropriate. A source link identifies support; it does not prove that every important part of the fact is tested. Local review checks do not make model calls. [Exact adapter change](docs/history/ANKI-v16.2-adapter.diff).
 
-The separate optional **Check against KB** flow uses `ankiBuildSourceAuditPrompt` and its v16.4 builder, not the NCLEX item-audit prompt. Preparation captures bounded source/note packets and exact request strings locally; an explicit Run submits them using independently selected settings. Retry / resume reuses that capture for incomplete groups. New requests use exact packet-local note handles and app-owned source-token ranges, with hidden `noteRefs` separate from visible/Extra `contextRefs`. The model first inventories every selected primary fact as nonoverlapping target/context ranges covering every source token, then supplies target coverage and separate Text/Extra support records. Context requires an explicit rationale; all-context classifications remain reviewable. Instructions separate substantive list members and compare full propositions, including actor, action, modality, frequency, conditions and numerical relations. Suggestions preserve the three-cloze limit and higher-priority coverage, and require whole-deck review before adding or deleting notes. Independently validated records survive errors, but unresolved required records or malformed findings keep the group incomplete. Exact addresses and complete token accounting establish traceability, not semantic entailment or exhaustive target judgment. The [exact builder diff](docs/history/ANKI-v16.4-audit-builder.diff) records the approved change. Frozen prompts and the generation adapter remain unchanged. Packets include actual review fronts, hidden answers, Text and Extra; source quotes are excluded because they were not generation input.
+The separate optional **Check against KB** flow uses `ankiBuildSourceAuditPrompt` and its v16.4 builder, not the NCLEX item-audit prompt. Preparation captures bounded source/note packets and exact request strings locally; an explicit Run submits them using independently selected settings. Retry / resume reuses that capture for incomplete groups. New requests use exact packet-local note handles and app-owned source-token ranges, with hidden `noteRefs` separate from visible/Extra `contextRefs`. The model first inventories every selected primary fact as nonoverlapping target/context ranges covering every source token, then supplies target coverage and separate Text/Extra support records. Context requires an explicit rationale; all-context classifications remain reviewable. Instructions separate substantive list members and compare full propositions, including actor, action, modality, frequency, conditions and numerical relations. Suggestions preserve the three-cloze limit and higher-priority coverage, and require whole-deck review before adding or deleting notes. Independently validated records survive errors, but unresolved required records or malformed findings keep the group incomplete. Exact addresses and complete token accounting establish traceability, not semantic entailment or exhaustive target judgment. The [exact builder diff](docs/history/ANKI-v16.4-audit-builder.diff) records the approved change. That v16.4 checker change left frozen prompts and the generation adapter unchanged; the v16.5 generation changes are recorded below. Packets include actual review fronts, hidden answers, Text and Extra; source quotes are excluded because they were not generation input.
+
+The v16.5 master clarification makes target coverage outrank monitoring-list compression and anti-overfragmentation, preserves full propositions including labels and timing origins, and distinguishes a support link from tested coverage. The runtime adapter plans source targets before composition, reconciles final masked views, and keeps equivalent representations hidden together. Planning stays internal; the two-block import/map protocol is unchanged. These instructions require live measurement; they do not guarantee semantic completeness. Exact changes: [master](docs/history/ANKI-v16.5-target-allocation.diff), [adapter](docs/history/ANKI-v16.5-adapter.diff).
 
 ### The master prompt
 
@@ -615,7 +617,7 @@ Count independently gradable answers even when they share a cloze index or appea
 Split unrelated targets or long lists into separate notes; keep together only one inseparable clinical relationship.
 Monitoring Panel Exception
 
-If the PDF gives one unified monitoring directive, the stem may contain more than 3 visible items, but only 2-3 items may be cloze targets in that note.
+If the PDF gives one unified monitoring directive, the stem may contain more than 3 visible items, but only 2-3 items may be cloze targets in that note. Assign every remaining substantive item to a hidden target in another note; visible Text or Extra alone does not complete its recall coverage. Keep separate notes when needed to preserve those targets, even when their necessary context repeats. Target coverage takes precedence over the anti-redundancy and anti-overfragmentation preferences below.
 
 PHASE 1.9 — ANTI-REDUNDANCY + ANTI-OVERFRAGMENTATION
 Anti-Redundancy
@@ -764,7 +766,7 @@ If output seems too short for the density of the PDF, re-audit for omitted numbe
 Do not add filler to increase count.
 Source-Meaning Re-Audit
 
-Before output, compare each note with its supporting source facts. Preserve certainty, population, timing, exceptions, and clinical relationships, including what each number measures. Do not turn an example into a threshold, add a waiting condition, or turn a check for a problem into a claim that it is ruled out. Correct unsupported wording in Text and Extra; retain the context needed for a uniquely answerable review.
+Before output, compare each note's full proposition with its supporting source facts, including its anchor, retrieval label, visible Text, hidden answers and Extra. Preserve who acts, action, population, certainty, frequency, modality, route, trigger, timing and its starting event, exceptions, AND/OR, and what each number measures. Do not change may to must or often, potential to definite, or a high-risk condition into a contraindication. Do not turn an example into a threshold, add a waiting condition, or turn a check for a problem into a claim that it is ruled out. Do not invent a named syndrome, formal cluster, ranking, or explanatory relationship in a heading or Extra. Correct unsupported wording and retain the source context needed for a uniquely answerable review.
 
 PHASE 5 — PRE-OUTPUT AUDIT
 
@@ -812,8 +814,8 @@ Specificity: shortened wording did not remove the context needed for one uniquel
 CRITICAL REMINDERS
 
 LATTE belongs in tags and organization first. Prefer consistent condition/topic anchors and specific retrieval labels without revealing the answer.
-One fact = one punchy card.
-Coverage is enforced by the ledger, not by making cards wordy.
+One independently gradable clinical target per review card; one source fact may require several notes.
+A ledger link records source support, not complete recall coverage. Verify each planned target's hidden destination after shortening, splitting or combining notes.
 Never drop list items.
 Never add unsourced facts.
 Keep Extra lean unless clarity truly requires more.
