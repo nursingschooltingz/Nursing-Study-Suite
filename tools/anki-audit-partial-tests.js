@@ -43,7 +43,8 @@ function runAnkiAuditPartialTests({S,t,section}){
   const extra=change(v=>{const x=v.factReviews[1].targets[0];x.status='extra-only';x.noteRefs=[];x.contextRefs=[{noteId:'n2',field:'extra'}];});
   t('V4 Extra-only receipts keep Extra references distinct',extra.complete&&extra.factReviews[1].targets[0].contextRefs[0].field==='extra');
   t('V4 context-only status cannot carry hidden refs',!change(v=>{v.factReviews[0].targets[0].status='visible-only';}).complete);
-  t('V4 context field must agree with context-only status',!change(v=>{const x=v.factReviews[1].targets[0];x.status='extra-only';x.noteRefs=[];x.contextRefs=[{noteId:'n2',field:'text'}];}).complete);
+  const normalizedContext=change(v=>{const x=v.factReviews[1].targets[0];x.status='extra-only';x.noteRefs=[];x.contextRefs=[{noteId:'n2',field:'text'}];});
+  t('V4 context-only status follows its exact locations with recorded normalization',normalizedContext.complete&&normalizedContext.factReviews[1].targets[0].status==='visible-only'&&normalizedContext.referenceRecoveries.length===1&&normalizedContext.referenceRecoveries[0].before.status==='extra-only');
   t('V4 overlapping inventory spans quarantine that fact only',change(v=>{v.factReviews[0].inventory.push({sourceRef:{start:1,end:1},role:'context',reason:'Label context.'});}).factReviews.length===1);
   t('V4 omitted inventory tokens cannot silently pass',!change(v=>{v.factReviews[0].inventory[0].sourceRef.end=4;}).complete);
   t('V4 context inventory requires an explicit rationale',!change(v=>{v.factReviews[0].inventory[0].role='context';v.factReviews[0].targets=[];}).complete);

@@ -110,7 +110,7 @@ async function main(){
     assert.equal(evidence.metadata.checkComplete,true);assert.equal(evidence.metadata.currentAtExport,true);assert(evidence.metadata.startedAt&&evidence.metadata.finishedAt);
     assert.equal(evidence.metadata.sourceSnapshotSha256,packet.metadata.sourceSnapshotSha256);assert.equal(evidence.metadata.cardSnapshotSha256,packet.metadata.cardSnapshotSha256);
     assert(evidence.results.every(g=>Array.isArray(g.factReviews)&&Array.isArray(g.noteReviews)),'completed report retains every returned review receipt');
-    assert.equal(evidence.metadata.schemaVersion,4);assert.equal(evidence.metadata.suiteVersion,'16.5');
+    assert.equal(evidence.metadata.schemaVersion,4);assert.equal(evidence.metadata.suiteVersion,'16.6');
     assert(evidence.noteHandleMaps.every(g=>g.notes.every(n=>/^n[1-9]\d*$/.test(n.handle))),'private report retains exact local-to-internal handle maps');
     assert(evidence.results.every(g=>g.complete&&g.factReviews.every(f=>f.inventory.length>0)),'completed groups account for every selected source fact');
     await view.getByText('Checked targets and note fields ·',{exact:false}).first().click();

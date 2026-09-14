@@ -7,7 +7,8 @@ const fs=require('fs'),path=require('path');
 const {resolveSuiteFile,sha256,suiteVersionFromFilename}=require('./repo-checks');
 function span(source,start,end){const a=source.indexOf(start),b=source.indexOf(end,a+start.length);if(a<0||b<0)throw Error('Pilot extraction anchor moved: '+start);return source.slice(a,b);}
 function makeAnkiPilotSpec(kb,source){
-  const helpers=span(source,'function kbSourceText(f){','\n')+'\n'+span(source,'function kbForAnki(kb){','// ── KB source chunking')+span(source,'function splitOversizedConditionBlock(block,max){','function ankiParseCards(raw');
+  // v16.6: the live packet now uses the same canonical-tag registry as generation review.
+  const helpers=span(source,'function kbSourceText(f){','\n')+'\n'+span(source,'function ankiConditionTagKey(','function ankiConditionTagCheck(')+span(source,'function kbForAnki(kb){','// ── KB source chunking')+span(source,'function splitOversizedConditionBlock(block,max){','function ankiParseCards(raw');
   const {kbForAnki,ankiChunkText}=new Function(helpers+';return {kbForAnki,ankiChunkText};')();
   const packet=kbForAnki(kb),chunks=ankiChunkText(packet,12000,2);
   const model=source.match(/const \[flashModel,setFlashModel\]=useState\('([^']+)'\)/)?.[1];

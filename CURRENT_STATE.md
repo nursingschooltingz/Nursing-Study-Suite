@@ -1,5 +1,17 @@
 # Current maintainer state
 
+## v16.6 Anki release (2026-09-13)
+
+The user approved implementation as v16.6 after independent review of four v16.5 generated decks and Flash/Low checker reports, followed by adjudication of the supplied external review. The canonical file is `Nursing-Study-Suite v16.6.html`. The user subsequently authorized committing, pushing and publishing v16.6 as the latest release, with asset `Nursing-Study-Suite.v16.6.html`. No new live model measurement is claimed.
+
+- Mixed Text/Extra contextual references are retained; visible Text takes precedence over Extra-only status. Same-note disjoint indices normalize without creating hidden coverage. Recovery history remains separate from citation recovery. Conflicting ranges, bad indices, invalid inventory roles and malformed JSON stay unresolved.
+- Exact Condition tokens are computed from the existing safe canonical registry and supplied in each condition prefix. Conservative normalization and selection rules remain unchanged.
+- Mixed source inventories and supported field receipts receive bounded advisory checks for suspicious context roles, noun-only citations with added predicates, and possible qualifier strengthening. These are review signals, not semantic verdicts or export gates. Literal hidden matches do not clear them.
+- Focused runtime adapter and checker guidance preserves full propositions, substantive target destinations, useful Extra and faithful paraphrases. All eleven frozen constants and their baseline remain unchanged.
+- Offline replay recovers 13 previously rejected records: OB improves 32/41→37/41 complete groups and med-surg 21/26→24/26. Both remain partial; eight unresolved records and one malformed JSON packet still require correction. These are parser results on saved responses, not evidence that card quality improved.
+
+Verification and limits: [implementation note](docs/reviews/anki-v16.6-implementation.md). Private decks, KBs and raw reports remain ignored.
+
 ## v16.5 Anki release (2026-09-13)
 
 The user approved the adjudicated implementation after four v16.4 subject exports and the follow-up external review, then explicitly authorized committing, pushing and publishing v16.5 as the latest release. The canonical application is `Nursing-Study-Suite v16.5.html`; its release asset is `Nursing-Study-Suite.v16.5.html`.

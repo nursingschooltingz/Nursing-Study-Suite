@@ -4,7 +4,7 @@ This is the task map for maintainers and coding agents. `AGENTS.md` remains the 
 
 ## Repository shape
 
-- `Nursing-Study-Suite v16.5.html` is the complete application.
+- `Nursing-Study-Suite v16.6.html` is the complete application.
 - `latte-tests.js` is the deterministic regression harness and extracts live functions by anchor.
 - `verify-repo.js` is the only ordinary repository verification entry point.
 - `prompt-baseline.json` stores the 11 frozen prompt hashes.
@@ -37,6 +37,8 @@ This is the task map for maintainers and coding agents. `AGENTS.md` remains the 
 - The focused v16.1 Extra change is recorded in `docs/history/ANKI-v16.1-extra-default.diff`; the preceding source/retrieval change is in `docs/history/ANKI-source-retrieval-update.diff`. These approved diffs do not authorize further prompt changes. Empty Extra must retain the same two pipe separators and third-field Tags.
 
 The approved v16.5 Anki master and runtime adapter changes are recorded in `docs/history/ANKI-v16.5-target-allocation.diff` and `docs/history/ANKI-v16.5-adapter.diff`. Internal target planning and reconciliation keep the same two-block response contract. Prompt-contract assertions protect instructions and formatting, not model adherence.
+
+The approved v16.6 changes leave all eleven frozen constants unchanged. Exact runtime changes are recorded in `docs/history/ANKI-v16.6-adapter.diff`, `docs/history/ANKI-v16.6-serializer.diff`, and `docs/history/ANKI-v16.6-audit-builder.diff`. The source packet supplies canonical Condition tokens; reference normalization is lossless and recorded; mixed-context and short-citation signals remain advisory.
 
 ## Stable landmarks inside the HTML
 

@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 2265;
+const EXPECTED_ASSERTIONS = 2564;
 
 let file;
 try {
@@ -2333,12 +2333,12 @@ section('v15.17 — approved rollback, historical examples and replay evidence')
 
 section('generation input pins and bounded pilot');
 {
-  // Packet/chunker/focus retain measured A0 hashes; the adapter pin records the approved v16.2 source-fidelity revision and local hash capture.
+  // v16.6: approved exact canonical input tokens and focused adapter changes have deliberate pins; chunker/focus remain frozen at their measured bytes.
   const inputs=[
-    ['source packet','function kbForAnki(kb){','// ── KB source chunking','abf40adde002b03587eefe395958ec67de14c7bec5c1fee5db600cc527e74a71'],
+    ['source packet','function kbForAnki(kb){','// ── KB source chunking','7a99d66b543e48414bd21d48a74d5753bbca883cf96ad967d4e0901cbbb29656'],
     ['chunking','function splitOversizedConditionBlock(block,max){','function ankiParseCards(raw','b3d15fb1e63a7b1cdd49eb105db827debac59bd0340c282fdae5049989e42002'],
     ['focus block','  function buildFocusBlock(){','  const run=useCallback(async()=>{','b096b8eb8733da287a097a99ede3f3e233d8e413c01bdf5605376f516054094f'],
-    ['mapping adapter','        const kbAdapter=','        parts.push({text:ANKI_MASTER_PROMPT','5f961b6c70580db1ea4ee519c9541363412b56bb24c74850067a233f2643920c']
+    ['mapping adapter','        const kbAdapter=','        parts.push({text:ANKI_MASTER_PROMPT','82295952ef835a9cf84ed63ced9f15840614566ac09b547856d9c5ed2d98609e']
   ];
   const {sha256}=require('./tools/repo-checks');
   for(const [name,start,end,hash] of inputs){const a=S.indexOf(start,name==='focus block'?S.indexOf('function AnkiGenerator()'):0),b=S.indexOf(end,a);t('generation input matches its approved pin: '+name,a>=0&&b>a&&sha256(S.slice(a,b).trim())===hash);}
@@ -2713,6 +2713,9 @@ section('v15.14 — clamps, backoff, storage');
   require('./tools/anki-audit-packet-size-tests').runAnkiAuditPacketSizeTests({S,t,section});
   require('./tools/anki-audit-partial-tests').runAnkiAuditPartialTests({S,t,section});
   require('./tools/anki-audit-reconcile-tests').runAnkiAuditReconcileTests({S,t,section});
+  require('./tools/anki-audit-v166-tests').runAnkiAuditV166Tests({S,t,section});
+  require('./tools/anki-generator-v166-tests').runAnkiGeneratorV166Tests({S,t,section});
+  require('./tools/anki-quality-v166-tests').runAnkiQualityV166Tests({S,t,section});
 
   console.log('\n════════════════════════════');
   const total = pass + fail;

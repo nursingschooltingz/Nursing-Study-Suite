@@ -9,6 +9,20 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [16.6] — 2026-09-13
+
+### Changed
+- Preserve mixed Text/Extra audit locations and normalize repeated same-note references with disjoint cloze indices. Record original and canonical references in the interface and private reports. Invalid or ambiguous evidence remains pending.
+- Supply exact canonical Condition tokens in structured source packets and require copying them, preserving conservative mapping safeguards.
+- Clarify source support, substantive Extra-only targets and target preservation during note splitting in the runtime adapter and checker. All eleven frozen constants and Flash / Medium stay unchanged.
+
+### Added
+- Advisory review items for selected substantive context spans in mixed inventories, short noun-only citations attached to added predicates, and possible qualifier strengthening. Related hidden answers remain candidates for manual review.
+- Synthetic quality fixtures including supported paraphrases, necessary scaffolding and known limits; no private course material is included.
+
+### Verification
+- See [implementation checks and measurement limits](docs/reviews/anki-v16.6-implementation.md). No new live Gemini run or native Anki import is part of this implementation.
+
 ## [16.5] — 2026-09-13
 
 ### Changed

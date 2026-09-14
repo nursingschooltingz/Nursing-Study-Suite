@@ -1,0 +1,725 @@
+{
+  "schemaVersion": 1,
+  "description": "Invented workshop examples for advisory Anki receipt checks. No clinical or private course content. Expected review is not an unsupported-content verdict.",
+  "defaults": {
+    "condition": "Vela Workshop",
+    "tier": 1,
+    "bucket": "Assess"
+  },
+  "cases": [
+    {
+      "id": "mixed-list-member-visible-rationale",
+      "source": "Indicators include amber haze, copper flecks, and a rattling shell.",
+      "text": "[Vela] Indicators: {{c1::amber haze}}, {{c2::copper flecks}}, and a rattling shell.",
+      "inventory": [
+        {
+          "span": "Indicators include",
+          "role": "context",
+          "reason": "List introduction."
+        },
+        {
+          "span": "amber haze,",
+          "role": "target",
+          "index": 1
+        },
+        {
+          "span": "copper flecks,",
+          "role": "target",
+          "index": 2
+        },
+        {
+          "span": "and",
+          "role": "context",
+          "reason": "Conjunction."
+        },
+        {
+          "span": "a rattling shell.",
+          "role": "context",
+          "reason": "Already provided as visible prompt context."
+        }
+      ],
+      "expect": {
+        "contextSpans": [
+          "a rattling shell."
+        ],
+        "evidenceFields": [],
+        "qualifierFields": []
+      }
+    },
+    {
+      "id": "mixed-list-member-tautological-rationale",
+      "source": "Failure risks include damp storage, uneven flooring, previous repairs, and loose fittings.",
+      "text": "[Vela] Failure risks: {{c1::damp storage}}, {{c2::uneven flooring}}, previous repairs, and {{c3::loose fittings}}.",
+      "inventory": [
+        {
+          "span": "Failure risks include",
+          "role": "context",
+          "reason": "List introduction."
+        },
+        {
+          "span": "damp storage,",
+          "role": "target",
+          "index": 1
+        },
+        {
+          "span": "uneven flooring,",
+          "role": "target",
+          "index": 2
+        },
+        {
+          "span": "previous repairs, and",
+          "role": "context",
+          "reason": "Previous repairs."
+        },
+        {
+          "span": "loose fittings.",
+          "role": "target",
+          "index": 3
+        }
+      ],
+      "expect": {
+        "contextSpans": [
+          "previous repairs, and"
+        ],
+        "evidenceFields": [],
+        "qualifierFields": []
+      }
+    },
+    {
+      "id": "mixed-numeric-timeframe",
+      "source": "The finish becomes matte and settles within 6 to 9 days.",
+      "text": "[Vela] Finish: becomes {{c1::matte}} and settles within 6 to 9 days.",
+      "inventory": [
+        {
+          "span": "The finish becomes",
+          "role": "context",
+          "reason": "Subject and linking phrase."
+        },
+        {
+          "span": "matte",
+          "role": "target",
+          "index": 1
+        },
+        {
+          "span": "and settles within 6 to 9 days.",
+          "role": "context",
+          "reason": "Resolution timeframe for the finish."
+        }
+      ],
+      "expect": {
+        "contextSpans": [
+          "and settles within 6 to 9 days."
+        ],
+        "evidenceFields": [],
+        "qualifierFields": []
+      }
+    },
+    {
+      "id": "mixed-populations",
+      "source": "The coating prevents corrosion in outdoor frames, coastal fixtures, and submerged brackets.",
+      "text": "[Vela] Coating: prevents {{c1::corrosion}} in outdoor frames, coastal fixtures, and submerged brackets.",
+      "inventory": [
+        {
+          "span": "The coating prevents",
+          "role": "context",
+          "reason": "Subject and action frame."
+        },
+        {
+          "span": "corrosion",
+          "role": "target",
+          "index": 1
+        },
+        {
+          "span": "in outdoor frames, coastal fixtures, and submerged brackets.",
+          "role": "context",
+          "reason": "High-risk populations benefiting from the coating."
+        }
+      ],
+      "expect": {
+        "contextSpans": [
+          "in outdoor frames, coastal fixtures, and submerged brackets."
+        ],
+        "evidenceFields": [],
+        "qualifierFields": []
+      }
+    },
+    {
+      "id": "mixed-needed-scaffolding-control",
+      "source": "The Vela loom uses a copper shuttle.",
+      "text": "[Vela loom] Shuttle: made of {{c1::copper}}.",
+      "inventory": [
+        {
+          "span": "The Vela loom uses a",
+          "role": "context",
+          "reason": "Names the device being tested."
+        },
+        {
+          "span": "copper shuttle.",
+          "role": "target",
+          "index": 1
+        }
+      ],
+      "expect": {
+        "contextSpans": [],
+        "evidenceFields": [],
+        "qualifierFields": []
+      }
+    },
+    {
+      "id": "mixed-necessary-condition-control",
+      "source": "When the latch is closed, press the green button.",
+      "text": "[Vela] When the latch is closed, press the {{c1::green button}}.",
+      "inventory": [
+        {
+          "span": "When the latch is closed, press the",
+          "role": "context",
+          "reason": "Condition and action needed to make the target answerable."
+        },
+        {
+          "span": "green button.",
+          "role": "target",
+          "index": 1
+        }
+      ],
+      "expect": {
+        "contextSpans": [],
+        "evidenceFields": [],
+        "qualifierFields": []
+      }
+    },
+    {
+      "id": "mixed-covered-elsewhere-still-reviewable",
+      "source": "The kit contains a spool, a shuttle, and a tension ring.",
+      "text": "[Vela] Kit: {{c1::a spool}}, {{c2::a shuttle}}, and a tension ring.",
+      "inventory": [
+        {
+          "span": "The kit contains",
+          "role": "context",
+          "reason": "Introduction."
+        },
+        {
+          "span": "a spool,",
+          "role": "target",
+          "index": 1
+        },
+        {
+          "span": "a shuttle,",
+          "role": "target",
+          "index": 2
+        },
+        {
+          "span": "and",
+          "role": "context",
+          "reason": "Conjunction."
+        },
+        {
+          "span": "a tension ring.",
+          "role": "context",
+          "reason": "Accompanying component."
+        }
+      ],
+      "otherNotes": [
+        {
+          "id": "elsewhere",
+          "text": "[Vela] Third kit component: {{c1::a tension ring}}.",
+          "chunk": 9
+        }
+      ],
+      "expect": {
+        "contextSpans": [
+          "a tension ring."
+        ],
+        "evidenceFields": [],
+        "qualifierFields": [],
+        "candidateNoteIds": [
+          "elsewhere"
+        ],
+        "automaticClearance": false
+      }
+    },
+    {
+      "id": "noun-only-causal-extra",
+      "source": "Flintveil appears as silver dots along the panel edge.",
+      "text": "[Vela] Flintveil: appears as {{c1::silver dots}} along the panel edge.",
+      "extra": "Caused by copper spores.",
+      "extraEvidence": [
+        "Flintveil"
+      ],
+      "expect": {
+        "contextSpans": [],
+        "evidenceFields": [
+          "extra"
+        ],
+        "qualifierFields": [],
+        "semanticAssessment": "unsupported added cause"
+      }
+    },
+    {
+      "id": "noun-only-definition-text",
+      "source": "Catalog entries include Velora, Nimset, and Asterin.",
+      "text": "[Vela] Velora is defined as {{c1::a silent rotary lock}}.",
+      "textEvidence": [
+        "Velora,"
+      ],
+      "expect": {
+        "contextSpans": [],
+        "evidenceFields": [
+          "text"
+        ],
+        "qualifierFields": [],
+        "semanticAssessment": "source lists a name but supplies no definition"
+      }
+    },
+    {
+      "id": "noun-only-required-action-extra",
+      "source": "The blue marker identifies the north rack.",
+      "text": "[Vela] Blue marker: identifies the {{c1::north rack}}.",
+      "extra": "Requires closing the main gate.",
+      "extraEvidence": [
+        "blue marker"
+      ],
+      "expect": {
+        "contextSpans": [],
+        "evidenceFields": [
+          "extra"
+        ],
+        "qualifierFields": [],
+        "semanticAssessment": "unsupported required action"
+      }
+    },
+    {
+      "id": "valid-source-supported-extra-control",
+      "source": "Use a felt sleeve because it prevents surface scratches.",
+      "text": "[Vela] Protective cover: use a {{c1::felt sleeve}}.",
+      "extra": "Prevents surface scratches.",
+      "extraEvidence": [
+        "because it prevents surface scratches."
+      ],
+      "expect": {
+        "contextSpans": [],
+        "evidenceFields": [],
+        "qualifierFields": []
+      }
+    },
+    {
+      "id": "paraphrase-extra-control",
+      "source": "An orange lever starts a new winding cycle.",
+      "text": "[Vela] Start control: the {{c1::orange lever}}.",
+      "extra": "Begins another winding cycle.",
+      "extraEvidence": [
+        "starts a new winding cycle."
+      ],
+      "expect": {
+        "contextSpans": [],
+        "evidenceFields": [],
+        "qualifierFields": [],
+        "semanticAssessment": "supported paraphrase; possible style redundancy is separate"
+      }
+    },
+    {
+      "id": "literal-short-answer-control",
+      "source": "The indicator color is amber.",
+      "text": "[Vela] Indicator color: {{c1::amber}}.",
+      "textEvidence": [
+        "amber."
+      ],
+      "expect": {
+        "contextSpans": [],
+        "evidenceFields": [],
+        "qualifierFields": []
+      }
+    },
+    {
+      "id": "equivalent-units-control",
+      "source": "The marked route is 3 km (3000 m) long.",
+      "text": "[Vela] Marked route length: {{c1::3 km (3000 m)}}.",
+      "inventory": [
+        {
+          "span": "The marked route is",
+          "role": "context",
+          "reason": "Identifies the measured route."
+        },
+        {
+          "span": "3 km (3000 m)",
+          "role": "target",
+          "index": 1
+        },
+        {
+          "span": "long.",
+          "role": "context",
+          "reason": "Measurement grammar."
+        }
+      ],
+      "expect": {
+        "contextSpans": [],
+        "evidenceFields": [],
+        "qualifierFields": [],
+        "answerExposure": false
+      }
+    },
+    {
+      "id": "qualifier-strengthening",
+      "source": "The winding fault may cause belt vibration.",
+      "text": "[Vela] The winding fault always causes {{c1::belt vibration}}.",
+      "expect": {
+        "contextSpans": [],
+        "evidenceFields": [],
+        "qualifierFields": [
+          "text"
+        ],
+        "semanticAssessment": "possibility strengthened into certainty"
+      }
+    },
+    {
+      "id": "preserved-qualifier-control",
+      "source": "The winding fault may cause belt vibration.",
+      "text": "[Vela] The winding fault may cause {{c1::belt vibration}}.",
+      "expect": {
+        "contextSpans": [],
+        "evidenceFields": [],
+        "qualifierFields": []
+      }
+    },
+    {
+      "id": "single-word-list-member",
+      "source": "The finish shows speckling, streaking, and tarnish.",
+      "text": "[Vela] Finish signs: {{c1::speckling}}, {{c2::streaking}}, and tarnish.",
+      "inventory": [
+        {
+          "span": "The finish shows",
+          "role": "context",
+          "reason": "Subject and verb."
+        },
+        {
+          "span": "speckling,",
+          "role": "target",
+          "index": 1
+        },
+        {
+          "span": "streaking,",
+          "role": "target",
+          "index": 2
+        },
+        {
+          "span": "and",
+          "role": "context",
+          "reason": "Conjunction."
+        },
+        {
+          "span": "tarnish.",
+          "role": "context",
+          "reason": "Appearance finding provided as prompt context."
+        }
+      ],
+      "expect": {
+        "contextSpans": [
+          "tarnish."
+        ],
+        "evidenceFields": [],
+        "qualifierFields": []
+      }
+    },
+    {
+      "id": "both-fields-short-evidence",
+      "source": "Catalog names include Zerline.",
+      "text": "[Vela] Zerline means {{c1::a paired rotary key}}.",
+      "extra": "Requires closing the main gate.",
+      "textEvidence": [
+        "Zerline."
+      ],
+      "extraEvidence": [
+        "Zerline."
+      ],
+      "expect": {
+        "contextSpans": [],
+        "evidenceFields": [
+          "text",
+          "extra"
+        ],
+        "qualifierFields": []
+      }
+    },
+    {
+      "id": "exact-condition-label-control",
+      "source": "Vela Workshop uses a copper shuttle.",
+      "text": "[Vela Workshop] Shuttle material: {{c1::copper}}.",
+      "inventory": [
+        {
+          "span": "Vela Workshop",
+          "role": "context",
+          "reason": "Condition name provided as prompt context."
+        },
+        {
+          "span": "uses a",
+          "role": "context",
+          "reason": "Connecting grammar."
+        },
+        {
+          "span": "copper shuttle.",
+          "role": "target",
+          "index": 1
+        }
+      ],
+      "expect": {
+        "contextSpans": [],
+        "evidenceFields": [],
+        "qualifierFields": []
+      }
+    },
+    {
+      "id": "different-clause-modal-control",
+      "source": "The belt may slip. The guard must stay closed.",
+      "text": "[Vela] The guard must stay {{c1::closed}}.",
+      "expect": {
+        "contextSpans": [],
+        "evidenceFields": [],
+        "qualifierFields": []
+      }
+    },
+    {
+      "id": "connective-after-target-control",
+      "source": "Choose amber, followed by cobalt.",
+      "text": "[Vela] Sequence: choose {{c1::amber}}, followed by {{c2::cobalt}}.",
+      "inventory": [
+        {
+          "span": "Choose",
+          "role": "context",
+          "reason": "Action verb."
+        },
+        {
+          "span": "amber,",
+          "role": "target",
+          "index": 1
+        },
+        {
+          "span": "followed by",
+          "role": "context",
+          "reason": "Temporal progression connective."
+        },
+        {
+          "span": "cobalt.",
+          "role": "target",
+          "index": 2
+        }
+      ],
+      "expect": {
+        "contextSpans": [],
+        "evidenceFields": [],
+        "qualifierFields": []
+      }
+    },
+    {
+      "id": "bare-action-connector-control",
+      "source": "Mark the spindle and provide padding.",
+      "text": "[Vela] Mark the {{c1::spindle}} and provide {{c2::padding}}.",
+      "inventory": [
+        {
+          "span": "Mark the",
+          "role": "context",
+          "reason": "Action frame."
+        },
+        {
+          "span": "spindle",
+          "role": "target",
+          "index": 1
+        },
+        {
+          "span": "and provide",
+          "role": "context",
+          "reason": "Conjunction and procedural verb."
+        },
+        {
+          "span": "padding.",
+          "role": "target",
+          "index": 2
+        }
+      ],
+      "expect": {
+        "contextSpans": [],
+        "evidenceFields": [],
+        "qualifierFields": []
+      }
+    },
+    {
+      "id": "category-heading-control",
+      "source": "Surface & edge signs include speckles or grooves.",
+      "text": "[Vela] Surface & edge signs: {{c1::speckles}} or {{c2::grooves}}.",
+      "inventory": [
+        {
+          "span": "Surface & edge signs include",
+          "role": "context",
+          "reason": "Category lead-in specifying the surface and edge group."
+        },
+        {
+          "span": "speckles",
+          "role": "target",
+          "index": 1
+        },
+        {
+          "span": "or",
+          "role": "context",
+          "reason": "Conjunction."
+        },
+        {
+          "span": "grooves.",
+          "role": "target",
+          "index": 2
+        }
+      ],
+      "expect": {
+        "contextSpans": [],
+        "evidenceFields": [],
+        "qualifierFields": []
+      }
+    },
+    {
+      "id": "physical-causes-noun-control",
+      "source": "Inspect physical causes of line wobble before switching patterns.",
+      "text": "[Vela] Initial check: inspect {{c1::physical causes of line wobble}}.",
+      "extra": "Check physical causes before switching patterns.",
+      "extraEvidence": [
+        "before switching patterns."
+      ],
+      "expect": {
+        "contextSpans": [],
+        "evidenceFields": [],
+        "qualifierFields": [],
+        "semanticAssessment": "causes is a noun, not an asserted causal predicate"
+      }
+    },
+    {
+      "id": "conditional-requirement-control",
+      "source": "Use narrow shims and avoid adding supports whenever possible.",
+      "text": "[Vela] Avoid adding supports when possible; if required, use {{c1::narrow shims}}.",
+      "expect": {
+        "contextSpans": [],
+        "evidenceFields": [],
+        "qualifierFields": []
+      }
+    },
+    {
+      "id": "frequency-paraphrase-control",
+      "source": "The housing is commonly quiet until warmed. The latch may rattle.",
+      "text": "[Vela] The housing is often quiet until warmed; the {{c1::latch}} may rattle.",
+      "expect": {
+        "contextSpans": [],
+        "evidenceFields": [],
+        "qualifierFields": []
+      }
+    },
+    {
+      "id": "availability-becomes-immediate-action",
+      "source": "Keep spare release pins readily available for lock failure.",
+      "text": "[Vela] For lock failure, immediately insert {{c1::spare release pins}}.",
+      "expect": {
+        "contextSpans": [],
+        "evidenceFields": [],
+        "qualifierFields": [
+          "text"
+        ],
+        "semanticAssessment": "preparation or availability strengthened into immediate action"
+      }
+    },
+    {
+      "id": "availability-preserved-control",
+      "source": "Keep spare release pins readily available for lock failure.",
+      "text": "[Vela] Keep {{c1::spare release pins}} readily available for lock failure.",
+      "expect": {
+        "contextSpans": [],
+        "evidenceFields": [],
+        "qualifierFields": []
+      }
+    },
+    {
+      "id": "named-list-does-not-supply-definitions",
+      "source": "Catalog names include Velora, Nimset, and Asterin.",
+      "text": "[Vela] A silent rotary key is {{c1::Velora}}, while a paired ratchet wheel is {{c2::Nimset}}.",
+      "expect": {
+        "contextSpans": [],
+        "evidenceFields": [
+          "text"
+        ],
+        "qualifierFields": [],
+        "semanticAssessment": "full citation supplies names, not the added definitions"
+      }
+    },
+    {
+      "id": "named-list-members-control",
+      "source": "Catalog names include Velora, Nimset, and Asterin.",
+      "text": "[Vela] Catalog names include {{c1::Velora}}, {{c2::Nimset}}, and {{c3::Asterin}}.",
+      "expect": {
+        "contextSpans": [],
+        "evidenceFields": [],
+        "qualifierFields": []
+      }
+    },
+    {
+      "id": "definitions-supplied-control",
+      "source": "Velora is a silent rotary key. Nimset is a paired ratchet wheel.",
+      "text": "[Vela] A silent rotary key is {{c1::Velora}}, while a paired ratchet wheel is {{c2::Nimset}}.",
+      "expect": {
+        "contextSpans": [],
+        "evidenceFields": [],
+        "qualifierFields": []
+      }
+    },
+    {
+      "id": "grammar-only-action-fragments-control",
+      "source": "Mark amber, but use cobalt and then keep teal, which may cause streaks.",
+      "text": "[Vela] Pattern: mark {{c1::amber}}, but use {{c2::cobalt}} and then keep {{c3::teal}}, which may cause {{c4::streaks}}.",
+      "inventory": [
+        {"span": "Mark", "role": "context", "reason": "Action verb."},
+        {"span": "amber,", "role": "target", "index": 1},
+        {"span": "but use", "role": "context", "reason": "Conjunction and action verb."},
+        {"span": "cobalt", "role": "target", "index": 2},
+        {"span": "and then keep", "role": "context", "reason": "Connective action frame."},
+        {"span": "teal,", "role": "target", "index": 3},
+        {"span": "which may cause", "role": "context", "reason": "Relative clause and modal verb phrase."},
+        {"span": "streaks.", "role": "target", "index": 4}
+      ],
+      "expect": {"contextSpans": [], "evidenceFields": [], "qualifierFields": []}
+    },
+    {
+      "id": "for-condition-scenario-control",
+      "source": "For a jammed spool, release the latch.",
+      "text": "[Vela] Procedure: for a jammed spool, {{c1::release the latch}}.",
+      "inventory": [
+        {"span": "For a jammed spool,", "role": "context", "reason": "Condition scenario for the selected procedure."},
+        {"span": "release the latch.", "role": "target", "index": 1}
+      ],
+      "expect": {"contextSpans": [], "evidenceFields": [], "qualifierFields": []}
+    },
+    {
+      "id": "when-setup-context-control",
+      "source": "When wiping the frame, use felt.",
+      "text": "[Vela] Cleaning: when wiping the frame, {{c1::use felt}}.",
+      "inventory": [
+        {"span": "When wiping the frame,", "role": "context", "reason": "Context setup for wiping the frame."},
+        {"span": "use felt.", "role": "target", "index": 1}
+      ],
+      "expect": {"contextSpans": [], "evidenceFields": [], "qualifierFields": []}
+    },
+    {
+      "id": "parenthetical-definitions-supplied-control",
+      "source": "Catalog names include Velora (silent rotary key), Nimset (paired ratchet wheel), and Asterin (fixed spindle).",
+      "text": "[Vela] A silent rotary key is {{c1::Velora}}, while a paired ratchet wheel is {{c2::Nimset}}.",
+      "expect": {"contextSpans": [], "evidenceFields": [], "qualifierFields": []}
+    },
+    {
+      "id": "full-citation-semantic-limit",
+      "source": "Do not leave the panel clamp attached for more than 18 minutes.",
+      "text": "[Vela] Clamp limit: detach before {{c1::18 minutes}}.",
+      "extra": "Exceeding this time causes gear fractures.",
+      "extraEvidence": [
+        "Do not leave the panel clamp attached for more than 18 minutes."
+      ],
+      "expect": {
+        "contextSpans": [],
+        "evidenceFields": [],
+        "qualifierFields": [],
+        "semanticAssessment": "unsupported added causal relation; deliberately outside short-citation heuristic",
+        "limitationControl": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+diff --git a/kbForAnki b/kbForAnki
+index e9ab364..e91d794 100644
+--- a/kbForAnki
++++ b/kbForAnki
+@@ -1,19 +1,25 @@
+-function kbForAnki(kb){
+-  const lines=[];
+-  lines.push('STRUCTURED LATTE KNOWLEDGE BASE — TREAT AS THE SOLE SOURCE MATERIAL');
+-  lines.push('Each FACT line is already source-grounded and assigned to one LATTE bucket and tier.');
+-  lines.push('Preserve every fact ID, clinical qualifier, numeric value, source pointer, LATTE bucket, and tier.');
+-  lines.push('Do not reclassify a fact into another LATTE bucket or lower its tier. Convert facts into Anki notes using the unchanged Anki instructions.');
+-  for(const c of kb.conditions||[]){
+-    lines.push('');
+-    lines.push('=== CONDITION: '+c.name+' ===');
+-    if((c.aliases||[]).length)lines.push('ALIASES: '+c.aliases.join(', '));
+-    for(const f of c.facts||[]){
+-      const subtype=f.subtype?' | Subtype: '+f.subtype:'';
+-      lines.push(`FACT ${f.id} | LATTE: ${f.latteBucket}${subtype} | Tier: ${f.tier} | ${f.text} | Source: ${kbSourceText(f)||'pointer unavailable'}`);
+-    }
+-  }
+-  return lines.join('\n');
+-}
+-
++function kbForAnki(kb){
++  // v16.6: raw names and aliases invited shortened tags; supply the same safe canonical token used by review.
++  const conditionIndex=ankiConditionTagIndex({facts:(kb.conditions||[]).flatMap(c=>(c.facts||[]).map(f=>({id:f.id,condition:c.name,aliases:c.aliases})))});
++  const lines=[];
++  lines.push('STRUCTURED LATTE KNOWLEDGE BASE — TREAT AS THE SOLE SOURCE MATERIAL');
++  lines.push('Each FACT line is already source-grounded and assigned to one LATTE bucket and tier.');
++  lines.push('Preserve every fact ID, clinical qualifier, numeric value, source pointer, LATTE bucket, and tier.');
++  lines.push('Do not reclassify a fact into another LATTE bucket or lower its tier. Convert facts into Anki notes using the unchanged Anki instructions.');
++  for(const c of kb.conditions||[]){
++    lines.push('');
++    lines.push('=== CONDITION: '+c.name+' ===');
++    const entry=conditionIndex.conditions.get(c.name),key=entry&&ankiConditionTagKey(entry.slug);
++    const canonical=conditionIndex.valid&&entry?.valid&&entry.slug&&(conditionIndex.owners.get(key)||new Set()).size===1?entry.slug:'';
++    // v16.6: this non-FACT prefix survives condition splitting; ambiguous names never receive an invented token.
++    lines.push('CANONICAL CONDITION TAG: '+(canonical?'Condition::'+canonical:'unavailable — source condition name requires review'));
++    if((c.aliases||[]).length)lines.push('ALIASES: '+c.aliases.join(', '));
++    for(const f of c.facts||[]){
++      const subtype=f.subtype?' | Subtype: '+f.subtype:'';
++      lines.push(`FACT ${f.id} | LATTE: ${f.latteBucket}${subtype} | Tier: ${f.tier} | ${f.text} | Source: ${kbSourceText(f)||'pointer unavailable'}`);
++    }
++  }
++  return lines.join('\n');
++}
++
+ 
