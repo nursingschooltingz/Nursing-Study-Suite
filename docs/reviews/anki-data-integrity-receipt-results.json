@@ -1,0 +1,883 @@
+{
+  "suite": "Nursing-Study-Suite v16.6.html",
+  "suiteSha256": "8524e35c8b3621e074a0499ba3857a672464b99721e4b502c381dfa29d0b9b12",
+  "assertions": 55,
+  "outcomes": [
+    {
+      "id": "literal-supported",
+      "text": "[Marker] The red marker belongs in the {{c1::north}} drawer.",
+      "expected": "supported",
+      "rationale": "The source states north for this marker.",
+      "actual": {
+        "receiptComplete": true,
+        "textStatus": "supported",
+        "extraStatus": "empty",
+        "queueCodes": [],
+        "exportable": true
+      },
+      "stages": {
+        "response": "```text\n[Marker] The red marker belongs in the {{c1::north}} drawer.||Topic::Workshop Tier::1\n```\n```text\nfact-1 -> line #1\n```",
+        "parsed": [
+          {
+            "id": "audit-note-1",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker belongs in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [],
+            "tagFormatContract": "hierarchical-v1"
+          }
+        ],
+        "mapped": [
+          {
+            "id": "audit-note-1",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker belongs in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "deduped": [
+          {
+            "id": "audit-note-1",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker belongs in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "normalized": [
+          {
+            "id": "audit-note-1",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker belongs in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "afterAudit": [
+          {
+            "id": "audit-note-1",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker belongs in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "exported": "[Marker] The red marker belongs in the {{c1::north}} drawer.||Topic::Workshop Tier::1"
+      }
+    },
+    {
+      "id": "paraphrase-supported",
+      "text": "[Marker] Place the red marker in the {{c1::north}} drawer.",
+      "expected": "supported",
+      "rationale": "Place in preserves the supplied storage destination.",
+      "actual": {
+        "receiptComplete": true,
+        "textStatus": "supported",
+        "extraStatus": "empty",
+        "queueCodes": [],
+        "exportable": true
+      },
+      "stages": {
+        "response": "```text\n[Marker] Place the red marker in the {{c1::north}} drawer.||Topic::Workshop Tier::1\n```\n```text\nfact-1 -> line #1\n```",
+        "parsed": [
+          {
+            "id": "audit-note-2",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] Place the red marker in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [],
+            "tagFormatContract": "hierarchical-v1"
+          }
+        ],
+        "mapped": [
+          {
+            "id": "audit-note-2",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] Place the red marker in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "deduped": [
+          {
+            "id": "audit-note-2",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] Place the red marker in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "normalized": [
+          {
+            "id": "audit-note-2",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] Place the red marker in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "afterAudit": [
+          {
+            "id": "audit-note-2",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] Place the red marker in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "exported": "[Marker] Place the red marker in the {{c1::north}} drawer.||Topic::Workshop Tier::1"
+      }
+    },
+    {
+      "id": "wrong-answer-real-citation",
+      "text": "[Marker] The red marker belongs in the {{c1::south}} drawer.",
+      "expected": "unsupported",
+      "rationale": "The only supplied destination is north; south contradicts it.",
+      "actual": {
+        "receiptComplete": true,
+        "textStatus": "supported",
+        "extraStatus": "empty",
+        "queueCodes": [],
+        "exportable": true
+      },
+      "stages": {
+        "response": "```text\n[Marker] The red marker belongs in the {{c1::south}} drawer.||Topic::Workshop Tier::1\n```\n```text\nfact-1 -> line #1\n```",
+        "parsed": [
+          {
+            "id": "audit-note-3",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker belongs in the {{c1::south}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [],
+            "tagFormatContract": "hierarchical-v1"
+          }
+        ],
+        "mapped": [
+          {
+            "id": "audit-note-3",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker belongs in the {{c1::south}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "deduped": [
+          {
+            "id": "audit-note-3",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker belongs in the {{c1::south}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "normalized": [
+          {
+            "id": "audit-note-3",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker belongs in the {{c1::south}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "afterAudit": [
+          {
+            "id": "audit-note-3",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker belongs in the {{c1::south}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "exported": "[Marker] The red marker belongs in the {{c1::south}} drawer.||Topic::Workshop Tier::1"
+      }
+    },
+    {
+      "id": "outside-cloze-negation",
+      "text": "[Marker] The red marker does not belong in the {{c1::north}} drawer.",
+      "expected": "unsupported",
+      "rationale": "The added negation reverses the source outside the answer.",
+      "actual": {
+        "receiptComplete": true,
+        "textStatus": "supported",
+        "extraStatus": "empty",
+        "queueCodes": [],
+        "exportable": true
+      },
+      "stages": {
+        "response": "```text\n[Marker] The red marker does not belong in the {{c1::north}} drawer.||Topic::Workshop Tier::1\n```\n```text\nfact-1 -> line #1\n```",
+        "parsed": [
+          {
+            "id": "audit-note-4",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker does not belong in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [],
+            "tagFormatContract": "hierarchical-v1"
+          }
+        ],
+        "mapped": [
+          {
+            "id": "audit-note-4",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker does not belong in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "deduped": [
+          {
+            "id": "audit-note-4",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker does not belong in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "normalized": [
+          {
+            "id": "audit-note-4",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker does not belong in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "afterAudit": [
+          {
+            "id": "audit-note-4",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker does not belong in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "exported": "[Marker] The red marker does not belong in the {{c1::north}} drawer.||Topic::Workshop Tier::1"
+      }
+    },
+    {
+      "id": "extra-addition",
+      "text": "[Marker] The red marker belongs in the {{c1::north}} drawer.",
+      "extra": "The marker dissolves in water.",
+      "expected": "unsupported",
+      "rationale": "No statement in this source describes solubility.",
+      "actual": {
+        "receiptComplete": true,
+        "textStatus": "supported",
+        "extraStatus": "supported",
+        "queueCodes": [],
+        "exportable": true
+      },
+      "stages": {
+        "response": "```text\n[Marker] The red marker belongs in the {{c1::north}} drawer.|The marker dissolves in water.|Topic::Workshop Tier::1\n```\n```text\nfact-1 -> line #1\n```",
+        "parsed": [
+          {
+            "id": "audit-note-5",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker belongs in the {{c1::north}} drawer.",
+            "extra": "The marker dissolves in water.",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [],
+            "tagFormatContract": "hierarchical-v1"
+          }
+        ],
+        "mapped": [
+          {
+            "id": "audit-note-5",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker belongs in the {{c1::north}} drawer.",
+            "extra": "The marker dissolves in water.",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "deduped": [
+          {
+            "id": "audit-note-5",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker belongs in the {{c1::north}} drawer.",
+            "extra": "The marker dissolves in water.",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "normalized": [
+          {
+            "id": "audit-note-5",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker belongs in the {{c1::north}} drawer.",
+            "extra": "The marker dissolves in water.",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "afterAudit": [
+          {
+            "id": "audit-note-5",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker belongs in the {{c1::north}} drawer.",
+            "extra": "The marker dissolves in water.",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "exported": "[Marker] The red marker belongs in the {{c1::north}} drawer.|The marker dissolves in water.|Topic::Workshop Tier::1"
+      }
+    },
+    {
+      "id": "hint-addition",
+      "text": "[Marker] The red marker belongs in the {{c1::north::sterile drawer}} drawer.",
+      "expected": "unsupported",
+      "rationale": "The source provides no sterility property; the hint is learner-visible.",
+      "actual": {
+        "receiptComplete": true,
+        "textStatus": "supported",
+        "extraStatus": "empty",
+        "queueCodes": [],
+        "exportable": true
+      },
+      "stages": {
+        "response": "```text\n[Marker] The red marker belongs in the {{c1::north::sterile drawer}} drawer.||Topic::Workshop Tier::1\n```\n```text\nfact-1 -> line #1\n```",
+        "parsed": [
+          {
+            "id": "audit-note-6",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker belongs in the {{c1::north::sterile drawer}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [],
+            "tagFormatContract": "hierarchical-v1"
+          }
+        ],
+        "mapped": [
+          {
+            "id": "audit-note-6",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker belongs in the {{c1::north::sterile drawer}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "deduped": [
+          {
+            "id": "audit-note-6",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker belongs in the {{c1::north::sterile drawer}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "normalized": [
+          {
+            "id": "audit-note-6",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker belongs in the {{c1::north::sterile drawer}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "afterAudit": [
+          {
+            "id": "audit-note-6",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker belongs in the {{c1::north::sterile drawer}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "exported": "[Marker] The red marker belongs in the {{c1::north::sterile drawer}} drawer.||Topic::Workshop Tier::1"
+      }
+    },
+    {
+      "id": "irrelevant-existing-fact",
+      "text": "[Marker] The red marker belongs in the {{c1::north}} drawer.",
+      "source": "The blue square belongs in the east cabinet.",
+      "expected": "unsupported",
+      "rationale": "An existing but unrelated fact establishes neither red marker nor north drawer.",
+      "actual": {
+        "receiptComplete": true,
+        "textStatus": "supported",
+        "extraStatus": "empty",
+        "queueCodes": [],
+        "exportable": true
+      },
+      "stages": {
+        "response": "```text\n[Marker] The red marker belongs in the {{c1::north}} drawer.||Topic::Workshop Tier::1\n```\n```text\nfact-1 -> line #1\n```",
+        "parsed": [
+          {
+            "id": "audit-note-7",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker belongs in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [],
+            "tagFormatContract": "hierarchical-v1"
+          }
+        ],
+        "mapped": [
+          {
+            "id": "audit-note-7",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker belongs in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "deduped": [
+          {
+            "id": "audit-note-7",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker belongs in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "normalized": [
+          {
+            "id": "audit-note-7",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker belongs in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "afterAudit": [
+          {
+            "id": "audit-note-7",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The red marker belongs in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "exported": "[Marker] The red marker belongs in the {{c1::north}} drawer.||Topic::Workshop Tier::1"
+      }
+    },
+    {
+      "id": "missing-qualifier-inconclusive",
+      "text": "[Marker] Place the marker in the {{c1::north}} drawer.",
+      "source": "A red marker goes north; a blue marker goes south.",
+      "expected": "inconclusive",
+      "rationale": "Without color, the destination is underdetermined; the source does not prove this general card true or false.",
+      "actual": {
+        "receiptComplete": true,
+        "textStatus": "supported",
+        "extraStatus": "empty",
+        "queueCodes": [],
+        "exportable": true
+      },
+      "stages": {
+        "response": "```text\n[Marker] Place the marker in the {{c1::north}} drawer.||Topic::Workshop Tier::1\n```\n```text\nfact-1 -> line #1\n```",
+        "parsed": [
+          {
+            "id": "audit-note-8",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] Place the marker in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [],
+            "tagFormatContract": "hierarchical-v1"
+          }
+        ],
+        "mapped": [
+          {
+            "id": "audit-note-8",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] Place the marker in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "deduped": [
+          {
+            "id": "audit-note-8",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] Place the marker in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "normalized": [
+          {
+            "id": "audit-note-8",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] Place the marker in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "afterAudit": [
+          {
+            "id": "audit-note-8",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] Place the marker in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "exported": "[Marker] Place the marker in the {{c1::north}} drawer.||Topic::Workshop Tier::1"
+      }
+    }
+  ],
+  "controls": {
+    "malformedAuditRejected": true,
+    "partialRecordsRetained": true,
+    "staleAuditInvalidated": true,
+    "allContextAdvisory": true
+  },
+  "retryContradiction": {
+    "complete": true,
+    "textStatus": "supported",
+    "findings": [
+      {
+        "code": "unsupported",
+        "factIds": [
+          "fact-1"
+        ],
+        "noteIds": [
+          "audit-note-9"
+        ],
+        "message": "The first attempt claims an unsupported destination.",
+        "suggestion": ""
+      }
+    ],
+    "queueCodes": [
+      "unsupported"
+    ]
+  },
+  "mutations": [
+    {
+      "name": "bypass note handle lookup (survives: later note access still quarantines the record)",
+      "killed": false
+    },
+    {
+      "name": "bypass complete source-token inventory",
+      "killed": true
+    },
+    {
+      "name": "invert currentness on edited notes",
+      "killed": true
+    }
+  ],
+  "interpretation": "Accepted receipts establish exact addresses and accounting, not semantic entailment. Unsupported and inconclusive expectations above come from the frozen source, not from the validator. Characterization assertions passing do not make these cards correct."
+}

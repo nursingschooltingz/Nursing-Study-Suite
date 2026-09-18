@@ -1,0 +1,212 @@
+{
+  "review": "Independent stage review: KB import, normalization, merge, persistence, downstream identity/tier",
+  "scope": {
+    "html": "Nursing-Study-Suite v16.6.html",
+    "readOnlyProduction": true,
+    "noPrivateMaterial": true,
+    "noAPI": true,
+    "noBrowser": true,
+    "created": "2026-09-18"
+  },
+  "conclusions": [
+    {
+      "id": "N3",
+      "disposition": "confirmed, re-scoped",
+      "category": "silent-content-change",
+      "evidence": "kbNormalizeImported converts genuinely invalid tier 'safety' to 3 and unknown bucket 'Pharm' to Look; safetyCritical stays true; dropped remains zero; validateLatteKnowledgeBase returns [].",
+      "impact": "An import receives plausible but unestablished priority/category; subsequent generation receives those defaults and its tags control tier-scoped exports.",
+      "restriction": "Invalid input does not establish the intended clinical tier or bucket. Do not describe a demonstrated clinically correct Tier 1 fact as demoted. Rejecting invalid input or disclosing its fallback is the justified desired behavior.",
+      "lines": [
+        1737,
+        1741,
+        1757,
+        1904,
+        1967,
+        2584,
+        2589,
+        4359
+      ]
+    },
+    {
+      "id": "A2",
+      "disposition": "confirmed and extended",
+      "category": "silent-content-change / lost-coverage",
+      "evidence": "Actual merge output retained 4027 fact-text characters; JSON roundtrip through the actual import/reload normalizer retained 4000. 600 quote chars, 50 per-fact pointers, 2000 conditions, 5000 facts/condition are silent caps; dropped is zero and a fully sourced long fact remains validation-clean.",
+      "impact": "Valid source text including a trailing exception and provenance pointers disappear on import/reload without a diagnostic.",
+      "restriction": "Resource limits may be legitimate policy, but silent truncation and unreported omission are independently observable. This probe does not establish effects in actual private KBs.",
+      "lines": [
+        1715,
+        1726,
+        1732,
+        1735,
+        1746,
+        1747,
+        1769,
+        10168
+      ]
+    },
+    {
+      "id": "fact-ID-renumber",
+      "disposition": "refuted as an active Anki stale-link defect; retained as snapshot-scope limitation",
+      "category": "policy-limit",
+      "evidence": "IDs fact-7/fact-42 become fact-1/fact-2. Actual App setter cleared registry and inspector; actual registerArtifact rejected an old-source publication; actual ankiRunIsCurrent returned false after KB identity changed.",
+      "downstreamGuards": "Anki current flag is batch.sourceKB===K.knowledgeBase (5575); ankiSelection(current=false) yields kept=[] (4360); summary uses current snapshot only (4297); export consumes selection (4474); generated artifacts are session-only (578-582). Fresh generation maps against its own immutable snapshot and chunk IDs (4166-4192).",
+      "restriction": "Saved external evidence must retain its snapshot or content, since fact-N alone is not a cross-import identifier. No persisted Anki map is reattached on page reload.",
+      "lines": [
+        1701,
+        1757,
+        578,
+        5575,
+        5631,
+        10139,
+        10209
+      ]
+    },
+    {
+      "id": "persistence",
+      "disposition": "no additional reproduced ordering/conflict defect",
+      "category": "safeguards",
+      "evidence": "Source suite confirms copied queued snapshots, order, abort rejection/handle closure, and unresolved different-writer conflicts. Reload reuses the lossy import sanitizer; that loss is included in A2.",
+      "restriction": "Native IndexedDB and browser event interleaving were not executed."
+    }
+  ],
+  "safeguards": [
+    {
+      "name": "import size/shape gate",
+      "definition": 1720,
+      "calls": [
+        2581,
+        2584
+      ],
+      "availableEvidence": "File byte size and parsed JSON only",
+      "predicate": "file.size <=25MiB; object root; conditions array; usable named condition; nonempty fact text",
+      "effect": "oversize or invalid root rejects; malformed entries skipped with dropped counters; cap/coercion changes are not counted",
+      "error": "Import failed displayed and prior KB remains; replacement ownership suppresses stale publication",
+      "bypass": "Generated build does not run this sanitizer until a later import/reload."
+    },
+    {
+      "name": "validateLatteKnowledgeBase",
+      "definition": 1904,
+      "calls": [
+        2900,
+        5769
+      ],
+      "availableEvidence": "Normalized KB values, quote presence, pointer filename strings",
+      "predicate": "name, duplicate IDs, allowed bucket, tier 1..3, text presence; quote missing warns; critical/numeric fact requires filename",
+      "effect": "returns issues only; Anki logs errors as warnings and still generates",
+      "error": "no proof of pointer existence, quote entailment, or correct tier; no prior raw fields remain for fallback detection",
+      "bypass": "Normalizer replaces invalid tier/bucket before validation; any nonempty filename satisfies pointer predicate."
+    },
+    {
+      "name": "mergeLatteParts",
+      "definition": 1677,
+      "calls": [
+        2844
+      ],
+      "availableEvidence": "Raw model condition aliases, text/bucket/subtype, sourcePointer",
+      "predicate": "Conservative condition-name/alias equivalence; fact key uses bucket, subtype and whitespace-collapsed text",
+      "effect": "merges exact-equivalent facts and unions pointers by filename/location; assigns new IDs; invalid tiers fallback to 1 for truthy safetyCritical else 2",
+      "error": "no binding from pointer to actual runtime source; no correction of meaning",
+      "bypass": "Same text with differing source quotes retains first quote while unioning pointers. This is provenance design scope, not independently proved false provenance."
+    },
+    {
+      "name": "ordered persistence/recovery",
+      "definition": 1879,
+      "calls": [
+        10138,
+        10178
+      ],
+      "availableEvidence": "JSON-copied KB, writer lineage, sequence, parent key, fallback bytes",
+      "predicate": "expected durable head/fallback bytes unchanged; reconciliation requires ordering or user choice",
+      "effect": "serial save; snapshots copied at save call; conflicts block saves and retain choices; tombstones prevent stale resurrection",
+      "error": "IDB failure tries fallback; failure of both surfaces visible error; no automatic choice of incompatible copies",
+      "bypass": "Hydration normalizes selected stored KB at 10168; normalization diagnostics discarded there."
+    },
+    {
+      "name": "source identity and link lifetime",
+      "definition": 10139,
+      "calls": [
+        2585,
+        10187,
+        10209
+      ],
+      "availableEvidence": "Live object identity, captured source identity, operation abort signal",
+      "predicate": "registry publication requires current source object; Anki active generation requires active run/current source/not aborted",
+      "effect": "replacement clears registry/inspector; stale run rejected; old notes remain but have no current coverage/export",
+      "error": "no browser race proof here, but actual extracted callbacks confirm guard behavior",
+      "bypass": "No bypass found in reviewed import path; fact IDs alone remain insufficient outside their captured source."
+    }
+  ],
+  "executedJournal": [
+    {
+      "command": "$auditProbe = @'\nconst fs=require('node:fs'), assert=require('node:assert/strict');\nconst html=fs.readFileSync('Nursing-Study-Suite v16.6.html','utf8');\nfunction span(a,b,tail){assert.equal(html.split(a).length-1,1);assert.equal(html.split(b).length-1,1);const s=html.slice(html.indexOf(a),html.indexOf(b));assert.ok(s.includes(tail));return s;}\nconst core=span('function kbSlug(s)','// ── Durable Knowledge Base persistence', \"formulas:arr('formulas'),contradictions:arr('contradictions')\");\nconst {kbNormalizeImported,mergeLatteParts}=new Function(core+';return {kbNormalizeImported,mergeLatteParts};')();\nconst val=span('function validateLatteKnowledgeBase(kb)','function kbSourceText(', 'return issues;');\nconst validate=new Function(val+';return validateLatteKnowledgeBase;')();\nconst fact=(patch={})=>({id:'fact-1',text:'The synthetic signal remains green.',tier:1,latteBucket:'Look',sourceQuote:'The synthetic signal remains green.',sources:[{filename:'synthetic.pdf',location:'page 1'}],...patch});\nconst kb=fs=>({conditions:[{name:'Signal',facts:fs}]});\nconst invalid=kbNormalizeImported(kb([fact({tier:'safety',latteBucket:'Pharm',safetyCritical:true})]));\nconst long=kbNormalizeImported(kb([fact({text:'x'.repeat(4000)+' EXCEPTION: never turn red.',sourceQuote:'q'.repeat(600)+' never red',sources:Array.from({length:51},(_,i)=>({filename:'source-'+i+'.pdf',location:'page '+i}))})]));\nconst factCap=kbNormalizeImported(kb(Array.from({length:5001},(_,i)=>fact({text:'Unique '+i}))));\nconst conditionCap=kbNormalizeImported({conditions:Array.from({length:2001},(_,i)=>({name:'Unique '+i,facts:[fact()]}))});\nconst renumber=kbNormalizeImported(kb([fact({id:'fact-7'}),fact({id:'fact-42',text:'The second signal is blue.'})]));\nconst constructed=mergeLatteParts([{conditions:[{name:'Signal',facts:[{...fact({text:'x'.repeat(4000)+' EXCEPTION: never turn red.'}),sourcePointer:{filename:'synthetic.pdf',location:'page 1'}}]}]}]);\nconst roundTrip=kbNormalizeImported(JSON.parse(JSON.stringify(constructed)));\nconst summary={invalid:{tier:invalid.kb.conditions[0].facts[0].tier,bucket:invalid.kb.conditions[0].facts[0].latteBucket,safetyCritical:invalid.kb.conditions[0].facts[0].safetyCritical,dropped:invalid.dropped,validation:validate(invalid.kb)},caps:{textLength:long.kb.conditions[0].facts[0].text.length,quoteLength:long.kb.conditions[0].facts[0].sourceQuote.length,sourcesLength:long.kb.conditions[0].facts[0].sources.length,dropped:long.dropped,validation:validate(long.kb),conditionCount:conditionCap.kb.conditions.length,conditionDropped:conditionCap.dropped,factCount:factCap.kb.conditions[0].facts.length,factDropped:factCap.dropped},roundTrip:{constructedLength:constructed.conditions[0].facts[0].text.length,reimportLength:roundTrip.kb.conditions[0].facts[0].text.length,dropped:roundTrip.dropped},renumber:{ids:renumber.kb.conditions[0].facts.map(f=>f.id)}};\nassert.equal(summary.invalid.tier,3);assert.equal(summary.invalid.bucket,'Look');assert.deepEqual(summary.invalid.validation,[]);\nassert.equal(summary.caps.sourcesLength,50);assert.equal(summary.roundTrip.constructedLength,4026);assert.equal(summary.roundTrip.reimportLength,4000);\nconsole.log(JSON.stringify(summary,null,2));\n'@\n$auditProbe | node",
+      "chunk_id": "6aa374",
+      "wall_time_seconds": 0.3001908,
+      "exit_code": 1,
+      "original_token_count": 202,
+      "output": "node:assert:152\r\n  throw new AssertionError(obj);\r\n  ^\r\n\r\nAssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\r\n\r\n4027 !== 4026\r\n\r\n    at [stdin]:19:52\r\n    at runScriptInThisContext (node:internal/vm:219:10)\r\n    at node:internal/process/execution:451:12\r\n    at [stdin]-wrapper:6:24\r\n    at runScriptInContext (node:internal/process/execution:449:60)\r\n    at evalFunction (node:internal/process/execution:283:30)\r\n    at evalTypeScript (node:internal/process/execution:295:3)\r\n    at node:internal/main/eval_stdin:51:5\r\n    at Socket.<anonymous> (node:internal/process/execution:205:5)\r\n    at Socket.emit (node:events:521:24) {\r\n  generatedMessage: true,\r\n  code: 'ERR_ASSERTION',\r\n  actual: 4027,\r\n  expected: 4026,\r\n  operator: 'strictEqual',\r\n  diff: 'simple'\r\n}\r\n\r\nNode.js v24.19.0\r\n"
+    },
+    {
+      "command": "$auditProbe = @'\nconst fs=require('node:fs'), assert=require('node:assert/strict');\nconst html=fs.readFileSync('Nursing-Study-Suite v16.6.html','utf8');\nfunction span(a,b,tail){assert.equal(html.split(a).length-1,1);assert.equal(html.split(b).length-1,1);const s=html.slice(html.indexOf(a),html.indexOf(b));assert.ok(s.includes(tail));return s;}\nconst core=span('function kbSlug(s)','// ── Durable Knowledge Base persistence', \"formulas:arr('formulas'),contradictions:arr('contradictions')\");\nconst {kbNormalizeImported,mergeLatteParts}=new Function(core+';return {kbNormalizeImported,mergeLatteParts};')();\nconst val=span('function validateLatteKnowledgeBase(kb)','function kbSourceText(', 'return issues;');\nconst validate=new Function(val+';return validateLatteKnowledgeBase;')();\nconst fact=(patch={})=>({id:'fact-1',text:'The synthetic signal remains green.',tier:1,latteBucket:'Look',sourceQuote:'The synthetic signal remains green.',sources:[{filename:'synthetic.pdf',location:'page 1'}],...patch});\nconst kb=fs=>({conditions:[{name:'Signal',facts:fs}]});\nconst invalid=kbNormalizeImported(kb([fact({tier:'safety',latteBucket:'Pharm',safetyCritical:true})]));\nconst long=kbNormalizeImported(kb([fact({text:'x'.repeat(4000)+' EXCEPTION: never turn red.',sourceQuote:'q'.repeat(600)+' never red',sources:Array.from({length:51},(_,i)=>({filename:'source-'+i+'.pdf',location:'page '+i}))})]));\nconst factCap=kbNormalizeImported(kb(Array.from({length:5001},(_,i)=>fact({text:'Unique '+i}))));\nconst conditionCap=kbNormalizeImported({conditions:Array.from({length:2001},(_,i)=>({name:'Unique '+i,facts:[fact()]}))});\nconst renumber=kbNormalizeImported(kb([fact({id:'fact-7'}),fact({id:'fact-42',text:'The second signal is blue.'})]));\nconst constructed=mergeLatteParts([{conditions:[{name:'Signal',facts:[{...fact({text:'x'.repeat(4000)+' EXCEPTION: never turn red.'}),sourcePointer:{filename:'synthetic.pdf',location:'page 1'}}]}]}]);\nconst roundTrip=kbNormalizeImported(JSON.parse(JSON.stringify(constructed)));\nconst summary={invalid:{tier:invalid.kb.conditions[0].facts[0].tier,bucket:invalid.kb.conditions[0].facts[0].latteBucket,safetyCritical:invalid.kb.conditions[0].facts[0].safetyCritical,dropped:invalid.dropped,validation:validate(invalid.kb)},caps:{textLength:long.kb.conditions[0].facts[0].text.length,quoteLength:long.kb.conditions[0].facts[0].sourceQuote.length,sourcesLength:long.kb.conditions[0].facts[0].sources.length,dropped:long.dropped,validation:validate(long.kb),conditionCount:conditionCap.kb.conditions.length,conditionDropped:conditionCap.dropped,factCount:factCap.kb.conditions[0].facts.length,factDropped:factCap.dropped},roundTrip:{constructedLength:constructed.conditions[0].facts[0].text.length,reimportLength:roundTrip.kb.conditions[0].facts[0].text.length,dropped:roundTrip.dropped},renumber:{ids:renumber.kb.conditions[0].facts.map(f=>f.id)}};\nassert.equal(summary.invalid.tier,3);assert.equal(summary.invalid.bucket,'Look');assert.deepEqual(summary.invalid.validation,[]);\nassert.equal(summary.caps.sourcesLength,50);assert.equal(summary.roundTrip.constructedLength,('x'.repeat(4000)+' EXCEPTION: never turn red.').length);assert.equal(summary.roundTrip.reimportLength,4000);\nconsole.log(JSON.stringify(summary,null,2));\n'@\n$auditProbe | node",
+      "chunk_id": "d6c1e8",
+      "wall_time_seconds": 0.2562427,
+      "exit_code": 0,
+      "original_token_count": 189,
+      "output": "{\n  \"invalid\": {\n    \"tier\": 3,\n    \"bucket\": \"Look\",\n    \"safetyCritical\": true,\n    \"dropped\": {\n      \"conditions\": 0,\n      \"facts\": 0\n    },\n    \"validation\": []\n  },\n  \"caps\": {\n    \"textLength\": 4000,\n    \"quoteLength\": 600,\n    \"sourcesLength\": 50,\n    \"dropped\": {\n      \"conditions\": 0,\n      \"facts\": 0\n    },\n    \"validation\": [],\n    \"conditionCount\": 2000,\n    \"conditionDropped\": {\n      \"conditions\": 0,\n      \"facts\": 0\n    },\n    \"factCount\": 5000,\n    \"factDropped\": {\n      \"conditions\": 0,\n      \"facts\": 0\n    }\n  },\n  \"roundTrip\": {\n    \"constructedLength\": 4027,\n    \"reimportLength\": 4000,\n    \"dropped\": {\n      \"conditions\": 0,\n      \"facts\": 0\n    }\n  },\n  \"renumber\": {\n    \"ids\": [\n      \"fact-1\",\n      \"fact-2\"\n    ]\n  }\n}\n"
+    },
+    {
+      "command": "node tools/reaudit-anki-source-tests.js",
+      "chunk_id": "287902",
+      "wall_time_seconds": 0.289042,
+      "exit_code": 1,
+      "original_token_count": 390,
+      "output": "PASS source-units-control\nPASS quote-dehyphenation-control\nPASS import-valid-control\nFAIL N3-invalid-tier-bucket — invalid tier/bucket must not silently become 3/Look\nFAIL A2-fact-quote-truncation — long source text must remain intact or be reported\nFAIL A2-condition-cap — condition cap silently loses a valid condition\nFAIL A2-fact-cap — fact cap silently loses a valid fact\nPASS build-valid-control\nPASS build-API-error-control\nFAIL A5-nested-primary-shape — nested malformed condition discards the earlier completed chunk\n\n0 !== 1\n\nFAIL A6-omission-shape-{\"missed\":{}} — malformed omission shape must be reported as incomplete/failed\nFAIL A6-omission-shape-{\"missed\":null} — malformed omission shape must be reported as incomplete/failed\nFAIL A6-omission-shape-{} — malformed omission shape must be reported as incomplete/failed\nPASS omission-empty-control\nPASS pass2-discard-control\nPASS pass1-retention-policy\nPASS operator-warning-policy\nPASS source-poison-chain\nFAIL A7-fabricated-first-pass-pointer — first-pass source pointer must bind to the actual source or report mismatch\nPASS A8-absent-quote-status\nFAIL quality-probe-failure — quality probe failure is silent\nPASS MAX_TOKENS-split-control\nPASS publication-control\nPASS import-size-control\nPASS persistence-order-control\nPASS persistence-transaction-control\nFAIL persistence-reload-loss — actual reload normalizer truncates a previously persisted valid fact\n\n4000 !== 4716\n\nPASS persistence-id-scope\n{\"tests\":28,\"pass\":17,\"fail\":11,\"mutationKilled\":2,\"mutationSurvived\":0}\n"
+    },
+    {
+      "command": "$auditProbe = @'\nconst fs=require('node:fs'),assert=require('node:assert/strict');\nconst html=fs.readFileSync('Nursing-Study-Suite v16.6.html','utf8');\nfunction span(a,b,tail){assert.equal(html.split(a).length-1,1);assert.equal(html.split(b).length-1,1);const s=html.slice(html.indexOf(a),html.indexOf(b));assert.ok(s.includes(tail));return s;}\nconst setter=span('  const setKnowledgeBase=useCallback(value=>{', \"  const [persistenceStatus,setPersistenceStatus]\", 'if(replaced){setArtifactRegistry(EMPTY_ARTIFACT_REGISTRY);setInspectedFactId(null);}');\nconst publisher=span('  const registerArtifact=useCallback((kind,entries,{merge=false,sourceKB=currentKnowledge.current}={})=>{', '  const knowledgeValue=useMemo(', 'sourceKB!==currentKnowledge.current');\nconst guard=span('function ankiRunIsCurrent(run,active,sourceKB)', 'function ankiRunEvidence(', 'run.sourceKB===sourceKB');\nconst oldKB={conditions:[]},newKB={conditions:[]},currentKnowledge={current:oldKB},kbMutation={current:0},empty={ankiNotes:[]};\nlet registry={ankiNotes:[{factIds:['fact-1']}]},inspected='fact-1',state;\nconst deps={useCallback:f=>f,currentKnowledge,kbMutation,publishKnowledgeBase:v=>state=v,setSaveRequest:()=>{},setPersistenceStatus:()=>{},setArtifactRegistry:v=>registry=typeof v==='function'?v(registry):v,setInspectedFactId:v=>inspected=v,EMPTY_ARTIFACT_REGISTRY:empty,mergeArtifactEntries:()=>{throw Error('unexercised');}};\nconst {setKnowledgeBase,registerArtifact,ankiRunIsCurrent}=new Function(...Object.keys(deps),setter+publisher+guard+';return {setKnowledgeBase,registerArtifact,ankiRunIsCurrent};')(...Object.values(deps));\nconst run={sourceKB:oldKB,ctl:new AbortController()};assert.equal(ankiRunIsCurrent(run,run,oldKB),true);\nsetKnowledgeBase(newKB);registerArtifact('ankiNotes',[{factIds:['fact-1']}],{sourceKB:oldKB});\nassert.strictEqual(state,newKB);assert.strictEqual(registry,empty);assert.equal(inspected,null);assert.equal(ankiRunIsCurrent(run,run,newKB),false);\nconsole.log(JSON.stringify({oldRunInitiallyCurrent:true,replacementClearedRegistry:true,replacementClosedInspector:true,oldSourceRegistryRepublishRejected:true,oldRunAfterReplacementCurrent:false}));\n'@\n$auditProbe | node",
+      "chunk_id": "e23f68",
+      "wall_time_seconds": 0.3611372,
+      "exit_code": 1,
+      "original_token_count": 202,
+      "output": "node:internal/assert/utils:77\r\n    throw err;\r\n    ^\r\n\r\nAssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\r\n\r\n  assert.ok(s.includes(tail))\r\n\r\n    at span ([stdin]:3:162)\r\n    at [stdin]:6:13\r\n    at runScriptInThisContext (node:internal/vm:219:10)\r\n    at node:internal/process/execution:451:12\r\n    at [stdin]-wrapper:6:24\r\n    at runScriptInContext (node:internal/process/execution:449:60)\r\n    at evalFunction (node:internal/process/execution:283:30)\r\n    at evalTypeScript (node:internal/process/execution:295:3)\r\n    at node:internal/main/eval_stdin:51:5\r\n    at Socket.<anonymous> (node:internal/process/execution:205:5) {\r\n  generatedMessage: true,\r\n  code: 'ERR_ASSERTION',\r\n  actual: false,\r\n  expected: true,\r\n  operator: '==',\r\n  diff: 'simple'\r\n}\r\n\r\nNode.js v24.19.0\r\n"
+    },
+    {
+      "command": "rg -n 'function ankiRun' 'Nursing-Study-Suite v16.6.html'",
+      "chunk_id": "9ca4e7",
+      "wall_time_seconds": 0.183816,
+      "exit_code": 0,
+      "original_token_count": 101,
+      "output": "4216:function ankiRunEvidence(run,status){return {status,model:run.model,thinkingLevel:run.thinkingLevel,context:run.context,snapshot:run.snapshot,chunkIds:run.chunkIds||[],rawResponses:[...run.rawResponses],partialResponse:run.partialResponse||'',truncated:!!run.truncated};}\n4217:function ankiRunIsCurrent(run,active,sourceKB){return run===active&&run.sourceKB===sourceKB&&!run.ctl.signal.aborted;}\n"
+    },
+    {
+      "command": "$auditLines=Get-Content -LiteralPath 'Nursing-Study-Suite v16.6.html'; 4217..4225 | ForEach-Object { '{0}:{1}' -f $_,$auditLines[$_-1] }",
+      "chunk_id": "a15c4c",
+      "wall_time_seconds": 0.3145515,
+      "exit_code": 0,
+      "original_token_count": 179,
+      "output": "4217:function ankiRunIsCurrent(run,active,sourceKB){return run===active&&run.sourceKB===sourceKB&&!run.ctl.signal.aborted;}\r\n4218:function ankiLinkedIds(card,snapshot){return (card.factIds||[]).filter(id=>snapshot&&snapshot.byId[id]);}\r\n4219:// v16.2: normalize only proven source aliases; semantic topic choices and ambiguous mappings stay reviewable.\r\n4220:function ankiConditionTagKey(value){\r\n4221:  if(typeof value!=='string'||value.length>512||/[\\p{Cf}\\p{Cs}]/u.test(value))return '';\r\n4222:  return value.normalize('NFC').replace(/[^\\p{L}\\p{N}\\p{M}]/gu,'').toLowerCase().normalize('NFC');\r\n4223:}\r\n4224:function ankiConditionTagSlug(value){\r\n4225:  const key=ankiConditionTagKey(value);if(!key)return '';\r\n"
+    },
+    {
+      "command": "$auditProbe = @'\nconst fs=require('node:fs'),assert=require('node:assert/strict');\nconst html=fs.readFileSync('Nursing-Study-Suite v16.6.html','utf8');\nfunction span(a,b,tail){assert.equal(html.split(a).length-1,1);assert.equal(html.split(b).length-1,1);const s=html.slice(html.indexOf(a),html.indexOf(b));assert.ok(s.includes(tail));return s;}\nconst setter=span('  const setKnowledgeBase=useCallback(value=>{', \"  const [persistenceStatus,setPersistenceStatus]\", 'if(replaced){setArtifactRegistry(EMPTY_ARTIFACT_REGISTRY);setInspectedFactId(null);}');\nconst publisher=span('  const registerArtifact=useCallback((kind,entries,{merge=false,sourceKB=currentKnowledge.current}={})=>{', '  const knowledgeValue=useMemo(', 'sourceKB!==currentKnowledge.current');\nconst guard=span('function ankiRunIsCurrent(run,active,sourceKB)', 'function ankiLinkedIds(', 'run.sourceKB===sourceKB');\nconst oldKB={conditions:[]},newKB={conditions:[]},currentKnowledge={current:oldKB},kbMutation={current:0},empty={ankiNotes:[]};\nlet registry={ankiNotes:[{factIds:['fact-1']}]},inspected='fact-1',state;\nconst deps={useCallback:f=>f,currentKnowledge,kbMutation,publishKnowledgeBase:v=>state=v,setSaveRequest:()=>{},setPersistenceStatus:()=>{},setArtifactRegistry:v=>registry=typeof v==='function'?v(registry):v,setInspectedFactId:v=>inspected=v,EMPTY_ARTIFACT_REGISTRY:empty,mergeArtifactEntries:()=>{throw Error('unexercised');}};\nconst {setKnowledgeBase,registerArtifact,ankiRunIsCurrent}=new Function(...Object.keys(deps),setter+publisher+guard+';return {setKnowledgeBase,registerArtifact,ankiRunIsCurrent};')(...Object.values(deps));\nconst run={sourceKB:oldKB,ctl:new AbortController()};assert.equal(ankiRunIsCurrent(run,run,oldKB),true);\nsetKnowledgeBase(newKB);registerArtifact('ankiNotes',[{factIds:['fact-1']}],{sourceKB:oldKB});\nassert.strictEqual(state,newKB);assert.strictEqual(registry,empty);assert.equal(inspected,null);assert.equal(ankiRunIsCurrent(run,run,newKB),false);\nconsole.log(JSON.stringify({oldRunInitiallyCurrent:true,replacementClearedRegistry:true,replacementClosedInspector:true,oldSourceRegistryRepublishRejected:true,oldRunAfterReplacementCurrent:false}));\n'@\n$auditProbe | node",
+      "chunk_id": "cfbb3c",
+      "wall_time_seconds": 0.3250455,
+      "exit_code": 0,
+      "original_token_count": 45,
+      "output": "{\"oldRunInitiallyCurrent\":true,\"replacementClearedRegistry\":true,\"replacementClosedInspector\":true,\"oldSourceRegistryRepublishRejected\":true,\"oldRunAfterReplacementCurrent\":false}\n"
+    }
+  ],
+  "executionNotes": [
+    "First direct cap probe failed because its handwritten expected suffix length was 4026 instead of actual 4027; corrected assertion derives length from the source expression. This was test-author error, not a production defect.",
+    "First identity probe used an end anchor that preceded the start; the non-vacuous tail assertion caught it. Located the next actual function and reran successfully. No failed extraction is counted as evidence.",
+    "Desired-behavior source suite exited 1 with 28 tests:17 pass,11 fail;2 guard mutants killed. It is independently authored by another agent; this review read actual source first, then inspected and executed that script.",
+    "Source suite contains fact/quote/condition/fact-count caps and save/reload loss; per-fact 51-to-50 pointer loss was separately reproduced here.",
+    "Read-only inspections also covered AGENTS.md, DECISIONS.md, CURRENT_STATE.md, DEVELOPMENT.md, README.md and the explicitly supplied re-audit brief. Long combined initial context output was truncated, so DECISIONS/DEVELOPMENT and source ranges were reread separately; relevant current-state/README sections were subsequently searched.",
+    "Production HTML and prior audit files were never written by this reviewer."
+  ],
+  "limitations": [
+    "No native browser, IndexedDB, Anki import or Gemini execution.",
+    "No private source material inspected.",
+    "Clinical truth cannot be inferred from malformed imported tier/bucket values.",
+    "Read-only context commands are represented by inspected paths and evidence locations rather than full large documentation output; all executed reproduction commands and complete tool results are retained above."
+  ]
+}

@@ -1,0 +1,225 @@
+{
+  "schemaVersion": 1,
+  "reviewer": "independent-sixth-stage-receipt",
+  "date": "2026-09-18",
+  "scope": "Optional Anki checker receipt integrity, source snapshots, retry/currentness and manual review decisions",
+  "readOnlyProduction": true,
+  "source": {
+    "file": "Nursing-Study-Suite v16.6.html",
+    "commit": "b6eb73ceabb7c8d292c186b07148c86949b37d34",
+    "sha256": "8524e35c8b3621e074a0499ba3857a672464b99721e4b502c381dfa29d0b9b12"
+  },
+  "contextRead": [
+    "AGENTS.md",
+    "DECISIONS.md",
+    "CURRENT_STATE.md current Anki releases",
+    "README.md Anki behavior/source-check sections",
+    "DEVELOPMENT.md initial workflow sections",
+    "user attached re-audit brief"
+  ],
+  "independentInventory": [
+    {
+      "guard": "Captured source snapshot",
+      "definition": "HTML:4166 ankiSourceSnapshot",
+      "calls": [
+        "Anki generation snapshot and sourceConflicts memo HTML:5588 vicinity",
+        "Receipt tests make()"
+      ],
+      "evidence": "Actual captured KB facts, condition, aliases, text, quote, tier, bucket and sources[]",
+      "predicate": "Copies source fields; freezes fact objects, nested source pointers, facts array and byId index.",
+      "effect": "Retains supplied content and filename/location pointers; establishes captured identity, not truth.",
+      "error": "Does not verify factual meaning or malformed input by itself.",
+      "bypass": "Upstream incorrect KB text is faithfully retained. Snapshot construction is not a semantic validator."
+    },
+    {
+      "guard": "Packet scope and identity",
+      "definition": "HTML:4600 ankiAuditGroups",
+      "calls": [
+        "HTML:5658 prepareSourceAudit"
+      ],
+      "evidence": "Actual note cloze structure, fields, Keep, tier, mappings, batch chunk IDs and source facts",
+      "predicate": "Nonempty unique note/fact IDs; known chunk facts; actual eligibility and bounded complete packet wire size.",
+      "effect": "Throws for ambiguous identifiers or indivisible oversized packets; builds exact request scope.",
+      "error": "Preparation catches exceptions into failed state.",
+      "bypass": "Complete packet accounting cannot establish relevance or entailment."
+    },
+    {
+      "guard": "Exact receipt decoding",
+      "definition": "HTML:4923 ankiParseSourceAuditV4; HTML:4658 ankiAuditSourceRange",
+      "calls": [
+        "HTML:5706 runSourceAudit"
+      ],
+      "evidence": "Captured group, packet-local n1 handles, numbered original source tokens, actual hidden cloze indices",
+      "predicate": "Exact schema; contiguous full inventory; unique target per target range; valid explicit role; exact handle; existing cloze index; required scoped records.",
+      "effect": "Retains independently valid records while unresolved errors keep group incomplete.",
+      "error": "Invalid top-level JSON/schema throws; invalid nested records become unresolved with path/context.",
+      "bypass": "Accepted model statuses remain unverified semantic judgments. Missing leaf evidence cannot bypass decoder."
+    },
+    {
+      "guard": "Required field evidence and finding dependencies",
+      "definition": "HTML:4824 ankiValidateSourceAuditRecords",
+      "calls": [
+        "HTML:4948 V4 validate adapter"
+      ],
+      "evidence": "Captured text, exact field spans, note scope, status and related findings",
+      "predicate": "Nonempty supported/changed/source-conflict evidence; supported records contain known spans; unsupported/changed verdicts require corresponding finding; empty Extra requires empty status and evidence.",
+      "effect": "Rejects invalid receipt instead of manufacturing approval or falsehood.",
+      "error": "Throws validation error that V4 quarantines for that record.",
+      "bypass": "The schema lacks field-level inconclusive status; propose this separately as policy/design. Known citation IDs and substrings do not imply semantic relevance."
+    },
+    {
+      "guard": "Retry merge",
+      "definition": "HTML:5048 ankiMergeSourceAuditResult",
+      "calls": [
+        "HTML:5708 runSourceAudit"
+      ],
+      "evidence": "Prior and next independently parsed V4 records and same group JSON signature",
+      "predicate": "Same packetSignature/protocol; merge by factId/noteId; require every selected fact/scoped note plus no unresolved error.",
+      "effect": "Retains accepted records, replaces valid same-ID records, unions findings/recovery provenance; prevents record duplication.",
+      "error": "Different captured packet throws. Public loop keeps failure evidence.",
+      "bypass": "Combining complementary attempts can preserve different model judgments; this is provenance/semantic uncertainty, not demonstrated false protocol completion."
+    },
+    {
+      "guard": "Pending and transport lifecycle",
+      "definition": "HTML:5373 ankiSourceAuditPending; HTML:5665-5730 runSourceAudit",
+      "calls": [
+        "Retry/resume button; completion publication"
+      ],
+      "evidence": "Captured original prompts/model/settings, accepted group statuses, attempt history, live run reference",
+      "predicate": "Only groups without complete results run; exact captured request must exist; stale currentness checked before/after await; truncated responses skipped; transport failure stops session.",
+      "effect": "Retries incomplete groups, retains completed work and attempts, quarantines invalid/truncated groups.",
+      "error": "Transport publishes failed/cancelled; validation errors allow other groups; stale state publishes interrupted.",
+      "bypass": "Receipt helper suite does not execute React event scheduling; independent lifecycle suite is needed for runtime dispatch claims."
+    },
+    {
+      "guard": "Currentness",
+      "definition": "HTML:5369 ankiSourceAuditCurrent; HTML:5579 effect/HTML:5681 guard",
+      "calls": [
+        "Active audit effect",
+        "runSourceAudit guard",
+        "HTML:5598 reviewItems memo",
+        "HTML:5096 evidence export"
+      ],
+      "evidence": "Captured cards and batch references, selected tier, current batch/KB identity",
+      "predicate": "run.cards===inputs.cards && run.batch===inputs.batch && run.tier===inputs.tier && inputs.current.",
+      "effect": "Interrupts stale work and excludes its receipt claims from current queue; marks downloads outdated.",
+      "error": "Stale evidence remains downloadable with checkComplete false.",
+      "bypass": "Relies on immutable state updates. Actual updateField HTML:5861 and source-link handlers allocate new cards arrays. In-place mutation hypothetical is not a reproduced public path."
+    },
+    {
+      "guard": "Local missing-evidence applicability",
+      "definition": "HTML:5134 ankiRecallIssues; HTML:5148 ankiReceiptRecallIssues",
+      "calls": [
+        "HTML:5362 receipt queue; HTML:5366 local queue"
+      ],
+      "evidence": "Actual valid clozes, known reliable mappings, captured fact span, referenced hidden answers",
+      "predicate": "Script comparison requires complete undisputed mapping; numeric recall comparison requires tested status, valid span and refs, then compares source number strings to hidden number strings.",
+      "effect": "Warnings only; [] means no applicable warning. Separate source-link and numeric status report missing/disputed evidence.",
+      "error": "Missing/invalid source or refs return []; receipt path already rejects them at decoding boundary.",
+      "bypass": "A semantic error can escape these bounded heuristics. No code here upgrades [] to supported status."
+    },
+    {
+      "guard": "Suggestions and manual decisions",
+      "definition": "HTML:5164 ankiSuggestionWarnings; HTML:5395 ankiMakeReviewDecision",
+      "calls": [
+        "HTML:5344 accepted finding queue; HTML:5601 saveReviewDecision"
+      ],
+      "evidence": "Checker suggestion, current item, disposition, captured note/source/tier, eligible covered-by note",
+      "predicate": "Allowed disposition, current source, current audit for nonlocal item; covered-elsewhere must identify kept structurally eligible note in selected tier.",
+      "effect": "Creates advisory acknowledgement record; does not alter Text, Extra, Tags, Keep or export.",
+      "error": "Invalid disposition, stale capture or missing/ineligible covered-by note throws.",
+      "bypass": "A user may acknowledge fixed without editing; this is explicitly a manual assertion rather than clinical certification."
+    },
+    {
+      "guard": "Decision invalidation/evidence",
+      "definition": "HTML:5388 ankiReviewDecisionCurrent; HTML:5402 ankiReviewDecisionEvidence; HTML:5089 ankiSourceAuditEvidence",
+      "calls": [
+        "Review queue and private download"
+      ],
+      "evidence": "Item signature, captured cards/batch/tier/preparedAt, current references, complete/pending groups, errors and hashes",
+      "predicate": "Decision signatures and reference identity match; only newest decision current. Report complete requires current capture, complete status, all groups checked and no failure.",
+      "effect": "Marks superseded/outdated decisions and incomplete reports; preserves explicit model judgment limitation.",
+      "error": "Hash failure produces null/unavailable flag; save handler reports export failure.",
+      "bypass": "Hashes establish bytes rather than clinical truth; completed means protocol accounting, as UI HTML:5469 and metadata explicitly state."
+    }
+  ],
+  "candidateVerdicts": [
+    {
+      "candidate": "Missing leaf evidence silently approves invalid receipt",
+      "verdict": "refuted for exercised public paths",
+      "basis": "Invalid note handles, missing indices, unknown source and absent required evidence produce incomplete V4 results. Leaf [] never supplies supported status."
+    },
+    {
+      "candidate": "Checker suggestions or Fixed acknowledgement automatically repair from model knowledge",
+      "verdict": "refuted",
+      "basis": "Real suggestion queue/decision functions preserve all cards/export bytes. No automatic application path in reviewed handler."
+    },
+    {
+      "candidate": "Changed notes retain current audit decisions",
+      "verdict": "refuted for immutable UI edits",
+      "basis": "Cards array identity changes; helper currentness and active audit effect invalidate captures. Receipt tests independently cover Text, source batch, selected tier and Keep changes."
+    },
+    {
+      "candidate": "Complementary retry duplicates records or accepts different packet",
+      "verdict": "refuted by executed controls",
+      "basis": "Same-packet partial records merge once; repeated merge has one fact/one note; changed captured fact body throws."
+    },
+    {
+      "candidate": "An exact source citation guarantees meaning",
+      "verdict": "semantic limitation, not deterministic coding defect",
+      "basis": "Six intentionally false mock judgments remain supported; DECISIONS.md, UI and report explicitly disclaim semantic certification. These are not observed Gemini errors or error-rate measurements."
+    },
+    {
+      "candidate": "Receipt fixtures use wrong source pointer shape",
+      "verdict": "refuted for new script",
+      "basis": "make() calls real ankiSourceSnapshot. sources:[{filename,location}] and source footer assertions pass."
+    }
+  ],
+  "testQualityConcerns": [
+    "Six failing assertions are deliberately stronger semantic expectations than the current deterministic decoder contract. Preserve their semantic-limit category; do not count them as six production defects or six actual checker model failures.",
+    "Receipt stage trace assembles real helpers in production order manually. It is not a run of the actual generation React handler; the separate lifecycle suite must support handler/event claims.",
+    "Preview/export assertions compare exported fields and the same extracted preview helper. They verify helper serialization invariance, not native Anki rendering or independently correct cloze semantics.",
+    "handle-guard-bypass mutation survives because downstream operations still quarantine the record. This discloses limited diagnostic-specific mutation coverage rather than public fail-open approval.",
+    "Complementary retry controls exercise merge helpers, not actual request scheduling; receipt script cannot alone establish stopped-session/late-response behavior.",
+    "Covered-elsewhere semantic relevance is a user judgment; the helper validates eligibility only. Manual fixed is acknowledgement, not evidence a correct text edit occurred.",
+    "Source currentness test replaces the batch object; it does not mutate a live KB in browser. Actual immutable UI handlers were inspected statically.",
+    "Existing shared fixture is used as a protocol-valid mock response builder, not expected semantic oracle. Expected source meaning is independently written in fixtures."
+  ],
+  "executionJournal": [
+    {
+      "command": "node tools/reaudit-anki-receipt-tests.js",
+      "exitCode": 1,
+      "output": "PASS live-span-tail [control]\nPASS supported-literal-roundtrip [control]\nPASS supported-literal-immutability [control]\nPASS supported-literal-preserved [control]\nPASS supported-paraphrase-roundtrip [control]\nPASS supported-paraphrase-immutability [control]\nPASS supported-paraphrase-preserved [control]\nPASS contradictory-answer-roundtrip [control]\nPASS contradictory-answer-immutability [control]\nFAIL contradictory-answer-semantic-expectation [semantic-limit]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'unsupported'\n\nPASS visible-negation-roundtrip [control]\nPASS visible-negation-immutability [control]\nFAIL visible-negation-semantic-expectation [semantic-limit]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'unsupported'\n\nPASS extra-addition-roundtrip [control]\nPASS extra-addition-immutability [control]\nFAIL extra-addition-semantic-expectation [semantic-limit]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'unsupported'\n\nPASS hint-addition-roundtrip [control]\nPASS hint-addition-immutability [control]\nFAIL hint-addition-semantic-expectation [semantic-limit]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'unsupported'\n\nPASS irrelevant-real-reference-roundtrip [control]\nPASS irrelevant-real-reference-immutability [control]\nFAIL irrelevant-real-reference-semantic-expectation [semantic-limit]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'unsupported'\n\nPASS inconclusive-population-roundtrip [control]\nPASS inconclusive-population-immutability [control]\nFAIL inconclusive-population-semantic-expectation [semantic-limit]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'inconclusive'\n\nPASS entity-and-hint-preservation-roundtrip [control]\nPASS entity-and-hint-preservation-immutability [control]\nPASS entity-and-hint-preservation-preserved [control]\nPASS real-source-shape [control]\nPASS source-footers [control]\nPASS invalid-json-\"\" [control]\nPASS invalid-json-\"{\\\"factReviews\\\":\" [control]\nPASS invalid-json-\"{}\" [control]\nPASS invalid-handle-incomplete [control]\nPASS missing-inventory-tail-incomplete [control]\nPASS missing-cloze-public-decoder [control]\nPASS unknown-evidence-public-decoder [control]\nPASS missing-evidence-no-supported-receipt [control]\nPASS missing-evidence-no-invented-falsehood [control]\nPASS false-negative-checker-does-not-deselect [control]\nPASS missing-receipt-shape-0 [control]\nPASS missing-receipt-shape-1 [control]\nPASS missing-receipt-shape-2 [control]\nPASS unmapped-not-approved [control]\nPASS disputed-not-approved [control]\nPASS receipt-number-not-hidden [control]\nPASS decision-fixed-no-repair [control]\nPASS decision-intentional-context-no-repair [control]\nPASS decision-covered-elsewhere-no-repair [control]\nPASS decision-unresolved-no-repair [control]\nPASS decision-invalidated-text [control]\nPASS decision-invalidated-source [control]\nPASS decision-invalidated-tier [control]\nPASS decision-invalidated-selection [control]\nPASS covered-by-missing-rejected [control]\nPASS complementary-retry-completes [control]\nPASS repeated-retry-no-record-duplication [control]\nPASS changed-packet-cannot-merge [control]\nPASS complete-report-honest-scope [control]\nPASS stale-report-not-complete [control]\n{\"passed\":54,\"failed\":6,\"failuresByCategory\":{\"semantic-limit\":6}}\nSURVIVED handle-guard-bypass\nKILLED handle-alias-guess\nKILLED inventory-guard-bypass\n"
+    },
+    {
+      "command": "git rev-parse HEAD\nGet-FileHash -Algorithm SHA256 -LiteralPath 'Nursing-Study-Suite v16.6.html'\nTest-Path -LiteralPath 'docs/reviews/anki-integrity-reaudit-stage-receipt.json'",
+      "exitCode": 0,
+      "output": "b6eb73ceabb7c8d292c186b07148c86949b37d34\n\r\nAlgorithm       Hash                                                                   Path\r\n---------       ----                                                                   ----\r\nSHA256          8524E35C8B3621E074A0499BA3857A672464B99721E4B502C381DFA29D0B9B12       C:\\Users\\sai13\\Proton Drive\\sai…\r\nFalse\r\n\r\n"
+    }
+  ],
+  "result": {
+    "passedControls": 54,
+    "failedDesiredSemanticExpectations": 6,
+    "exitCode": 1,
+    "mutations": [
+      {
+        "name": "handle-guard-bypass",
+        "outcome": "survived"
+      },
+      {
+        "name": "handle-alias-guess",
+        "outcome": "killed"
+      },
+      {
+        "name": "inventory-guard-bypass",
+        "outcome": "killed"
+      }
+    ],
+    "newReproducedDeterministicDefects": 0
+  },
+  "limits": [
+    "Bounded independent source/helper review, not exhaustive application audit.",
+    "No production files, previous audit files or private study artifacts changed/read.",
+    "No Gemini call, browser test, native Anki import, independent clinical validation or verifier run by this stage reviewer."
+  ]
+}

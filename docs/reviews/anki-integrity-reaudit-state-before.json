@@ -1,0 +1,455 @@
+{
+  "commit": "b6eb73ceabb7c8d292c186b07148c86949b37d34",
+  "status": [
+    "?? docs/reviews/anki-data-integrity-audit-2026-09-18.md",
+    "?? docs/reviews/anki-data-integrity-execution-results.json",
+    "?? docs/reviews/anki-data-integrity-lifecycle-evidence.md",
+    "?? docs/reviews/anki-data-integrity-receipt-evidence.md",
+    "?? docs/reviews/anki-data-integrity-receipt-results.json",
+    "?? docs/reviews/anki-data-integrity-source-evidence.md",
+    "?? docs/reviews/anki-data-integrity-transform-evidence.md",
+    "?? docs/reviews/anki-data-integrity-transform-results.json",
+    "?? docs/reviews/codex-remediation-plan-v15.17.md",
+    "?? docs/reviews/production-review-2026-09-11.md",
+    "?? tools/audit-anki-lifecycle-tests.js",
+    "?? tools/audit-anki-receipt-tests.js",
+    "?? tools/audit-anki-source-tests.js",
+    "?? tools/audit-anki-transform-tests.js"
+  ],
+  "tracked": [
+    {
+      "path": ".gitattributes",
+      "sha256": "12B3CC73275D610A31A50CD65D9D5CF7FB7D5D6318EC5851D9BF9C3437794C36"
+    },
+    {
+      "path": ".gitignore",
+      "sha256": "73C94D15BD789BB400254CE3832AECF724FF9BC738C5DB1E680A692EC0A073BD"
+    },
+    {
+      "path": "AGENTS.md",
+      "sha256": "2328DD45138BDCA5614A9C53EAE04B39B6E016BAE21E03F52534535AF62718ED"
+    },
+    {
+      "path": "ANKI-v15.17-validation.md",
+      "sha256": "AE6D39A807D749F5472061538FA0F346D8A81791D26185DC7A256E2C95EA6915"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "sha256": "5C298D39A250CB91C7ED2A3DB2A37C3A06E7BA34AC894016E23D4B148C10D93A"
+    },
+    {
+      "path": "CLAUDE.md",
+      "sha256": "9D6DBD841EB14E6EC1D55113EEA9768A9E27177FA2B26E77159BF42D9A3B7180"
+    },
+    {
+      "path": "CURRENT_STATE.md",
+      "sha256": "24C62B7FC0EF87A1A47A0C59959351B0BB259448723F8D75F4F9C99DE7344C4F"
+    },
+    {
+      "path": "DECISIONS.md",
+      "sha256": "621EEC5E88FDD03784066C8CF6C2CCF319693EE7ED8652A6A22738A975B08B2C"
+    },
+    {
+      "path": "DEVELOPMENT.md",
+      "sha256": "24B56C27E1EED8215D6F5783048463DA48975B1AEAAFB19C008E9E28F10A71E8"
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "3972DC9744F6499F0F9B2DBF76696F2AE7AD8AF9B23DDE66D6AF86C9DFB36986"
+    },
+    {
+      "path": "Nursing-Study-Suite v16.6.html",
+      "sha256": "8524E35C8B3621E074A0499BA3857A672464B99721E4B502C381DFA29D0B9B12"
+    },
+    {
+      "path": "Prompts.md",
+      "sha256": "0F6861FAE4EA4B0038871DD50782EC14AC891B2462A202B9AE67A028BA8E68A4"
+    },
+    {
+      "path": "README.md",
+      "sha256": "3F40B2EB7AAECD1D6977D6CBDE07AA1C68FB44C5D86C344ACF9F3D62CC73F7F3"
+    },
+    {
+      "path": "davis-transcribe-test.js",
+      "sha256": "3DAFB01B07417CD0233940387E6BD16A717F6D19D081FFAE2136E50D469A777E"
+    },
+    {
+      "path": "docs/history/ANKI-source-retrieval-update.diff",
+      "sha256": "4CFA01AB44FCB0C2CAA17F91BDC29EF9C5B39799F40F8C604CC318951F6DB6E8"
+    },
+    {
+      "path": "docs/history/ANKI-v15.16-prompt.diff",
+      "sha256": "DDF8D3DA05A399195694976C14390081392171A25D26D0840A2A15D2CEC4DDEE"
+    },
+    {
+      "path": "docs/history/ANKI-v15.17-example-proposal.diff",
+      "sha256": "E12EACF4541BE4C959EBE88289BE125CC63AEE890BD96D3073AD792CD29AF6A6"
+    },
+    {
+      "path": "docs/history/ANKI-v15.17-example-rollback.diff",
+      "sha256": "317292758D39FB525F8975D098C18E828AE0787D76E44F7383B6C6743FF6DB11"
+    },
+    {
+      "path": "docs/history/ANKI-v16.1-extra-default.diff",
+      "sha256": "F523E7F644030FF06BB8277477BB5842AF77FF42FD231B8233CEBBAB5880FA61"
+    },
+    {
+      "path": "docs/history/ANKI-v16.2-adapter.diff",
+      "sha256": "3A71F960F94093A0900F04D9DC9F849CCA074E77387528A545255865300A293F"
+    },
+    {
+      "path": "docs/history/ANKI-v16.3-audit-builder.diff",
+      "sha256": "304C0495B1E712E63B8E8C4DD6B4540AE647434345C6E3047489A1CA0CE92673"
+    },
+    {
+      "path": "docs/history/ANKI-v16.4-audit-builder.diff",
+      "sha256": "C75E1D9670009ED1EC2285C7763B75B148019FB22AC00839CAB2D7131C7954A3"
+    },
+    {
+      "path": "docs/history/ANKI-v16.5-adapter.diff",
+      "sha256": "FAB0061E82F17C7308666D1476A998E632A319F350D01C2EC5A186A8EC7E7B4F"
+    },
+    {
+      "path": "docs/history/ANKI-v16.5-target-allocation.diff",
+      "sha256": "F5622664A9577C701F2EC407CE3607E5BC5918CCE9EDAC494B2DA84B9ABB8EC7"
+    },
+    {
+      "path": "docs/history/ANKI-v16.6-adapter.diff",
+      "sha256": "62E22A282F5349C178E25B66BF7C7F90934098BF7FE64FF06A6CC3D9FB7ACA62"
+    },
+    {
+      "path": "docs/history/ANKI-v16.6-audit-builder.diff",
+      "sha256": "DCA091A35A33EA3A1AD23BF69F80B075262032FD3584966F17039787EB359DB3"
+    },
+    {
+      "path": "docs/history/ANKI-v16.6-serializer.diff",
+      "sha256": "5D7A0B973CBE8366AE106F35A8D31B79C9C64307E40F13AEFE019A8A3F172006"
+    },
+    {
+      "path": "docs/history/Nursing-Study-Suite-v16-spec.md",
+      "sha256": "B6CB34B246233DC2716C2D34028D9781A1B61DAD796681AF0C7BC978123C6F01"
+    },
+    {
+      "path": "docs/history/v16-benchmark-worksheet.md",
+      "sha256": "A718041DC04EA0D38EA55A5B484ACF6462CD2EE932A36E713735E81A64D23CD7"
+    },
+    {
+      "path": "docs/reviews/anki-v16.1-release.md",
+      "sha256": "D64C81C2360CF541A415E81390822B594E654F2B4CCD705DC75697ABA1E2AE58"
+    },
+    {
+      "path": "docs/reviews/anki-v16.2-implementation.md",
+      "sha256": "4E3888C1AE6B52D150692B240A37D389BEEFDEBAD73E8B062B6CBA72D4FB6F38"
+    },
+    {
+      "path": "docs/reviews/anki-v16.3-implementation.md",
+      "sha256": "80E20E27B5DC2090C71524A359AF9FF01C759912BEAE113A5003CFD52A98AEC5"
+    },
+    {
+      "path": "docs/reviews/anki-v16.4-implementation.md",
+      "sha256": "4E846180DD403F1851510E9834BC26807594C14AD306E0CF42DD9C4AA4BB4072"
+    },
+    {
+      "path": "docs/reviews/anki-v16.5-implementation.md",
+      "sha256": "435B2C624C2CD933CF76CA87DC6C645A17143AAEC4F44C5592AE1904555D6A38"
+    },
+    {
+      "path": "docs/reviews/anki-v16.6-implementation.md",
+      "sha256": "A5C2412D9D6644CD21994885B299E96A26744BF2A48F28FF7B6D6588AADCE741"
+    },
+    {
+      "path": "docs/reviews/remediation-browser-validation.md",
+      "sha256": "788E35FED3EC290B9B8A16F4F4B1FCC8685EF3540BCB47D04495DE57317B6B74"
+    },
+    {
+      "path": "docs/reviews/remediation-execution-v15.17.md",
+      "sha256": "FD58147F20FA3B914F438079EDF1806D99721D19E0ECBA878FB5D204DCECF8BA"
+    },
+    {
+      "path": "docs/reviews/remediation-resource-validation.md",
+      "sha256": "322C7A5DC274C4FC6F609C996C5E87D27576F13FB0782EE7BFD7FC58A447C3AB"
+    },
+    {
+      "path": "docs/reviews/visual-update-v16.0.md",
+      "sha256": "6F0C2640E1FDCDE3735A192FEB0ECF56444F2DA40C1D6BFBC45DAFC4778D3C65"
+    },
+    {
+      "path": "latte-tests.js",
+      "sha256": "A03B54FFB61A982C8AE235716CEA550E49F750886068B6880945F4490047D984"
+    },
+    {
+      "path": "neia-fixture.json",
+      "sha256": "A460ABC94DD58C2E065011EDC83DA19CBC3C2A6B7FEA9F20C7A4F73637DACECF"
+    },
+    {
+      "path": "neia-retest.js",
+      "sha256": "0750BC02B3AC0E1DDAE6CE14004F3093FD437D65C5A1CA0976271A5FA629E924"
+    },
+    {
+      "path": "prompt-baseline.json",
+      "sha256": "27EA651081737A328116D6812DBAE88122559D889462EF307E579018FE5591C9"
+    },
+    {
+      "path": "tools/anki-audit-packet-size-tests.js",
+      "sha256": "F3774E64C2F8C068801815F35741F40B57571245C8F04BDD50B4513DD09359CA"
+    },
+    {
+      "path": "tools/anki-audit-partial-tests.js",
+      "sha256": "697A4B7A7759E21194C577B447EF1B589BF398CF8DAAFD18CDE5642A8D5B0EF4"
+    },
+    {
+      "path": "tools/anki-audit-receipt-tests.js",
+      "sha256": "B4583631384FA21C94D4421D37B75CBC57659540F222EBFA46487625DC91633D"
+    },
+    {
+      "path": "tools/anki-audit-reconcile-tests.js",
+      "sha256": "CE041F75618CD75F6B0EFFB3907AD4FC1AF4FE4E1C959796655C81549EBE7EA8"
+    },
+    {
+      "path": "tools/anki-audit-v166-tests.js",
+      "sha256": "51A61FF8570ECC80FA698D082E1154730B7ABB2491453EA5CA6955184BA9EE18"
+    },
+    {
+      "path": "tools/anki-audit-wire-tests.js",
+      "sha256": "D32BF906DD58659ACFFD2B68113B6FBA389F342FD66B89D2641B119B8108C667"
+    },
+    {
+      "path": "tools/anki-browser-fixture.js",
+      "sha256": "BF7D3CAA0A90F76FC62FB8A410F16EFFA0472BA0180DBFBC5A28BDB4C50AC4B4"
+    },
+    {
+      "path": "tools/anki-citation-recovery-tests.js",
+      "sha256": "650D8A8D25EF43535F3D7D5F68EBD173CDA6CAC5B037B53E674901E95A8B4D07"
+    },
+    {
+      "path": "tools/anki-condition-tag-tests.js",
+      "sha256": "81E023D690DE8B51CC77200D20635468EE3B5A76B0143D0968B298E7912AC79C"
+    },
+    {
+      "path": "tools/anki-example-proposal.js",
+      "sha256": "47CE3135820CBCFDB08F34453B51F070DC54D330FCE2998399439072F568DCB3"
+    },
+    {
+      "path": "tools/anki-extra-default-tests.js",
+      "sha256": "3E10DEB27CD22B120D6A37DC74BCCC3C6C14E333679BC509E92E8FA3F0D4A050"
+    },
+    {
+      "path": "tools/anki-generation-quality-browser-tests.js",
+      "sha256": "8372936CA867978E9DA23F01061CD0975E13F6AFBC82A02E9678610B0B30097E"
+    },
+    {
+      "path": "tools/anki-generator-v166-tests.js",
+      "sha256": "3EB0E23BAF2028514A018B6FA029F510F568843384481C9ED5D0404260CF7CCA"
+    },
+    {
+      "path": "tools/anki-local-checks-tests.js",
+      "sha256": "6E792F2606A1C3E7A13E4A4C229DC31138120BE1E835CA9A90FC0A4884E0D919"
+    },
+    {
+      "path": "tools/anki-mapping-update-tests.js",
+      "sha256": "C9C8E346FD91577DF4A6E06C93D7844AF8C4041B5335EE00DBFC152B35EC530F"
+    },
+    {
+      "path": "tools/anki-normalization-diagnostics-tests.js",
+      "sha256": "1A7EB6ADA6BE90120FDC0A7A7E9F17BCD301CA49922327E3132CFB97980E015C"
+    },
+    {
+      "path": "tools/anki-pilot-spec.js",
+      "sha256": "4FE1EF0178D6C0E720A47037FAF798DD51D7A258780005E7320B342D0E3528FC"
+    },
+    {
+      "path": "tools/anki-quality-v166-tests.js",
+      "sha256": "12E8B723A66E6E4C6701CBB4089994A9564C11B2B143E60C709184A97943D319"
+    },
+    {
+      "path": "tools/anki-recall-review-tests.js",
+      "sha256": "8A9A41F9987BD699FBBCAAEC5ACDDCD07B577ED9F7718E905DD2D14CE3E64CD6"
+    },
+    {
+      "path": "tools/anki-review-evidence-tests.js",
+      "sha256": "DF5B5C172ECE4DFF46D47F8A66A6E171ACC8AB2D38C9A8305F1A0118D3E7E8AA"
+    },
+    {
+      "path": "tools/anki-review-quality-tests.js",
+      "sha256": "E4DB44331B4AB36A3D829F748AC7C151A69FC0E94D55F9B5505200E0BEB5BF88"
+    },
+    {
+      "path": "tools/anki-review-queue-tests.js",
+      "sha256": "99757516837EA46E30E436F18BF50C064C49457E770E76CA91F047DC41FB0661"
+    },
+    {
+      "path": "tools/anki-source-audit-tests.js",
+      "sha256": "E7CABD72FE91A5F509FA6522FA93B027A2F5E93DEEB32EA1EAA98886B7D65458"
+    },
+    {
+      "path": "tools/anki-source-review-browser-tests.js",
+      "sha256": "DB129738849E6DD813845F7AAEE88130480A05A47A9E04336CDA975944BA10CD"
+    },
+    {
+      "path": "tools/anki-source-ui-tests.js",
+      "sha256": "E1E09591B0CD44DCB0774BCEAB1DC993A9A88CE618F0471EE7ABFCEA2AE6BA38"
+    },
+    {
+      "path": "tools/anki-tag-format-tests.js",
+      "sha256": "6531E99064C9BC35A6440ACBC6C56C3D2868379A6356BB49952105E2710354F8"
+    },
+    {
+      "path": "tools/anki-target-allocation-tests.js",
+      "sha256": "E4335D0359B0003183C1ABBC7000400036ED4310BCC5EAB2E5238911908A8B7F"
+    },
+    {
+      "path": "tools/anki-v166-browser-tests.js",
+      "sha256": "4687EAC2C30E60462E5BE7A9FDB0DBA800CD5F6DE0565D2271F5E6436DC1AEA9"
+    },
+    {
+      "path": "tools/check-prompts.js",
+      "sha256": "BED85222D83687170779EA83430885CE7EC31F66E736F82845FB3C15A4BDA095"
+    },
+    {
+      "path": "tools/evidence-regression-tests.js",
+      "sha256": "135512BF727428B37D5EAD47D0063C539929B5701FDDD022A61B42002CAFC5B1"
+    },
+    {
+      "path": "tools/fixtures/anki-audit-response.js",
+      "sha256": "640CC3BC8581CFC3C2FA750B21CEE7BBF406B92881CED32598446B4751F3E148"
+    },
+    {
+      "path": "tools/fixtures/anki-v15.16-prompt.txt",
+      "sha256": "9BE7826295EDC2D3E394FE4727CFF916921BB944F51D0E5E4ED3648AEEA78EE2"
+    },
+    {
+      "path": "tools/fixtures/anki-v166-quality-cases.json",
+      "sha256": "C4A5061B6F949095CDB8764D973CC455B47D52C66E1C3F00BD74F153869D972B"
+    },
+    {
+      "path": "tools/neutral-weight-tests.js",
+      "sha256": "13FD7C3F3E900F6B4CE0E0AE583A148D0C77302FD5E0D1ECD9383257DF4DBAB2"
+    },
+    {
+      "path": "tools/numeric-boundary-tests.js",
+      "sha256": "17D2E7A3B33AE82FA0F436654DFBFD797F07509F89300115FDE22134418E140C"
+    },
+    {
+      "path": "tools/remediation-anki-performance-tests.js",
+      "sha256": "94A6311DE2193441D4D1FA34B48B53A62472AC0CE064EFA4DF0B0A7E46BD6566"
+    },
+    {
+      "path": "tools/remediation-anki-performance.js",
+      "sha256": "90CEF03E439209A7EA106650A21F7F065D9E978AE94253FF2474E746F802685D"
+    },
+    {
+      "path": "tools/remediation-artifact-tests.js",
+      "sha256": "78D57BB4F1A1490E0DC2433284B3995E126347DA5E51FF673878E03837840CE0"
+    },
+    {
+      "path": "tools/remediation-browser-fixture.js",
+      "sha256": "F6E18F7FAA3C1FD8D4AA138FCB3D695EA93E97EBCAC9500FB146172446DEFB9E"
+    },
+    {
+      "path": "tools/remediation-browser-tests.js",
+      "sha256": "6BF5EE66066EB1A99ED1850B9B49C0520EC9BB3CED420DD073E73E107DE9EA71"
+    },
+    {
+      "path": "tools/remediation-ownership-tests.js",
+      "sha256": "CB0CF826D301D68199C76B00158A433D03D9CE25EE0FC29D7159B76A0F59DE87"
+    },
+    {
+      "path": "tools/remediation-pdf-browser-tests.js",
+      "sha256": "2263DF445819146E516EBECDCCA28546F7B2A9E551A22FB46FF375526BB2DF3F"
+    },
+    {
+      "path": "tools/remediation-resource-tests.js",
+      "sha256": "4C13D27F2A377ABC0C65042C0C2D4AF1CE7527C575A513B29DFEEDB150583885"
+    },
+    {
+      "path": "tools/remediation-storage-tests.js",
+      "sha256": "3AD3CE66168CF3C8EE9CC33DFBCB6AC9D39AB003CA301DC0789F94A3E2E8856A"
+    },
+    {
+      "path": "tools/remediation-tooling-tests.js",
+      "sha256": "05EAF699D19E382DF6BA6B2F31180C0517761C3C1D02BCE79B88C3CFF3B2BA7D"
+    },
+    {
+      "path": "tools/remediation-worksheet-browser-tests.js",
+      "sha256": "33C43326C183987EFFE191B29CBA0D96B8A1DFF0622015E84C197E467184B84A"
+    },
+    {
+      "path": "tools/render-prompts.js",
+      "sha256": "A9B32B87CC3425E4E272BD0894A39291C24B0100A28B8C6E851B982EEC0E5DA4"
+    },
+    {
+      "path": "tools/repo-checks.js",
+      "sha256": "0B4E7903A843732AD28095470710E83B7CBFEA2953490B2AF2C6BD57FA3716D6"
+    },
+    {
+      "path": "tools/transport-regression-tests.js",
+      "sha256": "D8451F2EB28D623CD0AD79B1186DF315516CFCBD8E5280A9835C0AF2612DB771"
+    },
+    {
+      "path": "tools/visual-browser-tests.js",
+      "sha256": "397E8CE977BBE0659101483658D3402F0E5129F8A5C3AB9BEEF584D11FB60B21"
+    },
+    {
+      "path": "tools/visual-regression-tests.js",
+      "sha256": "8FF0C411BBC0D526987EC35257D1CA175FB439A267FFDB6F1D815C174A90AE84"
+    },
+    {
+      "path": "tools/worksheet-remediation-tests.js",
+      "sha256": "0E2CD681B6610FFC6E84275C3B6C83906E445207DC8CCD60BCF98F57DF40D59A"
+    },
+    {
+      "path": "verify-repo.js",
+      "sha256": "220AEEFA837E6201D0B7FB3FAC7EA2D5A7B53685C76D7A966CD988368D884257"
+    }
+  ],
+  "priorAudit": [
+    {
+      "path": "C:\\Users\\sai13\\Proton Drive\\sai136ob\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\docs\\reviews\\anki-data-integrity-audit-2026-09-18.md",
+      "sha256": "F7BB150C0D17E10332115F90AFC22035E542BE6FA0E5C618878D0C9592141EBB"
+    },
+    {
+      "path": "C:\\Users\\sai13\\Proton Drive\\sai136ob\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\docs\\reviews\\anki-data-integrity-execution-results.json",
+      "sha256": "0B01D1F02C27A1A944956562B74D0A613143ED8E25333443186765FB1E002CB3"
+    },
+    {
+      "path": "C:\\Users\\sai13\\Proton Drive\\sai136ob\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\docs\\reviews\\anki-data-integrity-lifecycle-evidence.md",
+      "sha256": "D82E7A3B632DBC1E58426691E844C8817BC639FEA5B40D6F9F631227C5C57332"
+    },
+    {
+      "path": "C:\\Users\\sai13\\Proton Drive\\sai136ob\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\docs\\reviews\\anki-data-integrity-receipt-evidence.md",
+      "sha256": "70E179EDD1FD53BD314490AD108A436735D7A94F29D21D5F1DA104C63AB284F4"
+    },
+    {
+      "path": "C:\\Users\\sai13\\Proton Drive\\sai136ob\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\docs\\reviews\\anki-data-integrity-receipt-results.json",
+      "sha256": "678AA3F82AD06D4AC55BC4B3F5CEF1FC638C66C67737EDBD50E826247E05042C"
+    },
+    {
+      "path": "C:\\Users\\sai13\\Proton Drive\\sai136ob\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\docs\\reviews\\anki-data-integrity-source-evidence.md",
+      "sha256": "62371B6A384E405BEB6718AC2EDEB36772FC093CB7A0293318B9DC3FD38A7F6D"
+    },
+    {
+      "path": "C:\\Users\\sai13\\Proton Drive\\sai136ob\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\docs\\reviews\\anki-data-integrity-transform-evidence.md",
+      "sha256": "62A4594C9F80AB0F73135B9EC640E6F43ABA849978B7E41EFC99F7AC2A921F28"
+    },
+    {
+      "path": "C:\\Users\\sai13\\Proton Drive\\sai136ob\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\docs\\reviews\\anki-data-integrity-transform-results.json",
+      "sha256": "DD5611333C54B2FF6891DF39E91DBE779107DD90059F691525B5BBDD83232F2D"
+    },
+    {
+      "path": "C:\\Users\\sai13\\Proton Drive\\sai136ob\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\tools\\audit-anki-lifecycle-tests.js",
+      "sha256": "52547DF99074C3A07AF327035B62CF49540287E0904A435599AC4FA62FFD80B3"
+    },
+    {
+      "path": "C:\\Users\\sai13\\Proton Drive\\sai136ob\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\tools\\audit-anki-receipt-tests.js",
+      "sha256": "A8E60AF262CBA0A9EBEC8D0BDA255FD223D62D098676B730BB3DD54BC5E8AB5A"
+    },
+    {
+      "path": "C:\\Users\\sai13\\Proton Drive\\sai136ob\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\tools\\audit-anki-source-tests.js",
+      "sha256": "CDF0C93C9F6BB20102A14095500DAE1019C5850CA94B87FC2572BFE1B2FD8F5D"
+    },
+    {
+      "path": "C:\\Users\\sai13\\Proton Drive\\sai136ob\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\tools\\audit-anki-transform-tests.js",
+      "sha256": "B1B8089912091EBA0D07E2C1CDFB6B0D735BE90EBCBA07858B48142D8710B56B"
+    }
+  ]
+}

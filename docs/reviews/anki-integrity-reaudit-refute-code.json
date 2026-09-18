@@ -1,0 +1,323 @@
+{
+  "reviewer": "Independent adversarial refuter: code really does the claim",
+  "date": "2026-09-18",
+  "sourceSha256": "8524e35c8b3621e074a0499ba3857a672464b99721e4b502c381dfa29d0b9b12",
+  "method": "Read binding/routed docs and production source before reading new evidence docs or running new suites. No prior A1-A9 audit used as authority. All four new live-extraction suites executed locally plus a fresh independent token/quote probe. Only this new output artifact was written.",
+  "verdicts": [
+    {
+      "id": "A1",
+      "vote": "confirm-defect",
+      "severity": "P1",
+      "reason": "ankiParseCards increments sourceLine only for lines containing a pipe (4147), discarding all other nonblank text before structural lint. attachCoverageToCards resolves that compressed coordinate (4178–4193); it cannot recover a lost prohibition or know original model line numbering. Export only sees surviving valid fields (4474). Scope is malformed model-output fragments and shifted provenance, not ordinary standalone prose outside a proper card.",
+      "source": {
+        "file": "Nursing-Study-Suite v16.6.html",
+        "lines": "4142-4150;4177-4200;4473-4481"
+      },
+      "testEvidence": "transform failures: multiline-negation-prefix-lost:no-exported-negation-loss, dropped-no-pipe-line:parsed-notes and no-mapping-index-shift, truncated-note:parsed-notes"
+    },
+    {
+      "id": "A2",
+      "vote": "confirm-defect",
+      "severity": "P1",
+      "reason": "The sanitizer slices both containers and strings before publication; dropped counts increase only for malformed entries, not overflow (1715,1726,1732,1746-1747). Thus otherwise valid tails and provenance are changed without a diagnostic. The same function is used on stored state, so this is not merely tolerant handling of bad imports. Scope is exact demonstrated limits; no frequency claim.",
+      "source": {
+        "file": "Nursing-Study-Suite v16.6.html",
+        "lines": "1715;1724-1752;10168"
+      },
+      "testEvidence": "source desired assertions fail for text/quote truncation, condition/fact caps, per-fact source cap, merge-restore length and persistence-reload-loss"
+    },
+    {
+      "id": "A3",
+      "vote": "confirm-defect",
+      "severity": "P2",
+      "reason": "The number pattern accepts ASCII signs only; the unit pattern accepts ASCII letters and stops before superscripts. These forms donate a supported suffix/prefix and produce no unsupported-form diagnostic. This is an incorrect exact-token normalization within an advisory check, not an export safety gate.",
+      "source": {
+        "file": "Nursing-Study-Suite v16.6.html",
+        "lines": "4384-4404;4412-4426"
+      },
+      "testEvidence": "transform Unicode minus changed/faithful and superscript square/cubic assertions fail; independent direct probe shows −5 °C -> 5 °c, -5 °C -> -5 °c, 5 cm² and 5 cm -> same key"
+    },
+    {
+      "id": "A4",
+      "vote": "rescope-policy",
+      "severity": null,
+      "reason": "ankiNumericAudit explicitly calls revealed preview for Text and Extra. Revealed rendering omits hints. README 191 and source 4363 define this narrow check; a hint mismatch is an observable limitation, not violation of a stated all-visible-text guarantee. Extending coverage can be proposed without making numeric warnings gates.",
+      "source": {
+        "file": "Nursing-Study-Suite v16.6.html",
+        "lines": "4363-4364;4412"
+      },
+      "testEvidence": "transform hint fixtures exercised; no assertion that advisory numeric check must reject hint-only additions"
+    },
+    {
+      "id": "A5",
+      "vote": "confirm-defect",
+      "severity": "P2",
+      "reason": "The guarded extraction validates only top-level conditions array. The next reduce dereferences c.facts after the per-chunk catch has ended; null crashes into the outer failure instead of preserving previously accumulated chunks. Error is visible and previous stored KB is not proved deleted. Confirm lost successful work in the current build only.",
+      "source": {
+        "file": "Nursing-Study-Suite v16.6.html",
+        "lines": "2778-2786;2794;2843-2846"
+      },
+      "testEvidence": "source A5-nested-primary-shape fails (0 publications versus desired 1); build-API-error-control passes"
+    },
+    {
+      "id": "A6",
+      "vote": "confirm-defect",
+      "severity": "P2",
+      "reason": "The omission parser unconditionally substitutes [] when missed is missing or non-array; no audit failure or inconclusive marker follows. It reaches '+0 recovered'. Unlike an explicit empty array, malformed evidence does not support a completed empty result.",
+      "source": {
+        "file": "Nursing-Study-Suite v16.6.html",
+        "lines": "2812;2832-2836"
+      },
+      "testEvidence": "three source desired assertions fail for missed:{}, missed:null and {}; omission-empty-control passes"
+    },
+    {
+      "id": "A7",
+      "vote": "confirm-defect",
+      "severity": "P2",
+      "reason": "build overwrites the part-level source filename/range but leaves each primary fact sourcePointer untouched. mergeLatteParts converts that supplied pointer directly into sources. The critical-fact validator only checks nonempty filename; downstream snapshots/export repeat the never-read file. Confirm provenance-integrity failure, without asserting a false clinical claim follows in every case.",
+      "source": {
+        "file": "Nursing-Study-Suite v16.6.html",
+        "lines": "1697-1701;1918-1919;2800;2826;4464-4481"
+      },
+      "testEvidence": "source A7-fabricated-first-pass-pointer fails; true quote plus never-read.pdf/page999 reaches source export"
+    },
+    {
+      "id": "A8",
+      "vote": "rescope-policy",
+      "severity": null,
+      "reason": "Blank sourceQuote is skipped by the matcher; quoteMiss remains zero, selecting the JSX sentence about every first-pass quote. However validateLatteKnowledgeBase warns on missing anchors. No diagnostic anywhere is false; all supplied quotes being located with an empty supplied set is logically vacuous. Recommend showing the attempted/missing denominator rather than treating this as hidden approval.",
+      "source": {
+        "file": "Nursing-Study-Suite v16.6.html",
+        "lines": "1917;2795;3045-3047"
+      },
+      "testEvidence": "source A8-absent-quote-status passes; static JSX read directly, no browser rendering claimed"
+    },
+    {
+      "id": "A9",
+      "vote": "confirm-defect",
+      "severity": "P2",
+      "reason": "A nonempty STOP response passes transport, parser can return cards=[] and then run unconditionally commits an empty batch and logs Complete. Missing mapping diagnostics expose zero linkage but do not classify generation as malformed. Scope is successful-status misclassification and empty result; not silent export of fabricated notes.",
+      "source": {
+        "file": "Nursing-Study-Suite v16.6.html",
+        "lines": "4145-4150;5817-5818;5844-5850"
+      },
+      "testEvidence": "lifecycle non-card-stop success-status desired assertion fails; zero-note source loss detectable control passes"
+    },
+    {
+      "id": "N1",
+      "vote": "confirm-defect",
+      "severity": "P2",
+      "reason": "Dedupe keys the raw effective tag set. Proven alias normalization runs afterward and can make two surviving records have identical Text, Extra, Tags and Keep. No subsequent dedupe is called in the generation handler. Scope exact aliases and automatic generation stage; not semantic near-duplicates or manual edits.",
+      "source": {
+        "file": "Nursing-Study-Suite v16.6.html",
+        "lines": "4204-4212;4274-4285;5826-5829"
+      },
+      "testEvidence": "transform alias-normalization-collision:no-byte-identical-export-duplicates fails (2 versus 1)"
+    },
+    {
+      "id": "N2",
+      "vote": "refute",
+      "severity": null,
+      "reason": "The observation that edits preserve factIds is true. But ankiBatchSummary counts associations, and the displayed label explicitly says Facts linked to kept notes. README 185 and DECISIONS expressly reject equating links with semantic coverage. Card object replacement invalidates audit currentness and numeric cache. No misreported semantic pass is produced by this count.",
+      "source": {
+        "file": "Nursing-Study-Suite v16.6.html",
+        "lines": "4294-4299;5607-5608;5848;5861-5874"
+      },
+      "testEvidence": "lifecycle source association survival, audit invalidation, stale-packet refusal and subsequent numeric recomputation controls all pass"
+    },
+    {
+      "id": "N3",
+      "vote": "confirm-defect",
+      "severity": "P2",
+      "reason": "Invalid enum values are silently replaced by valid Tier3/Look before validation, retaining safetyCritical and zero dropped counts. This destroys knowledge that classification was unknown. The source does not establish the clinically correct tier of a malformed input; 'known high-priority fact demoted' is an overclaim. Confirm silent invented classification and consequent filtering eligibility only.",
+      "source": {
+        "file": "Nursing-Study-Suite v16.6.html",
+        "lines": "1737-1744;1914-1915;4359"
+      },
+      "testEvidence": "source N3-invalid-tier-bucket fails; import-valid-control passes for numeric string tier"
+    },
+    {
+      "id": "MAXTOK",
+      "vote": "confirm-defect",
+      "severity": "P2",
+      "reason": "The final Complete log is unqualified although runState.truncated is true. A red log explicitly says cards are missing and completed metadata retains truncated; therefore silent truncation and total loss of diagnostics are refuted. Confirm only contradictory completion wording; retention of valid partial cards itself is not a defect.",
+      "source": {
+        "file": "Nursing-Study-Suite v16.6.html",
+        "lines": "5813;5844;5847"
+      },
+      "testEvidence": "lifecycle truncation-warning-survives and partial-card retention controls pass; unqualified Complete desired assertion fails"
+    },
+    {
+      "id": "REPAIR_DEDUPE",
+      "vote": "rescope-policy",
+      "severity": null,
+      "reason": "Invalid notes deliberately get no dedupe key; preserving two broken records avoids deleting distinct repairable material. Manual edits preserve Keep and do not call dedupe. Identical repaired notes can remain, but automatic deletion after user edits has no established requirement and collision review exists. Review workflow enhancement, not proved implementation error.",
+      "source": {
+        "file": "Nursing-Study-Suite v16.6.html",
+        "lines": "4208;4431-4441;5861-5874"
+      },
+      "testEvidence": "lifecycle invalid-repair-and-user-selection controls pass; fixture demonstrates two identical repaired eligible notes"
+    },
+    {
+      "id": "FACT_RENUMBER",
+      "vote": "refute",
+      "severity": null,
+      "reason": "Fact rekeying is explicit within a new snapshot to guarantee unique local identities. Old batches compare source object identity and get no active export when source changes; App clears registry and rejects old-source publication. A bare fact-N cannot identify a fact globally, but no same-session cross-source association defect follows.",
+      "source": {
+        "file": "Nursing-Study-Suite v16.6.html",
+        "lines": "1755-1757;4217;4358-4361;10139;10209"
+      },
+      "testEvidence": "source persistence-id-scope and lifecycle source-replacement-and-publication controls pass"
+    },
+    {
+      "id": "OPERATOR",
+      "vote": "rescope-policy",
+      "severity": null,
+      "reason": "Source code explicitly implements an additive operator warning after quote location; mismatch never discards. This is a documented warn-tier decision supported by DECISIONS and AGENTS. Upgrading it to failure would be a policy change. Fact-to-quote entailment is a distinct unimplemented semantic operation.",
+      "source": {
+        "file": "Nursing-Study-Suite v16.6.html",
+        "lines": "2103-2120;2135-2141;2796-2798;2820-2822"
+      },
+      "testEvidence": "source operator-warning-policy and pass1-retention-policy controls pass"
+    },
+    {
+      "id": "EXPORT",
+      "vote": "not-reproduced",
+      "severity": null,
+      "reason": "Text/Extra are escaped in HTML mode; quotes need no escaping in plain text nodes and are not placed into attributes. Tags are data in a dedicated import column. Headerless exports intentionally require plain import configuration. No native Anki importer was executed, so quote/Tag data-loss allegations are unproved; helper roundtrip controls pass.",
+      "source": {
+        "file": "Nursing-Study-Suite v16.6.html",
+        "lines": "4473-4481"
+      },
+      "testEvidence": "transform preview/export comparisons and receipt entity-and-hint-preservation pass; native Anki gap remains"
+    },
+    {
+      "id": "PROBE",
+      "vote": "not-reproduced",
+      "severity": null,
+      "reason": "The catches really swallow quality/composition exceptions. The executed probe injects a throwing dependency; it proves the catch behavior, not reachability from ordinary source units. No actual ordinary well-shaped PDF/PPTX input that causes this was reproduced.",
+      "source": {
+        "file": "Nursing-Study-Suite v16.6.html",
+        "lines": "2070-2078"
+      },
+      "testEvidence": "source quality-probe-failure desired assertion fails on injected exception only"
+    },
+    {
+      "id": "MISSING_LEAF",
+      "vote": "refute",
+      "severity": null,
+      "reason": "An empty list from a narrow warning helper is not an approval status. Public V4 parsing requires exact schemas and known source/token/note addresses; invalid required records keep completion false. Missing mappings separately produce numeric Not checked. Leaf inapplicability cannot be promoted into overall unsupported-card approval.",
+      "source": {
+        "file": "Nursing-Study-Suite v16.6.html",
+        "lines": "4923-4938;5084-5102;5134-5139;5148-5156;4407-4411"
+      },
+      "testEvidence": "receipt invalid/missing evidence, public decoder, unmapped and disputed controls pass"
+    },
+    {
+      "id": "POISONED_KB",
+      "vote": "rescope-policy",
+      "severity": null,
+      "reason": "A real located quote and an inaccurate fact can coexist: the existing matcher verifies quote presence, not fact entailment, while kbForAnki gives the fact text as generator input. Synthetic chain proves false content can propagate, but no deterministic semantic checker promises to detect the contradiction. Document the source boundary and reviewer expectations rather than inventing a coding regression or new gate.",
+      "source": {
+        "file": "Nursing-Study-Suite v16.6.html",
+        "lines": "2097-2101;2794-2800;5768;5791-5792"
+      },
+      "testEvidence": "source source-poison-chain passes as reproduction of a semantic limitation, not semantic validation"
+    },
+    {
+      "id": "SUGGESTION",
+      "vote": "refute",
+      "severity": null,
+      "reason": "ankiMakeReviewDecision constructs a scoped decision object and never mutates notes. The save handler stores that decision. Suggestions are advisory strings inspected for warnings. 'Fixed' is a manual attestation, not an automatic edit or clinical approval. No automatic model-knowledge correction occurs.",
+      "source": {
+        "file": "Nursing-Study-Suite v16.6.html",
+        "lines": "5164;5395-5405;5601-5604"
+      },
+      "testEvidence": "receipt decision-fixed/intentional-context/covered-elsewhere/unresolved-no-repair controls pass; stale decision controls pass"
+    },
+    {
+      "id": "QUOTE_PREFIX",
+      "vote": "confirm-defect",
+      "severity": "P1",
+      "reason": "kbQuoteInSource performs normalized unbounded includes. A quote ending 'reads 60' therefore matches source 'reads 600 units'; this is a false location claim about numeric token bytes. Actual pass 2 treats that result as admission and retains a 60-unit fact without a quote/operator warning. Full-token phrase substrings must stay accepted; a blanket whole-source equality test is not justified.",
+      "source": {
+        "file": "Nursing-Study-Suite v16.6.html",
+        "lines": "2097-2101;2820-2827"
+      },
+      "testEvidence": "source QUOTE_PREFIX-numeric-token-boundary fails; quote-substring-control passes; independent direct probe reproduces numericPrefix=true and legitimateCompleteTokenSubstring=true"
+    }
+  ],
+  "totals": {
+    "confirm-defect": 11,
+    "rescope-policy": 5,
+    "refute": 4,
+    "not-reproduced": 2
+  },
+  "commandJournal": [
+    {
+      "command": "node tools/reaudit-anki-source-tests.js",
+      "chunk_id": "3ee056",
+      "wall_time_seconds": 0.4126463,
+      "exit_code": 1,
+      "original_token_count": 471,
+      "output": "PASS source-units-control\nPASS quote-dehyphenation-control\nPASS quote-substring-control\nFAIL QUOTE_PREFIX-numeric-token-boundary — partial numeric token must not admit an additive fact\n\n1 !== 0\n\nPASS import-valid-control\nFAIL N3-invalid-tier-bucket — invalid tier/bucket must not silently become 3/Look\nFAIL A2-fact-quote-truncation — long source text must remain intact or be reported\nFAIL A2-condition-cap — condition cap silently loses a valid condition\nFAIL A2-fact-cap — fact cap silently loses a valid fact\nFAIL A2-per-fact-source-cap — per-fact source cap silently removes provenance\nFAIL A2-merge-restore-length — merge-produced fact silently shortened during restore\n\n4000 !== 4027\n\nPASS build-valid-control\nPASS build-API-error-control\nFAIL A5-nested-primary-shape — nested malformed condition discards the earlier completed chunk\n\n0 !== 1\n\nFAIL A6-omission-shape-{\"missed\":{}} — malformed omission shape must be reported as incomplete/failed\nFAIL A6-omission-shape-{\"missed\":null} — malformed omission shape must be reported as incomplete/failed\nFAIL A6-omission-shape-{} — malformed omission shape must be reported as incomplete/failed\nPASS omission-empty-control\nPASS pass2-discard-control\nPASS pass1-retention-policy\nPASS operator-warning-policy\nPASS source-poison-chain\nFAIL A7-fabricated-first-pass-pointer — first-pass source pointer must bind to the actual source or report mismatch\nPASS A8-absent-quote-status\nFAIL quality-probe-failure — quality probe failure is silent\nPASS MAX_TOKENS-split-control\nPASS publication-control\nPASS import-size-control\nPASS persistence-order-control\nPASS persistence-transaction-control\nFAIL persistence-reload-loss — actual reload normalizer truncates a previously persisted valid fact\n\n4000 !== 4716\n\nPASS persistence-id-scope\n{\"tests\":32,\"pass\":18,\"fail\":14,\"mutationKilled\":2,\"mutationSurvived\":0}\n"
+    },
+    {
+      "command": "node tools/reaudit-anki-transform-tests.js",
+      "chunk_id": "9f2349",
+      "wall_time_seconds": 0.4871145,
+      "exit_code": 1,
+      "original_token_count": 1733,
+      "output": "{\n  \"suite\": \"Independent synthetic transform re-audit\",\n  \"htmlSha256\": \"8524e35c8b3621e074a0499ba3857a672464b99721e4b502c381dfa29d0b9b12\",\n  \"fixtureCount\": 63,\n  \"assertions\": 923,\n  \"passed\": 914,\n  \"failed\": 9,\n  \"mutantsKilled\": 3,\n  \"failures\": [\n    {\n      \"id\": \"unicode-minus-changed:numeric-verdict\",\n      \"pass\": false,\n      \"error\": \"The mathematical minus sign must not turn negative five into positive five.\"\n    },\n    {\n      \"id\": \"unicode-minus-faithful:numeric-verdict\",\n      \"pass\": false,\n      \"error\": \"ASCII hyphen-minus and mathematical minus denote the same negative value.\\n\\n1 !== 0\\n\"\n    },\n    {\n      \"id\": \"superscript-unit-changed:numeric-verdict\",\n      \"pass\": false,\n      \"error\": \"Square centimeters are not centimeters; unsupported compound units must not donate a matching prefix.\"\n    },\n    {\n      \"id\": \"superscript-cubic-changed:numeric-verdict\",\n      \"pass\": false,\n      \"error\": \"Cubic centimeters are not centimeters.\"\n    },\n    {\n      \"id\": \"multiline-negation-prefix-lost:no-exported-negation-loss\",\n      \"pass\": false,\n      \"error\": \"Dropping the unpiped negation prefix changes the explicit prohibition into its opposite; export must retain the prohibition or require structural repair.\"\n    },\n    {\n      \"id\": \"dropped-no-pipe-line:parsed-notes\",\n      \"pass\": false,\n      \"error\": \"A malformed generated note should remain reviewable and must not shift the next declared note identity.\\n\\n1 !== 2\\n\"\n    },\n    {\n      \"id\": \"dropped-no-pipe-line:no-mapping-index-shift\",\n      \"pass\": false,\n      \"error\": \"A malformed generated note should remain reviewable and must not shift the next declared note identity.\"\n    },\n    {\n      \"id\": \"truncated-note:parsed-notes\",\n      \"pass\": false,\n      \"error\": \"An incomplete final note should remain visible for correction instead of disappearing.\\n\\n1 !== 2\\n\"\n    },\n    {\n      \"id\": \"alias-normalization-collision:no-byte-identical-export-duplicates\",\n      \"pass\": false,\n      \"error\": \"Two identical notes differing only by a proven source alias must not become byte-identical exported notes after dedupe.\\n\\n2 !== 1\\n\"\n    }\n  ],\n  \"mutations\": [\n    {\n      \"id\": \"numeric-supported-short-circuit\",\n      \"killed\": true,\n      \"newlyFailing\": [\n        \"changed-number:numeric-verdict\",\n        \"changed-unit:numeric-verdict\",\n        \"ascii-minus-changed:numeric-verdict\",\n        \"quote-only:numeric-verdict\",\n        \"extra-unsupported-number:numeric-verdict\",\n        \"time-value-changed:numeric-verdict\"\n      ]\n    },\n    {\n      \"id\": \"lint-selection-filter\",\n      \"killed\": true,\n      \"newlyFailing\": [\n        \"nested-cloze:preview-export:false:false:all\",\n        \"nested-cloze:preview-export:false:false:1\",\n        \"nested-cloze:preview-export:false:true:all\",\n        \"nested-cloze:preview-export:false:true:1\",\n        \"nested-cloze:preview-export:true:false:all\",\n        \"nested-cloze:preview-export:true:false:1\",\n        \"nested-cloze:preview-export:true:true:all\",\n        \"nested-cloze:preview-export:true:true:1\",\n        \"nested-cloze:eligible-notes\",\n        \"unclosed-cloze:preview-export:false:false:all\",\n        \"unclosed-cloze:preview-export:false:false:1\",\n        \"unclosed-cloze:preview-export:false:true:all\",\n        \"unclosed-cloze:preview-export:false:true:1\",\n        \"unclosed-cloze:preview-export:true:false:all\",\n        \"unclosed-cloze:preview-export:true:false:1\",\n        \"unclosed-cloze:preview-export:true:true:all\",\n        \"unclosed-cloze:preview-export:true:true:1\",\n        \"unclosed-cloze:eligible-notes\",\n        \"ambiguous-braces:preview-export:false:false:all\",\n        \"ambiguous-braces:preview-export:false:false:1\",\n        \"ambiguous-braces:preview-export:false:true:all\",\n        \"ambiguous-braces:preview-export:false:true:1\",\n        \"ambiguous-braces:preview-export:true:false:all\",\n        \"ambiguous-braces:preview-export:true:false:1\",\n        \"ambiguous-braces:preview-export:true:true:all\",\n        \"ambiguous-braces:preview-export:true:true:1\",\n        \"ambiguous-braces:eligible-notes\",\n        \"zero-index:eligible-notes\",\n        \"empty-answer:preview-export:false:false:all\",\n        \"empty-answer:preview-export:false:false:1\",\n        \"empty-answer:preview-export:false:true:all\",\n        \"empty-answer:preview-export:false:true:1\",\n        \"empty-answer:preview-export:true:false:all\",\n        \"empty-answer:preview-export:true:false:1\",\n        \"empty-answer:preview-export:true:true:all\",\n        \"empty-answer:preview-export:true:true:1\",\n        \"empty-answer:eligible-notes\",\n        \"four-indices:preview-export:false:false:all\",\n        \"four-indices:preview-export:false:false:1\",\n        \"four-indices:preview-export:false:true:all\",\n        \"four-indices:preview-export:false:true:1\",\n        \"four-indices:preview-export:true:false:all\",\n        \"four-indices:preview-export:true:false:1\",\n        \"four-indices:preview-export:true:true:all\",\n        \"four-indices:preview-export:true:true:1\",\n        \"four-indices:eligible-notes\",\n        \"pipe-in-field:preview-export:false:false:all\",\n        \"pipe-in-field:preview-export:false:false:1\",\n        \"pipe-in-field:preview-export:false:true:all\",\n        \"pipe-in-field:preview-export:false:true:1\",\n        \"pipe-in-field:preview-export:true:false:all\",\n        \"pipe-in-field:preview-export:true:false:1\",\n        \"pipe-in-field:preview-export:true:true:all\",\n        \"pipe-in-field:preview-export:true:true:1\",\n        \"pipe-in-field:eligible-notes\",\n        \"edit-pipe-injection:preview-export:false:false:all\",\n        \"edit-pipe-injection:preview-export:false:false:1\",\n        \"edit-pipe-injection:preview-export:false:true:all\",\n        \"edit-pipe-injection:preview-export:false:true:1\",\n        \"edit-pipe-injection:preview-export:true:false:all\",\n        \"edit-pipe-injection:preview-export:true:false:1\",\n        \"edit-pipe-injection:preview-export:true:true:all\",\n        \"edit-pipe-injection:preview-export:true:true:1\",\n        \"edit-pipe-injection:eligible-notes\",\n        \"edit-newline-injection:preview-export:false:false:all\",\n        \"edit-newline-injection:preview-export:false:false:1\",\n        \"edit-newline-injection:preview-export:false:true:all\",\n        \"edit-newline-injection:preview-export:false:true:1\",\n        \"edit-newline-injection:preview-export:true:false:all\",\n        \"edit-newline-injection:preview-export:true:false:1\",\n        \"edit-newline-injection:preview-export:true:true:all\",\n        \"edit-newline-injection:preview-export:true:true:1\",\n        \"edit-newline-injection:eligible-notes\"\n      ]\n    },\n    {\n      \"id\": \"dedupe-key-text-only\",\n      \"killed\": true,\n      \"newlyFailing\": [\n        \"distinct-extra:dedupe-retention\",\n        \"distinct-extra:eligible-notes\",\n        \"distinct-tag:dedupe-retention\",\n        \"distinct-tag:eligible-notes\",\n        \"manual-keep-distinction:dedupe-retention\"\n      ]\n    }\n  ]\n}\n"
+    },
+    {
+      "command": "node tools/reaudit-anki-lifecycle-tests.js",
+      "chunk_id": "382b98",
+      "wall_time_seconds": 0.477872,
+      "exit_code": 1,
+      "original_token_count": 789,
+      "output": "PASS valid-stage-preservation: one intact selected note and one review\nPASS valid-stage-preservation: raw export preserves exact editable fields\nPASS valid-stage-preservation: real snapshot retains production source shape\nPASS valid-stage-preservation: actual export callback downloads one blob\nPASS valid-stage-preservation: header escapes fields without altering editable note\nFAIL non-card-stop: A9 non-card response is not successful completion\nPASS non-card-stop: zero-note source loss is detectable\nPASS max-tokens-retention: truncation warning survives\nPASS max-tokens-retention: partial valid notes retained for inspection\nFAIL max-tokens-retention: truncated batch not labelled unqualified Complete\nPASS transport-retries-not-regeneration: HTTP and EOF retries produce one final note\nPASS transport-retries-not-regeneration: retry delay honours provider floor\nPASS transport-retries-not-regeneration: all generation requests are real streaming transport\nPASS empty-and-fatal-errors: empty STOP retries then fails without publishing\nPASS empty-and-fatal-errors: fatal HTTP does not retry\nPASS repeat-user-regeneration: second user generation replaces cards and registry\nPASS invalid-repair-and-user-selection: invalid notes remain visible and excluded\nPASS invalid-repair-and-user-selection: repair restores eligibility without content loss\nPASS invalid-repair-and-user-selection: repair/edit preserves manual exclusion\nPASS text-edit-link-association-and-currentness: N2 source association intentionally survives manual edit\nPASS text-edit-link-association-and-currentness: old audit loses currentness after edit\nPASS text-edit-link-association-and-currentness: outdated packet cannot send a new check\nPASS text-edit-link-association-and-currentness: numeric no-values status is explicit\nPASS text-edit-link-association-and-currentness: edit invalidates cached numeric result\nPASS source-replacement-and-publication: real App setter clears registry and old export\nPASS source-replacement-and-publication: real App publication guard rejects stale effect\nPASS cancel-overlap-and-identity-races: cancel prevents partial publication\nPASS cancel-overlap-and-identity-races: overlap cannot publish old cards\nPASS cancel-overlap-and-identity-races: source replacement before child rerender cannot publish\nPASS source-check-pending-retry-queue: preparation creates multiple captured groups without fetch\nPASS source-check-pending-retry-queue: malformed group remains pending while valid group retained\nPASS source-check-pending-retry-queue: resume retries only pending groups using captured prompts\nPASS source-check-pending-retry-queue: retry request body equals original captured body\nPASS source-check-pending-retry-queue: completed check does not rerun\nPASS source-check-cancel-and-edit-during-request: source-check cancel cannot publish late verdict\nPASS source-check-cancel-and-edit-during-request: in-flight edit interrupts source check\nPASS stale-run-guard-mutation: run identity source and abort matrix\nPASS stale-run-guard-mutation: inverted stale guard is killed\n{\"assertions\":38,\"passed\":36,\"failed\":2,\"unexpectedErrors\":0,\"mutantsKilled\":1}\n"
+    },
+    {
+      "command": "node tools/reaudit-anki-receipt-tests.js",
+      "chunk_id": "892c62",
+      "wall_time_seconds": 0.3241248,
+      "exit_code": 1,
+      "original_token_count": 869,
+      "output": "PASS live-span-tail [control]\nPASS supported-literal-roundtrip [control]\nPASS supported-literal-immutability [control]\nPASS supported-literal-preserved [control]\nPASS supported-paraphrase-roundtrip [control]\nPASS supported-paraphrase-immutability [control]\nPASS supported-paraphrase-preserved [control]\nPASS contradictory-answer-roundtrip [control]\nPASS contradictory-answer-immutability [control]\nFAIL contradictory-answer-semantic-expectation [semantic-limit]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'unsupported'\n\nPASS visible-negation-roundtrip [control]\nPASS visible-negation-immutability [control]\nFAIL visible-negation-semantic-expectation [semantic-limit]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'unsupported'\n\nPASS extra-addition-roundtrip [control]\nPASS extra-addition-immutability [control]\nFAIL extra-addition-semantic-expectation [semantic-limit]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'unsupported'\n\nPASS hint-addition-roundtrip [control]\nPASS hint-addition-immutability [control]\nFAIL hint-addition-semantic-expectation [semantic-limit]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'unsupported'\n\nPASS irrelevant-real-reference-roundtrip [control]\nPASS irrelevant-real-reference-immutability [control]\nFAIL irrelevant-real-reference-semantic-expectation [semantic-limit]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'unsupported'\n\nPASS inconclusive-population-roundtrip [control]\nPASS inconclusive-population-immutability [control]\nFAIL inconclusive-population-semantic-expectation [semantic-limit]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'inconclusive'\n\nPASS entity-and-hint-preservation-roundtrip [control]\nPASS entity-and-hint-preservation-immutability [control]\nPASS entity-and-hint-preservation-preserved [control]\nPASS real-source-shape [control]\nPASS source-footers [control]\nPASS invalid-json-\"\" [control]\nPASS invalid-json-\"{\\\"factReviews\\\":\" [control]\nPASS invalid-json-\"{}\" [control]\nPASS invalid-handle-incomplete [control]\nPASS missing-inventory-tail-incomplete [control]\nPASS missing-cloze-public-decoder [control]\nPASS unknown-evidence-public-decoder [control]\nPASS missing-evidence-no-supported-receipt [control]\nPASS missing-evidence-no-invented-falsehood [control]\nPASS false-negative-checker-does-not-deselect [control]\nPASS missing-receipt-shape-0 [control]\nPASS missing-receipt-shape-1 [control]\nPASS missing-receipt-shape-2 [control]\nPASS unmapped-not-approved [control]\nPASS disputed-not-approved [control]\nPASS receipt-number-not-hidden [control]\nPASS decision-fixed-no-repair [control]\nPASS decision-intentional-context-no-repair [control]\nPASS decision-covered-elsewhere-no-repair [control]\nPASS decision-unresolved-no-repair [control]\nPASS decision-invalidated-text [control]\nPASS decision-invalidated-source [control]\nPASS decision-invalidated-tier [control]\nPASS decision-invalidated-selection [control]\nPASS covered-by-missing-rejected [control]\nPASS complementary-retry-completes [control]\nPASS repeated-retry-no-record-duplication [control]\nPASS changed-packet-cannot-merge [control]\nPASS complete-report-honest-scope [control]\nPASS stale-report-not-complete [control]\n{\"passed\":54,\"failed\":6,\"failuresByCategory\":{\"semantic-limit\":6}}\nSURVIVED handle-guard-bypass\nKILLED handle-alias-guess\nKILLED inventory-guard-bypass\n"
+    },
+    {
+      "command": "$refuteProbe = @'\nconst fs=require('fs'),assert=require('assert/strict');\nconst h=fs.readFileSync('Nursing-Study-Suite v16.6.html','utf8');\nfunction span(a,b,t){assert.equal(h.split(a).length-1,1);assert.equal(h.split(b).length-1,1);const s=h.slice(h.indexOf(a),h.indexOf(b));assert(s.includes(t));return s;}\nconst q=span('function kbNormForMatch(s)','// ── v15.14: operator agreement','sourceDehyphNorm.includes(kbDehyphNormForMatch(quote))');\nconst Q=new Function(q+';return {kbNormForMatch,kbQuoteInSource}')();\nconst number=span('function ankiNumericText(value)','function ankiNumericAudit(card','return {tokens,unsupported:[...new Set(unsupported)]}');\nconst N=new Function(number+';return ankiNumericTokens;')();\nconst source=Q.kbNormForMatch('The synthetic marker reads 600 units.');\nconst observed={numericPrefix:Q.kbQuoteInSource('The synthetic marker reads 60',source),legitimateCompleteTokenSubstring:Q.kbQuoteInSource('synthetic marker reads 600',source),unicodeMinus:N('−5 °C'),asciiMinus:N('-5 °C'),squared:N('5 cm²'),plain:N('5 cm')};\nassert.equal(observed.numericPrefix,true);assert.equal(observed.legitimateCompleteTokenSubstring,true);assert.equal(observed.unicodeMinus.tokens[0].key,'5 °c');assert.equal(observed.asciiMinus.tokens[0].key,'-5 °c');assert.equal(observed.squared.tokens[0].key,observed.plain.tokens[0].key);\nconsole.log(JSON.stringify(observed,null,2));\n'@\n$refuteProbe | node",
+      "chunk_id": "db4949",
+      "wall_time_seconds": 0.2400025,
+      "exit_code": 0,
+      "original_token_count": 192,
+      "output": "{\n  \"numericPrefix\": true,\n  \"legitimateCompleteTokenSubstring\": true,\n  \"unicodeMinus\": {\n    \"tokens\": [\n      {\n        \"value\": \"5\",\n        \"unit\": \"°c\",\n        \"key\": \"5 °c\",\n        \"raw\": \"5 °c\"\n      }\n    ],\n    \"unsupported\": []\n  },\n  \"asciiMinus\": {\n    \"tokens\": [\n      {\n        \"value\": \"-5\",\n        \"unit\": \"°c\",\n        \"key\": \"-5 °c\",\n        \"raw\": \"-5 °c\"\n      }\n    ],\n    \"unsupported\": []\n  },\n  \"squared\": {\n    \"tokens\": [\n      {\n        \"value\": \"5\",\n        \"unit\": \"cm\",\n        \"key\": \"5 cm\",\n        \"raw\": \"5 cm\"\n      }\n    ],\n    \"unsupported\": []\n  },\n  \"plain\": {\n    \"tokens\": [\n      {\n        \"value\": \"5\",\n        \"unit\": \"cm\",\n        \"key\": \"5 cm\",\n        \"raw\": \"5 cm\"\n      }\n    ],\n    \"unsupported\": []\n  }\n}\n"
+    }
+  ],
+  "inspectionJournal": {
+    "paths": [
+      "AGENTS.md",
+      "DECISIONS.md",
+      "CURRENT_STATE.md",
+      "README.md",
+      "DEVELOPMENT.md",
+      "Nursing-Study-Suite v16.6.html",
+      "docs/reviews/anki-integrity-reaudit-candidates.json",
+      "docs/reviews/anki-integrity-reaudit-source-evidence.md",
+      "docs/reviews/anki-integrity-reaudit-transform-evidence.md",
+      "docs/reviews/anki-integrity-reaudit-lifecycle-evidence.md",
+      "docs/reviews/anki-integrity-reaudit-receipt-evidence.md",
+      "docs/reviews/anki-integrity-reaudit-stage-extraction.json",
+      "docs/reviews/anki-integrity-reaudit-stage-import.json"
+    ],
+    "notes": "Large combined documentation reads truncated tool output; focused source ranges and relevant README/evidence sections were read afterward. Full reproduction commands, outputs and exits are retained in commandJournal; inspection reads have no behavioral-test status."
+  },
+  "limitations": [
+    "No browser, native Anki import, native IndexedDB, private material or live Gemini calls.",
+    "The four suites exit 1 intentionally for unmet desired behavior; these exits are not infrastructure failure or production verifier outcomes.",
+    "Receipt suite has six synthetic semantic-limit failures and one surviving handle-guard mutant; neither is counted as six implementation defects or silently omitted.",
+    "Actual React scheduling and native PDF/PPTX decoding were not executed. Synthetic boundary mocks do not establish failure incidence on clinical decks.",
+    "No clinical correctness or correct tier can be inferred from malformed input classification. Severity reflects demonstrated data/status impact, not measured patient harm."
+  ]
+}

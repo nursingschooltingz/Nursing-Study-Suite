@@ -9,6 +9,24 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [16.7] — 2026-09-18
+
+### Fixed
+
+- Preserve generated Anki fragments and ledger addresses, flag ambiguous line boundaries for Text repair, and distinguish no-note, partial/truncated, structurally repairable and complete generation.
+- Preserve full KB text and provenance during import/restore. Reject exceeded import collection limits and invalid tier/category values explicitly; keep malformed saved records available for recovery and archive copies before resuming saves.
+- Recover from malformed nested extraction/omission responses per chunk, retain raw failure evidence even if every chunk fails, bind primary pointers to the actual file/chunk, and disclose unavailable optional diagnostics.
+- Report checked/matched/unverified/missing quotes separately and reject partial adjacent-digit anchors in both quote-matching paths. Primary quote misses and operator disagreements remain warnings.
+- Preserve negative signs and exponent-bearing units in Anki numeric comparisons; include visible hints in advisory checks.
+- Merge exact valid duplicates after proven condition-alias normalization while retaining original addresses, source unions and normalization history.
+
+### Added
+
+- Explicit exact-merge action after manual repairs, advisory source-link review after Text/Extra edits, and shared note provenance in private batch/source-check downloads.
+- 256 synthetic regression assertions. The unified verifier passes 2,820 assertions, all eleven frozen prompt hashes and full JSX transformation. See the [implementation record](docs/reviews/anki-integrity-implementation-2026-09-18.md) for scope and remaining acceptance limits.
+
+Released as `Nursing-Study-Suite.v16.7.html`. All eleven frozen prompts and advisory warning tiers remain unchanged. No automatic model call or clinical-correctness claim is added. See the [release verification record](docs/reviews/anki-v16.7-release.md) for CDN checks and acceptance limits.
+
 ## [16.6] — 2026-09-13
 
 ### Changed

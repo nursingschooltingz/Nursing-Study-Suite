@@ -1,0 +1,5183 @@
+{
+  "suite": "independent-source-reaudit",
+  "html": "Nursing-Study-Suite v16.6.html",
+  "sha256": "8524e35c8b3621e074a0499ba3857a672464b99721e4b502c381dfa29d0b9b12",
+  "anchors": [
+    {
+      "start": "function kbBuildFocusBlock(",
+      "end": "// ── Durable Knowledge Base persistence",
+      "tail": "formulas:arr('formulas'),contradictions:arr('contradictions')",
+      "startLine": 1607,
+      "endLine": 1774
+    },
+    {
+      "start": "const KB_EXTRACTION_PROMPT=",
+      "end": "// Focus context for the Knowledge Base.",
+      "tail": "Assign latteBucket, subtype, factType, safetyCritical, and tier",
+      "startLine": 1422,
+      "endLine": 1600
+    },
+    {
+      "start": "function extractJSON(text)",
+      "end": "// PDF text extraction (shared)",
+      "tail": "throw new Error('JSON truncated.')",
+      "startLine": 899,
+      "endLine": 913
+    },
+    {
+      "start": "function kbTextQuality(units)",
+      "end": "// v15.14: ONE page walk.",
+      "tail": "perPage};",
+      "startLine": 1030,
+      "endLine": 1040
+    },
+    {
+      "start": "const CASE_STOPWORDS=",
+      "end": "function itemHeuristics(",
+      "tail": "!CASE_STOPWORDS.has(w)",
+      "startLine": 8784,
+      "endLine": 8788
+    },
+    {
+      "start": "function kbUnitLabel(units)",
+      "end": "// ── v15.12: flashcard ingestion",
+      "tail": "excessRaster:u.composition.raster-medianRaster",
+      "startLine": 1976,
+      "endLine": 2238
+    },
+    {
+      "start": "function splitOversizedConditionBlock(",
+      "end": "// v16.0: actual review fronts can reveal an answer",
+      "tail": "+body;",
+      "startLine": 4104,
+      "endLine": 4482
+    },
+    {
+      "start": "function validateLatteKnowledgeBase(",
+      "end": "// ── KB source chunking",
+      "tail": "return lines.join('\\n');",
+      "startLine": 1904,
+      "endLine": 1972
+    },
+    {
+      "start": "function createOperationSlot()",
+      "end": "function cardCurrentEntries(",
+      "tail": "cancel(){active?.ctl.abort();active=null;}",
+      "startLine": 2525,
+      "endLine": 2528
+    },
+    {
+      "start": "  const build=async()=>{",
+      "end": "  // v15.10: the diagnostics panel is a scroll box",
+      "tail": "finally{if(replacementSlot.current.finish(run)){abortRef.current=null;setBusy(false);}}",
+      "startLine": 2675,
+      "endLine": 2869
+    },
+    {
+      "start": "  const importJSON=async file=>{",
+      "end": "  // v15.3 (Gemini",
+      "tail": "finally{if(replacementSlot.current.finish(run)){abortRef.current=null;setBusy(false);}}",
+      "startLine": 2575,
+      "endLine": 2595
+    },
+    {
+      "start": "const KB_DB_NAME='",
+      "end": "function validateLatteKnowledgeBase(",
+      "tail": "const result=tail.then(job);tail=result.catch(()=>{});return result;",
+      "startLine": 1776,
+      "endLine": 1903
+    }
+  ],
+  "results": [
+    {
+      "id": "source-units-control",
+      "category": "control",
+      "rationale": "The page/slide labels and all source text must survive real grouping.",
+      "status": "pass",
+      "trace": {
+        "quality": {
+          "pages": 2,
+          "empty": 2,
+          "total": 31,
+          "avg": 16,
+          "perPage": [
+            {
+              "n": 1,
+              "kind": "page",
+              "chars": 15
+            },
+            {
+              "n": 2,
+              "kind": "page",
+              "chars": 16
+            }
+          ]
+        },
+        "pdf": [
+          {
+            "text": "\n--- PAGE 1 ---\nfirst page text",
+            "label": "page 1",
+            "units": [
+              {
+                "kind": "page",
+                "n": 1,
+                "text": "\n--- PAGE 1 ---\nfirst page text"
+              }
+            ]
+          },
+          {
+            "text": "\n--- PAGE 1 ---\nfirst page text\n\n--- PAGE 2 ---\nsecond page text",
+            "label": "pages 1–2",
+            "units": [
+              {
+                "kind": "page",
+                "n": 1,
+                "text": "\n--- PAGE 1 ---\nfirst page text"
+              },
+              {
+                "kind": "page",
+                "n": 2,
+                "text": "\n--- PAGE 2 ---\nsecond page text"
+              }
+            ]
+          }
+        ],
+        "pptx": [
+          {
+            "text": "--- SLIDE 1 ---\nfirst\n",
+            "label": "slide 1",
+            "units": [
+              {
+                "kind": "slide",
+                "n": 1,
+                "text": "--- SLIDE 1 ---\nfirst\n"
+              }
+            ]
+          },
+          {
+            "text": "--- SLIDE 2 ---\nsecond",
+            "label": "slide 2",
+            "units": [
+              {
+                "kind": "slide",
+                "n": 2,
+                "text": "--- SLIDE 2 ---\nsecond"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "quote-dehyphenation-control",
+      "category": "control",
+      "rationale": "A linebreak inside a word is a formatting variant of the same source sentence.",
+      "status": "pass",
+      "trace": {
+        "accepted": true
+      }
+    },
+    {
+      "id": "quote-substring-control",
+      "category": "control",
+      "rationale": "A quoted phrase may legitimately omit surrounding sentence words when its own edge tokens are complete.",
+      "status": "pass",
+      "trace": {
+        "source": "The synthetic marker reads 600 units.",
+        "quote": "synthetic marker reads 600",
+        "accepted": true,
+        "output": {
+          "published": [
+            {
+              "metadata": {
+                "course": "Synthetic",
+                "exam": "Synthetic",
+                "createdAt": "2026-09-18T20:29:46.618Z",
+                "schemaVersion": "1.1"
+              },
+              "sources": [
+                {
+                  "filename": "synthetic.pdf",
+                  "range": "page 1"
+                },
+                {
+                  "filename": "synthetic.pdf",
+                  "range": "page 1 (recovered)"
+                }
+              ],
+              "conditions": [
+                {
+                  "id": "signal",
+                  "name": "Signal",
+                  "aliases": [],
+                  "facts": [
+                    {
+                      "id": "fact-1",
+                      "text": "The synthetic marker reads 600 units.",
+                      "latteBucket": "Look",
+                      "tier": 1,
+                      "factType": "other",
+                      "safetyCritical": false,
+                      "sourceQuote": "synthetic marker reads 600",
+                      "sources": [
+                        {
+                          "filename": "synthetic.pdf",
+                          "location": "page 1"
+                        }
+                      ],
+                      "recovered": true
+                    }
+                  ]
+                }
+              ],
+              "medications": [],
+              "diagnostics": [],
+              "scoringTools": [],
+              "formulas": [],
+              "contradictions": []
+            }
+          ],
+          "logs": [
+            {
+              "m": "Reading synthetic.pdf — page 1/1",
+              "t": ""
+            },
+            {
+              "m": "⚠ synthetic.pdf: little or no text layer — 37 character(s) across 1 page(s), 1 nearly empty. This is usually a scanned or photographed PDF. Only extracted text reaches the model, so this file will yield few or no facts. Use a text-based PDF (or OCR it first).",
+              "t": "err"
+            },
+            {
+              "m": "1 chunk(s) · mock [low] · audit: mock [low]",
+              "t": "warn"
+            },
+            {
+              "m": "✓ synthetic.pdf (page 1) — 0 fact(s)",
+              "t": "ok"
+            },
+            {
+              "m": "  ↳ audit: +1 recovered",
+              "t": "ok"
+            },
+            {
+              "m": "Knowledge Base built: 1 condition(s), 1 fact(s).",
+              "t": "ok"
+            }
+          ],
+          "warnings": [
+            "synthetic.pdf: little or no text layer — 37 character(s) across 1 page(s), 1 nearly empty. This is usually a scanned or photographed PDF. Only extracted text reaches the model, so this file will yield few or no facts. Use a text-based PDF (or OCR it first)."
+          ],
+          "error": "",
+          "requests": [
+            {
+              "model": "mock",
+              "sourceParts": [
+                "SOURCE FILE: synthetic.pdf\nSOURCE RANGE: page 1\n\n--- PAGE 1 ---\nThe synthetic marker reads 600 units."
+              ],
+              "promptSha256": "5e160dd46bbccae60aa476ac9d4d2731aab25c31c5ca0a45e976f361a7536f6f",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            },
+            {
+              "model": "mock",
+              "sourceParts": [
+                "(A) SOURCE CHUNK — synthetic.pdf (page 1)\n\n--- PAGE 1 ---\nThe synthetic marker reads 600 units.",
+                "(B) FACTS ALREADY EXTRACTED FROM THIS CHUNK\n(nothing was extracted from this chunk)"
+              ],
+              "promptSha256": "9335f2c24af1d946f4e6a0f5d4bb4227d83173a070d097374fa68db25151aece",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            }
+          ],
+          "diag": {
+            "chunks": [
+              {
+                "tag": "synthetic.pdf (page 1)",
+                "file": "synthetic.pdf",
+                "label": "page 1",
+                "chars": 53,
+                "facts": 0,
+                "recovered": 1,
+                "discarded": 0,
+                "quoteMiss": 0,
+                "quoteMissDetail": [],
+                "quoteMissByReason": {},
+                "discardByReason": {},
+                "dehyphSaved": 0,
+                "opMismatch": 0,
+                "opDetail": [],
+                "failed": false,
+                "density": 0,
+                "flag": null
+              }
+            ],
+            "gaps": [
+              {
+                "condition": "Signal",
+                "total": 1,
+                "missing": [
+                  "BriefPatho",
+                  "Assess",
+                  "Tests",
+                  "Treatments",
+                  "Educate"
+                ]
+              }
+            ],
+            "recovered": 1,
+            "discarded": 0,
+            "quoteMiss": 0,
+            "byReason": {},
+            "discardByReason": {},
+            "dehyphSaved": 0,
+            "opMismatch": 0,
+            "opDetail": [],
+            "quality": {
+              "synthetic.pdf": {
+                "pages": 1,
+                "empty": 1,
+                "total": 37,
+                "avg": 37,
+                "perPage": [
+                  {
+                    "n": 1,
+                    "kind": "page",
+                    "chars": 37
+                  }
+                ]
+              }
+            },
+            "composition": {},
+            "chunkChars": 45000,
+            "overlapUnits": 0,
+            "model": "mock",
+            "level": "low",
+            "auto": false,
+            "verified": true,
+            "focus": null
+          },
+          "busy": false,
+          "progress": 100,
+          "selected": "signal"
+        }
+      }
+    },
+    {
+      "id": "QUOTE_PREFIX-numeric-token-boundary",
+      "category": "unsupported-fact-admission",
+      "rationale": "Source 600 does not contain the complete number token 60. A trailing numeric prefix cannot satisfy the existing pass-2 verbatim-quote admission rule.",
+      "status": "fail",
+      "error": {
+        "name": "AssertionError",
+        "message": "partial numeric token must not admit an additive fact\n\n1 !== 0\n",
+        "actual": 1,
+        "expected": 0
+      },
+      "trace": {
+        "source": "The synthetic marker reads 600 units.",
+        "quote": "The synthetic marker reads 60",
+        "fact": "The synthetic marker reads 60 units.",
+        "accepted": true,
+        "output": {
+          "published": [
+            {
+              "metadata": {
+                "course": "Synthetic",
+                "exam": "Synthetic",
+                "createdAt": "2026-09-18T20:29:46.620Z",
+                "schemaVersion": "1.1"
+              },
+              "sources": [
+                {
+                  "filename": "synthetic.pdf",
+                  "range": "page 1"
+                },
+                {
+                  "filename": "synthetic.pdf",
+                  "range": "page 1 (recovered)"
+                }
+              ],
+              "conditions": [
+                {
+                  "id": "signal",
+                  "name": "Signal",
+                  "aliases": [],
+                  "facts": [
+                    {
+                      "id": "fact-1",
+                      "text": "The synthetic marker reads 60 units.",
+                      "latteBucket": "Look",
+                      "tier": 1,
+                      "factType": "other",
+                      "safetyCritical": false,
+                      "sourceQuote": "The synthetic marker reads 60",
+                      "sources": [
+                        {
+                          "filename": "synthetic.pdf",
+                          "location": "page 1"
+                        }
+                      ],
+                      "recovered": true
+                    }
+                  ]
+                }
+              ],
+              "medications": [],
+              "diagnostics": [],
+              "scoringTools": [],
+              "formulas": [],
+              "contradictions": []
+            }
+          ],
+          "logs": [
+            {
+              "m": "Reading synthetic.pdf — page 1/1",
+              "t": ""
+            },
+            {
+              "m": "⚠ synthetic.pdf: little or no text layer — 37 character(s) across 1 page(s), 1 nearly empty. This is usually a scanned or photographed PDF. Only extracted text reaches the model, so this file will yield few or no facts. Use a text-based PDF (or OCR it first).",
+              "t": "err"
+            },
+            {
+              "m": "1 chunk(s) · mock [low] · audit: mock [low]",
+              "t": "warn"
+            },
+            {
+              "m": "✓ synthetic.pdf (page 1) — 0 fact(s)",
+              "t": "ok"
+            },
+            {
+              "m": "  ↳ audit: +1 recovered",
+              "t": "ok"
+            },
+            {
+              "m": "Knowledge Base built: 1 condition(s), 1 fact(s).",
+              "t": "ok"
+            }
+          ],
+          "warnings": [
+            "synthetic.pdf: little or no text layer — 37 character(s) across 1 page(s), 1 nearly empty. This is usually a scanned or photographed PDF. Only extracted text reaches the model, so this file will yield few or no facts. Use a text-based PDF (or OCR it first)."
+          ],
+          "error": "",
+          "requests": [
+            {
+              "model": "mock",
+              "sourceParts": [
+                "SOURCE FILE: synthetic.pdf\nSOURCE RANGE: page 1\n\n--- PAGE 1 ---\nThe synthetic marker reads 600 units."
+              ],
+              "promptSha256": "5e160dd46bbccae60aa476ac9d4d2731aab25c31c5ca0a45e976f361a7536f6f",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            },
+            {
+              "model": "mock",
+              "sourceParts": [
+                "(A) SOURCE CHUNK — synthetic.pdf (page 1)\n\n--- PAGE 1 ---\nThe synthetic marker reads 600 units.",
+                "(B) FACTS ALREADY EXTRACTED FROM THIS CHUNK\n(nothing was extracted from this chunk)"
+              ],
+              "promptSha256": "9335f2c24af1d946f4e6a0f5d4bb4227d83173a070d097374fa68db25151aece",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            }
+          ],
+          "diag": {
+            "chunks": [
+              {
+                "tag": "synthetic.pdf (page 1)",
+                "file": "synthetic.pdf",
+                "label": "page 1",
+                "chars": 53,
+                "facts": 0,
+                "recovered": 1,
+                "discarded": 0,
+                "quoteMiss": 0,
+                "quoteMissDetail": [],
+                "quoteMissByReason": {},
+                "discardByReason": {},
+                "dehyphSaved": 0,
+                "opMismatch": 0,
+                "opDetail": [],
+                "failed": false,
+                "density": 0,
+                "flag": null
+              }
+            ],
+            "gaps": [
+              {
+                "condition": "Signal",
+                "total": 1,
+                "missing": [
+                  "BriefPatho",
+                  "Assess",
+                  "Tests",
+                  "Treatments",
+                  "Educate"
+                ]
+              }
+            ],
+            "recovered": 1,
+            "discarded": 0,
+            "quoteMiss": 0,
+            "byReason": {},
+            "discardByReason": {},
+            "dehyphSaved": 0,
+            "opMismatch": 0,
+            "opDetail": [],
+            "quality": {
+              "synthetic.pdf": {
+                "pages": 1,
+                "empty": 1,
+                "total": 37,
+                "avg": 37,
+                "perPage": [
+                  {
+                    "n": 1,
+                    "kind": "page",
+                    "chars": 37
+                  }
+                ]
+              }
+            },
+            "composition": {},
+            "chunkChars": 45000,
+            "overlapUnits": 0,
+            "model": "mock",
+            "level": "low",
+            "auto": false,
+            "verified": true,
+            "focus": null
+          },
+          "busy": false,
+          "progress": 100,
+          "selected": "signal"
+        },
+        "expected": {
+          "recovered": 0,
+          "reason": "60 is only a prefix inside source numeric token 600"
+        }
+      }
+    },
+    {
+      "id": "import-valid-control",
+      "category": "control",
+      "rationale": "A complete valid import and valid numeric tier string must preserve source content.",
+      "status": "pass",
+      "trace": {
+        "input": {
+          "metadata": {
+            "course": "Synthetic"
+          },
+          "conditions": [
+            {
+              "id": "signal",
+              "name": "Signal",
+              "aliases": [],
+              "facts": [
+                {
+                  "id": "fact-1",
+                  "text": "Keep the signal green.",
+                  "latteBucket": "Look",
+                  "tier": "1",
+                  "factType": "other",
+                  "safetyCritical": false,
+                  "sourceQuote": "Keep the signal green.",
+                  "sources": [
+                    {
+                      "filename": "synthetic.pdf",
+                      "location": "page 1"
+                    }
+                  ],
+                  "sourcePointer": {
+                    "filename": "synthetic.pdf",
+                    "location": "page 1"
+                  }
+                }
+              ]
+            }
+          ],
+          "sources": []
+        },
+        "output": {
+          "published": [
+            {
+              "metadata": {
+                "course": "Synthetic",
+                "exam": "",
+                "createdAt": "",
+                "schemaVersion": "1.1"
+              },
+              "sources": [],
+              "conditions": [
+                {
+                  "id": "signal",
+                  "name": "Signal",
+                  "aliases": [],
+                  "facts": [
+                    {
+                      "id": "fact-1",
+                      "text": "Keep the signal green.",
+                      "tier": 1,
+                      "latteBucket": "Look",
+                      "subtype": null,
+                      "factType": "other",
+                      "safetyCritical": false,
+                      "recovered": false,
+                      "sourceQuote": "Keep the signal green.",
+                      "sources": [
+                        {
+                          "filename": "synthetic.pdf",
+                          "location": "page 1"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "medications": [],
+              "diagnostics": [],
+              "scoringTools": [],
+              "formulas": [],
+              "contradictions": []
+            }
+          ],
+          "logs": [],
+          "warnings": [],
+          "error": "",
+          "requests": [],
+          "diag": null,
+          "busy": false,
+          "course": "Synthetic",
+          "exam": "",
+          "selected": "signal"
+        }
+      }
+    },
+    {
+      "id": "N3-invalid-tier-bucket",
+      "category": "silent-content-change",
+      "rationale": "An invalid priority/category has no source-supported replacement; import must reject or disclose coercion.",
+      "status": "fail",
+      "error": {
+        "name": "AssertionError",
+        "message": "invalid tier/bucket must not silently become 3/Look",
+        "actual": false,
+        "expected": true
+      },
+      "trace": {
+        "input": {
+          "metadata": {
+            "course": "Synthetic"
+          },
+          "conditions": [
+            {
+              "id": "signal",
+              "name": "Signal",
+              "aliases": [],
+              "facts": [
+                {
+                  "id": "fact-1",
+                  "text": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                  "latteBucket": "Pharm",
+                  "tier": "safety",
+                  "factType": "other",
+                  "safetyCritical": true,
+                  "sourceQuote": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                  "sources": [
+                    {
+                      "filename": "synthetic.pdf",
+                      "location": "page 1"
+                    }
+                  ],
+                  "sourcePointer": {
+                    "filename": "synthetic.pdf",
+                    "location": "page 1"
+                  }
+                }
+              ]
+            }
+          ],
+          "sources": []
+        },
+        "output": {
+          "published": [
+            {
+              "metadata": {
+                "course": "Synthetic",
+                "exam": "",
+                "createdAt": "",
+                "schemaVersion": "1.1"
+              },
+              "sources": [],
+              "conditions": [
+                {
+                  "id": "signal",
+                  "name": "Signal",
+                  "aliases": [],
+                  "facts": [
+                    {
+                      "id": "fact-1",
+                      "text": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                      "tier": 3,
+                      "latteBucket": "Look",
+                      "subtype": null,
+                      "factType": "other",
+                      "safetyCritical": true,
+                      "recovered": false,
+                      "sourceQuote": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                      "sources": [
+                        {
+                          "filename": "synthetic.pdf",
+                          "location": "page 1"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "medications": [],
+              "diagnostics": [],
+              "scoringTools": [],
+              "formulas": [],
+              "contradictions": []
+            }
+          ],
+          "logs": [],
+          "warnings": [],
+          "error": "",
+          "requests": [],
+          "diag": null,
+          "busy": false,
+          "course": "Synthetic",
+          "exam": "",
+          "selected": "signal"
+        },
+        "normalized": {
+          "kb": {
+            "metadata": {
+              "course": "Synthetic",
+              "exam": "",
+              "createdAt": "",
+              "schemaVersion": "1.1"
+            },
+            "sources": [],
+            "conditions": [
+              {
+                "id": "signal",
+                "name": "Signal",
+                "aliases": [],
+                "facts": [
+                  {
+                    "id": "fact-1",
+                    "text": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                    "tier": 3,
+                    "latteBucket": "Look",
+                    "subtype": null,
+                    "factType": "other",
+                    "safetyCritical": true,
+                    "recovered": false,
+                    "sourceQuote": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                    "sources": [
+                      {
+                        "filename": "synthetic.pdf",
+                        "location": "page 1"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "medications": [],
+            "diagnostics": [],
+            "scoringTools": [],
+            "formulas": [],
+            "contradictions": []
+          },
+          "dropped": {
+            "conditions": 0,
+            "facts": 0
+          }
+        },
+        "validation": [],
+        "ankiPacket": "STRUCTURED LATTE KNOWLEDGE BASE — TREAT AS THE SOLE SOURCE MATERIAL\nEach FACT line is already source-grounded and assigned to one LATTE bucket and tier.\nPreserve every fact ID, clinical qualifier, numeric value, source pointer, LATTE bucket, and tier.\nDo not reclassify a fact into another LATTE bucket or lower its tier. Convert facts into Anki notes using the unchanged Anki instructions.\n\n=== CONDITION: Signal ===\nCANONICAL CONDITION TAG: Condition::Signal\nFACT fact-1 | LATTE: Look | Tier: 3 | The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure. | Source: synthetic.pdf, page 1"
+      }
+    },
+    {
+      "id": "A2-fact-quote-truncation",
+      "category": "silent-content-change",
+      "rationale": "A final negation/exception in a valid long fact is substantive and cannot disappear without notice.",
+      "status": "fail",
+      "error": {
+        "name": "AssertionError",
+        "message": "long source text must remain intact or be reported",
+        "actual": false,
+        "expected": true
+      },
+      "trace": {
+        "inputLengths": {
+          "text": 4628,
+          "sourceQuote": 728
+        },
+        "output": {
+          "published": [
+            {
+              "metadata": {
+                "course": "Synthetic",
+                "exam": "",
+                "createdAt": "",
+                "schemaVersion": "1.1"
+              },
+              "sources": [],
+              "conditions": [
+                {
+                  "id": "signal",
+                  "name": "Signal",
+                  "aliases": [],
+                  "facts": [
+                    {
+                      "id": "fact-1",
+                      "text": "Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully. Read source carefully",
+                      "tier": 1,
+                      "latteBucket": "Look",
+                      "subtype": null,
+                      "factType": "other",
+                      "safetyCritical": false,
+                      "recovered": false,
+                      "sourceQuote": "Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefix Source prefi",
+                      "sources": [
+                        {
+                          "filename": "synthetic.pdf",
+                          "location": "page 1"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "medications": [],
+              "diagnostics": [],
+              "scoringTools": [],
+              "formulas": [],
+              "contradictions": []
+            }
+          ],
+          "logs": [],
+          "warnings": [],
+          "error": "",
+          "requests": [],
+          "diag": null,
+          "busy": false,
+          "course": "Synthetic",
+          "exam": "",
+          "selected": "signal"
+        },
+        "actual": {
+          "text": 4000,
+          "sourceQuote": 600,
+          "exceptionRetained": false
+        }
+      }
+    },
+    {
+      "id": "A2-condition-cap",
+      "category": "lost-coverage",
+      "rationale": "The 2001st valid condition is distinct source content; any resource-limit omission must be disclosed.",
+      "status": "fail",
+      "error": {
+        "name": "AssertionError",
+        "message": "condition cap silently loses a valid condition",
+        "actual": false,
+        "expected": true
+      },
+      "trace": {
+        "counts": {
+          "input": 2001,
+          "output": 2000,
+          "dropped": {
+            "conditions": 0,
+            "facts": 0
+          }
+        },
+        "importWarnings": []
+      }
+    },
+    {
+      "id": "A2-fact-cap",
+      "category": "lost-coverage",
+      "rationale": "The 5001st valid fact is distinct source content; any resource-limit omission must be disclosed.",
+      "status": "fail",
+      "error": {
+        "name": "AssertionError",
+        "message": "fact cap silently loses a valid fact",
+        "actual": false,
+        "expected": true
+      },
+      "trace": {
+        "counts": {
+          "input": 5001,
+          "output": 5000,
+          "dropped": {
+            "conditions": 0,
+            "facts": 0
+          }
+        },
+        "importWarnings": []
+      }
+    },
+    {
+      "id": "A2-per-fact-source-cap",
+      "category": "lost-coverage",
+      "rationale": "Each of 51 distinct source pointers is evidence; a cap cannot silently remove the 51st pointer.",
+      "status": "fail",
+      "error": {
+        "name": "AssertionError",
+        "message": "per-fact source cap silently removes provenance",
+        "actual": false,
+        "expected": true
+      },
+      "trace": {
+        "output": {
+          "published": [
+            {
+              "metadata": {
+                "course": "Synthetic",
+                "exam": "",
+                "createdAt": "",
+                "schemaVersion": "1.1"
+              },
+              "sources": [],
+              "conditions": [
+                {
+                  "id": "signal",
+                  "name": "Signal",
+                  "aliases": [],
+                  "facts": [
+                    {
+                      "id": "fact-1",
+                      "text": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                      "tier": 1,
+                      "latteBucket": "Look",
+                      "subtype": null,
+                      "factType": "other",
+                      "safetyCritical": false,
+                      "recovered": false,
+                      "sourceQuote": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                      "sources": [
+                        {
+                          "filename": "source-0.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-1.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-2.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-3.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-4.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-5.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-6.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-7.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-8.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-9.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-10.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-11.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-12.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-13.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-14.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-15.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-16.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-17.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-18.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-19.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-20.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-21.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-22.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-23.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-24.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-25.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-26.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-27.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-28.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-29.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-30.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-31.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-32.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-33.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-34.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-35.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-36.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-37.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-38.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-39.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-40.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-41.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-42.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-43.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-44.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-45.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-46.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-47.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-48.pdf",
+                          "location": "page 1"
+                        },
+                        {
+                          "filename": "source-49.pdf",
+                          "location": "page 1"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "medications": [],
+              "diagnostics": [],
+              "scoringTools": [],
+              "formulas": [],
+              "contradictions": []
+            }
+          ],
+          "logs": [],
+          "warnings": [],
+          "error": "",
+          "requests": [],
+          "diag": null,
+          "busy": false,
+          "course": "Synthetic",
+          "exam": "",
+          "selected": "signal"
+        },
+        "inputPointers": [
+          {
+            "filename": "source-0.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-1.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-2.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-3.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-4.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-5.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-6.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-7.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-8.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-9.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-10.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-11.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-12.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-13.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-14.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-15.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-16.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-17.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-18.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-19.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-20.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-21.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-22.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-23.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-24.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-25.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-26.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-27.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-28.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-29.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-30.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-31.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-32.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-33.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-34.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-35.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-36.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-37.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-38.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-39.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-40.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-41.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-42.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-43.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-44.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-45.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-46.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-47.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-48.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-49.pdf",
+            "location": "page 1"
+          },
+          {
+            "filename": "source-50.pdf",
+            "location": "page 1"
+          }
+        ],
+        "outputCount": 50
+      }
+    },
+    {
+      "id": "A2-merge-restore-length",
+      "category": "silent-content-change",
+      "rationale": "The app own merge accepts the full fact; restore must preserve its final exception instead of silently shortening an app-produced KB.",
+      "status": "fail",
+      "error": {
+        "name": "AssertionError",
+        "message": "merge-produced fact silently shortened during restore\n\n4000 !== 4027\n",
+        "actual": 4000,
+        "expected": 4027
+      },
+      "trace": {
+        "inputLength": 4027,
+        "mergedLength": 4027,
+        "restoredLength": 4000,
+        "dropped": {
+          "conditions": 0,
+          "facts": 0
+        }
+      }
+    },
+    {
+      "id": "build-valid-control",
+      "category": "control",
+      "rationale": "One valid extraction with a located quote must publish intact with actual quality data.",
+      "status": "pass",
+      "trace": {
+        "output": {
+          "published": [
+            {
+              "metadata": {
+                "course": "Synthetic",
+                "exam": "Synthetic",
+                "createdAt": "2026-09-18T20:29:46.668Z",
+                "schemaVersion": "1.1"
+              },
+              "sources": [
+                {
+                  "filename": "synthetic.pdf",
+                  "range": "page 1"
+                }
+              ],
+              "conditions": [
+                {
+                  "id": "signal",
+                  "name": "Signal",
+                  "aliases": [],
+                  "facts": [
+                    {
+                      "id": "fact-1",
+                      "text": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                      "latteBucket": "Look",
+                      "tier": 1,
+                      "factType": "other",
+                      "safetyCritical": false,
+                      "sourceQuote": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                      "sources": [
+                        {
+                          "filename": "synthetic.pdf",
+                          "location": "page 1"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "medications": [],
+              "diagnostics": [],
+              "scoringTools": [],
+              "formulas": [],
+              "contradictions": []
+            }
+          ],
+          "logs": [
+            {
+              "m": "Reading synthetic.pdf — page 1/1",
+              "t": ""
+            },
+            {
+              "m": "1 chunk(s) · mock [low]",
+              "t": "warn"
+            },
+            {
+              "m": "✓ synthetic.pdf (page 1) — 1 fact(s)",
+              "t": "ok"
+            },
+            {
+              "m": "Knowledge Base built: 1 condition(s), 1 fact(s).",
+              "t": "ok"
+            }
+          ],
+          "warnings": [],
+          "error": "",
+          "requests": [
+            {
+              "model": "mock",
+              "sourceParts": [
+                "SOURCE FILE: synthetic.pdf\nSOURCE RANGE: page 1\n\n--- PAGE 1 ---\nThe signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure."
+              ],
+              "promptSha256": "5e160dd46bbccae60aa476ac9d4d2731aab25c31c5ca0a45e976f361a7536f6f",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            }
+          ],
+          "diag": {
+            "chunks": [
+              {
+                "tag": "synthetic.pdf (page 1)",
+                "file": "synthetic.pdf",
+                "label": "page 1",
+                "chars": 156,
+                "facts": 1,
+                "recovered": 0,
+                "discarded": 0,
+                "quoteMiss": 0,
+                "quoteMissDetail": [],
+                "quoteMissByReason": {},
+                "discardByReason": {},
+                "dehyphSaved": 0,
+                "opMismatch": 0,
+                "opDetail": [],
+                "failed": false,
+                "density": 6.410256410256411,
+                "flag": null
+              }
+            ],
+            "gaps": [
+              {
+                "condition": "Signal",
+                "total": 1,
+                "missing": [
+                  "BriefPatho",
+                  "Assess",
+                  "Tests",
+                  "Treatments",
+                  "Educate"
+                ]
+              }
+            ],
+            "recovered": 0,
+            "discarded": 0,
+            "quoteMiss": 0,
+            "byReason": {},
+            "discardByReason": {},
+            "dehyphSaved": 0,
+            "opMismatch": 0,
+            "opDetail": [],
+            "quality": {
+              "synthetic.pdf": {
+                "pages": 1,
+                "empty": 0,
+                "total": 140,
+                "avg": 140,
+                "perPage": [
+                  {
+                    "n": 1,
+                    "kind": "page",
+                    "chars": 140
+                  }
+                ]
+              }
+            },
+            "composition": {},
+            "chunkChars": 45000,
+            "overlapUnits": 0,
+            "model": "mock",
+            "level": "low",
+            "auto": false,
+            "verified": false,
+            "focus": null
+          },
+          "busy": false,
+          "progress": 100,
+          "selected": "signal"
+        }
+      }
+    },
+    {
+      "id": "build-API-error-control",
+      "category": "control",
+      "rationale": "An ordinary later API failure should preserve earlier completed chunks and disclose the failure.",
+      "status": "pass",
+      "trace": {
+        "output": {
+          "published": [
+            {
+              "metadata": {
+                "course": "Synthetic",
+                "exam": "Synthetic",
+                "createdAt": "2026-09-18T20:29:46.669Z",
+                "schemaVersion": "1.1"
+              },
+              "sources": [
+                {
+                  "filename": "synthetic.pdf",
+                  "range": "page 1"
+                }
+              ],
+              "conditions": [
+                {
+                  "id": "signal",
+                  "name": "Signal",
+                  "aliases": [],
+                  "facts": [
+                    {
+                      "id": "fact-1",
+                      "text": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                      "latteBucket": "Look",
+                      "tier": 1,
+                      "factType": "other",
+                      "safetyCritical": false,
+                      "sourceQuote": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                      "sources": [
+                        {
+                          "filename": "synthetic.pdf",
+                          "location": "page 1"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "medications": [],
+              "diagnostics": [],
+              "scoringTools": [],
+              "formulas": [],
+              "contradictions": []
+            }
+          ],
+          "logs": [
+            {
+              "m": "Reading synthetic.pdf — page 2/2",
+              "t": ""
+            },
+            {
+              "m": "2 chunk(s) · mock [low]",
+              "t": "warn"
+            },
+            {
+              "m": "✓ synthetic.pdf (page 1) — 1 fact(s)",
+              "t": "ok"
+            },
+            {
+              "m": "✕ synthetic.pdf (page 2): Synthetic API outage",
+              "t": "err"
+            },
+            {
+              "m": "Knowledge Base built: 1 condition(s), 1 fact(s).",
+              "t": "ok"
+            }
+          ],
+          "warnings": [
+            "synthetic.pdf (page 2): Synthetic API outage"
+          ],
+          "error": "",
+          "requests": [
+            {
+              "model": "mock",
+              "sourceParts": [
+                "SOURCE FILE: synthetic.pdf\nSOURCE RANGE: page 1\n\n--- PAGE 1 ---\nThe signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure."
+              ],
+              "promptSha256": "5e160dd46bbccae60aa476ac9d4d2731aab25c31c5ca0a45e976f361a7536f6f",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            },
+            {
+              "model": "mock",
+              "sourceParts": [
+                "SOURCE FILE: synthetic.pdf\nSOURCE RANGE: page 2\n\n--- PAGE 2 ---\nThe signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure."
+              ],
+              "promptSha256": "d51b066fd66f7469ead6e883ebdf31199d663a449b5c006af1ff022d9352e9a5",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            }
+          ],
+          "diag": {
+            "chunks": [
+              {
+                "tag": "synthetic.pdf (page 1)",
+                "file": "synthetic.pdf",
+                "label": "page 1",
+                "chars": 156,
+                "facts": 1,
+                "recovered": 0,
+                "discarded": 0,
+                "quoteMiss": 0,
+                "quoteMissDetail": [],
+                "quoteMissByReason": {},
+                "discardByReason": {},
+                "dehyphSaved": 0,
+                "opMismatch": 0,
+                "opDetail": [],
+                "failed": false,
+                "density": 6.410256410256411,
+                "flag": null
+              },
+              {
+                "tag": "synthetic.pdf (page 2)",
+                "file": "synthetic.pdf",
+                "label": "page 2",
+                "chars": 156,
+                "facts": 0,
+                "recovered": 0,
+                "discarded": 0,
+                "quoteMiss": 0,
+                "quoteMissDetail": [],
+                "quoteMissByReason": {},
+                "discardByReason": {},
+                "dehyphSaved": 0,
+                "opMismatch": 0,
+                "opDetail": [],
+                "failed": true,
+                "density": 0,
+                "flag": "failed"
+              }
+            ],
+            "gaps": [
+              {
+                "condition": "Signal",
+                "total": 1,
+                "missing": [
+                  "BriefPatho",
+                  "Assess",
+                  "Tests",
+                  "Treatments",
+                  "Educate"
+                ]
+              }
+            ],
+            "recovered": 0,
+            "discarded": 0,
+            "quoteMiss": 0,
+            "byReason": {},
+            "discardByReason": {},
+            "dehyphSaved": 0,
+            "opMismatch": 0,
+            "opDetail": [],
+            "quality": {
+              "synthetic.pdf": {
+                "pages": 2,
+                "empty": 0,
+                "total": 280,
+                "avg": 140,
+                "perPage": [
+                  {
+                    "n": 1,
+                    "kind": "page",
+                    "chars": 140
+                  },
+                  {
+                    "n": 2,
+                    "kind": "page",
+                    "chars": 140
+                  }
+                ]
+              }
+            },
+            "composition": {},
+            "chunkChars": 1,
+            "overlapUnits": 0,
+            "model": "mock",
+            "level": "low",
+            "auto": false,
+            "verified": false,
+            "focus": null
+          },
+          "busy": false,
+          "progress": 100,
+          "selected": "signal"
+        }
+      }
+    },
+    {
+      "id": "A5-nested-primary-shape",
+      "category": "lost-coverage",
+      "rationale": "A malformed later condition must be isolated like an API chunk error; an earlier completed chunk must survive.",
+      "status": "fail",
+      "error": {
+        "name": "AssertionError",
+        "message": "nested malformed condition discards the earlier completed chunk\n\n0 !== 1\n",
+        "actual": 0,
+        "expected": 1
+      },
+      "trace": {
+        "output": {
+          "published": [],
+          "logs": [
+            {
+              "m": "Reading synthetic.pdf — page 2/2",
+              "t": ""
+            },
+            {
+              "m": "2 chunk(s) · mock [low]",
+              "t": "warn"
+            },
+            {
+              "m": "✓ synthetic.pdf (page 1) — 1 fact(s)",
+              "t": "ok"
+            }
+          ],
+          "warnings": [],
+          "error": "Cannot read properties of null (reading 'facts')",
+          "requests": [
+            {
+              "model": "mock",
+              "sourceParts": [
+                "SOURCE FILE: synthetic.pdf\nSOURCE RANGE: page 1\n\n--- PAGE 1 ---\nThe signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure."
+              ],
+              "promptSha256": "5e160dd46bbccae60aa476ac9d4d2731aab25c31c5ca0a45e976f361a7536f6f",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            },
+            {
+              "model": "mock",
+              "sourceParts": [
+                "SOURCE FILE: synthetic.pdf\nSOURCE RANGE: page 2\n\n--- PAGE 2 ---\nThe signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure."
+              ],
+              "promptSha256": "d51b066fd66f7469ead6e883ebdf31199d663a449b5c006af1ff022d9352e9a5",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            }
+          ],
+          "diag": null,
+          "busy": false,
+          "progress": 48
+        }
+      }
+    },
+    {
+      "id": "A6-omission-shape-{\"missed\":{}}",
+      "category": "inconclusive-misreported",
+      "rationale": "Only a well-shaped empty missed array establishes a completed omission audit; malformed output is inconclusive.",
+      "status": "fail",
+      "error": {
+        "name": "AssertionError",
+        "message": "malformed omission shape must be reported as incomplete/failed",
+        "actual": false,
+        "expected": true
+      },
+      "trace": {
+        "response": {
+          "missed": {}
+        },
+        "output": {
+          "published": [
+            {
+              "metadata": {
+                "course": "Synthetic",
+                "exam": "Synthetic",
+                "createdAt": "2026-09-18T20:29:46.671Z",
+                "schemaVersion": "1.1"
+              },
+              "sources": [
+                {
+                  "filename": "synthetic.pdf",
+                  "range": "page 1"
+                }
+              ],
+              "conditions": [
+                {
+                  "id": "signal",
+                  "name": "Signal",
+                  "aliases": [],
+                  "facts": [
+                    {
+                      "id": "fact-1",
+                      "text": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                      "latteBucket": "Look",
+                      "tier": 1,
+                      "factType": "other",
+                      "safetyCritical": false,
+                      "sourceQuote": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                      "sources": [
+                        {
+                          "filename": "synthetic.pdf",
+                          "location": "page 1"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "medications": [],
+              "diagnostics": [],
+              "scoringTools": [],
+              "formulas": [],
+              "contradictions": []
+            }
+          ],
+          "logs": [
+            {
+              "m": "Reading synthetic.pdf — page 1/1",
+              "t": ""
+            },
+            {
+              "m": "1 chunk(s) · mock [low] · audit: mock [low]",
+              "t": "warn"
+            },
+            {
+              "m": "✓ synthetic.pdf (page 1) — 1 fact(s)",
+              "t": "ok"
+            },
+            {
+              "m": "  ↳ audit: +0 recovered",
+              "t": ""
+            },
+            {
+              "m": "Knowledge Base built: 1 condition(s), 1 fact(s).",
+              "t": "ok"
+            }
+          ],
+          "warnings": [],
+          "error": "",
+          "requests": [
+            {
+              "model": "mock",
+              "sourceParts": [
+                "SOURCE FILE: synthetic.pdf\nSOURCE RANGE: page 1\n\n--- PAGE 1 ---\nThe signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure."
+              ],
+              "promptSha256": "5e160dd46bbccae60aa476ac9d4d2731aab25c31c5ca0a45e976f361a7536f6f",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            },
+            {
+              "model": "mock",
+              "sourceParts": [
+                "(A) SOURCE CHUNK — synthetic.pdf (page 1)\n\n--- PAGE 1 ---\nThe signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                "(B) FACTS ALREADY EXTRACTED FROM THIS CHUNK\n# Signal\n- [Look] The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure."
+              ],
+              "promptSha256": "9335f2c24af1d946f4e6a0f5d4bb4227d83173a070d097374fa68db25151aece",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            }
+          ],
+          "diag": {
+            "chunks": [
+              {
+                "tag": "synthetic.pdf (page 1)",
+                "file": "synthetic.pdf",
+                "label": "page 1",
+                "chars": 156,
+                "facts": 1,
+                "recovered": 0,
+                "discarded": 0,
+                "quoteMiss": 0,
+                "quoteMissDetail": [],
+                "quoteMissByReason": {},
+                "discardByReason": {},
+                "dehyphSaved": 0,
+                "opMismatch": 0,
+                "opDetail": [],
+                "failed": false,
+                "density": 6.410256410256411,
+                "flag": null
+              }
+            ],
+            "gaps": [
+              {
+                "condition": "Signal",
+                "total": 1,
+                "missing": [
+                  "BriefPatho",
+                  "Assess",
+                  "Tests",
+                  "Treatments",
+                  "Educate"
+                ]
+              }
+            ],
+            "recovered": 0,
+            "discarded": 0,
+            "quoteMiss": 0,
+            "byReason": {},
+            "discardByReason": {},
+            "dehyphSaved": 0,
+            "opMismatch": 0,
+            "opDetail": [],
+            "quality": {
+              "synthetic.pdf": {
+                "pages": 1,
+                "empty": 0,
+                "total": 140,
+                "avg": 140,
+                "perPage": [
+                  {
+                    "n": 1,
+                    "kind": "page",
+                    "chars": 140
+                  }
+                ]
+              }
+            },
+            "composition": {},
+            "chunkChars": 45000,
+            "overlapUnits": 0,
+            "model": "mock",
+            "level": "low",
+            "auto": false,
+            "verified": true,
+            "focus": null
+          },
+          "busy": false,
+          "progress": 100,
+          "selected": "signal"
+        }
+      }
+    },
+    {
+      "id": "A6-omission-shape-{\"missed\":null}",
+      "category": "inconclusive-misreported",
+      "rationale": "Only a well-shaped empty missed array establishes a completed omission audit; malformed output is inconclusive.",
+      "status": "fail",
+      "error": {
+        "name": "AssertionError",
+        "message": "malformed omission shape must be reported as incomplete/failed",
+        "actual": false,
+        "expected": true
+      },
+      "trace": {
+        "response": {
+          "missed": null
+        },
+        "output": {
+          "published": [
+            {
+              "metadata": {
+                "course": "Synthetic",
+                "exam": "Synthetic",
+                "createdAt": "2026-09-18T20:29:46.672Z",
+                "schemaVersion": "1.1"
+              },
+              "sources": [
+                {
+                  "filename": "synthetic.pdf",
+                  "range": "page 1"
+                }
+              ],
+              "conditions": [
+                {
+                  "id": "signal",
+                  "name": "Signal",
+                  "aliases": [],
+                  "facts": [
+                    {
+                      "id": "fact-1",
+                      "text": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                      "latteBucket": "Look",
+                      "tier": 1,
+                      "factType": "other",
+                      "safetyCritical": false,
+                      "sourceQuote": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                      "sources": [
+                        {
+                          "filename": "synthetic.pdf",
+                          "location": "page 1"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "medications": [],
+              "diagnostics": [],
+              "scoringTools": [],
+              "formulas": [],
+              "contradictions": []
+            }
+          ],
+          "logs": [
+            {
+              "m": "Reading synthetic.pdf — page 1/1",
+              "t": ""
+            },
+            {
+              "m": "1 chunk(s) · mock [low] · audit: mock [low]",
+              "t": "warn"
+            },
+            {
+              "m": "✓ synthetic.pdf (page 1) — 1 fact(s)",
+              "t": "ok"
+            },
+            {
+              "m": "  ↳ audit: +0 recovered",
+              "t": ""
+            },
+            {
+              "m": "Knowledge Base built: 1 condition(s), 1 fact(s).",
+              "t": "ok"
+            }
+          ],
+          "warnings": [],
+          "error": "",
+          "requests": [
+            {
+              "model": "mock",
+              "sourceParts": [
+                "SOURCE FILE: synthetic.pdf\nSOURCE RANGE: page 1\n\n--- PAGE 1 ---\nThe signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure."
+              ],
+              "promptSha256": "5e160dd46bbccae60aa476ac9d4d2731aab25c31c5ca0a45e976f361a7536f6f",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            },
+            {
+              "model": "mock",
+              "sourceParts": [
+                "(A) SOURCE CHUNK — synthetic.pdf (page 1)\n\n--- PAGE 1 ---\nThe signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                "(B) FACTS ALREADY EXTRACTED FROM THIS CHUNK\n# Signal\n- [Look] The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure."
+              ],
+              "promptSha256": "9335f2c24af1d946f4e6a0f5d4bb4227d83173a070d097374fa68db25151aece",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            }
+          ],
+          "diag": {
+            "chunks": [
+              {
+                "tag": "synthetic.pdf (page 1)",
+                "file": "synthetic.pdf",
+                "label": "page 1",
+                "chars": 156,
+                "facts": 1,
+                "recovered": 0,
+                "discarded": 0,
+                "quoteMiss": 0,
+                "quoteMissDetail": [],
+                "quoteMissByReason": {},
+                "discardByReason": {},
+                "dehyphSaved": 0,
+                "opMismatch": 0,
+                "opDetail": [],
+                "failed": false,
+                "density": 6.410256410256411,
+                "flag": null
+              }
+            ],
+            "gaps": [
+              {
+                "condition": "Signal",
+                "total": 1,
+                "missing": [
+                  "BriefPatho",
+                  "Assess",
+                  "Tests",
+                  "Treatments",
+                  "Educate"
+                ]
+              }
+            ],
+            "recovered": 0,
+            "discarded": 0,
+            "quoteMiss": 0,
+            "byReason": {},
+            "discardByReason": {},
+            "dehyphSaved": 0,
+            "opMismatch": 0,
+            "opDetail": [],
+            "quality": {
+              "synthetic.pdf": {
+                "pages": 1,
+                "empty": 0,
+                "total": 140,
+                "avg": 140,
+                "perPage": [
+                  {
+                    "n": 1,
+                    "kind": "page",
+                    "chars": 140
+                  }
+                ]
+              }
+            },
+            "composition": {},
+            "chunkChars": 45000,
+            "overlapUnits": 0,
+            "model": "mock",
+            "level": "low",
+            "auto": false,
+            "verified": true,
+            "focus": null
+          },
+          "busy": false,
+          "progress": 100,
+          "selected": "signal"
+        }
+      }
+    },
+    {
+      "id": "A6-omission-shape-{}",
+      "category": "inconclusive-misreported",
+      "rationale": "Only a well-shaped empty missed array establishes a completed omission audit; malformed output is inconclusive.",
+      "status": "fail",
+      "error": {
+        "name": "AssertionError",
+        "message": "malformed omission shape must be reported as incomplete/failed",
+        "actual": false,
+        "expected": true
+      },
+      "trace": {
+        "response": {},
+        "output": {
+          "published": [
+            {
+              "metadata": {
+                "course": "Synthetic",
+                "exam": "Synthetic",
+                "createdAt": "2026-09-18T20:29:46.672Z",
+                "schemaVersion": "1.1"
+              },
+              "sources": [
+                {
+                  "filename": "synthetic.pdf",
+                  "range": "page 1"
+                }
+              ],
+              "conditions": [
+                {
+                  "id": "signal",
+                  "name": "Signal",
+                  "aliases": [],
+                  "facts": [
+                    {
+                      "id": "fact-1",
+                      "text": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                      "latteBucket": "Look",
+                      "tier": 1,
+                      "factType": "other",
+                      "safetyCritical": false,
+                      "sourceQuote": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                      "sources": [
+                        {
+                          "filename": "synthetic.pdf",
+                          "location": "page 1"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "medications": [],
+              "diagnostics": [],
+              "scoringTools": [],
+              "formulas": [],
+              "contradictions": []
+            }
+          ],
+          "logs": [
+            {
+              "m": "Reading synthetic.pdf — page 1/1",
+              "t": ""
+            },
+            {
+              "m": "1 chunk(s) · mock [low] · audit: mock [low]",
+              "t": "warn"
+            },
+            {
+              "m": "✓ synthetic.pdf (page 1) — 1 fact(s)",
+              "t": "ok"
+            },
+            {
+              "m": "  ↳ audit: +0 recovered",
+              "t": ""
+            },
+            {
+              "m": "Knowledge Base built: 1 condition(s), 1 fact(s).",
+              "t": "ok"
+            }
+          ],
+          "warnings": [],
+          "error": "",
+          "requests": [
+            {
+              "model": "mock",
+              "sourceParts": [
+                "SOURCE FILE: synthetic.pdf\nSOURCE RANGE: page 1\n\n--- PAGE 1 ---\nThe signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure."
+              ],
+              "promptSha256": "5e160dd46bbccae60aa476ac9d4d2731aab25c31c5ca0a45e976f361a7536f6f",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            },
+            {
+              "model": "mock",
+              "sourceParts": [
+                "(A) SOURCE CHUNK — synthetic.pdf (page 1)\n\n--- PAGE 1 ---\nThe signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                "(B) FACTS ALREADY EXTRACTED FROM THIS CHUNK\n# Signal\n- [Look] The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure."
+              ],
+              "promptSha256": "9335f2c24af1d946f4e6a0f5d4bb4227d83173a070d097374fa68db25151aece",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            }
+          ],
+          "diag": {
+            "chunks": [
+              {
+                "tag": "synthetic.pdf (page 1)",
+                "file": "synthetic.pdf",
+                "label": "page 1",
+                "chars": 156,
+                "facts": 1,
+                "recovered": 0,
+                "discarded": 0,
+                "quoteMiss": 0,
+                "quoteMissDetail": [],
+                "quoteMissByReason": {},
+                "discardByReason": {},
+                "dehyphSaved": 0,
+                "opMismatch": 0,
+                "opDetail": [],
+                "failed": false,
+                "density": 6.410256410256411,
+                "flag": null
+              }
+            ],
+            "gaps": [
+              {
+                "condition": "Signal",
+                "total": 1,
+                "missing": [
+                  "BriefPatho",
+                  "Assess",
+                  "Tests",
+                  "Treatments",
+                  "Educate"
+                ]
+              }
+            ],
+            "recovered": 0,
+            "discarded": 0,
+            "quoteMiss": 0,
+            "byReason": {},
+            "discardByReason": {},
+            "dehyphSaved": 0,
+            "opMismatch": 0,
+            "opDetail": [],
+            "quality": {
+              "synthetic.pdf": {
+                "pages": 1,
+                "empty": 0,
+                "total": 140,
+                "avg": 140,
+                "perPage": [
+                  {
+                    "n": 1,
+                    "kind": "page",
+                    "chars": 140
+                  }
+                ]
+              }
+            },
+            "composition": {},
+            "chunkChars": 45000,
+            "overlapUnits": 0,
+            "model": "mock",
+            "level": "low",
+            "auto": false,
+            "verified": true,
+            "focus": null
+          },
+          "busy": false,
+          "progress": 100,
+          "selected": "signal"
+        }
+      }
+    },
+    {
+      "id": "omission-empty-control",
+      "category": "control",
+      "rationale": "An explicit empty missed array is a valid no-omission result.",
+      "status": "pass",
+      "trace": {
+        "output": {
+          "published": [
+            {
+              "metadata": {
+                "course": "Synthetic",
+                "exam": "Synthetic",
+                "createdAt": "2026-09-18T20:29:46.672Z",
+                "schemaVersion": "1.1"
+              },
+              "sources": [
+                {
+                  "filename": "synthetic.pdf",
+                  "range": "page 1"
+                }
+              ],
+              "conditions": [
+                {
+                  "id": "signal",
+                  "name": "Signal",
+                  "aliases": [],
+                  "facts": [
+                    {
+                      "id": "fact-1",
+                      "text": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                      "latteBucket": "Look",
+                      "tier": 1,
+                      "factType": "other",
+                      "safetyCritical": false,
+                      "sourceQuote": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                      "sources": [
+                        {
+                          "filename": "synthetic.pdf",
+                          "location": "page 1"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "medications": [],
+              "diagnostics": [],
+              "scoringTools": [],
+              "formulas": [],
+              "contradictions": []
+            }
+          ],
+          "logs": [
+            {
+              "m": "Reading synthetic.pdf — page 1/1",
+              "t": ""
+            },
+            {
+              "m": "1 chunk(s) · mock [low] · audit: mock [low]",
+              "t": "warn"
+            },
+            {
+              "m": "✓ synthetic.pdf (page 1) — 1 fact(s)",
+              "t": "ok"
+            },
+            {
+              "m": "  ↳ audit: +0 recovered",
+              "t": ""
+            },
+            {
+              "m": "Knowledge Base built: 1 condition(s), 1 fact(s).",
+              "t": "ok"
+            }
+          ],
+          "warnings": [],
+          "error": "",
+          "requests": [
+            {
+              "model": "mock",
+              "sourceParts": [
+                "SOURCE FILE: synthetic.pdf\nSOURCE RANGE: page 1\n\n--- PAGE 1 ---\nThe signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure."
+              ],
+              "promptSha256": "5e160dd46bbccae60aa476ac9d4d2731aab25c31c5ca0a45e976f361a7536f6f",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            },
+            {
+              "model": "mock",
+              "sourceParts": [
+                "(A) SOURCE CHUNK — synthetic.pdf (page 1)\n\n--- PAGE 1 ---\nThe signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                "(B) FACTS ALREADY EXTRACTED FROM THIS CHUNK\n# Signal\n- [Look] The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure."
+              ],
+              "promptSha256": "9335f2c24af1d946f4e6a0f5d4bb4227d83173a070d097374fa68db25151aece",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            }
+          ],
+          "diag": {
+            "chunks": [
+              {
+                "tag": "synthetic.pdf (page 1)",
+                "file": "synthetic.pdf",
+                "label": "page 1",
+                "chars": 156,
+                "facts": 1,
+                "recovered": 0,
+                "discarded": 0,
+                "quoteMiss": 0,
+                "quoteMissDetail": [],
+                "quoteMissByReason": {},
+                "discardByReason": {},
+                "dehyphSaved": 0,
+                "opMismatch": 0,
+                "opDetail": [],
+                "failed": false,
+                "density": 6.410256410256411,
+                "flag": null
+              }
+            ],
+            "gaps": [
+              {
+                "condition": "Signal",
+                "total": 1,
+                "missing": [
+                  "BriefPatho",
+                  "Assess",
+                  "Tests",
+                  "Treatments",
+                  "Educate"
+                ]
+              }
+            ],
+            "recovered": 0,
+            "discarded": 0,
+            "quoteMiss": 0,
+            "byReason": {},
+            "discardByReason": {},
+            "dehyphSaved": 0,
+            "opMismatch": 0,
+            "opDetail": [],
+            "quality": {
+              "synthetic.pdf": {
+                "pages": 1,
+                "empty": 0,
+                "total": 140,
+                "avg": 140,
+                "perPage": [
+                  {
+                    "n": 1,
+                    "kind": "page",
+                    "chars": 140
+                  }
+                ]
+              }
+            },
+            "composition": {},
+            "chunkChars": 45000,
+            "overlapUnits": 0,
+            "model": "mock",
+            "level": "low",
+            "auto": false,
+            "verified": true,
+            "focus": null
+          },
+          "busy": false,
+          "progress": 100,
+          "selected": "signal"
+        }
+      }
+    },
+    {
+      "id": "pass2-discard-control",
+      "category": "control",
+      "rationale": "The additive omission contains no source quote and must be discarded under the approved strict pass-2 policy.",
+      "status": "pass",
+      "trace": {
+        "output": {
+          "published": [
+            {
+              "metadata": {
+                "course": "Synthetic",
+                "exam": "Synthetic",
+                "createdAt": "2026-09-18T20:29:46.673Z",
+                "schemaVersion": "1.1"
+              },
+              "sources": [
+                {
+                  "filename": "synthetic.pdf",
+                  "range": "page 1"
+                }
+              ],
+              "conditions": [
+                {
+                  "id": "signal",
+                  "name": "Signal",
+                  "aliases": [],
+                  "facts": [
+                    {
+                      "id": "fact-1",
+                      "text": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                      "latteBucket": "Look",
+                      "tier": 1,
+                      "factType": "other",
+                      "safetyCritical": false,
+                      "sourceQuote": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                      "sources": [
+                        {
+                          "filename": "synthetic.pdf",
+                          "location": "page 1"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "medications": [],
+              "diagnostics": [],
+              "scoringTools": [],
+              "formulas": [],
+              "contradictions": []
+            }
+          ],
+          "logs": [
+            {
+              "m": "Reading synthetic.pdf — page 1/1",
+              "t": ""
+            },
+            {
+              "m": "1 chunk(s) · mock [low] · audit: mock [low]",
+              "t": "warn"
+            },
+            {
+              "m": "✓ synthetic.pdf (page 1) — 1 fact(s)",
+              "t": "ok"
+            },
+            {
+              "m": "  ↳ audit: +0 recovered, 1 discarded (quote not found in source)",
+              "t": ""
+            },
+            {
+              "m": "Knowledge Base built: 1 condition(s), 1 fact(s).",
+              "t": "ok"
+            }
+          ],
+          "warnings": [],
+          "error": "",
+          "requests": [
+            {
+              "model": "mock",
+              "sourceParts": [
+                "SOURCE FILE: synthetic.pdf\nSOURCE RANGE: page 1\n\n--- PAGE 1 ---\nThe signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure."
+              ],
+              "promptSha256": "5e160dd46bbccae60aa476ac9d4d2731aab25c31c5ca0a45e976f361a7536f6f",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            },
+            {
+              "model": "mock",
+              "sourceParts": [
+                "(A) SOURCE CHUNK — synthetic.pdf (page 1)\n\n--- PAGE 1 ---\nThe signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                "(B) FACTS ALREADY EXTRACTED FROM THIS CHUNK\n# Signal\n- [Look] The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure."
+              ],
+              "promptSha256": "9335f2c24af1d946f4e6a0f5d4bb4227d83173a070d097374fa68db25151aece",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            }
+          ],
+          "diag": {
+            "chunks": [
+              {
+                "tag": "synthetic.pdf (page 1)",
+                "file": "synthetic.pdf",
+                "label": "page 1",
+                "chars": 156,
+                "facts": 1,
+                "recovered": 0,
+                "discarded": 1,
+                "quoteMiss": 0,
+                "quoteMissDetail": [
+                  {
+                    "pass": 2,
+                    "reason": "absent",
+                    "quote": "Ultraviolet mode is mandatory for every signal.",
+                    "fact": "The signal is ultraviolet.",
+                    "latteBucket": "Look"
+                  }
+                ],
+                "quoteMissByReason": {},
+                "discardByReason": {
+                  "absent": 1
+                },
+                "dehyphSaved": 0,
+                "opMismatch": 0,
+                "opDetail": [],
+                "failed": false,
+                "density": 6.410256410256411,
+                "flag": null
+              }
+            ],
+            "gaps": [
+              {
+                "condition": "Signal",
+                "total": 1,
+                "missing": [
+                  "BriefPatho",
+                  "Assess",
+                  "Tests",
+                  "Treatments",
+                  "Educate"
+                ]
+              }
+            ],
+            "recovered": 0,
+            "discarded": 1,
+            "quoteMiss": 0,
+            "byReason": {},
+            "discardByReason": {
+              "absent": 1
+            },
+            "dehyphSaved": 0,
+            "opMismatch": 0,
+            "opDetail": [],
+            "quality": {
+              "synthetic.pdf": {
+                "pages": 1,
+                "empty": 0,
+                "total": 140,
+                "avg": 140,
+                "perPage": [
+                  {
+                    "n": 1,
+                    "kind": "page",
+                    "chars": 140
+                  }
+                ]
+              }
+            },
+            "composition": {},
+            "chunkChars": 45000,
+            "overlapUnits": 0,
+            "model": "mock",
+            "level": "low",
+            "auto": false,
+            "verified": true,
+            "focus": null
+          },
+          "busy": false,
+          "progress": 100,
+          "selected": "signal"
+        }
+      }
+    },
+    {
+      "id": "pass1-retention-policy",
+      "category": "policy-limit",
+      "rationale": "Primary quote misses intentionally retain facts and count the failure; no semantic approval is inferred.",
+      "status": "pass",
+      "trace": {
+        "output": {
+          "published": [
+            {
+              "metadata": {
+                "course": "Synthetic",
+                "exam": "Synthetic",
+                "createdAt": "2026-09-18T20:29:46.673Z",
+                "schemaVersion": "1.1"
+              },
+              "sources": [
+                {
+                  "filename": "synthetic.pdf",
+                  "range": "page 1"
+                }
+              ],
+              "conditions": [
+                {
+                  "id": "signal",
+                  "name": "Signal",
+                  "aliases": [],
+                  "facts": [
+                    {
+                      "id": "fact-1",
+                      "text": "The signal is ultraviolet.",
+                      "latteBucket": "Look",
+                      "tier": 1,
+                      "factType": "other",
+                      "safetyCritical": false,
+                      "sourceQuote": "Ultraviolet is mandatory for every signal.",
+                      "sources": [
+                        {
+                          "filename": "synthetic.pdf",
+                          "location": "page 1"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "medications": [],
+              "diagnostics": [],
+              "scoringTools": [],
+              "formulas": [],
+              "contradictions": []
+            }
+          ],
+          "logs": [
+            {
+              "m": "Reading synthetic.pdf — page 1/1",
+              "t": ""
+            },
+            {
+              "m": "1 chunk(s) · mock [low]",
+              "t": "warn"
+            },
+            {
+              "m": "✓ synthetic.pdf (page 1) — 1 fact(s)",
+              "t": "ok"
+            },
+            {
+              "m": "Knowledge Base built: 1 condition(s), 1 fact(s).",
+              "t": "ok"
+            }
+          ],
+          "warnings": [],
+          "error": "",
+          "requests": [
+            {
+              "model": "mock",
+              "sourceParts": [
+                "SOURCE FILE: synthetic.pdf\nSOURCE RANGE: page 1\n\n--- PAGE 1 ---\nThe signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure."
+              ],
+              "promptSha256": "5e160dd46bbccae60aa476ac9d4d2731aab25c31c5ca0a45e976f361a7536f6f",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            }
+          ],
+          "diag": {
+            "chunks": [
+              {
+                "tag": "synthetic.pdf (page 1)",
+                "file": "synthetic.pdf",
+                "label": "page 1",
+                "chars": 156,
+                "facts": 1,
+                "recovered": 0,
+                "discarded": 0,
+                "quoteMiss": 1,
+                "quoteMissDetail": [
+                  {
+                    "pass": 1,
+                    "reason": "absent",
+                    "quote": "Ultraviolet is mandatory for every signal.",
+                    "fact": "The signal is ultraviolet.",
+                    "latteBucket": "Look"
+                  }
+                ],
+                "quoteMissByReason": {
+                  "absent": 1
+                },
+                "discardByReason": {},
+                "dehyphSaved": 0,
+                "opMismatch": 0,
+                "opDetail": [],
+                "failed": false,
+                "density": 6.410256410256411,
+                "flag": null
+              }
+            ],
+            "gaps": [
+              {
+                "condition": "Signal",
+                "total": 1,
+                "missing": [
+                  "BriefPatho",
+                  "Assess",
+                  "Tests",
+                  "Treatments",
+                  "Educate"
+                ]
+              }
+            ],
+            "recovered": 0,
+            "discarded": 0,
+            "quoteMiss": 1,
+            "byReason": {
+              "absent": 1
+            },
+            "discardByReason": {},
+            "dehyphSaved": 0,
+            "opMismatch": 0,
+            "opDetail": [],
+            "quality": {
+              "synthetic.pdf": {
+                "pages": 1,
+                "empty": 0,
+                "total": 140,
+                "avg": 140,
+                "perPage": [
+                  {
+                    "n": 1,
+                    "kind": "page",
+                    "chars": 140
+                  }
+                ]
+              }
+            },
+            "composition": {},
+            "chunkChars": 45000,
+            "overlapUnits": 0,
+            "model": "mock",
+            "level": "low",
+            "auto": false,
+            "verified": false,
+            "focus": null
+          },
+          "busy": false,
+          "progress": 100,
+          "selected": "signal"
+        }
+      }
+    },
+    {
+      "id": "operator-warning-policy",
+      "category": "policy-limit",
+      "rationale": "Source comparator < contradicts >; the approved operator policy warns without discarding.",
+      "status": "pass",
+      "trace": {
+        "output": {
+          "published": [
+            {
+              "metadata": {
+                "course": "Synthetic",
+                "exam": "Synthetic",
+                "createdAt": "2026-09-18T20:29:46.673Z",
+                "schemaVersion": "1.1"
+              },
+              "sources": [
+                {
+                  "filename": "synthetic.pdf",
+                  "range": "page 1"
+                },
+                {
+                  "filename": "synthetic.pdf",
+                  "range": "page 1 (recovered)"
+                }
+              ],
+              "conditions": [
+                {
+                  "id": "signal",
+                  "name": "Signal",
+                  "aliases": [],
+                  "facts": [
+                    {
+                      "id": "fact-1",
+                      "text": "Hold the synthetic operation when signal level > 60 units.",
+                      "latteBucket": "Look",
+                      "tier": 1,
+                      "factType": "other",
+                      "safetyCritical": false,
+                      "sourceQuote": "Hold the synthetic operation when signal level > 60 units.",
+                      "sources": [
+                        {
+                          "filename": "synthetic.pdf",
+                          "location": "page 1"
+                        }
+                      ],
+                      "recovered": true
+                    }
+                  ]
+                }
+              ],
+              "medications": [],
+              "diagnostics": [],
+              "scoringTools": [],
+              "formulas": [],
+              "contradictions": []
+            }
+          ],
+          "logs": [
+            {
+              "m": "Reading synthetic.pdf — page 1/1",
+              "t": ""
+            },
+            {
+              "m": "⚠ synthetic.pdf: little or no text layer — 58 character(s) across 1 page(s). This is usually a scanned or photographed PDF. Only extracted text reaches the model, so this file will yield few or no facts. Use a text-based PDF (or OCR it first).",
+              "t": "err"
+            },
+            {
+              "m": "1 chunk(s) · mock [low] · audit: mock [low]",
+              "t": "warn"
+            },
+            {
+              "m": "✓ synthetic.pdf (page 1) — 0 fact(s)",
+              "t": "ok"
+            },
+            {
+              "m": "  ↳ audit: +1 recovered",
+              "t": "ok"
+            },
+            {
+              "m": "  ⚠ synthetic.pdf (page 1): 1 verified quote(s) disagree with the source on a comparator or arrow — check these by eye",
+              "t": "err"
+            },
+            {
+              "m": "Knowledge Base built: 1 condition(s), 1 fact(s).",
+              "t": "ok"
+            }
+          ],
+          "warnings": [
+            "synthetic.pdf: little or no text layer — 58 character(s) across 1 page(s). This is usually a scanned or photographed PDF. Only extracted text reaches the model, so this file will yield few or no facts. Use a text-based PDF (or OCR it first)."
+          ],
+          "error": "",
+          "requests": [
+            {
+              "model": "mock",
+              "sourceParts": [
+                "SOURCE FILE: synthetic.pdf\nSOURCE RANGE: page 1\n\n--- PAGE 1 ---\nHold the synthetic operation when signal level < 60 units."
+              ],
+              "promptSha256": "5e160dd46bbccae60aa476ac9d4d2731aab25c31c5ca0a45e976f361a7536f6f",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            },
+            {
+              "model": "mock",
+              "sourceParts": [
+                "(A) SOURCE CHUNK — synthetic.pdf (page 1)\n\n--- PAGE 1 ---\nHold the synthetic operation when signal level < 60 units.",
+                "(B) FACTS ALREADY EXTRACTED FROM THIS CHUNK\n(nothing was extracted from this chunk)"
+              ],
+              "promptSha256": "9335f2c24af1d946f4e6a0f5d4bb4227d83173a070d097374fa68db25151aece",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            }
+          ],
+          "diag": {
+            "chunks": [
+              {
+                "tag": "synthetic.pdf (page 1)",
+                "file": "synthetic.pdf",
+                "label": "page 1",
+                "chars": 74,
+                "facts": 0,
+                "recovered": 1,
+                "discarded": 0,
+                "quoteMiss": 0,
+                "quoteMissDetail": [],
+                "quoteMissByReason": {},
+                "discardByReason": {},
+                "dehyphSaved": 0,
+                "opMismatch": 1,
+                "opDetail": [
+                  {
+                    "pass": 2,
+                    "quote": "Hold the synthetic operation when signal level > 60 units.",
+                    "fact": "Hold the synthetic operation when signal level > 60 units.",
+                    "latteBucket": "Look"
+                  }
+                ],
+                "failed": false,
+                "density": 0,
+                "flag": null
+              }
+            ],
+            "gaps": [
+              {
+                "condition": "Signal",
+                "total": 1,
+                "missing": [
+                  "BriefPatho",
+                  "Assess",
+                  "Tests",
+                  "Treatments",
+                  "Educate"
+                ]
+              }
+            ],
+            "recovered": 1,
+            "discarded": 0,
+            "quoteMiss": 0,
+            "byReason": {},
+            "discardByReason": {},
+            "dehyphSaved": 0,
+            "opMismatch": 1,
+            "opDetail": [
+              {
+                "pass": 2,
+                "quote": "Hold the synthetic operation when signal level > 60 units.",
+                "fact": "Hold the synthetic operation when signal level > 60 units.",
+                "latteBucket": "Look",
+                "tag": "synthetic.pdf (page 1)"
+              }
+            ],
+            "quality": {
+              "synthetic.pdf": {
+                "pages": 1,
+                "empty": 0,
+                "total": 58,
+                "avg": 58,
+                "perPage": [
+                  {
+                    "n": 1,
+                    "kind": "page",
+                    "chars": 58
+                  }
+                ]
+              }
+            },
+            "composition": {},
+            "chunkChars": 45000,
+            "overlapUnits": 0,
+            "model": "mock",
+            "level": "low",
+            "auto": false,
+            "verified": true,
+            "focus": null
+          },
+          "busy": false,
+          "progress": 100,
+          "selected": "signal"
+        }
+      }
+    },
+    {
+      "id": "source-poison-chain",
+      "category": "policy-limit",
+      "rationale": "Original source says green; red is contradicted even if its attached quote accurately says green. Faithful KB conversion propagates this upstream error.",
+      "status": "pass",
+      "trace": {
+        "independentExpectedVerdict": "unsupported: red contradicts the original source green",
+        "originalSource": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+        "output": {
+          "published": [
+            {
+              "metadata": {
+                "course": "Synthetic",
+                "exam": "Synthetic",
+                "createdAt": "2026-09-18T20:29:46.674Z",
+                "schemaVersion": "1.1"
+              },
+              "sources": [
+                {
+                  "filename": "synthetic.pdf",
+                  "range": "page 1"
+                }
+              ],
+              "conditions": [
+                {
+                  "id": "signal",
+                  "name": "Signal",
+                  "aliases": [],
+                  "facts": [
+                    {
+                      "id": "fact-1",
+                      "text": "The signal lamp is red during readiness.",
+                      "latteBucket": "Look",
+                      "tier": 1,
+                      "factType": "other",
+                      "safetyCritical": false,
+                      "sourceQuote": "The signal lamp is green during readiness.",
+                      "sources": [
+                        {
+                          "filename": "synthetic.pdf",
+                          "location": "page 1"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "medications": [],
+              "diagnostics": [],
+              "scoringTools": [],
+              "formulas": [],
+              "contradictions": []
+            }
+          ],
+          "logs": [
+            {
+              "m": "Reading synthetic.pdf — page 1/1",
+              "t": ""
+            },
+            {
+              "m": "1 chunk(s) · mock [low]",
+              "t": "warn"
+            },
+            {
+              "m": "✓ synthetic.pdf (page 1) — 1 fact(s)",
+              "t": "ok"
+            },
+            {
+              "m": "Knowledge Base built: 1 condition(s), 1 fact(s).",
+              "t": "ok"
+            }
+          ],
+          "warnings": [],
+          "error": "",
+          "requests": [
+            {
+              "model": "mock",
+              "sourceParts": [
+                "SOURCE FILE: synthetic.pdf\nSOURCE RANGE: page 1\n\n--- PAGE 1 ---\nThe signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure."
+              ],
+              "promptSha256": "5e160dd46bbccae60aa476ac9d4d2731aab25c31c5ca0a45e976f361a7536f6f",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            }
+          ],
+          "diag": {
+            "chunks": [
+              {
+                "tag": "synthetic.pdf (page 1)",
+                "file": "synthetic.pdf",
+                "label": "page 1",
+                "chars": 156,
+                "facts": 1,
+                "recovered": 0,
+                "discarded": 0,
+                "quoteMiss": 0,
+                "quoteMissDetail": [],
+                "quoteMissByReason": {},
+                "discardByReason": {},
+                "dehyphSaved": 0,
+                "opMismatch": 0,
+                "opDetail": [],
+                "failed": false,
+                "density": 6.410256410256411,
+                "flag": null
+              }
+            ],
+            "gaps": [
+              {
+                "condition": "Signal",
+                "total": 1,
+                "missing": [
+                  "BriefPatho",
+                  "Assess",
+                  "Tests",
+                  "Treatments",
+                  "Educate"
+                ]
+              }
+            ],
+            "recovered": 0,
+            "discarded": 0,
+            "quoteMiss": 0,
+            "byReason": {},
+            "discardByReason": {},
+            "dehyphSaved": 0,
+            "opMismatch": 0,
+            "opDetail": [],
+            "quality": {
+              "synthetic.pdf": {
+                "pages": 1,
+                "empty": 0,
+                "total": 140,
+                "avg": 140,
+                "perPage": [
+                  {
+                    "n": 1,
+                    "kind": "page",
+                    "chars": 140
+                  }
+                ]
+              }
+            },
+            "composition": {},
+            "chunkChars": 45000,
+            "overlapUnits": 0,
+            "model": "mock",
+            "level": "low",
+            "auto": false,
+            "verified": false,
+            "focus": null
+          },
+          "busy": false,
+          "progress": 100,
+          "selected": "signal"
+        },
+        "downstream": {
+          "snapshot": {
+            "facts": [
+              {
+                "id": "fact-1",
+                "condition": "Signal",
+                "aliases": [],
+                "subtype": "",
+                "text": "The signal lamp is red during readiness.",
+                "sourceQuote": "The signal lamp is green during readiness.",
+                "tier": 1,
+                "bucket": "Look",
+                "sources": [
+                  {
+                    "filename": "synthetic.pdf",
+                    "location": "page 1"
+                  }
+                ]
+              }
+            ],
+            "byId": {
+              "fact-1": {
+                "id": "fact-1",
+                "condition": "Signal",
+                "aliases": [],
+                "subtype": "",
+                "text": "The signal lamp is red during readiness.",
+                "sourceQuote": "The signal lamp is green during readiness.",
+                "tier": 1,
+                "bucket": "Look",
+                "sources": [
+                  {
+                    "filename": "synthetic.pdf",
+                    "location": "page 1"
+                  }
+                ]
+              }
+            }
+          },
+          "packet": "STRUCTURED LATTE KNOWLEDGE BASE — TREAT AS THE SOLE SOURCE MATERIAL\nEach FACT line is already source-grounded and assigned to one LATTE bucket and tier.\nPreserve every fact ID, clinical qualifier, numeric value, source pointer, LATTE bucket, and tier.\nDo not reclassify a fact into another LATTE bucket or lower its tier. Convert facts into Anki notes using the unchanged Anki instructions.\n\n=== CONDITION: Signal ===\nCANONICAL CONDITION TAG: Condition::Signal\nFACT fact-1 | LATTE: Look | Tier: 1 | The signal lamp is red during readiness. | Source: synthetic.pdf, page 1",
+          "chunks": [
+            "STRUCTURED LATTE KNOWLEDGE BASE — TREAT AS THE SOLE SOURCE MATERIAL\nEach FACT line is already source-grounded and assigned to one LATTE bucket and tier.\nPreserve every fact ID, clinical qualifier, numeric value, source pointer, LATTE bucket, and tier.\nDo not reclassify a fact into another LATTE bucket or lower its tier. Convert facts into Anki notes using the unchanged Anki instructions.\n\n=== CONDITION: Signal ===\nCANONICAL CONDITION TAG: Condition::Signal\nFACT fact-1 | LATTE: Look | Tier: 1 | The signal lamp is red during readiness. | Source: synthetic.pdf, page 1"
+          ],
+          "response": "```\nSignal lamp during readiness is {{c1::red}}.||Nursing::LATTE::Look Condition::Signal Tier::1\n```\n```text\nfact-1 -> #1\n```",
+          "parse": [
+            {
+              "id": "synthetic-note-1",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "Signal lamp during readiness is {{c1::red}}.",
+              "extra": "",
+              "tags": "Nursing::LATTE::Look Condition::Signal Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [],
+              "tagFormatContract": "hierarchical-v1"
+            }
+          ],
+          "mappingIssues": [],
+          "attachCoverageToCards": [
+            {
+              "id": "synthetic-note-1",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "Signal lamp during readiness is {{c1::red}}.",
+              "extra": "",
+              "tags": "Nursing::LATTE::Look Condition::Signal Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "ankiDedupeCards": [
+            {
+              "id": "synthetic-note-1",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "Signal lamp during readiness is {{c1::red}}.",
+              "extra": "",
+              "tags": "Nursing::LATTE::Look Condition::Signal Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "ankiNormalizeConditionTags": [
+            {
+              "id": "synthetic-note-1",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "Signal lamp during readiness is {{c1::red}}.",
+              "extra": "",
+              "tags": "Nursing::LATTE::Look Condition::Signal Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "lint": [
+            {
+              "id": "synthetic-note-1",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "Signal lamp during readiness is {{c1::red}}.",
+              "extra": "",
+              "tags": "Nursing::LATTE::Look Condition::Signal Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": [],
+              "lint": []
+            }
+          ],
+          "edit": {
+            "applied": false,
+            "cards": [
+              {
+                "id": "synthetic-note-1",
+                "chunk": 1,
+                "sourceLine": 1,
+                "text": "Signal lamp during readiness is {{c1::red}}.",
+                "extra": "",
+                "tags": "Nursing::LATTE::Look Condition::Signal Tier::1",
+                "pipeCount": 2,
+                "needsReview": false,
+                "keep": true,
+                "factIds": [
+                  "fact-1"
+                ],
+                "tagFormatContract": "hierarchical-v1",
+                "mappingIssues": [],
+                "lint": []
+              }
+            ]
+          },
+          "numeric": [
+            {
+              "status": "No supported numeric values found",
+              "checked": 0,
+              "findings": []
+            }
+          ],
+          "summary": {
+            "valid": [
+              {
+                "id": "synthetic-note-1",
+                "chunk": 1,
+                "sourceLine": 1,
+                "text": "Signal lamp during readiness is {{c1::red}}.",
+                "extra": "",
+                "tags": "Nursing::LATTE::Look Condition::Signal Tier::1",
+                "pipeCount": 2,
+                "needsReview": false,
+                "keep": true,
+                "factIds": [
+                  "fact-1"
+                ],
+                "tagFormatContract": "hierarchical-v1",
+                "mappingIssues": [],
+                "lint": []
+              }
+            ],
+            "kept": [
+              {
+                "id": "synthetic-note-1",
+                "chunk": 1,
+                "sourceLine": 1,
+                "text": "Signal lamp during readiness is {{c1::red}}.",
+                "extra": "",
+                "tags": "Nursing::LATTE::Look Condition::Signal Tier::1",
+                "pipeCount": 2,
+                "needsReview": false,
+                "keep": true,
+                "factIds": [
+                  "fact-1"
+                ],
+                "tagFormatContract": "hierarchical-v1",
+                "mappingIssues": [],
+                "lint": []
+              }
+            ],
+            "invalid": 0,
+            "manualExcluded": 0,
+            "reviews": 1,
+            "total": 1,
+            "coveredCount": 1,
+            "uncovered": [],
+            "entries": [
+              {
+                "id": "synthetic-note-1",
+                "factIds": [
+                  "fact-1"
+                ],
+                "label": "Anki note — Signal lamp during readiness is red."
+              }
+            ]
+          },
+          "preview": [
+            {
+              "text": "Signal lamp during readiness is [...].",
+              "revealed": "Signal lamp during readiness is red.",
+              "extra": ""
+            }
+          ],
+          "export": "#separator:Pipe\n#html:true\n#notetype:Cloze\n#tags column:3\nSignal lamp during readiness is {{c1::red}}.|Source: synthetic.pdf, page 1|Nursing::LATTE::Look Condition::Signal Tier::1"
+        }
+      }
+    },
+    {
+      "id": "A7-fabricated-first-pass-pointer",
+      "category": "unsupported-provenance",
+      "rationale": "The runtime read only synthetic.pdf page 1; a model-authored never-read.pdf page 999 cannot be its evidence pointer.",
+      "status": "fail",
+      "error": {
+        "name": "AssertionError",
+        "message": "first-pass source pointer must bind to the actual source or report mismatch",
+        "actual": false,
+        "expected": true
+      },
+      "trace": {
+        "output": {
+          "published": [
+            {
+              "metadata": {
+                "course": "Synthetic",
+                "exam": "Synthetic",
+                "createdAt": "2026-09-18T20:29:46.678Z",
+                "schemaVersion": "1.1"
+              },
+              "sources": [
+                {
+                  "filename": "synthetic.pdf",
+                  "range": "page 1"
+                }
+              ],
+              "conditions": [
+                {
+                  "id": "signal",
+                  "name": "Signal",
+                  "aliases": [],
+                  "facts": [
+                    {
+                      "id": "fact-1",
+                      "text": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                      "latteBucket": "Look",
+                      "tier": 1,
+                      "factType": "other",
+                      "safetyCritical": true,
+                      "sourceQuote": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                      "sources": [
+                        {
+                          "filename": "never-read.pdf",
+                          "location": "page 999"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "medications": [],
+              "diagnostics": [],
+              "scoringTools": [],
+              "formulas": [],
+              "contradictions": []
+            }
+          ],
+          "logs": [
+            {
+              "m": "Reading synthetic.pdf — page 1/1",
+              "t": ""
+            },
+            {
+              "m": "1 chunk(s) · mock [low]",
+              "t": "warn"
+            },
+            {
+              "m": "✓ synthetic.pdf (page 1) — 1 fact(s)",
+              "t": "ok"
+            },
+            {
+              "m": "Knowledge Base built: 1 condition(s), 1 fact(s).",
+              "t": "ok"
+            }
+          ],
+          "warnings": [],
+          "error": "",
+          "requests": [
+            {
+              "model": "mock",
+              "sourceParts": [
+                "SOURCE FILE: synthetic.pdf\nSOURCE RANGE: page 1\n\n--- PAGE 1 ---\nThe signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure."
+              ],
+              "promptSha256": "5e160dd46bbccae60aa476ac9d4d2731aab25c31c5ca0a45e976f361a7536f6f",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            }
+          ],
+          "diag": {
+            "chunks": [
+              {
+                "tag": "synthetic.pdf (page 1)",
+                "file": "synthetic.pdf",
+                "label": "page 1",
+                "chars": 156,
+                "facts": 1,
+                "recovered": 0,
+                "discarded": 0,
+                "quoteMiss": 0,
+                "quoteMissDetail": [],
+                "quoteMissByReason": {},
+                "discardByReason": {},
+                "dehyphSaved": 0,
+                "opMismatch": 0,
+                "opDetail": [],
+                "failed": false,
+                "density": 6.410256410256411,
+                "flag": null
+              }
+            ],
+            "gaps": [
+              {
+                "condition": "Signal",
+                "total": 1,
+                "missing": [
+                  "BriefPatho",
+                  "Assess",
+                  "Tests",
+                  "Treatments",
+                  "Educate"
+                ]
+              }
+            ],
+            "recovered": 0,
+            "discarded": 0,
+            "quoteMiss": 0,
+            "byReason": {},
+            "discardByReason": {},
+            "dehyphSaved": 0,
+            "opMismatch": 0,
+            "opDetail": [],
+            "quality": {
+              "synthetic.pdf": {
+                "pages": 1,
+                "empty": 0,
+                "total": 140,
+                "avg": 140,
+                "perPage": [
+                  {
+                    "n": 1,
+                    "kind": "page",
+                    "chars": 140
+                  }
+                ]
+              }
+            },
+            "composition": {},
+            "chunkChars": 45000,
+            "overlapUnits": 0,
+            "model": "mock",
+            "level": "low",
+            "auto": false,
+            "verified": false,
+            "focus": null
+          },
+          "busy": false,
+          "progress": 100,
+          "selected": "signal"
+        },
+        "validation": [],
+        "packet": "STRUCTURED LATTE KNOWLEDGE BASE — TREAT AS THE SOLE SOURCE MATERIAL\nEach FACT line is already source-grounded and assigned to one LATTE bucket and tier.\nPreserve every fact ID, clinical qualifier, numeric value, source pointer, LATTE bucket, and tier.\nDo not reclassify a fact into another LATTE bucket or lower its tier. Convert facts into Anki notes using the unchanged Anki instructions.\n\n=== CONDITION: Signal ===\nCANONICAL CONDITION TAG: Condition::Signal\nFACT fact-1 | LATTE: Look | Tier: 1 | The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure. | Source: never-read.pdf, page 999",
+        "downstream": {
+          "snapshot": {
+            "facts": [
+              {
+                "id": "fact-1",
+                "condition": "Signal",
+                "aliases": [],
+                "subtype": "",
+                "text": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                "sourceQuote": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                "tier": 1,
+                "bucket": "Look",
+                "sources": [
+                  {
+                    "filename": "never-read.pdf",
+                    "location": "page 999"
+                  }
+                ]
+              }
+            ],
+            "byId": {
+              "fact-1": {
+                "id": "fact-1",
+                "condition": "Signal",
+                "aliases": [],
+                "subtype": "",
+                "text": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                "sourceQuote": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                "tier": 1,
+                "bucket": "Look",
+                "sources": [
+                  {
+                    "filename": "never-read.pdf",
+                    "location": "page 999"
+                  }
+                ]
+              }
+            }
+          },
+          "packet": "STRUCTURED LATTE KNOWLEDGE BASE — TREAT AS THE SOLE SOURCE MATERIAL\nEach FACT line is already source-grounded and assigned to one LATTE bucket and tier.\nPreserve every fact ID, clinical qualifier, numeric value, source pointer, LATTE bucket, and tier.\nDo not reclassify a fact into another LATTE bucket or lower its tier. Convert facts into Anki notes using the unchanged Anki instructions.\n\n=== CONDITION: Signal ===\nCANONICAL CONDITION TAG: Condition::Signal\nFACT fact-1 | LATTE: Look | Tier: 1 | The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure. | Source: never-read.pdf, page 999",
+          "chunks": [
+            "STRUCTURED LATTE KNOWLEDGE BASE — TREAT AS THE SOLE SOURCE MATERIAL\nEach FACT line is already source-grounded and assigned to one LATTE bucket and tier.\nPreserve every fact ID, clinical qualifier, numeric value, source pointer, LATTE bucket, and tier.\nDo not reclassify a fact into another LATTE bucket or lower its tier. Convert facts into Anki notes using the unchanged Anki instructions.\n\n=== CONDITION: Signal ===\nCANONICAL CONDITION TAG: Condition::Signal\nFACT fact-1 | LATTE: Look | Tier: 1 | The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure. | Source: never-read.pdf, page 999"
+          ],
+          "response": "```\nSignal lamp during readiness is {{c1::green}}.||Nursing::LATTE::Look Condition::Signal Tier::1\n```\n```text\nfact-1 -> #1\n```",
+          "parse": [
+            {
+              "id": "synthetic-note-2",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "Signal lamp during readiness is {{c1::green}}.",
+              "extra": "",
+              "tags": "Nursing::LATTE::Look Condition::Signal Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [],
+              "tagFormatContract": "hierarchical-v1"
+            }
+          ],
+          "mappingIssues": [],
+          "attachCoverageToCards": [
+            {
+              "id": "synthetic-note-2",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "Signal lamp during readiness is {{c1::green}}.",
+              "extra": "",
+              "tags": "Nursing::LATTE::Look Condition::Signal Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "ankiDedupeCards": [
+            {
+              "id": "synthetic-note-2",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "Signal lamp during readiness is {{c1::green}}.",
+              "extra": "",
+              "tags": "Nursing::LATTE::Look Condition::Signal Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "ankiNormalizeConditionTags": [
+            {
+              "id": "synthetic-note-2",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "Signal lamp during readiness is {{c1::green}}.",
+              "extra": "",
+              "tags": "Nursing::LATTE::Look Condition::Signal Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "lint": [
+            {
+              "id": "synthetic-note-2",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "Signal lamp during readiness is {{c1::green}}.",
+              "extra": "",
+              "tags": "Nursing::LATTE::Look Condition::Signal Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": [],
+              "lint": []
+            }
+          ],
+          "edit": {
+            "applied": false,
+            "cards": [
+              {
+                "id": "synthetic-note-2",
+                "chunk": 1,
+                "sourceLine": 1,
+                "text": "Signal lamp during readiness is {{c1::green}}.",
+                "extra": "",
+                "tags": "Nursing::LATTE::Look Condition::Signal Tier::1",
+                "pipeCount": 2,
+                "needsReview": false,
+                "keep": true,
+                "factIds": [
+                  "fact-1"
+                ],
+                "tagFormatContract": "hierarchical-v1",
+                "mappingIssues": [],
+                "lint": []
+              }
+            ]
+          },
+          "numeric": [
+            {
+              "status": "No supported numeric values found",
+              "checked": 0,
+              "findings": []
+            }
+          ],
+          "summary": {
+            "valid": [
+              {
+                "id": "synthetic-note-2",
+                "chunk": 1,
+                "sourceLine": 1,
+                "text": "Signal lamp during readiness is {{c1::green}}.",
+                "extra": "",
+                "tags": "Nursing::LATTE::Look Condition::Signal Tier::1",
+                "pipeCount": 2,
+                "needsReview": false,
+                "keep": true,
+                "factIds": [
+                  "fact-1"
+                ],
+                "tagFormatContract": "hierarchical-v1",
+                "mappingIssues": [],
+                "lint": []
+              }
+            ],
+            "kept": [
+              {
+                "id": "synthetic-note-2",
+                "chunk": 1,
+                "sourceLine": 1,
+                "text": "Signal lamp during readiness is {{c1::green}}.",
+                "extra": "",
+                "tags": "Nursing::LATTE::Look Condition::Signal Tier::1",
+                "pipeCount": 2,
+                "needsReview": false,
+                "keep": true,
+                "factIds": [
+                  "fact-1"
+                ],
+                "tagFormatContract": "hierarchical-v1",
+                "mappingIssues": [],
+                "lint": []
+              }
+            ],
+            "invalid": 0,
+            "manualExcluded": 0,
+            "reviews": 1,
+            "total": 1,
+            "coveredCount": 1,
+            "uncovered": [],
+            "entries": [
+              {
+                "id": "synthetic-note-2",
+                "factIds": [
+                  "fact-1"
+                ],
+                "label": "Anki note — Signal lamp during readiness is green."
+              }
+            ]
+          },
+          "preview": [
+            {
+              "text": "Signal lamp during readiness is [...].",
+              "revealed": "Signal lamp during readiness is green.",
+              "extra": ""
+            }
+          ],
+          "export": "#separator:Pipe\n#html:true\n#notetype:Cloze\n#tags column:3\nSignal lamp during readiness is {{c1::green}}.|Source: never-read.pdf, page 999|Nursing::LATTE::Look Condition::Signal Tier::1"
+        },
+        "actualPointer": {
+          "filename": "never-read.pdf",
+          "location": "page 999"
+        }
+      }
+    },
+    {
+      "id": "A8-absent-quote-status",
+      "category": "policy-limit",
+      "rationale": "An absent quote cannot establish source support. Current quote-miss count excludes absent anchors, but structural validation separately warns.",
+      "status": "pass",
+      "trace": {
+        "output": {
+          "published": [
+            {
+              "metadata": {
+                "course": "Synthetic",
+                "exam": "Synthetic",
+                "createdAt": "2026-09-18T20:29:46.679Z",
+                "schemaVersion": "1.1"
+              },
+              "sources": [
+                {
+                  "filename": "synthetic.pdf",
+                  "range": "page 1"
+                }
+              ],
+              "conditions": [
+                {
+                  "id": "signal",
+                  "name": "Signal",
+                  "aliases": [],
+                  "facts": [
+                    {
+                      "id": "fact-1",
+                      "text": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                      "latteBucket": "Look",
+                      "tier": 1,
+                      "factType": "other",
+                      "safetyCritical": false,
+                      "sourceQuote": "",
+                      "sources": [
+                        {
+                          "filename": "synthetic.pdf",
+                          "location": "page 1"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "medications": [],
+              "diagnostics": [],
+              "scoringTools": [],
+              "formulas": [],
+              "contradictions": []
+            }
+          ],
+          "logs": [
+            {
+              "m": "Reading synthetic.pdf — page 1/1",
+              "t": ""
+            },
+            {
+              "m": "1 chunk(s) · mock [low]",
+              "t": "warn"
+            },
+            {
+              "m": "✓ synthetic.pdf (page 1) — 1 fact(s)",
+              "t": "ok"
+            },
+            {
+              "m": "Knowledge Base built: 1 condition(s), 1 fact(s).",
+              "t": "ok"
+            }
+          ],
+          "warnings": [],
+          "error": "",
+          "requests": [
+            {
+              "model": "mock",
+              "sourceParts": [
+                "SOURCE FILE: synthetic.pdf\nSOURCE RANGE: page 1\n\n--- PAGE 1 ---\nThe signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure."
+              ],
+              "promptSha256": "5e160dd46bbccae60aa476ac9d4d2731aab25c31c5ca0a45e976f361a7536f6f",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            }
+          ],
+          "diag": {
+            "chunks": [
+              {
+                "tag": "synthetic.pdf (page 1)",
+                "file": "synthetic.pdf",
+                "label": "page 1",
+                "chars": 156,
+                "facts": 1,
+                "recovered": 0,
+                "discarded": 0,
+                "quoteMiss": 0,
+                "quoteMissDetail": [],
+                "quoteMissByReason": {},
+                "discardByReason": {},
+                "dehyphSaved": 0,
+                "opMismatch": 0,
+                "opDetail": [],
+                "failed": false,
+                "density": 6.410256410256411,
+                "flag": null
+              }
+            ],
+            "gaps": [
+              {
+                "condition": "Signal",
+                "total": 1,
+                "missing": [
+                  "BriefPatho",
+                  "Assess",
+                  "Tests",
+                  "Treatments",
+                  "Educate"
+                ]
+              }
+            ],
+            "recovered": 0,
+            "discarded": 0,
+            "quoteMiss": 0,
+            "byReason": {},
+            "discardByReason": {},
+            "dehyphSaved": 0,
+            "opMismatch": 0,
+            "opDetail": [],
+            "quality": {
+              "synthetic.pdf": {
+                "pages": 1,
+                "empty": 0,
+                "total": 140,
+                "avg": 140,
+                "perPage": [
+                  {
+                    "n": 1,
+                    "kind": "page",
+                    "chars": 140
+                  }
+                ]
+              }
+            },
+            "composition": {},
+            "chunkChars": 45000,
+            "overlapUnits": 0,
+            "model": "mock",
+            "level": "low",
+            "auto": false,
+            "verified": false,
+            "focus": null
+          },
+          "busy": false,
+          "progress": 100,
+          "selected": "signal"
+        },
+        "validation": [
+          {
+            "severity": "warning",
+            "condition": "Signal",
+            "factId": "fact-1",
+            "message": "Fact has no short verbatim source anchor; NCLEX grounding will fall back to the concise fact text."
+          }
+        ],
+        "uiStaticEvidence": {
+          "line": 3047,
+          "condition": "diag.quoteMiss ? warning : green every-first-pass-quote-located",
+          "browserExecuted": false
+        }
+      }
+    },
+    {
+      "id": "quality-probe-failure",
+      "category": "code-path-concern",
+      "rationale": "A failed quality probe is unknown, not successful scan quality; currently exceptions vanish.",
+      "status": "fail",
+      "error": {
+        "name": "AssertionError",
+        "message": "quality probe failure is silent",
+        "actual": false,
+        "expected": true
+      },
+      "trace": {
+        "output": {
+          "published": [
+            {
+              "metadata": {
+                "course": "Synthetic",
+                "exam": "Synthetic",
+                "createdAt": "2026-09-18T20:29:46.680Z",
+                "schemaVersion": "1.1"
+              },
+              "sources": [
+                {
+                  "filename": "synthetic.pdf",
+                  "range": "page 1"
+                }
+              ],
+              "conditions": [
+                {
+                  "id": "signal",
+                  "name": "Signal",
+                  "aliases": [],
+                  "facts": [
+                    {
+                      "id": "fact-1",
+                      "text": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                      "latteBucket": "Look",
+                      "tier": 1,
+                      "factType": "other",
+                      "safetyCritical": false,
+                      "sourceQuote": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                      "sources": [
+                        {
+                          "filename": "synthetic.pdf",
+                          "location": "page 1"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "medications": [],
+              "diagnostics": [],
+              "scoringTools": [],
+              "formulas": [],
+              "contradictions": []
+            }
+          ],
+          "logs": [
+            {
+              "m": "Reading synthetic.pdf — page 1/1",
+              "t": ""
+            },
+            {
+              "m": "1 chunk(s) · mock [low]",
+              "t": "warn"
+            },
+            {
+              "m": "✓ synthetic.pdf (page 1) — 1 fact(s)",
+              "t": "ok"
+            },
+            {
+              "m": "Knowledge Base built: 1 condition(s), 1 fact(s).",
+              "t": "ok"
+            }
+          ],
+          "warnings": [],
+          "error": "",
+          "requests": [
+            {
+              "model": "mock",
+              "sourceParts": [
+                "SOURCE FILE: synthetic.pdf\nSOURCE RANGE: page 1\n\n--- PAGE 1 ---\nThe signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure."
+              ],
+              "promptSha256": "5e160dd46bbccae60aa476ac9d4d2731aab25c31c5ca0a45e976f361a7536f6f",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            }
+          ],
+          "diag": {
+            "chunks": [
+              {
+                "tag": "synthetic.pdf (page 1)",
+                "file": "synthetic.pdf",
+                "label": "page 1",
+                "chars": 156,
+                "facts": 1,
+                "recovered": 0,
+                "discarded": 0,
+                "quoteMiss": 0,
+                "quoteMissDetail": [],
+                "quoteMissByReason": {},
+                "discardByReason": {},
+                "dehyphSaved": 0,
+                "opMismatch": 0,
+                "opDetail": [],
+                "failed": false,
+                "density": 6.410256410256411,
+                "flag": null
+              }
+            ],
+            "gaps": [
+              {
+                "condition": "Signal",
+                "total": 1,
+                "missing": [
+                  "BriefPatho",
+                  "Assess",
+                  "Tests",
+                  "Treatments",
+                  "Educate"
+                ]
+              }
+            ],
+            "recovered": 0,
+            "discarded": 0,
+            "quoteMiss": 0,
+            "byReason": {},
+            "discardByReason": {},
+            "dehyphSaved": 0,
+            "opMismatch": 0,
+            "opDetail": [],
+            "quality": {},
+            "composition": {},
+            "chunkChars": 45000,
+            "overlapUnits": 0,
+            "model": "mock",
+            "level": "low",
+            "auto": false,
+            "verified": false,
+            "focus": null
+          },
+          "busy": false,
+          "progress": 100,
+          "selected": "signal"
+        },
+        "actualQuality": {}
+      }
+    },
+    {
+      "id": "MAX_TOKENS-split-control",
+      "category": "control",
+      "rationale": "Truncated primary JSON must requeue both source halves instead of publishing partial JSON.",
+      "status": "pass",
+      "trace": {
+        "output": {
+          "published": [
+            {
+              "metadata": {
+                "course": "Synthetic",
+                "exam": "Synthetic",
+                "createdAt": "2026-09-18T20:29:46.680Z",
+                "schemaVersion": "1.1"
+              },
+              "sources": [
+                {
+                  "filename": "synthetic.pdf",
+                  "range": "page 1"
+                },
+                {
+                  "filename": "synthetic.pdf",
+                  "range": "page 2"
+                }
+              ],
+              "conditions": [
+                {
+                  "id": "signal",
+                  "name": "Signal",
+                  "aliases": [],
+                  "facts": [
+                    {
+                      "id": "fact-1",
+                      "text": "First complete chunk.",
+                      "latteBucket": "Look",
+                      "tier": 1,
+                      "factType": "other",
+                      "safetyCritical": false,
+                      "sourceQuote": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                      "sources": [
+                        {
+                          "filename": "synthetic.pdf",
+                          "location": "page 1"
+                        }
+                      ]
+                    },
+                    {
+                      "id": "fact-2",
+                      "text": "Second complete chunk.",
+                      "latteBucket": "Look",
+                      "tier": 1,
+                      "factType": "other",
+                      "safetyCritical": false,
+                      "sourceQuote": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                      "sources": [
+                        {
+                          "filename": "synthetic.pdf",
+                          "location": "page 1"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "medications": [],
+              "diagnostics": [],
+              "scoringTools": [],
+              "formulas": [],
+              "contradictions": []
+            }
+          ],
+          "logs": [
+            {
+              "m": "Reading synthetic.pdf — page 2/2",
+              "t": ""
+            },
+            {
+              "m": "1 chunk(s) · mock [low]",
+              "t": "warn"
+            },
+            {
+              "m": "↯ synthetic.pdf (pages 1–2) hit the token ceiling — splitting into page 1 + page 2 and retrying",
+              "t": "warn"
+            },
+            {
+              "m": "✓ synthetic.pdf (page 1) — 1 fact(s)",
+              "t": "ok"
+            },
+            {
+              "m": "✓ synthetic.pdf (page 2) — 1 fact(s)",
+              "t": "ok"
+            },
+            {
+              "m": "Knowledge Base built: 1 condition(s), 2 fact(s).",
+              "t": "ok"
+            }
+          ],
+          "warnings": [],
+          "error": "",
+          "requests": [
+            {
+              "model": "mock",
+              "sourceParts": [
+                "SOURCE FILE: synthetic.pdf\nSOURCE RANGE: pages 1–2\n\n--- PAGE 1 ---\nThe signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.\n\n--- PAGE 2 ---\nThe signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure."
+              ],
+              "promptSha256": "d2198fa6b2fdc49189e8b7a6d45aaf15111fbad385eee64735340026f7b8a3b8",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            },
+            {
+              "model": "mock",
+              "sourceParts": [
+                "SOURCE FILE: synthetic.pdf\nSOURCE RANGE: page 1\n\n--- PAGE 1 ---\nThe signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure."
+              ],
+              "promptSha256": "5e160dd46bbccae60aa476ac9d4d2731aab25c31c5ca0a45e976f361a7536f6f",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            },
+            {
+              "model": "mock",
+              "sourceParts": [
+                "SOURCE FILE: synthetic.pdf\nSOURCE RANGE: page 2\n\n--- PAGE 2 ---\nThe signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure."
+              ],
+              "promptSha256": "d51b066fd66f7469ead6e883ebdf31199d663a449b5c006af1ff022d9352e9a5",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            }
+          ],
+          "diag": {
+            "chunks": [
+              {
+                "tag": "synthetic.pdf (page 1)",
+                "file": "synthetic.pdf",
+                "label": "page 1",
+                "chars": 156,
+                "facts": 1,
+                "recovered": 0,
+                "discarded": 0,
+                "quoteMiss": 0,
+                "quoteMissDetail": [],
+                "quoteMissByReason": {},
+                "discardByReason": {},
+                "dehyphSaved": 0,
+                "opMismatch": 0,
+                "opDetail": [],
+                "failed": false,
+                "density": 6.410256410256411,
+                "flag": null
+              },
+              {
+                "tag": "synthetic.pdf (page 2)",
+                "file": "synthetic.pdf",
+                "label": "page 2",
+                "chars": 156,
+                "facts": 1,
+                "recovered": 0,
+                "discarded": 0,
+                "quoteMiss": 0,
+                "quoteMissDetail": [],
+                "quoteMissByReason": {},
+                "discardByReason": {},
+                "dehyphSaved": 0,
+                "opMismatch": 0,
+                "opDetail": [],
+                "failed": false,
+                "density": 6.410256410256411,
+                "flag": null
+              }
+            ],
+            "gaps": [
+              {
+                "condition": "Signal",
+                "total": 2,
+                "missing": [
+                  "BriefPatho",
+                  "Assess",
+                  "Tests",
+                  "Treatments",
+                  "Educate"
+                ]
+              }
+            ],
+            "recovered": 0,
+            "discarded": 0,
+            "quoteMiss": 0,
+            "byReason": {},
+            "discardByReason": {},
+            "dehyphSaved": 0,
+            "opMismatch": 0,
+            "opDetail": [],
+            "quality": {
+              "synthetic.pdf": {
+                "pages": 2,
+                "empty": 0,
+                "total": 280,
+                "avg": 140,
+                "perPage": [
+                  {
+                    "n": 1,
+                    "kind": "page",
+                    "chars": 140
+                  },
+                  {
+                    "n": 2,
+                    "kind": "page",
+                    "chars": 140
+                  }
+                ]
+              }
+            },
+            "composition": {},
+            "chunkChars": 45000,
+            "overlapUnits": 0,
+            "model": "mock",
+            "level": "low",
+            "auto": false,
+            "verified": false,
+            "focus": null
+          },
+          "busy": false,
+          "progress": 100,
+          "selected": "signal"
+        }
+      }
+    },
+    {
+      "id": "publication-control",
+      "category": "control",
+      "rationale": "Cancellation after the API starts must suppress late KB publication.",
+      "status": "pass",
+      "trace": {
+        "output": {
+          "published": [],
+          "logs": [
+            {
+              "m": "Reading synthetic.pdf — page 1/1",
+              "t": ""
+            },
+            {
+              "m": "1 chunk(s) · mock [low]",
+              "t": "warn"
+            }
+          ],
+          "warnings": [],
+          "error": "",
+          "requests": [
+            {
+              "model": "mock",
+              "sourceParts": [
+                "SOURCE FILE: synthetic.pdf\nSOURCE RANGE: page 1\n\n--- PAGE 1 ---\nThe signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure."
+              ],
+              "promptSha256": "5e160dd46bbccae60aa476ac9d4d2731aab25c31c5ca0a45e976f361a7536f6f",
+              "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 65536,
+                "thinkingConfig": {
+                  "thinkingLevel": "low"
+                }
+              }
+            }
+          ],
+          "diag": null,
+          "busy": true,
+          "progress": 0
+        }
+      }
+    },
+    {
+      "id": "import-size-control",
+      "category": "control",
+      "rationale": "Import size gate must run before reading a large file.",
+      "status": "pass",
+      "trace": {
+        "output": {
+          "published": [],
+          "logs": [],
+          "warnings": [],
+          "error": "Import failed: File is 26214401 — larger than the 26214400 import limit.",
+          "requests": [],
+          "diag": null,
+          "busy": false
+        },
+        "reads": 0
+      }
+    },
+    {
+      "id": "persistence-order-control",
+      "category": "control",
+      "rationale": "Queued writes capture immutable snapshots and complete in order; ambiguous different-writer records stay unresolved.",
+      "status": "pass",
+      "trace": {
+        "writes": [
+          {
+            "kb": {
+              "metadata": {
+                "course": "Synthetic"
+              },
+              "conditions": [
+                {
+                  "id": "signal",
+                  "name": "Signal",
+                  "aliases": [],
+                  "facts": [
+                    {
+                      "id": "fact-1",
+                      "text": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                      "latteBucket": "Look",
+                      "tier": 1,
+                      "factType": "other",
+                      "safetyCritical": false,
+                      "sourceQuote": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                      "sources": [
+                        {
+                          "filename": "synthetic.pdf",
+                          "location": "page 1"
+                        }
+                      ],
+                      "sourcePointer": {
+                        "filename": "synthetic.pdf",
+                        "location": "page 1"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "sources": []
+            },
+            "meta": {
+              "writer": "synthetic",
+              "sequence": 1,
+              "parent": "null",
+              "deleted": false,
+              "bytes": "{\"metadata\":{\"course\":\"Synthetic\"},\"conditions\":[{\"id\":\"signal\",\"name\":\"Signal\",\"aliases\":[],\"facts\":[{\"id\":\"fact-1\",\"text\":\"The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.\",\"latteBucket\":\"Look\",\"tier\":1,\"factType\":\"other\",\"safetyCritical\":false,\"sourceQuote\":\"The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.\",\"sources\":[{\"filename\":\"synthetic.pdf\",\"location\":\"page 1\"}],\"sourcePointer\":{\"filename\":\"synthetic.pdf\",\"location\":\"page 1\"}}]}],\"sources\":[]}"
+            }
+          },
+          {
+            "kb": {
+              "metadata": {
+                "course": "Synthetic"
+              },
+              "conditions": [
+                {
+                  "id": "signal",
+                  "name": "Signal",
+                  "aliases": [],
+                  "facts": [
+                    {
+                      "id": "fact-1",
+                      "text": "MUTATED",
+                      "latteBucket": "Look",
+                      "tier": 1,
+                      "factType": "other",
+                      "safetyCritical": false,
+                      "sourceQuote": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                      "sources": [
+                        {
+                          "filename": "synthetic.pdf",
+                          "location": "page 1"
+                        }
+                      ],
+                      "sourcePointer": {
+                        "filename": "synthetic.pdf",
+                        "location": "page 1"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "sources": []
+            },
+            "meta": {
+              "writer": "synthetic",
+              "sequence": 2,
+              "parent": "[\"synthetic\",1]",
+              "deleted": false,
+              "bytes": "{\"metadata\":{\"course\":\"Synthetic\"},\"conditions\":[{\"id\":\"signal\",\"name\":\"Signal\",\"aliases\":[],\"facts\":[{\"id\":\"fact-1\",\"text\":\"MUTATED\",\"latteBucket\":\"Look\",\"tier\":1,\"factType\":\"other\",\"safetyCritical\":false,\"sourceQuote\":\"The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.\",\"sources\":[{\"filename\":\"synthetic.pdf\",\"location\":\"page 1\"}],\"sourcePointer\":{\"filename\":\"synthetic.pdf\",\"location\":\"page 1\"}}]}],\"sources\":[]}"
+            }
+          }
+        ],
+        "conflict": {
+          "record": null,
+          "choices": [
+            {
+              "kb": {
+                "a": 1
+              },
+              "meta": {
+                "writer": "one",
+                "sequence": 1
+              }
+            },
+            {
+              "kb": {
+                "a": 2
+              },
+              "meta": {
+                "writer": "two",
+                "sequence": 2
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "persistence-transaction-control",
+      "category": "control",
+      "rationale": "The real transaction helper must wait for completion and reject aborts, always closing its handle.",
+      "status": "pass",
+      "trace": {
+        "actual": {
+          "settledOnlyAfterCommit": true,
+          "closed": 2,
+          "abortRejected": true
+        }
+      }
+    },
+    {
+      "id": "persistence-reload-loss",
+      "category": "silent-content-change",
+      "rationale": "Persistence writes the complete fact; reload sanitizer must not silently remove a final exception from the saved KB.",
+      "status": "fail",
+      "error": {
+        "name": "AssertionError",
+        "message": "actual reload normalizer truncates a previously persisted valid fact\n\n4000 !== 4716\n",
+        "actual": 4000,
+        "expected": 4716
+      },
+      "trace": {
+        "beforeLength": 4716,
+        "savedLength": 4716,
+        "reloadedLength": 4000,
+        "dropped": {
+          "conditions": 0,
+          "facts": 0
+        }
+      }
+    },
+    {
+      "id": "persistence-id-scope",
+      "category": "policy-limit",
+      "rationale": "fact-N is snapshot-local; importing an ID gap deliberately renumbers it. It cannot independently identify saved external evidence.",
+      "status": "pass",
+      "trace": {
+        "input": {
+          "metadata": {
+            "course": "Synthetic"
+          },
+          "conditions": [
+            {
+              "id": "signal",
+              "name": "Signal",
+              "aliases": [],
+              "facts": [
+                {
+                  "id": "fact-7",
+                  "text": "First fact.",
+                  "latteBucket": "Look",
+                  "tier": 1,
+                  "factType": "other",
+                  "safetyCritical": false,
+                  "sourceQuote": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                  "sources": [
+                    {
+                      "filename": "synthetic.pdf",
+                      "location": "page 1"
+                    }
+                  ],
+                  "sourcePointer": {
+                    "filename": "synthetic.pdf",
+                    "location": "page 1"
+                  }
+                },
+                {
+                  "id": "fact-42",
+                  "text": "Second fact.",
+                  "latteBucket": "Look",
+                  "tier": 1,
+                  "factType": "other",
+                  "safetyCritical": false,
+                  "sourceQuote": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                  "sources": [
+                    {
+                      "filename": "synthetic.pdf",
+                      "location": "page 1"
+                    }
+                  ],
+                  "sourcePointer": {
+                    "filename": "synthetic.pdf",
+                    "location": "page 1"
+                  }
+                }
+              ]
+            }
+          ],
+          "sources": []
+        },
+        "output": {
+          "kb": {
+            "metadata": {
+              "course": "Synthetic",
+              "exam": "",
+              "createdAt": "",
+              "schemaVersion": "1.1"
+            },
+            "sources": [],
+            "conditions": [
+              {
+                "id": "signal",
+                "name": "Signal",
+                "aliases": [],
+                "facts": [
+                  {
+                    "id": "fact-1",
+                    "text": "First fact.",
+                    "tier": 1,
+                    "latteBucket": "Look",
+                    "subtype": null,
+                    "factType": "other",
+                    "safetyCritical": false,
+                    "recovered": false,
+                    "sourceQuote": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                    "sources": [
+                      {
+                        "filename": "synthetic.pdf",
+                        "location": "page 1"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "fact-2",
+                    "text": "Second fact.",
+                    "tier": 1,
+                    "latteBucket": "Look",
+                    "subtype": null,
+                    "factType": "other",
+                    "safetyCritical": false,
+                    "recovered": false,
+                    "sourceQuote": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                    "sources": [
+                      {
+                        "filename": "synthetic.pdf",
+                        "location": "page 1"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "medications": [],
+            "diagnostics": [],
+            "scoringTools": [],
+            "formulas": [],
+            "contradictions": []
+          },
+          "dropped": {
+            "conditions": 0,
+            "facts": 0
+          }
+        }
+      }
+    }
+  ],
+  "mutations": [
+    {
+      "name": "pass2-quote-discard",
+      "original": "if(!kbQuoteInSource(f.sourceQuote,srcNorm,srcDehyph)){discarded++;noteMiss(2,f);continue;}",
+      "replacement": "if(false){discarded++;noteMiss(2,f);continue;}",
+      "killed": true,
+      "message": "Expected values to be strictly equal:\n\n2 !== 1\n",
+      "trace": {
+        "published": [
+          {
+            "metadata": {
+              "course": "Synthetic",
+              "exam": "Synthetic",
+              "createdAt": "2026-09-18T20:29:46.683Z",
+              "schemaVersion": "1.1"
+            },
+            "sources": [
+              {
+                "filename": "synthetic.pdf",
+                "range": "page 1"
+              },
+              {
+                "filename": "synthetic.pdf",
+                "range": "page 1 (recovered)"
+              }
+            ],
+            "conditions": [
+              {
+                "id": "signal",
+                "name": "Signal",
+                "aliases": [],
+                "facts": [
+                  {
+                    "id": "fact-1",
+                    "text": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                    "latteBucket": "Look",
+                    "tier": 1,
+                    "factType": "other",
+                    "safetyCritical": false,
+                    "sourceQuote": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                    "sources": [
+                      {
+                        "filename": "synthetic.pdf",
+                        "location": "page 1"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "fact-2",
+                    "text": "The signal is ultraviolet.",
+                    "latteBucket": "Look",
+                    "tier": 1,
+                    "factType": "other",
+                    "safetyCritical": false,
+                    "sourceQuote": "Ultraviolet mode is mandatory for every signal.",
+                    "sources": [
+                      {
+                        "filename": "synthetic.pdf",
+                        "location": "page 1"
+                      }
+                    ],
+                    "recovered": true
+                  }
+                ]
+              }
+            ],
+            "medications": [],
+            "diagnostics": [],
+            "scoringTools": [],
+            "formulas": [],
+            "contradictions": []
+          }
+        ],
+        "logs": [
+          {
+            "m": "Reading synthetic.pdf — page 1/1",
+            "t": ""
+          },
+          {
+            "m": "1 chunk(s) · mock [low] · audit: mock [low]",
+            "t": "warn"
+          },
+          {
+            "m": "✓ synthetic.pdf (page 1) — 1 fact(s)",
+            "t": "ok"
+          },
+          {
+            "m": "  ↳ audit: +1 recovered",
+            "t": "ok"
+          },
+          {
+            "m": "Knowledge Base built: 1 condition(s), 2 fact(s).",
+            "t": "ok"
+          }
+        ],
+        "warnings": [],
+        "error": "",
+        "requests": [
+          {
+            "model": "mock",
+            "sourceParts": [
+              "SOURCE FILE: synthetic.pdf\nSOURCE RANGE: page 1\n\n--- PAGE 1 ---\nThe signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure."
+            ],
+            "promptSha256": "5e160dd46bbccae60aa476ac9d4d2731aab25c31c5ca0a45e976f361a7536f6f",
+            "generationConfig": {
+              "responseMimeType": "application/json",
+              "maxOutputTokens": 65536,
+              "thinkingConfig": {
+                "thinkingLevel": "low"
+              }
+            }
+          },
+          {
+            "model": "mock",
+            "sourceParts": [
+              "(A) SOURCE CHUNK — synthetic.pdf (page 1)\n\n--- PAGE 1 ---\nThe signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+              "(B) FACTS ALREADY EXTRACTED FROM THIS CHUNK\n# Signal\n- [Look] The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure."
+            ],
+            "promptSha256": "9335f2c24af1d946f4e6a0f5d4bb4227d83173a070d097374fa68db25151aece",
+            "generationConfig": {
+              "responseMimeType": "application/json",
+              "maxOutputTokens": 65536,
+              "thinkingConfig": {
+                "thinkingLevel": "low"
+              }
+            }
+          }
+        ],
+        "diag": {
+          "chunks": [
+            {
+              "tag": "synthetic.pdf (page 1)",
+              "file": "synthetic.pdf",
+              "label": "page 1",
+              "chars": 156,
+              "facts": 1,
+              "recovered": 1,
+              "discarded": 0,
+              "quoteMiss": 0,
+              "quoteMissDetail": [],
+              "quoteMissByReason": {},
+              "discardByReason": {},
+              "dehyphSaved": 1,
+              "opMismatch": 0,
+              "opDetail": [],
+              "failed": false,
+              "density": 6.410256410256411,
+              "flag": null
+            }
+          ],
+          "gaps": [
+            {
+              "condition": "Signal",
+              "total": 2,
+              "missing": [
+                "BriefPatho",
+                "Assess",
+                "Tests",
+                "Treatments",
+                "Educate"
+              ]
+            }
+          ],
+          "recovered": 1,
+          "discarded": 0,
+          "quoteMiss": 0,
+          "byReason": {},
+          "discardByReason": {},
+          "dehyphSaved": 1,
+          "opMismatch": 0,
+          "opDetail": [],
+          "quality": {
+            "synthetic.pdf": {
+              "pages": 1,
+              "empty": 0,
+              "total": 140,
+              "avg": 140,
+              "perPage": [
+                {
+                  "n": 1,
+                  "kind": "page",
+                  "chars": 140
+                }
+              ]
+            }
+          },
+          "composition": {},
+          "chunkChars": 45000,
+          "overlapUnits": 0,
+          "model": "mock",
+          "level": "low",
+          "auto": false,
+          "verified": true,
+          "focus": null
+        },
+        "busy": false,
+        "progress": 100,
+        "selected": "signal"
+      }
+    },
+    {
+      "name": "final-publication-guard",
+      "original": "if(!replacementSlot.current.current(run))return;\n      K.setKnowledgeBase(kb);",
+      "replacement": "if(false)return;\n      K.setKnowledgeBase(kb);",
+      "killed": true,
+      "message": "Expected values to be strictly equal:\n\n1 !== 0\n",
+      "trace": {
+        "published": [
+          {
+            "metadata": {
+              "course": "Synthetic",
+              "exam": "Synthetic",
+              "createdAt": "2026-09-18T20:29:46.684Z",
+              "schemaVersion": "1.1"
+            },
+            "sources": [
+              {
+                "filename": "synthetic.pdf",
+                "range": "page 1"
+              }
+            ],
+            "conditions": [
+              {
+                "id": "signal",
+                "name": "Signal",
+                "aliases": [],
+                "facts": [
+                  {
+                    "id": "fact-1",
+                    "text": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                    "latteBucket": "Look",
+                    "tier": 1,
+                    "factType": "other",
+                    "safetyCritical": false,
+                    "sourceQuote": "The signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure.",
+                    "sources": [
+                      {
+                        "filename": "synthetic.pdf",
+                        "location": "page 1"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "medications": [],
+            "diagnostics": [],
+            "scoringTools": [],
+            "formulas": [],
+            "contradictions": []
+          }
+        ],
+        "logs": [
+          {
+            "m": "Reading synthetic.pdf — page 1/1",
+            "t": ""
+          },
+          {
+            "m": "1 chunk(s) · mock [low]",
+            "t": "warn"
+          }
+        ],
+        "warnings": [],
+        "error": "",
+        "requests": [
+          {
+            "model": "mock",
+            "sourceParts": [
+              "SOURCE FILE: synthetic.pdf\nSOURCE RANGE: page 1\n\n--- PAGE 1 ---\nThe signal lamp is green during readiness. The alarm remains off during readiness. The indicator is observed before the synthetic procedure."
+            ],
+            "promptSha256": "5e160dd46bbccae60aa476ac9d4d2731aab25c31c5ca0a45e976f361a7536f6f",
+            "generationConfig": {
+              "responseMimeType": "application/json",
+              "maxOutputTokens": 65536,
+              "thinkingConfig": {
+                "thinkingLevel": "low"
+              }
+            }
+          }
+        ],
+        "diag": null,
+        "busy": true,
+        "progress": 0
+      }
+    }
+  ],
+  "counts": {
+    "tests": 32,
+    "pass": 18,
+    "fail": 14,
+    "mutationKilled": 2,
+    "mutationSurvived": 0
+  },
+  "limits": [
+    "No private source material",
+    "No live API",
+    "Native PDF/PPTX extraction mocked at boundary",
+    "Native IndexedDB/browser/React lifecycle not executed",
+    "Source-poison chain calls shipped stages directly; full Anki handler covered by separate lifecycle suite",
+    "No clinical correctness claim"
+  ]
+}

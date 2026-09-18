@@ -1,0 +1,252 @@
+{
+  "rule": "Three independent lenses; majority refute excludes a defect. Contract-policy dissents preserved.",
+  "reviewers": [
+    "code",
+    "guards",
+    "expectations"
+  ],
+  "rows": [
+    {
+      "id": "A1",
+      "claim": "Non-pipe response content is silently discarded; qualifiers can vanish and later note line numbers attach the wrong fact.",
+      "suite": "transform",
+      "votes": {
+        "code": "confirm-defect",
+        "guards": "confirm-defect",
+        "expectations": "confirm-defect"
+      },
+      "outcome": "A: unanimous"
+    },
+    {
+      "id": "A2",
+      "claim": "KB import/restore silently truncates text/quotes and drops conditions/facts above caps.",
+      "suite": "source",
+      "votes": {
+        "code": "confirm-defect",
+        "guards": "confirm-defect",
+        "expectations": "confirm-defect"
+      },
+      "outcome": "A: unanimous"
+    },
+    {
+      "id": "A3",
+      "claim": "Numeric tokenization drops Unicode minus and unit exponents; can also warn falsely for equivalent ASCII/Unicode negative forms.",
+      "suite": "transform",
+      "votes": {
+        "code": "confirm-defect",
+        "guards": "confirm-defect",
+        "expectations": "confirm-defect"
+      },
+      "outcome": "A: unanimous"
+    },
+    {
+      "id": "A4",
+      "claim": "Numeric hints are not checked because only revealed text enters scanner. Determine defect versus explicit narrow advisory scope.",
+      "suite": "transform",
+      "votes": {
+        "code": "rescope-policy",
+        "guards": "rescope-policy",
+        "expectations": "rescope-policy"
+      },
+      "outcome": "C: policy/limit or not reproduced"
+    },
+    {
+      "id": "A5",
+      "claim": "A later nested malformed primary extraction conditions:[null] prevents committing earlier successful chunks, unlike normal API error.",
+      "suite": "source",
+      "votes": {
+        "code": "confirm-defect",
+        "guards": "confirm-defect",
+        "expectations": "confirm-defect"
+      },
+      "outcome": "A: unanimous"
+    },
+    {
+      "id": "A6",
+      "claim": "Wrong-shaped omission response becomes +0 recovered rather than inconclusive.",
+      "suite": "source",
+      "votes": {
+        "code": "confirm-defect",
+        "guards": "confirm-defect",
+        "expectations": "confirm-defect"
+      },
+      "outcome": "A: unanimous"
+    },
+    {
+      "id": "A7",
+      "claim": "A model-controlled first-pass pointer names a never-read file/page and reaches Anki source export.",
+      "suite": "source",
+      "votes": {
+        "code": "confirm-defect",
+        "guards": "confirm-defect",
+        "expectations": "confirm-defect"
+      },
+      "outcome": "A: unanimous"
+    },
+    {
+      "id": "A8",
+      "claim": "No quotes attempted still displays green Every first-pass quote was located text. Missing-anchor validator warnings exist; assess overstatement.",
+      "suite": "source",
+      "votes": {
+        "code": "rescope-policy",
+        "guards": "rescope-policy",
+        "expectations": "rescope-policy"
+      },
+      "outcome": "C: policy/limit or not reproduced"
+    },
+    {
+      "id": "A9",
+      "claim": "Nonempty STOP non-card prose commits successful zero-note generation rather than malformed response status.",
+      "suite": "lifecycle",
+      "votes": {
+        "code": "confirm-defect",
+        "guards": "confirm-defect",
+        "expectations": "confirm-defect"
+      },
+      "outcome": "A: unanimous"
+    },
+    {
+      "id": "N1",
+      "claim": "Deduplication precedes alias normalization; two alias/canonical variants become byte-identical selected export rows.",
+      "suite": "transform",
+      "votes": {
+        "code": "confirm-defect",
+        "guards": "confirm-defect",
+        "expectations": "rescope-policy"
+      },
+      "outcome": "A: majority; contract dissent"
+    },
+    {
+      "id": "N2",
+      "claim": "Arbitrary Text edits retain fact IDs and all-tier linked association count. Is the documented association count misrepresenting semantic coverage?",
+      "suite": "lifecycle",
+      "votes": {
+        "code": "refute",
+        "guards": "rescope-policy",
+        "expectations": "refute"
+      },
+      "outcome": "Excluded as defect; refuted"
+    },
+    {
+      "id": "N3",
+      "claim": "Invalid tier/bucket silently become Tier3/Look including safetyCritical import, with dropped0 and no validator issue.",
+      "suite": "source",
+      "votes": {
+        "code": "confirm-defect",
+        "guards": "confirm-defect",
+        "expectations": "rescope-policy"
+      },
+      "outcome": "A: majority; contract dissent"
+    },
+    {
+      "id": "MAXTOK",
+      "claim": "Partial parsable MAX_TOKENS output retained with explicit warning/truncated flag but final green Complete log.",
+      "suite": "lifecycle",
+      "votes": {
+        "code": "confirm-defect",
+        "guards": "confirm-defect",
+        "expectations": "rescope-policy"
+      },
+      "outcome": "A: majority; contract dissent"
+    },
+    {
+      "id": "REPAIR_DEDUPE",
+      "claim": "Invalid duplicates are exempt from dedupe and remain identical after manual repair. Determine whether automatic deletion is justified.",
+      "suite": "transform/lifecycle",
+      "votes": {
+        "code": "rescope-policy",
+        "guards": "rescope-policy",
+        "expectations": "rescope-policy"
+      },
+      "outcome": "C: policy/limit or not reproduced"
+    },
+    {
+      "id": "FACT_RENUMBER",
+      "claim": "Import/build rekeys fact IDs; determine actual same-session stale association against source replacement guards and captured snapshots.",
+      "suite": "source/lifecycle",
+      "votes": {
+        "code": "refute",
+        "guards": "refute",
+        "expectations": "refute"
+      },
+      "outcome": "Excluded as defect; refuted"
+    },
+    {
+      "id": "OPERATOR",
+      "claim": "Quote operator mismatch only warns and fact/quote entailment is not checked. Deliberate policy versus bug.",
+      "suite": "source",
+      "votes": {
+        "code": "rescope-policy",
+        "guards": "rescope-policy",
+        "expectations": "rescope-policy"
+      },
+      "outcome": "C: policy/limit or not reproduced"
+    },
+    {
+      "id": "EXPORT",
+      "claim": "Header exporter escapes only &<> in Text/Extra, not quotes/Tags. Demonstrate actual data loss or classify native Anki gap.",
+      "suite": "transform",
+      "votes": {
+        "code": "not-reproduced",
+        "guards": "not-reproduced",
+        "expectations": "not-reproduced"
+      },
+      "outcome": "C: policy/limit or not reproduced"
+    },
+    {
+      "id": "PROBE",
+      "claim": "kbBuildSourceChunks catches quality/probe exceptions silently. Need reachable ordinary-input failure rather than injected throwing helper only.",
+      "suite": "source",
+      "votes": {
+        "code": "not-reproduced",
+        "guards": "not-reproduced",
+        "expectations": "not-reproduced"
+      },
+      "outcome": "B: ordinary trigger unproved"
+    },
+    {
+      "id": "MISSING_LEAF",
+      "claim": "Receipt/recall leaf returns [] on missing evidence. Public decoder rejects invalid receipts and mapping status stays inconclusive; determine actual approval.",
+      "suite": "receipt",
+      "votes": {
+        "code": "refute",
+        "guards": "refute",
+        "expectations": "refute"
+      },
+      "outcome": "Excluded as defect; refuted"
+    },
+    {
+      "id": "POISONED_KB",
+      "claim": "Source false fact with true quote becomes faithful KB->card->export. Source-boundary limitation rather than deterministic semantic checker bug.",
+      "suite": "source",
+      "votes": {
+        "code": "rescope-policy",
+        "guards": "rescope-policy",
+        "expectations": "rescope-policy"
+      },
+      "outcome": "C: policy/limit or not reproduced"
+    },
+    {
+      "id": "SUGGESTION",
+      "claim": "Unsupported model suggestions or Fixed manual decision apply clinical edits. Tests so far show no changes and explicit manual metadata.",
+      "suite": "receipt",
+      "votes": {
+        "code": "refute",
+        "guards": "refute",
+        "expectations": "refute"
+      },
+      "outcome": "Excluded as defect; refuted"
+    },
+    {
+      "id": "QUOTE_PREFIX",
+      "claim": "A quote ending in numeric token 60 is accepted inside source 600; actual omission pass retains altered 60 fact with no quote/operator warning.",
+      "suite": "source/stage-extraction",
+      "votes": {
+        "code": "confirm-defect",
+        "guards": "confirm-defect",
+        "expectations": "rescope-policy"
+      },
+      "outcome": "A: majority; contract dissent"
+    }
+  ]
+}

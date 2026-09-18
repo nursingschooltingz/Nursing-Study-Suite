@@ -1,0 +1,5864 @@
+{
+  "suite": "Nursing-Study-Suite v16.6.html",
+  "sha256": "8524e35c8b3621e074a0499ba3857a672464b99721e4b502c381dfa29d0b9b12",
+  "results": [
+    {
+      "id": "live-span-tail",
+      "category": "control",
+      "rationale": "Extraction must reach actual review decision implementation.",
+      "pass": true
+    },
+    {
+      "id": "supported-literal-roundtrip",
+      "category": "control",
+      "rationale": "North is the explicit source destination.",
+      "pass": true
+    },
+    {
+      "id": "supported-literal-immutability",
+      "category": "control",
+      "rationale": "Advisory checking must never rewrite the supplied note.",
+      "pass": true
+    },
+    {
+      "id": "supported-literal-preserved",
+      "category": "control",
+      "rationale": "North is the explicit source destination.",
+      "pass": true
+    },
+    {
+      "id": "supported-paraphrase-roundtrip",
+      "category": "control",
+      "rationale": "Place preserves the supplied storage destination.",
+      "pass": true
+    },
+    {
+      "id": "supported-paraphrase-immutability",
+      "category": "control",
+      "rationale": "Advisory checking must never rewrite the supplied note.",
+      "pass": true
+    },
+    {
+      "id": "supported-paraphrase-preserved",
+      "category": "control",
+      "rationale": "Place preserves the supplied storage destination.",
+      "pass": true
+    },
+    {
+      "id": "contradictory-answer-roundtrip",
+      "category": "control",
+      "rationale": "South contradicts the supplied north destination.",
+      "pass": true
+    },
+    {
+      "id": "contradictory-answer-immutability",
+      "category": "control",
+      "rationale": "Advisory checking must never rewrite the supplied note.",
+      "pass": true
+    },
+    {
+      "id": "contradictory-answer-semantic-expectation",
+      "category": "semantic-limit",
+      "rationale": "South contradicts the supplied north destination.",
+      "pass": false,
+      "expected": "unsupported",
+      "actual": "supported",
+      "message": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'unsupported'\n"
+    },
+    {
+      "id": "visible-negation-roundtrip",
+      "category": "control",
+      "rationale": "Visible negation reverses the directive.",
+      "pass": true
+    },
+    {
+      "id": "visible-negation-immutability",
+      "category": "control",
+      "rationale": "Advisory checking must never rewrite the supplied note.",
+      "pass": true
+    },
+    {
+      "id": "visible-negation-semantic-expectation",
+      "category": "semantic-limit",
+      "rationale": "Visible negation reverses the directive.",
+      "pass": false,
+      "expected": "unsupported",
+      "actual": "supported",
+      "message": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'unsupported'\n"
+    },
+    {
+      "id": "extra-addition-roundtrip",
+      "category": "control",
+      "rationale": "No source statement describes solubility.",
+      "pass": true
+    },
+    {
+      "id": "extra-addition-immutability",
+      "category": "control",
+      "rationale": "Advisory checking must never rewrite the supplied note.",
+      "pass": true
+    },
+    {
+      "id": "extra-addition-semantic-expectation",
+      "category": "semantic-limit",
+      "rationale": "No source statement describes solubility.",
+      "pass": false,
+      "expected": "unsupported",
+      "actual": "supported",
+      "message": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'unsupported'\n"
+    },
+    {
+      "id": "hint-addition-roundtrip",
+      "category": "control",
+      "rationale": "The source supplies no sterility property.",
+      "pass": true
+    },
+    {
+      "id": "hint-addition-immutability",
+      "category": "control",
+      "rationale": "Advisory checking must never rewrite the supplied note.",
+      "pass": true
+    },
+    {
+      "id": "hint-addition-semantic-expectation",
+      "category": "semantic-limit",
+      "rationale": "The source supplies no sterility property.",
+      "pass": false,
+      "expected": "unsupported",
+      "actual": "supported",
+      "message": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'unsupported'\n"
+    },
+    {
+      "id": "irrelevant-real-reference-roundtrip",
+      "category": "control",
+      "rationale": "The existing source ID refers to a different object and destination.",
+      "pass": true
+    },
+    {
+      "id": "irrelevant-real-reference-immutability",
+      "category": "control",
+      "rationale": "Advisory checking must never rewrite the supplied note.",
+      "pass": true
+    },
+    {
+      "id": "irrelevant-real-reference-semantic-expectation",
+      "category": "semantic-limit",
+      "rationale": "The existing source ID refers to a different object and destination.",
+      "pass": false,
+      "expected": "unsupported",
+      "actual": "supported",
+      "message": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'unsupported'\n"
+    },
+    {
+      "id": "inconclusive-population-roundtrip",
+      "category": "control",
+      "rationale": "Without color the destination is underdetermined, not proven true or false.",
+      "pass": true
+    },
+    {
+      "id": "inconclusive-population-immutability",
+      "category": "control",
+      "rationale": "Advisory checking must never rewrite the supplied note.",
+      "pass": true
+    },
+    {
+      "id": "inconclusive-population-semantic-expectation",
+      "category": "semantic-limit",
+      "rationale": "Without color the destination is underdetermined, not proven true or false.",
+      "pass": false,
+      "expected": "inconclusive",
+      "actual": "supported",
+      "message": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'inconclusive'\n"
+    },
+    {
+      "id": "entity-and-hint-preservation-roundtrip",
+      "category": "control",
+      "rationale": "Characters, entities, hint and Extra must retain their literal values under text-only export.",
+      "pass": true
+    },
+    {
+      "id": "entity-and-hint-preservation-immutability",
+      "category": "control",
+      "rationale": "Advisory checking must never rewrite the supplied note.",
+      "pass": true
+    },
+    {
+      "id": "entity-and-hint-preservation-preserved",
+      "category": "control",
+      "rationale": "Characters, entities, hint and Extra must retain their literal values under text-only export.",
+      "pass": true
+    },
+    {
+      "id": "real-source-shape",
+      "category": "control",
+      "rationale": "Source pointers must come from the actual snapshot helper.",
+      "pass": true
+    },
+    {
+      "id": "source-footers",
+      "category": "control",
+      "rationale": "Export references must use the captured file and location.",
+      "pass": true
+    },
+    {
+      "id": "invalid-json-\"\"",
+      "category": "control",
+      "rationale": "Absent/incomplete evidence cannot become completed audit.",
+      "pass": true
+    },
+    {
+      "id": "invalid-json-\"{\\\"factReviews\\\":\"",
+      "category": "control",
+      "rationale": "Absent/incomplete evidence cannot become completed audit.",
+      "pass": true
+    },
+    {
+      "id": "invalid-json-\"{}\"",
+      "category": "control",
+      "rationale": "Absent/incomplete evidence cannot become completed audit.",
+      "pass": true
+    },
+    {
+      "id": "invalid-handle-incomplete",
+      "category": "control",
+      "rationale": "An unrecognized note address must remain unresolved.",
+      "pass": true
+    },
+    {
+      "id": "missing-inventory-tail-incomplete",
+      "category": "control",
+      "rationale": "A source token cannot silently disappear from accounting.",
+      "pass": true
+    },
+    {
+      "id": "missing-cloze-public-decoder",
+      "category": "control",
+      "rationale": "The public boundary must reject the malformed evidence even when a leaf helper returns no warning.",
+      "pass": true
+    },
+    {
+      "id": "unknown-evidence-public-decoder",
+      "category": "control",
+      "rationale": "The public boundary must reject the malformed evidence even when a leaf helper returns no warning.",
+      "pass": true
+    },
+    {
+      "id": "missing-evidence-no-supported-receipt",
+      "category": "control",
+      "rationale": "A supported declaration without its required evidence must remain unresolved.",
+      "pass": true
+    },
+    {
+      "id": "missing-evidence-no-invented-falsehood",
+      "category": "control",
+      "rationale": "Missing evidence alone cannot substitute for the explicit finding required by an unsupported receipt.",
+      "pass": true
+    },
+    {
+      "id": "false-negative-checker-does-not-deselect",
+      "category": "control",
+      "rationale": "A mistaken advisory judgment must leave a source-supported card available.",
+      "pass": true
+    },
+    {
+      "id": "missing-receipt-shape-0",
+      "category": "control",
+      "rationale": "Missing evidence must not manufacture an affirmative approval.",
+      "pass": true
+    },
+    {
+      "id": "missing-receipt-shape-1",
+      "category": "control",
+      "rationale": "Missing evidence must not manufacture an affirmative approval.",
+      "pass": true
+    },
+    {
+      "id": "missing-receipt-shape-2",
+      "category": "control",
+      "rationale": "Missing evidence must not manufacture an affirmative approval.",
+      "pass": true
+    },
+    {
+      "id": "unmapped-not-approved",
+      "category": "control",
+      "rationale": "An inapplicable script heuristic is not approval; independent mapping diagnostics must remain visible.",
+      "pass": true
+    },
+    {
+      "id": "disputed-not-approved",
+      "category": "control",
+      "rationale": "An inapplicable script heuristic is not approval; independent mapping diagnostics must remain visible.",
+      "pass": true
+    },
+    {
+      "id": "receipt-number-not-hidden",
+      "category": "control",
+      "rationale": "7 is supplied but the referenced hidden answer blue does not test it.",
+      "pass": true
+    },
+    {
+      "id": "decision-fixed-no-repair",
+      "category": "control",
+      "rationale": "A source-unsupported suggestion or acknowledgement cannot automatically replace original content.",
+      "pass": true
+    },
+    {
+      "id": "decision-intentional-context-no-repair",
+      "category": "control",
+      "rationale": "A source-unsupported suggestion or acknowledgement cannot automatically replace original content.",
+      "pass": true
+    },
+    {
+      "id": "decision-covered-elsewhere-no-repair",
+      "category": "control",
+      "rationale": "A source-unsupported suggestion or acknowledgement cannot automatically replace original content.",
+      "pass": true
+    },
+    {
+      "id": "decision-unresolved-no-repair",
+      "category": "control",
+      "rationale": "A source-unsupported suggestion or acknowledgement cannot automatically replace original content.",
+      "pass": true
+    },
+    {
+      "id": "decision-invalidated-text",
+      "category": "control",
+      "rationale": "Captured acknowledgements must not survive changed evidence.",
+      "pass": true
+    },
+    {
+      "id": "decision-invalidated-source",
+      "category": "control",
+      "rationale": "Captured acknowledgements must not survive changed evidence.",
+      "pass": true
+    },
+    {
+      "id": "decision-invalidated-tier",
+      "category": "control",
+      "rationale": "Captured acknowledgements must not survive changed evidence.",
+      "pass": true
+    },
+    {
+      "id": "decision-invalidated-selection",
+      "category": "control",
+      "rationale": "Captured acknowledgements must not survive changed evidence.",
+      "pass": true
+    },
+    {
+      "id": "covered-by-missing-rejected",
+      "category": "control",
+      "rationale": "A nonexistent note cannot be used as manual coverage evidence.",
+      "pass": true
+    },
+    {
+      "id": "complementary-retry-completes",
+      "category": "control",
+      "rationale": "Good independent records from the same immutable packet must survive a retry.",
+      "pass": true
+    },
+    {
+      "id": "repeated-retry-no-record-duplication",
+      "category": "control",
+      "rationale": "Replaying accepted records must not append duplicate target or note receipts.",
+      "pass": true
+    },
+    {
+      "id": "changed-packet-cannot-merge",
+      "category": "control",
+      "rationale": "Receipts from altered source content cannot reuse prior completion.",
+      "pass": true
+    },
+    {
+      "id": "complete-report-honest-scope",
+      "category": "control",
+      "rationale": "Protocol completion must retain semantic limitation language.",
+      "pass": true
+    },
+    {
+      "id": "stale-report-not-complete",
+      "category": "control",
+      "rationale": "Changed note capture invalidates completion.",
+      "pass": true
+    }
+  ],
+  "summary": {
+    "passed": 54,
+    "failed": 6,
+    "failuresByCategory": {
+      "semantic-limit": 6
+    }
+  },
+  "traces": [
+    {
+      "id": "supported-literal",
+      "source": {
+        "metadata": {
+          "schemaVersion": "1.0"
+        },
+        "conditions": [
+          {
+            "id": "workshop",
+            "name": "Workshop",
+            "aliases": [],
+            "facts": [
+              {
+                "id": "fact-1",
+                "text": "Store the red marker in the north drawer.",
+                "sourceQuote": "Store the red marker in the north drawer.",
+                "latteBucket": "Educate",
+                "tier": 1,
+                "sources": [
+                  {
+                    "filename": "synthetic-source.txt",
+                    "location": "line 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "sourceExpectation": "North is the explicit source destination.",
+      "snapshot": {
+        "facts": [
+          {
+            "id": "fact-1",
+            "condition": "Workshop",
+            "aliases": [],
+            "subtype": "",
+            "text": "Store the red marker in the north drawer.",
+            "sourceQuote": "Store the red marker in the north drawer.",
+            "tier": 1,
+            "bucket": "Educate",
+            "sources": [
+              {
+                "filename": "synthetic-source.txt",
+                "location": "line 1"
+              }
+            ]
+          }
+        ],
+        "byId": {
+          "fact-1": {
+            "id": "fact-1",
+            "condition": "Workshop",
+            "aliases": [],
+            "subtype": "",
+            "text": "Store the red marker in the north drawer.",
+            "sourceQuote": "Store the red marker in the north drawer.",
+            "tier": 1,
+            "bucket": "Educate",
+            "sources": [
+              {
+                "filename": "synthetic-source.txt",
+                "location": "line 1"
+              }
+            ]
+          }
+        }
+      },
+      "stages": {
+        "parse": {
+          "before": "```text\n[Marker] Store red in the {{c1::north}} drawer.||Topic::Workshop Tier::1\n```\n```text\nfact-1 -> line #1\n```",
+          "after": [
+            {
+              "id": "reaudit-note-1",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store red in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [],
+              "tagFormatContract": "hierarchical-v1"
+            }
+          ]
+        },
+        "map": {
+          "before": [
+            {
+              "id": "reaudit-note-1",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store red in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [],
+              "tagFormatContract": "hierarchical-v1"
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-1",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store red in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "dedupe": {
+          "before": [
+            {
+              "id": "reaudit-note-1",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store red in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-1",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store red in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "normalize": {
+          "before": [
+            {
+              "id": "reaudit-note-1",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store red in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-1",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store red in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "lint": {
+          "before": [
+            {
+              "id": "reaudit-note-1",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store red in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "issues": [
+            []
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-1",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store red in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "edit": {
+          "before": [
+            {
+              "id": "reaudit-note-1",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store red in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-1",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store red in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "action": "No content edit requested in this fixture"
+        },
+        "export": {
+          "before": [
+            {
+              "id": "reaudit-note-1",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store red in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "plain": "[Marker] Store red in the {{c1::north}} drawer.||Topic::Workshop Tier::1",
+          "html": "#separator:Pipe\n#html:true\n#notetype:Cloze\n#tags column:3\n[Marker] Store red in the {{c1::north}} drawer.||Topic::Workshop Tier::1",
+          "withSources": "#separator:Pipe\n#html:true\n#notetype:Cloze\n#tags column:3\n[Marker] Store red in the {{c1::north}} drawer.|Source: synthetic-source.txt, line 1|Topic::Workshop Tier::1",
+          "after": [
+            {
+              "id": "reaudit-note-1",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store red in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        }
+      },
+      "previews": [
+        {
+          "id": "reaudit-note-1",
+          "text": "[Marker] Store red in the {{c1::north}} drawer.",
+          "extra": "",
+          "fronts": [
+            {
+              "index": 1,
+              "front": "[Marker] Store red in the [...] drawer.",
+              "back": "[Marker] Store red in the north drawer."
+            }
+          ]
+        }
+      ],
+      "requestPacket": {
+        "protocolVersion": 4,
+        "id": "source-1-part-1",
+        "chunk": 1,
+        "part": 1,
+        "parts": 1,
+        "tier": "all",
+        "sourceFactIds": [
+          "fact-1"
+        ],
+        "scopeNoteIds": [
+          "n1"
+        ],
+        "facts": [
+          {
+            "id": "fact-1",
+            "condition": "Workshop",
+            "aliases": [],
+            "subtype": "",
+            "text": "Store the red marker in the north drawer.",
+            "tier": 1,
+            "bucket": "Educate",
+            "inSelectedTier": true,
+            "sourceTokens": [
+              {
+                "id": 1,
+                "text": "Store"
+              },
+              {
+                "id": 2,
+                "text": "the"
+              },
+              {
+                "id": 3,
+                "text": "red"
+              },
+              {
+                "id": 4,
+                "text": "marker"
+              },
+              {
+                "id": 5,
+                "text": "in"
+              },
+              {
+                "id": 6,
+                "text": "the"
+              },
+              {
+                "id": 7,
+                "text": "north"
+              },
+              {
+                "id": 8,
+                "text": "drawer."
+              }
+            ]
+          }
+        ],
+        "notes": [
+          {
+            "id": "n1",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] Store red in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "tagFormatContract": "hierarchical-v1",
+            "tier": "1",
+            "keep": true,
+            "structurallyValid": true,
+            "inSelectedTier": true,
+            "eligible": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "unresolvedFactIds": [],
+            "reviewTargets": [
+              {
+                "index": 1,
+                "front": "[Marker] Store red in the [...] drawer.",
+                "answers": [
+                  "north"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "mockReceipt": {
+        "factReviews": [
+          {
+            "factId": "fact-1",
+            "targets": [
+              {
+                "status": "tested",
+                "noteRefs": [
+                  {
+                    "noteId": "n1",
+                    "clozeIndices": [
+                      1
+                    ]
+                  }
+                ],
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "contextRefs": []
+              }
+            ],
+            "inventory": [
+              {
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "role": "target",
+                "reason": "Synthetic fixture target; not a semantic judgment."
+              }
+            ]
+          }
+        ],
+        "noteReviews": [
+          {
+            "noteId": "n1",
+            "text": {
+              "status": "supported",
+              "evidence": [
+                {
+                  "factId": "fact-1",
+                  "sourceRef": {
+                    "start": 1,
+                    "end": 8
+                  }
+                }
+              ]
+            },
+            "extra": {
+              "status": "empty",
+              "evidence": []
+            }
+          }
+        ],
+        "findings": []
+      },
+      "acceptedReceipt": {
+        "groupId": "source-1-part-1",
+        "factReviews": [
+          {
+            "factId": "fact-1",
+            "inventory": [
+              {
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "sourceSpan": "Store the red marker in the north drawer.",
+                "sourceStart": 0,
+                "sourceEnd": 41,
+                "role": "target",
+                "reason": "Synthetic fixture target; not a semantic judgment."
+              }
+            ],
+            "targets": [
+              {
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "sourceSpan": "Store the red marker in the north drawer.",
+                "sourceStart": 0,
+                "sourceEnd": 41,
+                "status": "tested",
+                "noteRefs": [
+                  {
+                    "noteId": "reaudit-note-1",
+                    "clozeIndices": [
+                      1
+                    ]
+                  }
+                ],
+                "contextRefs": []
+              }
+            ]
+          }
+        ],
+        "noteReviews": [
+          {
+            "noteId": "reaudit-note-1",
+            "text": {
+              "status": "supported",
+              "evidence": [
+                {
+                  "factId": "fact-1",
+                  "sourceRef": {
+                    "start": 1,
+                    "end": 8
+                  },
+                  "sourceSpan": "Store the red marker in the north drawer.",
+                  "sourceStart": 0,
+                  "sourceEnd": 41
+                }
+              ]
+            },
+            "extra": {
+              "status": "empty",
+              "evidence": []
+            }
+          }
+        ],
+        "findings": [],
+        "citationRecoveries": [],
+        "referenceRecoveries": [],
+        "unresolved": [],
+        "complete": true,
+        "protocolVersion": 4,
+        "packetSignature": "{\"id\":\"source-1-part-1\",\"chunk\":1,\"part\":1,\"parts\":1,\"protocolVersion\":4,\"tier\":\"all\",\"sourceFactIds\":[\"fact-1\"],\"scopeNoteIds\":[\"reaudit-note-1\"],\"facts\":[{\"id\":\"fact-1\",\"condition\":\"Workshop\",\"aliases\":[],\"subtype\":\"\",\"text\":\"Store the red marker in the north drawer.\",\"tier\":1,\"bucket\":\"Educate\",\"inSelectedTier\":true}],\"notes\":[{\"id\":\"reaudit-note-1\",\"chunk\":1,\"sourceLine\":1,\"text\":\"[Marker] Store red in the {{c1::north}} drawer.\",\"extra\":\"\",\"tags\":\"Topic::Workshop Tier::1\",\"tagFormatContract\":\"hierarchical-v1\",\"tier\":\"1\",\"keep\":true,\"structurallyValid\":true,\"inSelectedTier\":true,\"eligible\":true,\"factIds\":[\"fact-1\"],\"unresolvedFactIds\":[],\"reviewTargets\":[{\"index\":1,\"front\":\"[Marker] Store red in the [...] drawer.\",\"answers\":[\"north\"]}]}],\"sizeChars\":930}"
+      },
+      "queueCodes": []
+    },
+    {
+      "id": "supported-paraphrase",
+      "source": {
+        "metadata": {
+          "schemaVersion": "1.0"
+        },
+        "conditions": [
+          {
+            "id": "workshop",
+            "name": "Workshop",
+            "aliases": [],
+            "facts": [
+              {
+                "id": "fact-1",
+                "text": "Store the red marker in the north drawer.",
+                "sourceQuote": "Store the red marker in the north drawer.",
+                "latteBucket": "Educate",
+                "tier": 1,
+                "sources": [
+                  {
+                    "filename": "synthetic-source.txt",
+                    "location": "line 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "sourceExpectation": "Place preserves the supplied storage destination.",
+      "snapshot": {
+        "facts": [
+          {
+            "id": "fact-1",
+            "condition": "Workshop",
+            "aliases": [],
+            "subtype": "",
+            "text": "Store the red marker in the north drawer.",
+            "sourceQuote": "Store the red marker in the north drawer.",
+            "tier": 1,
+            "bucket": "Educate",
+            "sources": [
+              {
+                "filename": "synthetic-source.txt",
+                "location": "line 1"
+              }
+            ]
+          }
+        ],
+        "byId": {
+          "fact-1": {
+            "id": "fact-1",
+            "condition": "Workshop",
+            "aliases": [],
+            "subtype": "",
+            "text": "Store the red marker in the north drawer.",
+            "sourceQuote": "Store the red marker in the north drawer.",
+            "tier": 1,
+            "bucket": "Educate",
+            "sources": [
+              {
+                "filename": "synthetic-source.txt",
+                "location": "line 1"
+              }
+            ]
+          }
+        }
+      },
+      "stages": {
+        "parse": {
+          "before": "```text\n[Marker] Place the red marker in the {{c1::north}} drawer.||Topic::Workshop Tier::1\n```\n```text\nfact-1 -> line #1\n```",
+          "after": [
+            {
+              "id": "reaudit-note-2",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Place the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [],
+              "tagFormatContract": "hierarchical-v1"
+            }
+          ]
+        },
+        "map": {
+          "before": [
+            {
+              "id": "reaudit-note-2",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Place the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [],
+              "tagFormatContract": "hierarchical-v1"
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-2",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Place the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "dedupe": {
+          "before": [
+            {
+              "id": "reaudit-note-2",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Place the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-2",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Place the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "normalize": {
+          "before": [
+            {
+              "id": "reaudit-note-2",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Place the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-2",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Place the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "lint": {
+          "before": [
+            {
+              "id": "reaudit-note-2",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Place the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "issues": [
+            []
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-2",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Place the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "edit": {
+          "before": [
+            {
+              "id": "reaudit-note-2",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Place the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-2",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Place the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "action": "No content edit requested in this fixture"
+        },
+        "export": {
+          "before": [
+            {
+              "id": "reaudit-note-2",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Place the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "plain": "[Marker] Place the red marker in the {{c1::north}} drawer.||Topic::Workshop Tier::1",
+          "html": "#separator:Pipe\n#html:true\n#notetype:Cloze\n#tags column:3\n[Marker] Place the red marker in the {{c1::north}} drawer.||Topic::Workshop Tier::1",
+          "withSources": "#separator:Pipe\n#html:true\n#notetype:Cloze\n#tags column:3\n[Marker] Place the red marker in the {{c1::north}} drawer.|Source: synthetic-source.txt, line 1|Topic::Workshop Tier::1",
+          "after": [
+            {
+              "id": "reaudit-note-2",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Place the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        }
+      },
+      "previews": [
+        {
+          "id": "reaudit-note-2",
+          "text": "[Marker] Place the red marker in the {{c1::north}} drawer.",
+          "extra": "",
+          "fronts": [
+            {
+              "index": 1,
+              "front": "[Marker] Place the red marker in the [...] drawer.",
+              "back": "[Marker] Place the red marker in the north drawer."
+            }
+          ]
+        }
+      ],
+      "requestPacket": {
+        "protocolVersion": 4,
+        "id": "source-1-part-1",
+        "chunk": 1,
+        "part": 1,
+        "parts": 1,
+        "tier": "all",
+        "sourceFactIds": [
+          "fact-1"
+        ],
+        "scopeNoteIds": [
+          "n1"
+        ],
+        "facts": [
+          {
+            "id": "fact-1",
+            "condition": "Workshop",
+            "aliases": [],
+            "subtype": "",
+            "text": "Store the red marker in the north drawer.",
+            "tier": 1,
+            "bucket": "Educate",
+            "inSelectedTier": true,
+            "sourceTokens": [
+              {
+                "id": 1,
+                "text": "Store"
+              },
+              {
+                "id": 2,
+                "text": "the"
+              },
+              {
+                "id": 3,
+                "text": "red"
+              },
+              {
+                "id": 4,
+                "text": "marker"
+              },
+              {
+                "id": 5,
+                "text": "in"
+              },
+              {
+                "id": 6,
+                "text": "the"
+              },
+              {
+                "id": 7,
+                "text": "north"
+              },
+              {
+                "id": 8,
+                "text": "drawer."
+              }
+            ]
+          }
+        ],
+        "notes": [
+          {
+            "id": "n1",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] Place the red marker in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "tagFormatContract": "hierarchical-v1",
+            "tier": "1",
+            "keep": true,
+            "structurallyValid": true,
+            "inSelectedTier": true,
+            "eligible": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "unresolvedFactIds": [],
+            "reviewTargets": [
+              {
+                "index": 1,
+                "front": "[Marker] Place the red marker in the [...] drawer.",
+                "answers": [
+                  "north"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "mockReceipt": {
+        "factReviews": [
+          {
+            "factId": "fact-1",
+            "targets": [
+              {
+                "status": "tested",
+                "noteRefs": [
+                  {
+                    "noteId": "n1",
+                    "clozeIndices": [
+                      1
+                    ]
+                  }
+                ],
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "contextRefs": []
+              }
+            ],
+            "inventory": [
+              {
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "role": "target",
+                "reason": "Synthetic fixture target; not a semantic judgment."
+              }
+            ]
+          }
+        ],
+        "noteReviews": [
+          {
+            "noteId": "n1",
+            "text": {
+              "status": "supported",
+              "evidence": [
+                {
+                  "factId": "fact-1",
+                  "sourceRef": {
+                    "start": 1,
+                    "end": 8
+                  }
+                }
+              ]
+            },
+            "extra": {
+              "status": "empty",
+              "evidence": []
+            }
+          }
+        ],
+        "findings": []
+      },
+      "acceptedReceipt": {
+        "groupId": "source-1-part-1",
+        "factReviews": [
+          {
+            "factId": "fact-1",
+            "inventory": [
+              {
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "sourceSpan": "Store the red marker in the north drawer.",
+                "sourceStart": 0,
+                "sourceEnd": 41,
+                "role": "target",
+                "reason": "Synthetic fixture target; not a semantic judgment."
+              }
+            ],
+            "targets": [
+              {
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "sourceSpan": "Store the red marker in the north drawer.",
+                "sourceStart": 0,
+                "sourceEnd": 41,
+                "status": "tested",
+                "noteRefs": [
+                  {
+                    "noteId": "reaudit-note-2",
+                    "clozeIndices": [
+                      1
+                    ]
+                  }
+                ],
+                "contextRefs": []
+              }
+            ]
+          }
+        ],
+        "noteReviews": [
+          {
+            "noteId": "reaudit-note-2",
+            "text": {
+              "status": "supported",
+              "evidence": [
+                {
+                  "factId": "fact-1",
+                  "sourceRef": {
+                    "start": 1,
+                    "end": 8
+                  },
+                  "sourceSpan": "Store the red marker in the north drawer.",
+                  "sourceStart": 0,
+                  "sourceEnd": 41
+                }
+              ]
+            },
+            "extra": {
+              "status": "empty",
+              "evidence": []
+            }
+          }
+        ],
+        "findings": [],
+        "citationRecoveries": [],
+        "referenceRecoveries": [],
+        "unresolved": [],
+        "complete": true,
+        "protocolVersion": 4,
+        "packetSignature": "{\"id\":\"source-1-part-1\",\"chunk\":1,\"part\":1,\"parts\":1,\"protocolVersion\":4,\"tier\":\"all\",\"sourceFactIds\":[\"fact-1\"],\"scopeNoteIds\":[\"reaudit-note-2\"],\"facts\":[{\"id\":\"fact-1\",\"condition\":\"Workshop\",\"aliases\":[],\"subtype\":\"\",\"text\":\"Store the red marker in the north drawer.\",\"tier\":1,\"bucket\":\"Educate\",\"inSelectedTier\":true}],\"notes\":[{\"id\":\"reaudit-note-2\",\"chunk\":1,\"sourceLine\":1,\"text\":\"[Marker] Place the red marker in the {{c1::north}} drawer.\",\"extra\":\"\",\"tags\":\"Topic::Workshop Tier::1\",\"tagFormatContract\":\"hierarchical-v1\",\"tier\":\"1\",\"keep\":true,\"structurallyValid\":true,\"inSelectedTier\":true,\"eligible\":true,\"factIds\":[\"fact-1\"],\"unresolvedFactIds\":[],\"reviewTargets\":[{\"index\":1,\"front\":\"[Marker] Place the red marker in the [...] drawer.\",\"answers\":[\"north\"]}]}],\"sizeChars\":952}"
+      },
+      "queueCodes": []
+    },
+    {
+      "id": "contradictory-answer",
+      "source": {
+        "metadata": {
+          "schemaVersion": "1.0"
+        },
+        "conditions": [
+          {
+            "id": "workshop",
+            "name": "Workshop",
+            "aliases": [],
+            "facts": [
+              {
+                "id": "fact-1",
+                "text": "Store the red marker in the north drawer.",
+                "sourceQuote": "Store the red marker in the north drawer.",
+                "latteBucket": "Educate",
+                "tier": 1,
+                "sources": [
+                  {
+                    "filename": "synthetic-source.txt",
+                    "location": "line 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "sourceExpectation": "South contradicts the supplied north destination.",
+      "snapshot": {
+        "facts": [
+          {
+            "id": "fact-1",
+            "condition": "Workshop",
+            "aliases": [],
+            "subtype": "",
+            "text": "Store the red marker in the north drawer.",
+            "sourceQuote": "Store the red marker in the north drawer.",
+            "tier": 1,
+            "bucket": "Educate",
+            "sources": [
+              {
+                "filename": "synthetic-source.txt",
+                "location": "line 1"
+              }
+            ]
+          }
+        ],
+        "byId": {
+          "fact-1": {
+            "id": "fact-1",
+            "condition": "Workshop",
+            "aliases": [],
+            "subtype": "",
+            "text": "Store the red marker in the north drawer.",
+            "sourceQuote": "Store the red marker in the north drawer.",
+            "tier": 1,
+            "bucket": "Educate",
+            "sources": [
+              {
+                "filename": "synthetic-source.txt",
+                "location": "line 1"
+              }
+            ]
+          }
+        }
+      },
+      "stages": {
+        "parse": {
+          "before": "```text\n[Marker] Store the red marker in the {{c1::south}} drawer.||Topic::Workshop Tier::1\n```\n```text\nfact-1 -> line #1\n```",
+          "after": [
+            {
+              "id": "reaudit-note-3",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::south}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [],
+              "tagFormatContract": "hierarchical-v1"
+            }
+          ]
+        },
+        "map": {
+          "before": [
+            {
+              "id": "reaudit-note-3",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::south}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [],
+              "tagFormatContract": "hierarchical-v1"
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-3",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::south}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "dedupe": {
+          "before": [
+            {
+              "id": "reaudit-note-3",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::south}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-3",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::south}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "normalize": {
+          "before": [
+            {
+              "id": "reaudit-note-3",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::south}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-3",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::south}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "lint": {
+          "before": [
+            {
+              "id": "reaudit-note-3",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::south}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "issues": [
+            []
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-3",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::south}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "edit": {
+          "before": [
+            {
+              "id": "reaudit-note-3",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::south}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-3",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::south}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "action": "No content edit requested in this fixture"
+        },
+        "export": {
+          "before": [
+            {
+              "id": "reaudit-note-3",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::south}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "plain": "[Marker] Store the red marker in the {{c1::south}} drawer.||Topic::Workshop Tier::1",
+          "html": "#separator:Pipe\n#html:true\n#notetype:Cloze\n#tags column:3\n[Marker] Store the red marker in the {{c1::south}} drawer.||Topic::Workshop Tier::1",
+          "withSources": "#separator:Pipe\n#html:true\n#notetype:Cloze\n#tags column:3\n[Marker] Store the red marker in the {{c1::south}} drawer.|Source: synthetic-source.txt, line 1|Topic::Workshop Tier::1",
+          "after": [
+            {
+              "id": "reaudit-note-3",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::south}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        }
+      },
+      "previews": [
+        {
+          "id": "reaudit-note-3",
+          "text": "[Marker] Store the red marker in the {{c1::south}} drawer.",
+          "extra": "",
+          "fronts": [
+            {
+              "index": 1,
+              "front": "[Marker] Store the red marker in the [...] drawer.",
+              "back": "[Marker] Store the red marker in the south drawer."
+            }
+          ]
+        }
+      ],
+      "requestPacket": {
+        "protocolVersion": 4,
+        "id": "source-1-part-1",
+        "chunk": 1,
+        "part": 1,
+        "parts": 1,
+        "tier": "all",
+        "sourceFactIds": [
+          "fact-1"
+        ],
+        "scopeNoteIds": [
+          "n1"
+        ],
+        "facts": [
+          {
+            "id": "fact-1",
+            "condition": "Workshop",
+            "aliases": [],
+            "subtype": "",
+            "text": "Store the red marker in the north drawer.",
+            "tier": 1,
+            "bucket": "Educate",
+            "inSelectedTier": true,
+            "sourceTokens": [
+              {
+                "id": 1,
+                "text": "Store"
+              },
+              {
+                "id": 2,
+                "text": "the"
+              },
+              {
+                "id": 3,
+                "text": "red"
+              },
+              {
+                "id": 4,
+                "text": "marker"
+              },
+              {
+                "id": 5,
+                "text": "in"
+              },
+              {
+                "id": 6,
+                "text": "the"
+              },
+              {
+                "id": 7,
+                "text": "north"
+              },
+              {
+                "id": 8,
+                "text": "drawer."
+              }
+            ]
+          }
+        ],
+        "notes": [
+          {
+            "id": "n1",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] Store the red marker in the {{c1::south}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "tagFormatContract": "hierarchical-v1",
+            "tier": "1",
+            "keep": true,
+            "structurallyValid": true,
+            "inSelectedTier": true,
+            "eligible": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "unresolvedFactIds": [],
+            "reviewTargets": [
+              {
+                "index": 1,
+                "front": "[Marker] Store the red marker in the [...] drawer.",
+                "answers": [
+                  "south"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "mockReceipt": {
+        "factReviews": [
+          {
+            "factId": "fact-1",
+            "targets": [
+              {
+                "status": "tested",
+                "noteRefs": [
+                  {
+                    "noteId": "n1",
+                    "clozeIndices": [
+                      1
+                    ]
+                  }
+                ],
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "contextRefs": []
+              }
+            ],
+            "inventory": [
+              {
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "role": "target",
+                "reason": "Synthetic fixture target; not a semantic judgment."
+              }
+            ]
+          }
+        ],
+        "noteReviews": [
+          {
+            "noteId": "n1",
+            "text": {
+              "status": "supported",
+              "evidence": [
+                {
+                  "factId": "fact-1",
+                  "sourceRef": {
+                    "start": 1,
+                    "end": 8
+                  }
+                }
+              ]
+            },
+            "extra": {
+              "status": "empty",
+              "evidence": []
+            }
+          }
+        ],
+        "findings": []
+      },
+      "acceptedReceipt": {
+        "groupId": "source-1-part-1",
+        "factReviews": [
+          {
+            "factId": "fact-1",
+            "inventory": [
+              {
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "sourceSpan": "Store the red marker in the north drawer.",
+                "sourceStart": 0,
+                "sourceEnd": 41,
+                "role": "target",
+                "reason": "Synthetic fixture target; not a semantic judgment."
+              }
+            ],
+            "targets": [
+              {
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "sourceSpan": "Store the red marker in the north drawer.",
+                "sourceStart": 0,
+                "sourceEnd": 41,
+                "status": "tested",
+                "noteRefs": [
+                  {
+                    "noteId": "reaudit-note-3",
+                    "clozeIndices": [
+                      1
+                    ]
+                  }
+                ],
+                "contextRefs": []
+              }
+            ]
+          }
+        ],
+        "noteReviews": [
+          {
+            "noteId": "reaudit-note-3",
+            "text": {
+              "status": "supported",
+              "evidence": [
+                {
+                  "factId": "fact-1",
+                  "sourceRef": {
+                    "start": 1,
+                    "end": 8
+                  },
+                  "sourceSpan": "Store the red marker in the north drawer.",
+                  "sourceStart": 0,
+                  "sourceEnd": 41
+                }
+              ]
+            },
+            "extra": {
+              "status": "empty",
+              "evidence": []
+            }
+          }
+        ],
+        "findings": [],
+        "citationRecoveries": [],
+        "referenceRecoveries": [],
+        "unresolved": [],
+        "complete": true,
+        "protocolVersion": 4,
+        "packetSignature": "{\"id\":\"source-1-part-1\",\"chunk\":1,\"part\":1,\"parts\":1,\"protocolVersion\":4,\"tier\":\"all\",\"sourceFactIds\":[\"fact-1\"],\"scopeNoteIds\":[\"reaudit-note-3\"],\"facts\":[{\"id\":\"fact-1\",\"condition\":\"Workshop\",\"aliases\":[],\"subtype\":\"\",\"text\":\"Store the red marker in the north drawer.\",\"tier\":1,\"bucket\":\"Educate\",\"inSelectedTier\":true}],\"notes\":[{\"id\":\"reaudit-note-3\",\"chunk\":1,\"sourceLine\":1,\"text\":\"[Marker] Store the red marker in the {{c1::south}} drawer.\",\"extra\":\"\",\"tags\":\"Topic::Workshop Tier::1\",\"tagFormatContract\":\"hierarchical-v1\",\"tier\":\"1\",\"keep\":true,\"structurallyValid\":true,\"inSelectedTier\":true,\"eligible\":true,\"factIds\":[\"fact-1\"],\"unresolvedFactIds\":[],\"reviewTargets\":[{\"index\":1,\"front\":\"[Marker] Store the red marker in the [...] drawer.\",\"answers\":[\"south\"]}]}],\"sizeChars\":952}"
+      },
+      "queueCodes": []
+    },
+    {
+      "id": "visible-negation",
+      "source": {
+        "metadata": {
+          "schemaVersion": "1.0"
+        },
+        "conditions": [
+          {
+            "id": "workshop",
+            "name": "Workshop",
+            "aliases": [],
+            "facts": [
+              {
+                "id": "fact-1",
+                "text": "Store the red marker in the north drawer.",
+                "sourceQuote": "Store the red marker in the north drawer.",
+                "latteBucket": "Educate",
+                "tier": 1,
+                "sources": [
+                  {
+                    "filename": "synthetic-source.txt",
+                    "location": "line 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "sourceExpectation": "Visible negation reverses the directive.",
+      "snapshot": {
+        "facts": [
+          {
+            "id": "fact-1",
+            "condition": "Workshop",
+            "aliases": [],
+            "subtype": "",
+            "text": "Store the red marker in the north drawer.",
+            "sourceQuote": "Store the red marker in the north drawer.",
+            "tier": 1,
+            "bucket": "Educate",
+            "sources": [
+              {
+                "filename": "synthetic-source.txt",
+                "location": "line 1"
+              }
+            ]
+          }
+        ],
+        "byId": {
+          "fact-1": {
+            "id": "fact-1",
+            "condition": "Workshop",
+            "aliases": [],
+            "subtype": "",
+            "text": "Store the red marker in the north drawer.",
+            "sourceQuote": "Store the red marker in the north drawer.",
+            "tier": 1,
+            "bucket": "Educate",
+            "sources": [
+              {
+                "filename": "synthetic-source.txt",
+                "location": "line 1"
+              }
+            ]
+          }
+        }
+      },
+      "stages": {
+        "parse": {
+          "before": "```text\n[Marker] Do not store the red marker in the {{c1::north}} drawer.||Topic::Workshop Tier::1\n```\n```text\nfact-1 -> line #1\n```",
+          "after": [
+            {
+              "id": "reaudit-note-4",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Do not store the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [],
+              "tagFormatContract": "hierarchical-v1"
+            }
+          ]
+        },
+        "map": {
+          "before": [
+            {
+              "id": "reaudit-note-4",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Do not store the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [],
+              "tagFormatContract": "hierarchical-v1"
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-4",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Do not store the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "dedupe": {
+          "before": [
+            {
+              "id": "reaudit-note-4",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Do not store the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-4",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Do not store the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "normalize": {
+          "before": [
+            {
+              "id": "reaudit-note-4",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Do not store the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-4",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Do not store the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "lint": {
+          "before": [
+            {
+              "id": "reaudit-note-4",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Do not store the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "issues": [
+            []
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-4",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Do not store the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "edit": {
+          "before": [
+            {
+              "id": "reaudit-note-4",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Do not store the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-4",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Do not store the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "action": "No content edit requested in this fixture"
+        },
+        "export": {
+          "before": [
+            {
+              "id": "reaudit-note-4",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Do not store the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "plain": "[Marker] Do not store the red marker in the {{c1::north}} drawer.||Topic::Workshop Tier::1",
+          "html": "#separator:Pipe\n#html:true\n#notetype:Cloze\n#tags column:3\n[Marker] Do not store the red marker in the {{c1::north}} drawer.||Topic::Workshop Tier::1",
+          "withSources": "#separator:Pipe\n#html:true\n#notetype:Cloze\n#tags column:3\n[Marker] Do not store the red marker in the {{c1::north}} drawer.|Source: synthetic-source.txt, line 1|Topic::Workshop Tier::1",
+          "after": [
+            {
+              "id": "reaudit-note-4",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Do not store the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        }
+      },
+      "previews": [
+        {
+          "id": "reaudit-note-4",
+          "text": "[Marker] Do not store the red marker in the {{c1::north}} drawer.",
+          "extra": "",
+          "fronts": [
+            {
+              "index": 1,
+              "front": "[Marker] Do not store the red marker in the [...] drawer.",
+              "back": "[Marker] Do not store the red marker in the north drawer."
+            }
+          ]
+        }
+      ],
+      "requestPacket": {
+        "protocolVersion": 4,
+        "id": "source-1-part-1",
+        "chunk": 1,
+        "part": 1,
+        "parts": 1,
+        "tier": "all",
+        "sourceFactIds": [
+          "fact-1"
+        ],
+        "scopeNoteIds": [
+          "n1"
+        ],
+        "facts": [
+          {
+            "id": "fact-1",
+            "condition": "Workshop",
+            "aliases": [],
+            "subtype": "",
+            "text": "Store the red marker in the north drawer.",
+            "tier": 1,
+            "bucket": "Educate",
+            "inSelectedTier": true,
+            "sourceTokens": [
+              {
+                "id": 1,
+                "text": "Store"
+              },
+              {
+                "id": 2,
+                "text": "the"
+              },
+              {
+                "id": 3,
+                "text": "red"
+              },
+              {
+                "id": 4,
+                "text": "marker"
+              },
+              {
+                "id": 5,
+                "text": "in"
+              },
+              {
+                "id": 6,
+                "text": "the"
+              },
+              {
+                "id": 7,
+                "text": "north"
+              },
+              {
+                "id": 8,
+                "text": "drawer."
+              }
+            ]
+          }
+        ],
+        "notes": [
+          {
+            "id": "n1",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] Do not store the red marker in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "tagFormatContract": "hierarchical-v1",
+            "tier": "1",
+            "keep": true,
+            "structurallyValid": true,
+            "inSelectedTier": true,
+            "eligible": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "unresolvedFactIds": [],
+            "reviewTargets": [
+              {
+                "index": 1,
+                "front": "[Marker] Do not store the red marker in the [...] drawer.",
+                "answers": [
+                  "north"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "mockReceipt": {
+        "factReviews": [
+          {
+            "factId": "fact-1",
+            "targets": [
+              {
+                "status": "tested",
+                "noteRefs": [
+                  {
+                    "noteId": "n1",
+                    "clozeIndices": [
+                      1
+                    ]
+                  }
+                ],
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "contextRefs": []
+              }
+            ],
+            "inventory": [
+              {
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "role": "target",
+                "reason": "Synthetic fixture target; not a semantic judgment."
+              }
+            ]
+          }
+        ],
+        "noteReviews": [
+          {
+            "noteId": "n1",
+            "text": {
+              "status": "supported",
+              "evidence": [
+                {
+                  "factId": "fact-1",
+                  "sourceRef": {
+                    "start": 1,
+                    "end": 8
+                  }
+                }
+              ]
+            },
+            "extra": {
+              "status": "empty",
+              "evidence": []
+            }
+          }
+        ],
+        "findings": []
+      },
+      "acceptedReceipt": {
+        "groupId": "source-1-part-1",
+        "factReviews": [
+          {
+            "factId": "fact-1",
+            "inventory": [
+              {
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "sourceSpan": "Store the red marker in the north drawer.",
+                "sourceStart": 0,
+                "sourceEnd": 41,
+                "role": "target",
+                "reason": "Synthetic fixture target; not a semantic judgment."
+              }
+            ],
+            "targets": [
+              {
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "sourceSpan": "Store the red marker in the north drawer.",
+                "sourceStart": 0,
+                "sourceEnd": 41,
+                "status": "tested",
+                "noteRefs": [
+                  {
+                    "noteId": "reaudit-note-4",
+                    "clozeIndices": [
+                      1
+                    ]
+                  }
+                ],
+                "contextRefs": []
+              }
+            ]
+          }
+        ],
+        "noteReviews": [
+          {
+            "noteId": "reaudit-note-4",
+            "text": {
+              "status": "supported",
+              "evidence": [
+                {
+                  "factId": "fact-1",
+                  "sourceRef": {
+                    "start": 1,
+                    "end": 8
+                  },
+                  "sourceSpan": "Store the red marker in the north drawer.",
+                  "sourceStart": 0,
+                  "sourceEnd": 41
+                }
+              ]
+            },
+            "extra": {
+              "status": "empty",
+              "evidence": []
+            }
+          }
+        ],
+        "findings": [],
+        "citationRecoveries": [],
+        "referenceRecoveries": [],
+        "unresolved": [],
+        "complete": true,
+        "protocolVersion": 4,
+        "packetSignature": "{\"id\":\"source-1-part-1\",\"chunk\":1,\"part\":1,\"parts\":1,\"protocolVersion\":4,\"tier\":\"all\",\"sourceFactIds\":[\"fact-1\"],\"scopeNoteIds\":[\"reaudit-note-4\"],\"facts\":[{\"id\":\"fact-1\",\"condition\":\"Workshop\",\"aliases\":[],\"subtype\":\"\",\"text\":\"Store the red marker in the north drawer.\",\"tier\":1,\"bucket\":\"Educate\",\"inSelectedTier\":true}],\"notes\":[{\"id\":\"reaudit-note-4\",\"chunk\":1,\"sourceLine\":1,\"text\":\"[Marker] Do not store the red marker in the {{c1::north}} drawer.\",\"extra\":\"\",\"tags\":\"Topic::Workshop Tier::1\",\"tagFormatContract\":\"hierarchical-v1\",\"tier\":\"1\",\"keep\":true,\"structurallyValid\":true,\"inSelectedTier\":true,\"eligible\":true,\"factIds\":[\"fact-1\"],\"unresolvedFactIds\":[],\"reviewTargets\":[{\"index\":1,\"front\":\"[Marker] Do not store the red marker in the [...] drawer.\",\"answers\":[\"north\"]}]}],\"sizeChars\":966}"
+      },
+      "queueCodes": []
+    },
+    {
+      "id": "extra-addition",
+      "source": {
+        "metadata": {
+          "schemaVersion": "1.0"
+        },
+        "conditions": [
+          {
+            "id": "workshop",
+            "name": "Workshop",
+            "aliases": [],
+            "facts": [
+              {
+                "id": "fact-1",
+                "text": "Store the red marker in the north drawer.",
+                "sourceQuote": "Store the red marker in the north drawer.",
+                "latteBucket": "Educate",
+                "tier": 1,
+                "sources": [
+                  {
+                    "filename": "synthetic-source.txt",
+                    "location": "line 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "sourceExpectation": "No source statement describes solubility.",
+      "snapshot": {
+        "facts": [
+          {
+            "id": "fact-1",
+            "condition": "Workshop",
+            "aliases": [],
+            "subtype": "",
+            "text": "Store the red marker in the north drawer.",
+            "sourceQuote": "Store the red marker in the north drawer.",
+            "tier": 1,
+            "bucket": "Educate",
+            "sources": [
+              {
+                "filename": "synthetic-source.txt",
+                "location": "line 1"
+              }
+            ]
+          }
+        ],
+        "byId": {
+          "fact-1": {
+            "id": "fact-1",
+            "condition": "Workshop",
+            "aliases": [],
+            "subtype": "",
+            "text": "Store the red marker in the north drawer.",
+            "sourceQuote": "Store the red marker in the north drawer.",
+            "tier": 1,
+            "bucket": "Educate",
+            "sources": [
+              {
+                "filename": "synthetic-source.txt",
+                "location": "line 1"
+              }
+            ]
+          }
+        }
+      },
+      "stages": {
+        "parse": {
+          "before": "```text\n[Marker] Store the red marker in the {{c1::north}} drawer.|The marker dissolves in water.|Topic::Workshop Tier::1\n```\n```text\nfact-1 -> line #1\n```",
+          "after": [
+            {
+              "id": "reaudit-note-5",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+              "extra": "The marker dissolves in water.",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [],
+              "tagFormatContract": "hierarchical-v1"
+            }
+          ]
+        },
+        "map": {
+          "before": [
+            {
+              "id": "reaudit-note-5",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+              "extra": "The marker dissolves in water.",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [],
+              "tagFormatContract": "hierarchical-v1"
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-5",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+              "extra": "The marker dissolves in water.",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "dedupe": {
+          "before": [
+            {
+              "id": "reaudit-note-5",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+              "extra": "The marker dissolves in water.",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-5",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+              "extra": "The marker dissolves in water.",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "normalize": {
+          "before": [
+            {
+              "id": "reaudit-note-5",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+              "extra": "The marker dissolves in water.",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-5",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+              "extra": "The marker dissolves in water.",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "lint": {
+          "before": [
+            {
+              "id": "reaudit-note-5",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+              "extra": "The marker dissolves in water.",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "issues": [
+            []
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-5",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+              "extra": "The marker dissolves in water.",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "edit": {
+          "before": [
+            {
+              "id": "reaudit-note-5",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+              "extra": "The marker dissolves in water.",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-5",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+              "extra": "The marker dissolves in water.",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "action": "No content edit requested in this fixture"
+        },
+        "export": {
+          "before": [
+            {
+              "id": "reaudit-note-5",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+              "extra": "The marker dissolves in water.",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "plain": "[Marker] Store the red marker in the {{c1::north}} drawer.|The marker dissolves in water.|Topic::Workshop Tier::1",
+          "html": "#separator:Pipe\n#html:true\n#notetype:Cloze\n#tags column:3\n[Marker] Store the red marker in the {{c1::north}} drawer.|The marker dissolves in water.|Topic::Workshop Tier::1",
+          "withSources": "#separator:Pipe\n#html:true\n#notetype:Cloze\n#tags column:3\n[Marker] Store the red marker in the {{c1::north}} drawer.|The marker dissolves in water.<br>Source: synthetic-source.txt, line 1|Topic::Workshop Tier::1",
+          "after": [
+            {
+              "id": "reaudit-note-5",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+              "extra": "The marker dissolves in water.",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        }
+      },
+      "previews": [
+        {
+          "id": "reaudit-note-5",
+          "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+          "extra": "The marker dissolves in water.",
+          "fronts": [
+            {
+              "index": 1,
+              "front": "[Marker] Store the red marker in the [...] drawer.",
+              "back": "[Marker] Store the red marker in the north drawer."
+            }
+          ]
+        }
+      ],
+      "requestPacket": {
+        "protocolVersion": 4,
+        "id": "source-1-part-1",
+        "chunk": 1,
+        "part": 1,
+        "parts": 1,
+        "tier": "all",
+        "sourceFactIds": [
+          "fact-1"
+        ],
+        "scopeNoteIds": [
+          "n1"
+        ],
+        "facts": [
+          {
+            "id": "fact-1",
+            "condition": "Workshop",
+            "aliases": [],
+            "subtype": "",
+            "text": "Store the red marker in the north drawer.",
+            "tier": 1,
+            "bucket": "Educate",
+            "inSelectedTier": true,
+            "sourceTokens": [
+              {
+                "id": 1,
+                "text": "Store"
+              },
+              {
+                "id": 2,
+                "text": "the"
+              },
+              {
+                "id": 3,
+                "text": "red"
+              },
+              {
+                "id": 4,
+                "text": "marker"
+              },
+              {
+                "id": 5,
+                "text": "in"
+              },
+              {
+                "id": 6,
+                "text": "the"
+              },
+              {
+                "id": 7,
+                "text": "north"
+              },
+              {
+                "id": 8,
+                "text": "drawer."
+              }
+            ]
+          }
+        ],
+        "notes": [
+          {
+            "id": "n1",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+            "extra": "The marker dissolves in water.",
+            "tags": "Topic::Workshop Tier::1",
+            "tagFormatContract": "hierarchical-v1",
+            "tier": "1",
+            "keep": true,
+            "structurallyValid": true,
+            "inSelectedTier": true,
+            "eligible": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "unresolvedFactIds": [],
+            "reviewTargets": [
+              {
+                "index": 1,
+                "front": "[Marker] Store the red marker in the [...] drawer.",
+                "answers": [
+                  "north"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "mockReceipt": {
+        "factReviews": [
+          {
+            "factId": "fact-1",
+            "targets": [
+              {
+                "status": "tested",
+                "noteRefs": [
+                  {
+                    "noteId": "n1",
+                    "clozeIndices": [
+                      1
+                    ]
+                  }
+                ],
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "contextRefs": []
+              }
+            ],
+            "inventory": [
+              {
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "role": "target",
+                "reason": "Synthetic fixture target; not a semantic judgment."
+              }
+            ]
+          }
+        ],
+        "noteReviews": [
+          {
+            "noteId": "n1",
+            "text": {
+              "status": "supported",
+              "evidence": [
+                {
+                  "factId": "fact-1",
+                  "sourceRef": {
+                    "start": 1,
+                    "end": 8
+                  }
+                }
+              ]
+            },
+            "extra": {
+              "status": "supported",
+              "evidence": [
+                {
+                  "factId": "fact-1",
+                  "sourceRef": {
+                    "start": 1,
+                    "end": 8
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "findings": []
+      },
+      "acceptedReceipt": {
+        "groupId": "source-1-part-1",
+        "factReviews": [
+          {
+            "factId": "fact-1",
+            "inventory": [
+              {
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "sourceSpan": "Store the red marker in the north drawer.",
+                "sourceStart": 0,
+                "sourceEnd": 41,
+                "role": "target",
+                "reason": "Synthetic fixture target; not a semantic judgment."
+              }
+            ],
+            "targets": [
+              {
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "sourceSpan": "Store the red marker in the north drawer.",
+                "sourceStart": 0,
+                "sourceEnd": 41,
+                "status": "tested",
+                "noteRefs": [
+                  {
+                    "noteId": "reaudit-note-5",
+                    "clozeIndices": [
+                      1
+                    ]
+                  }
+                ],
+                "contextRefs": []
+              }
+            ]
+          }
+        ],
+        "noteReviews": [
+          {
+            "noteId": "reaudit-note-5",
+            "text": {
+              "status": "supported",
+              "evidence": [
+                {
+                  "factId": "fact-1",
+                  "sourceRef": {
+                    "start": 1,
+                    "end": 8
+                  },
+                  "sourceSpan": "Store the red marker in the north drawer.",
+                  "sourceStart": 0,
+                  "sourceEnd": 41
+                }
+              ]
+            },
+            "extra": {
+              "status": "supported",
+              "evidence": [
+                {
+                  "factId": "fact-1",
+                  "sourceRef": {
+                    "start": 1,
+                    "end": 8
+                  },
+                  "sourceSpan": "Store the red marker in the north drawer.",
+                  "sourceStart": 0,
+                  "sourceEnd": 41
+                }
+              ]
+            }
+          }
+        ],
+        "findings": [],
+        "citationRecoveries": [],
+        "referenceRecoveries": [],
+        "unresolved": [],
+        "complete": true,
+        "protocolVersion": 4,
+        "packetSignature": "{\"id\":\"source-1-part-1\",\"chunk\":1,\"part\":1,\"parts\":1,\"protocolVersion\":4,\"tier\":\"all\",\"sourceFactIds\":[\"fact-1\"],\"scopeNoteIds\":[\"reaudit-note-5\"],\"facts\":[{\"id\":\"fact-1\",\"condition\":\"Workshop\",\"aliases\":[],\"subtype\":\"\",\"text\":\"Store the red marker in the north drawer.\",\"tier\":1,\"bucket\":\"Educate\",\"inSelectedTier\":true}],\"notes\":[{\"id\":\"reaudit-note-5\",\"chunk\":1,\"sourceLine\":1,\"text\":\"[Marker] Store the red marker in the {{c1::north}} drawer.\",\"extra\":\"The marker dissolves in water.\",\"tags\":\"Topic::Workshop Tier::1\",\"tagFormatContract\":\"hierarchical-v1\",\"tier\":\"1\",\"keep\":true,\"structurallyValid\":true,\"inSelectedTier\":true,\"eligible\":true,\"factIds\":[\"fact-1\"],\"unresolvedFactIds\":[],\"reviewTargets\":[{\"index\":1,\"front\":\"[Marker] Store the red marker in the [...] drawer.\",\"answers\":[\"north\"]}]}],\"sizeChars\":982}"
+      },
+      "queueCodes": []
+    },
+    {
+      "id": "hint-addition",
+      "source": {
+        "metadata": {
+          "schemaVersion": "1.0"
+        },
+        "conditions": [
+          {
+            "id": "workshop",
+            "name": "Workshop",
+            "aliases": [],
+            "facts": [
+              {
+                "id": "fact-1",
+                "text": "Store the red marker in the north drawer.",
+                "sourceQuote": "Store the red marker in the north drawer.",
+                "latteBucket": "Educate",
+                "tier": 1,
+                "sources": [
+                  {
+                    "filename": "synthetic-source.txt",
+                    "location": "line 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "sourceExpectation": "The source supplies no sterility property.",
+      "snapshot": {
+        "facts": [
+          {
+            "id": "fact-1",
+            "condition": "Workshop",
+            "aliases": [],
+            "subtype": "",
+            "text": "Store the red marker in the north drawer.",
+            "sourceQuote": "Store the red marker in the north drawer.",
+            "tier": 1,
+            "bucket": "Educate",
+            "sources": [
+              {
+                "filename": "synthetic-source.txt",
+                "location": "line 1"
+              }
+            ]
+          }
+        ],
+        "byId": {
+          "fact-1": {
+            "id": "fact-1",
+            "condition": "Workshop",
+            "aliases": [],
+            "subtype": "",
+            "text": "Store the red marker in the north drawer.",
+            "sourceQuote": "Store the red marker in the north drawer.",
+            "tier": 1,
+            "bucket": "Educate",
+            "sources": [
+              {
+                "filename": "synthetic-source.txt",
+                "location": "line 1"
+              }
+            ]
+          }
+        }
+      },
+      "stages": {
+        "parse": {
+          "before": "```text\n[Marker] Store the red marker in the {{c1::north::sterile drawer}} drawer.||Topic::Workshop Tier::1\n```\n```text\nfact-1 -> line #1\n```",
+          "after": [
+            {
+              "id": "reaudit-note-6",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north::sterile drawer}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [],
+              "tagFormatContract": "hierarchical-v1"
+            }
+          ]
+        },
+        "map": {
+          "before": [
+            {
+              "id": "reaudit-note-6",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north::sterile drawer}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [],
+              "tagFormatContract": "hierarchical-v1"
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-6",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north::sterile drawer}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "dedupe": {
+          "before": [
+            {
+              "id": "reaudit-note-6",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north::sterile drawer}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-6",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north::sterile drawer}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "normalize": {
+          "before": [
+            {
+              "id": "reaudit-note-6",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north::sterile drawer}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-6",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north::sterile drawer}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "lint": {
+          "before": [
+            {
+              "id": "reaudit-note-6",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north::sterile drawer}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "issues": [
+            []
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-6",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north::sterile drawer}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "edit": {
+          "before": [
+            {
+              "id": "reaudit-note-6",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north::sterile drawer}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-6",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north::sterile drawer}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "action": "No content edit requested in this fixture"
+        },
+        "export": {
+          "before": [
+            {
+              "id": "reaudit-note-6",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north::sterile drawer}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "plain": "[Marker] Store the red marker in the {{c1::north::sterile drawer}} drawer.||Topic::Workshop Tier::1",
+          "html": "#separator:Pipe\n#html:true\n#notetype:Cloze\n#tags column:3\n[Marker] Store the red marker in the {{c1::north::sterile drawer}} drawer.||Topic::Workshop Tier::1",
+          "withSources": "#separator:Pipe\n#html:true\n#notetype:Cloze\n#tags column:3\n[Marker] Store the red marker in the {{c1::north::sterile drawer}} drawer.|Source: synthetic-source.txt, line 1|Topic::Workshop Tier::1",
+          "after": [
+            {
+              "id": "reaudit-note-6",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north::sterile drawer}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        }
+      },
+      "previews": [
+        {
+          "id": "reaudit-note-6",
+          "text": "[Marker] Store the red marker in the {{c1::north::sterile drawer}} drawer.",
+          "extra": "",
+          "fronts": [
+            {
+              "index": 1,
+              "front": "[Marker] Store the red marker in the [sterile drawer] drawer.",
+              "back": "[Marker] Store the red marker in the north drawer."
+            }
+          ]
+        }
+      ],
+      "requestPacket": {
+        "protocolVersion": 4,
+        "id": "source-1-part-1",
+        "chunk": 1,
+        "part": 1,
+        "parts": 1,
+        "tier": "all",
+        "sourceFactIds": [
+          "fact-1"
+        ],
+        "scopeNoteIds": [
+          "n1"
+        ],
+        "facts": [
+          {
+            "id": "fact-1",
+            "condition": "Workshop",
+            "aliases": [],
+            "subtype": "",
+            "text": "Store the red marker in the north drawer.",
+            "tier": 1,
+            "bucket": "Educate",
+            "inSelectedTier": true,
+            "sourceTokens": [
+              {
+                "id": 1,
+                "text": "Store"
+              },
+              {
+                "id": 2,
+                "text": "the"
+              },
+              {
+                "id": 3,
+                "text": "red"
+              },
+              {
+                "id": 4,
+                "text": "marker"
+              },
+              {
+                "id": 5,
+                "text": "in"
+              },
+              {
+                "id": 6,
+                "text": "the"
+              },
+              {
+                "id": 7,
+                "text": "north"
+              },
+              {
+                "id": 8,
+                "text": "drawer."
+              }
+            ]
+          }
+        ],
+        "notes": [
+          {
+            "id": "n1",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] Store the red marker in the {{c1::north::sterile drawer}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "tagFormatContract": "hierarchical-v1",
+            "tier": "1",
+            "keep": true,
+            "structurallyValid": true,
+            "inSelectedTier": true,
+            "eligible": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "unresolvedFactIds": [],
+            "reviewTargets": [
+              {
+                "index": 1,
+                "front": "[Marker] Store the red marker in the [sterile drawer] drawer.",
+                "answers": [
+                  "north"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "mockReceipt": {
+        "factReviews": [
+          {
+            "factId": "fact-1",
+            "targets": [
+              {
+                "status": "tested",
+                "noteRefs": [
+                  {
+                    "noteId": "n1",
+                    "clozeIndices": [
+                      1
+                    ]
+                  }
+                ],
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "contextRefs": []
+              }
+            ],
+            "inventory": [
+              {
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "role": "target",
+                "reason": "Synthetic fixture target; not a semantic judgment."
+              }
+            ]
+          }
+        ],
+        "noteReviews": [
+          {
+            "noteId": "n1",
+            "text": {
+              "status": "supported",
+              "evidence": [
+                {
+                  "factId": "fact-1",
+                  "sourceRef": {
+                    "start": 1,
+                    "end": 8
+                  }
+                }
+              ]
+            },
+            "extra": {
+              "status": "empty",
+              "evidence": []
+            }
+          }
+        ],
+        "findings": []
+      },
+      "acceptedReceipt": {
+        "groupId": "source-1-part-1",
+        "factReviews": [
+          {
+            "factId": "fact-1",
+            "inventory": [
+              {
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "sourceSpan": "Store the red marker in the north drawer.",
+                "sourceStart": 0,
+                "sourceEnd": 41,
+                "role": "target",
+                "reason": "Synthetic fixture target; not a semantic judgment."
+              }
+            ],
+            "targets": [
+              {
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "sourceSpan": "Store the red marker in the north drawer.",
+                "sourceStart": 0,
+                "sourceEnd": 41,
+                "status": "tested",
+                "noteRefs": [
+                  {
+                    "noteId": "reaudit-note-6",
+                    "clozeIndices": [
+                      1
+                    ]
+                  }
+                ],
+                "contextRefs": []
+              }
+            ]
+          }
+        ],
+        "noteReviews": [
+          {
+            "noteId": "reaudit-note-6",
+            "text": {
+              "status": "supported",
+              "evidence": [
+                {
+                  "factId": "fact-1",
+                  "sourceRef": {
+                    "start": 1,
+                    "end": 8
+                  },
+                  "sourceSpan": "Store the red marker in the north drawer.",
+                  "sourceStart": 0,
+                  "sourceEnd": 41
+                }
+              ]
+            },
+            "extra": {
+              "status": "empty",
+              "evidence": []
+            }
+          }
+        ],
+        "findings": [],
+        "citationRecoveries": [],
+        "referenceRecoveries": [],
+        "unresolved": [],
+        "complete": true,
+        "protocolVersion": 4,
+        "packetSignature": "{\"id\":\"source-1-part-1\",\"chunk\":1,\"part\":1,\"parts\":1,\"protocolVersion\":4,\"tier\":\"all\",\"sourceFactIds\":[\"fact-1\"],\"scopeNoteIds\":[\"reaudit-note-6\"],\"facts\":[{\"id\":\"fact-1\",\"condition\":\"Workshop\",\"aliases\":[],\"subtype\":\"\",\"text\":\"Store the red marker in the north drawer.\",\"tier\":1,\"bucket\":\"Educate\",\"inSelectedTier\":true}],\"notes\":[{\"id\":\"reaudit-note-6\",\"chunk\":1,\"sourceLine\":1,\"text\":\"[Marker] Store the red marker in the {{c1::north::sterile drawer}} drawer.\",\"extra\":\"\",\"tags\":\"Topic::Workshop Tier::1\",\"tagFormatContract\":\"hierarchical-v1\",\"tier\":\"1\",\"keep\":true,\"structurallyValid\":true,\"inSelectedTier\":true,\"eligible\":true,\"factIds\":[\"fact-1\"],\"unresolvedFactIds\":[],\"reviewTargets\":[{\"index\":1,\"front\":\"[Marker] Store the red marker in the [sterile drawer] drawer.\",\"answers\":[\"north\"]}]}],\"sizeChars\":979}"
+      },
+      "queueCodes": []
+    },
+    {
+      "id": "irrelevant-real-reference",
+      "source": {
+        "metadata": {
+          "schemaVersion": "1.0"
+        },
+        "conditions": [
+          {
+            "id": "workshop",
+            "name": "Workshop",
+            "aliases": [],
+            "facts": [
+              {
+                "id": "fact-1",
+                "text": "The blue square belongs in the east cabinet.",
+                "sourceQuote": "The blue square belongs in the east cabinet.",
+                "latteBucket": "Educate",
+                "tier": 1,
+                "sources": [
+                  {
+                    "filename": "synthetic-source.txt",
+                    "location": "line 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "sourceExpectation": "The existing source ID refers to a different object and destination.",
+      "snapshot": {
+        "facts": [
+          {
+            "id": "fact-1",
+            "condition": "Workshop",
+            "aliases": [],
+            "subtype": "",
+            "text": "The blue square belongs in the east cabinet.",
+            "sourceQuote": "The blue square belongs in the east cabinet.",
+            "tier": 1,
+            "bucket": "Educate",
+            "sources": [
+              {
+                "filename": "synthetic-source.txt",
+                "location": "line 1"
+              }
+            ]
+          }
+        ],
+        "byId": {
+          "fact-1": {
+            "id": "fact-1",
+            "condition": "Workshop",
+            "aliases": [],
+            "subtype": "",
+            "text": "The blue square belongs in the east cabinet.",
+            "sourceQuote": "The blue square belongs in the east cabinet.",
+            "tier": 1,
+            "bucket": "Educate",
+            "sources": [
+              {
+                "filename": "synthetic-source.txt",
+                "location": "line 1"
+              }
+            ]
+          }
+        }
+      },
+      "stages": {
+        "parse": {
+          "before": "```text\n[Marker] Store the red marker in the {{c1::north}} drawer.||Topic::Workshop Tier::1\n```\n```text\nfact-1 -> line #1\n```",
+          "after": [
+            {
+              "id": "reaudit-note-7",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [],
+              "tagFormatContract": "hierarchical-v1"
+            }
+          ]
+        },
+        "map": {
+          "before": [
+            {
+              "id": "reaudit-note-7",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [],
+              "tagFormatContract": "hierarchical-v1"
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-7",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "dedupe": {
+          "before": [
+            {
+              "id": "reaudit-note-7",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-7",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "normalize": {
+          "before": [
+            {
+              "id": "reaudit-note-7",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-7",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "lint": {
+          "before": [
+            {
+              "id": "reaudit-note-7",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "issues": [
+            []
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-7",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "edit": {
+          "before": [
+            {
+              "id": "reaudit-note-7",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-7",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "action": "No content edit requested in this fixture"
+        },
+        "export": {
+          "before": [
+            {
+              "id": "reaudit-note-7",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "plain": "[Marker] Store the red marker in the {{c1::north}} drawer.||Topic::Workshop Tier::1",
+          "html": "#separator:Pipe\n#html:true\n#notetype:Cloze\n#tags column:3\n[Marker] Store the red marker in the {{c1::north}} drawer.||Topic::Workshop Tier::1",
+          "withSources": "#separator:Pipe\n#html:true\n#notetype:Cloze\n#tags column:3\n[Marker] Store the red marker in the {{c1::north}} drawer.|Source: synthetic-source.txt, line 1|Topic::Workshop Tier::1",
+          "after": [
+            {
+              "id": "reaudit-note-7",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        }
+      },
+      "previews": [
+        {
+          "id": "reaudit-note-7",
+          "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+          "extra": "",
+          "fronts": [
+            {
+              "index": 1,
+              "front": "[Marker] Store the red marker in the [...] drawer.",
+              "back": "[Marker] Store the red marker in the north drawer."
+            }
+          ]
+        }
+      ],
+      "requestPacket": {
+        "protocolVersion": 4,
+        "id": "source-1-part-1",
+        "chunk": 1,
+        "part": 1,
+        "parts": 1,
+        "tier": "all",
+        "sourceFactIds": [
+          "fact-1"
+        ],
+        "scopeNoteIds": [
+          "n1"
+        ],
+        "facts": [
+          {
+            "id": "fact-1",
+            "condition": "Workshop",
+            "aliases": [],
+            "subtype": "",
+            "text": "The blue square belongs in the east cabinet.",
+            "tier": 1,
+            "bucket": "Educate",
+            "inSelectedTier": true,
+            "sourceTokens": [
+              {
+                "id": 1,
+                "text": "The"
+              },
+              {
+                "id": 2,
+                "text": "blue"
+              },
+              {
+                "id": 3,
+                "text": "square"
+              },
+              {
+                "id": 4,
+                "text": "belongs"
+              },
+              {
+                "id": 5,
+                "text": "in"
+              },
+              {
+                "id": 6,
+                "text": "the"
+              },
+              {
+                "id": 7,
+                "text": "east"
+              },
+              {
+                "id": 8,
+                "text": "cabinet."
+              }
+            ]
+          }
+        ],
+        "notes": [
+          {
+            "id": "n1",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "tagFormatContract": "hierarchical-v1",
+            "tier": "1",
+            "keep": true,
+            "structurallyValid": true,
+            "inSelectedTier": true,
+            "eligible": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "unresolvedFactIds": [],
+            "reviewTargets": [
+              {
+                "index": 1,
+                "front": "[Marker] Store the red marker in the [...] drawer.",
+                "answers": [
+                  "north"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "mockReceipt": {
+        "factReviews": [
+          {
+            "factId": "fact-1",
+            "targets": [
+              {
+                "status": "tested",
+                "noteRefs": [
+                  {
+                    "noteId": "n1",
+                    "clozeIndices": [
+                      1
+                    ]
+                  }
+                ],
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "contextRefs": []
+              }
+            ],
+            "inventory": [
+              {
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "role": "target",
+                "reason": "Synthetic fixture target; not a semantic judgment."
+              }
+            ]
+          }
+        ],
+        "noteReviews": [
+          {
+            "noteId": "n1",
+            "text": {
+              "status": "supported",
+              "evidence": [
+                {
+                  "factId": "fact-1",
+                  "sourceRef": {
+                    "start": 1,
+                    "end": 8
+                  }
+                }
+              ]
+            },
+            "extra": {
+              "status": "empty",
+              "evidence": []
+            }
+          }
+        ],
+        "findings": []
+      },
+      "acceptedReceipt": {
+        "groupId": "source-1-part-1",
+        "factReviews": [
+          {
+            "factId": "fact-1",
+            "inventory": [
+              {
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "sourceSpan": "The blue square belongs in the east cabinet.",
+                "sourceStart": 0,
+                "sourceEnd": 44,
+                "role": "target",
+                "reason": "Synthetic fixture target; not a semantic judgment."
+              }
+            ],
+            "targets": [
+              {
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "sourceSpan": "The blue square belongs in the east cabinet.",
+                "sourceStart": 0,
+                "sourceEnd": 44,
+                "status": "tested",
+                "noteRefs": [
+                  {
+                    "noteId": "reaudit-note-7",
+                    "clozeIndices": [
+                      1
+                    ]
+                  }
+                ],
+                "contextRefs": []
+              }
+            ]
+          }
+        ],
+        "noteReviews": [
+          {
+            "noteId": "reaudit-note-7",
+            "text": {
+              "status": "supported",
+              "evidence": [
+                {
+                  "factId": "fact-1",
+                  "sourceRef": {
+                    "start": 1,
+                    "end": 8
+                  },
+                  "sourceSpan": "The blue square belongs in the east cabinet.",
+                  "sourceStart": 0,
+                  "sourceEnd": 44
+                }
+              ]
+            },
+            "extra": {
+              "status": "empty",
+              "evidence": []
+            }
+          }
+        ],
+        "findings": [],
+        "citationRecoveries": [],
+        "referenceRecoveries": [],
+        "unresolved": [],
+        "complete": true,
+        "protocolVersion": 4,
+        "packetSignature": "{\"id\":\"source-1-part-1\",\"chunk\":1,\"part\":1,\"parts\":1,\"protocolVersion\":4,\"tier\":\"all\",\"sourceFactIds\":[\"fact-1\"],\"scopeNoteIds\":[\"reaudit-note-7\"],\"facts\":[{\"id\":\"fact-1\",\"condition\":\"Workshop\",\"aliases\":[],\"subtype\":\"\",\"text\":\"The blue square belongs in the east cabinet.\",\"tier\":1,\"bucket\":\"Educate\",\"inSelectedTier\":true}],\"notes\":[{\"id\":\"reaudit-note-7\",\"chunk\":1,\"sourceLine\":1,\"text\":\"[Marker] Store the red marker in the {{c1::north}} drawer.\",\"extra\":\"\",\"tags\":\"Topic::Workshop Tier::1\",\"tagFormatContract\":\"hierarchical-v1\",\"tier\":\"1\",\"keep\":true,\"structurallyValid\":true,\"inSelectedTier\":true,\"eligible\":true,\"factIds\":[\"fact-1\"],\"unresolvedFactIds\":[],\"reviewTargets\":[{\"index\":1,\"front\":\"[Marker] Store the red marker in the [...] drawer.\",\"answers\":[\"north\"]}]}],\"sizeChars\":958}"
+      },
+      "queueCodes": []
+    },
+    {
+      "id": "inconclusive-population",
+      "source": {
+        "metadata": {
+          "schemaVersion": "1.0"
+        },
+        "conditions": [
+          {
+            "id": "workshop",
+            "name": "Workshop",
+            "aliases": [],
+            "facts": [
+              {
+                "id": "fact-1",
+                "text": "Red markers go north; blue markers go south.",
+                "sourceQuote": "Red markers go north; blue markers go south.",
+                "latteBucket": "Educate",
+                "tier": 1,
+                "sources": [
+                  {
+                    "filename": "synthetic-source.txt",
+                    "location": "line 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "sourceExpectation": "Without color the destination is underdetermined, not proven true or false.",
+      "snapshot": {
+        "facts": [
+          {
+            "id": "fact-1",
+            "condition": "Workshop",
+            "aliases": [],
+            "subtype": "",
+            "text": "Red markers go north; blue markers go south.",
+            "sourceQuote": "Red markers go north; blue markers go south.",
+            "tier": 1,
+            "bucket": "Educate",
+            "sources": [
+              {
+                "filename": "synthetic-source.txt",
+                "location": "line 1"
+              }
+            ]
+          }
+        ],
+        "byId": {
+          "fact-1": {
+            "id": "fact-1",
+            "condition": "Workshop",
+            "aliases": [],
+            "subtype": "",
+            "text": "Red markers go north; blue markers go south.",
+            "sourceQuote": "Red markers go north; blue markers go south.",
+            "tier": 1,
+            "bucket": "Educate",
+            "sources": [
+              {
+                "filename": "synthetic-source.txt",
+                "location": "line 1"
+              }
+            ]
+          }
+        }
+      },
+      "stages": {
+        "parse": {
+          "before": "```text\n[Marker] Store the marker in the {{c1::north}} drawer.||Topic::Workshop Tier::1\n```\n```text\nfact-1 -> line #1\n```",
+          "after": [
+            {
+              "id": "reaudit-note-8",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [],
+              "tagFormatContract": "hierarchical-v1"
+            }
+          ]
+        },
+        "map": {
+          "before": [
+            {
+              "id": "reaudit-note-8",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [],
+              "tagFormatContract": "hierarchical-v1"
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-8",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "dedupe": {
+          "before": [
+            {
+              "id": "reaudit-note-8",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-8",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "normalize": {
+          "before": [
+            {
+              "id": "reaudit-note-8",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-8",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "lint": {
+          "before": [
+            {
+              "id": "reaudit-note-8",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "issues": [
+            []
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-8",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "edit": {
+          "before": [
+            {
+              "id": "reaudit-note-8",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-8",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "action": "No content edit requested in this fixture"
+        },
+        "export": {
+          "before": [
+            {
+              "id": "reaudit-note-8",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "plain": "[Marker] Store the marker in the {{c1::north}} drawer.||Topic::Workshop Tier::1",
+          "html": "#separator:Pipe\n#html:true\n#notetype:Cloze\n#tags column:3\n[Marker] Store the marker in the {{c1::north}} drawer.||Topic::Workshop Tier::1",
+          "withSources": "#separator:Pipe\n#html:true\n#notetype:Cloze\n#tags column:3\n[Marker] Store the marker in the {{c1::north}} drawer.|Source: synthetic-source.txt, line 1|Topic::Workshop Tier::1",
+          "after": [
+            {
+              "id": "reaudit-note-8",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] Store the marker in the {{c1::north}} drawer.",
+              "extra": "",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        }
+      },
+      "previews": [
+        {
+          "id": "reaudit-note-8",
+          "text": "[Marker] Store the marker in the {{c1::north}} drawer.",
+          "extra": "",
+          "fronts": [
+            {
+              "index": 1,
+              "front": "[Marker] Store the marker in the [...] drawer.",
+              "back": "[Marker] Store the marker in the north drawer."
+            }
+          ]
+        }
+      ],
+      "requestPacket": {
+        "protocolVersion": 4,
+        "id": "source-1-part-1",
+        "chunk": 1,
+        "part": 1,
+        "parts": 1,
+        "tier": "all",
+        "sourceFactIds": [
+          "fact-1"
+        ],
+        "scopeNoteIds": [
+          "n1"
+        ],
+        "facts": [
+          {
+            "id": "fact-1",
+            "condition": "Workshop",
+            "aliases": [],
+            "subtype": "",
+            "text": "Red markers go north; blue markers go south.",
+            "tier": 1,
+            "bucket": "Educate",
+            "inSelectedTier": true,
+            "sourceTokens": [
+              {
+                "id": 1,
+                "text": "Red"
+              },
+              {
+                "id": 2,
+                "text": "markers"
+              },
+              {
+                "id": 3,
+                "text": "go"
+              },
+              {
+                "id": 4,
+                "text": "north;"
+              },
+              {
+                "id": 5,
+                "text": "blue"
+              },
+              {
+                "id": 6,
+                "text": "markers"
+              },
+              {
+                "id": 7,
+                "text": "go"
+              },
+              {
+                "id": 8,
+                "text": "south."
+              }
+            ]
+          }
+        ],
+        "notes": [
+          {
+            "id": "n1",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] Store the marker in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "tagFormatContract": "hierarchical-v1",
+            "tier": "1",
+            "keep": true,
+            "structurallyValid": true,
+            "inSelectedTier": true,
+            "eligible": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "unresolvedFactIds": [],
+            "reviewTargets": [
+              {
+                "index": 1,
+                "front": "[Marker] Store the marker in the [...] drawer.",
+                "answers": [
+                  "north"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "mockReceipt": {
+        "factReviews": [
+          {
+            "factId": "fact-1",
+            "targets": [
+              {
+                "status": "tested",
+                "noteRefs": [
+                  {
+                    "noteId": "n1",
+                    "clozeIndices": [
+                      1
+                    ]
+                  }
+                ],
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "contextRefs": []
+              }
+            ],
+            "inventory": [
+              {
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "role": "target",
+                "reason": "Synthetic fixture target; not a semantic judgment."
+              }
+            ]
+          }
+        ],
+        "noteReviews": [
+          {
+            "noteId": "n1",
+            "text": {
+              "status": "supported",
+              "evidence": [
+                {
+                  "factId": "fact-1",
+                  "sourceRef": {
+                    "start": 1,
+                    "end": 8
+                  }
+                }
+              ]
+            },
+            "extra": {
+              "status": "empty",
+              "evidence": []
+            }
+          }
+        ],
+        "findings": []
+      },
+      "acceptedReceipt": {
+        "groupId": "source-1-part-1",
+        "factReviews": [
+          {
+            "factId": "fact-1",
+            "inventory": [
+              {
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "sourceSpan": "Red markers go north; blue markers go south.",
+                "sourceStart": 0,
+                "sourceEnd": 44,
+                "role": "target",
+                "reason": "Synthetic fixture target; not a semantic judgment."
+              }
+            ],
+            "targets": [
+              {
+                "sourceRef": {
+                  "start": 1,
+                  "end": 8
+                },
+                "sourceSpan": "Red markers go north; blue markers go south.",
+                "sourceStart": 0,
+                "sourceEnd": 44,
+                "status": "tested",
+                "noteRefs": [
+                  {
+                    "noteId": "reaudit-note-8",
+                    "clozeIndices": [
+                      1
+                    ]
+                  }
+                ],
+                "contextRefs": []
+              }
+            ]
+          }
+        ],
+        "noteReviews": [
+          {
+            "noteId": "reaudit-note-8",
+            "text": {
+              "status": "supported",
+              "evidence": [
+                {
+                  "factId": "fact-1",
+                  "sourceRef": {
+                    "start": 1,
+                    "end": 8
+                  },
+                  "sourceSpan": "Red markers go north; blue markers go south.",
+                  "sourceStart": 0,
+                  "sourceEnd": 44
+                }
+              ]
+            },
+            "extra": {
+              "status": "empty",
+              "evidence": []
+            }
+          }
+        ],
+        "findings": [],
+        "citationRecoveries": [],
+        "referenceRecoveries": [],
+        "unresolved": [],
+        "complete": true,
+        "protocolVersion": 4,
+        "packetSignature": "{\"id\":\"source-1-part-1\",\"chunk\":1,\"part\":1,\"parts\":1,\"protocolVersion\":4,\"tier\":\"all\",\"sourceFactIds\":[\"fact-1\"],\"scopeNoteIds\":[\"reaudit-note-8\"],\"facts\":[{\"id\":\"fact-1\",\"condition\":\"Workshop\",\"aliases\":[],\"subtype\":\"\",\"text\":\"Red markers go north; blue markers go south.\",\"tier\":1,\"bucket\":\"Educate\",\"inSelectedTier\":true}],\"notes\":[{\"id\":\"reaudit-note-8\",\"chunk\":1,\"sourceLine\":1,\"text\":\"[Marker] Store the marker in the {{c1::north}} drawer.\",\"extra\":\"\",\"tags\":\"Topic::Workshop Tier::1\",\"tagFormatContract\":\"hierarchical-v1\",\"tier\":\"1\",\"keep\":true,\"structurallyValid\":true,\"inSelectedTier\":true,\"eligible\":true,\"factIds\":[\"fact-1\"],\"unresolvedFactIds\":[],\"reviewTargets\":[{\"index\":1,\"front\":\"[Marker] Store the marker in the [...] drawer.\",\"answers\":[\"north\"]}]}],\"sizeChars\":950}"
+      },
+      "queueCodes": []
+    },
+    {
+      "id": "entity-and-hint-preservation",
+      "source": {
+        "metadata": {
+          "schemaVersion": "1.0"
+        },
+        "conditions": [
+          {
+            "id": "workshop",
+            "name": "Workshop",
+            "aliases": [],
+            "facts": [
+              {
+                "id": "fact-1",
+                "text": "The symbol < &amp; > is literal. Literal <tag> &amp; and \"quote\".",
+                "sourceQuote": "The symbol < &amp; > is literal. Literal <tag> &amp; and \"quote\".",
+                "latteBucket": "Educate",
+                "tier": 1,
+                "sources": [
+                  {
+                    "filename": "synthetic-source.txt",
+                    "location": "line 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "sourceExpectation": "Characters, entities, hint and Extra must retain their literal values under text-only export.",
+      "snapshot": {
+        "facts": [
+          {
+            "id": "fact-1",
+            "condition": "Workshop",
+            "aliases": [],
+            "subtype": "",
+            "text": "The symbol < &amp; > is literal. Literal <tag> &amp; and \"quote\".",
+            "sourceQuote": "The symbol < &amp; > is literal. Literal <tag> &amp; and \"quote\".",
+            "tier": 1,
+            "bucket": "Educate",
+            "sources": [
+              {
+                "filename": "synthetic-source.txt",
+                "location": "line 1"
+              }
+            ]
+          }
+        ],
+        "byId": {
+          "fact-1": {
+            "id": "fact-1",
+            "condition": "Workshop",
+            "aliases": [],
+            "subtype": "",
+            "text": "The symbol < &amp; > is literal. Literal <tag> &amp; and \"quote\".",
+            "sourceQuote": "The symbol < &amp; > is literal. Literal <tag> &amp; and \"quote\".",
+            "tier": 1,
+            "bucket": "Educate",
+            "sources": [
+              {
+                "filename": "synthetic-source.txt",
+                "location": "line 1"
+              }
+            ]
+          }
+        }
+      },
+      "stages": {
+        "parse": {
+          "before": "```text\n[Marker] The symbol {{c1::< &amp; >::symbol}} is literal.|Literal <tag> &amp; and \"quote\".|Topic::Workshop Tier::1\n```\n```text\nfact-1 -> line #1\n```",
+          "after": [
+            {
+              "id": "reaudit-note-9",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] The symbol {{c1::< &amp; >::symbol}} is literal.",
+              "extra": "Literal <tag> &amp; and \"quote\".",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [],
+              "tagFormatContract": "hierarchical-v1"
+            }
+          ]
+        },
+        "map": {
+          "before": [
+            {
+              "id": "reaudit-note-9",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] The symbol {{c1::< &amp; >::symbol}} is literal.",
+              "extra": "Literal <tag> &amp; and \"quote\".",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [],
+              "tagFormatContract": "hierarchical-v1"
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-9",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] The symbol {{c1::< &amp; >::symbol}} is literal.",
+              "extra": "Literal <tag> &amp; and \"quote\".",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "dedupe": {
+          "before": [
+            {
+              "id": "reaudit-note-9",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] The symbol {{c1::< &amp; >::symbol}} is literal.",
+              "extra": "Literal <tag> &amp; and \"quote\".",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-9",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] The symbol {{c1::< &amp; >::symbol}} is literal.",
+              "extra": "Literal <tag> &amp; and \"quote\".",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "normalize": {
+          "before": [
+            {
+              "id": "reaudit-note-9",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] The symbol {{c1::< &amp; >::symbol}} is literal.",
+              "extra": "Literal <tag> &amp; and \"quote\".",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-9",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] The symbol {{c1::< &amp; >::symbol}} is literal.",
+              "extra": "Literal <tag> &amp; and \"quote\".",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "lint": {
+          "before": [
+            {
+              "id": "reaudit-note-9",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] The symbol {{c1::< &amp; >::symbol}} is literal.",
+              "extra": "Literal <tag> &amp; and \"quote\".",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "issues": [
+            []
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-9",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] The symbol {{c1::< &amp; >::symbol}} is literal.",
+              "extra": "Literal <tag> &amp; and \"quote\".",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        },
+        "edit": {
+          "before": [
+            {
+              "id": "reaudit-note-9",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] The symbol {{c1::< &amp; >::symbol}} is literal.",
+              "extra": "Literal <tag> &amp; and \"quote\".",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "after": [
+            {
+              "id": "reaudit-note-9",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] The symbol {{c1::< &amp; >::symbol}} is literal.",
+              "extra": "Literal <tag> &amp; and \"quote\".",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "action": "No content edit requested in this fixture"
+        },
+        "export": {
+          "before": [
+            {
+              "id": "reaudit-note-9",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] The symbol {{c1::< &amp; >::symbol}} is literal.",
+              "extra": "Literal <tag> &amp; and \"quote\".",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ],
+          "plain": "[Marker] The symbol {{c1::< &amp; >::symbol}} is literal.|Literal <tag> &amp; and \"quote\".|Topic::Workshop Tier::1",
+          "html": "#separator:Pipe\n#html:true\n#notetype:Cloze\n#tags column:3\n[Marker] The symbol {{c1::&lt; &amp;amp; &gt;::symbol}} is literal.|Literal &lt;tag&gt; &amp;amp; and \"quote\".|Topic::Workshop Tier::1",
+          "withSources": "#separator:Pipe\n#html:true\n#notetype:Cloze\n#tags column:3\n[Marker] The symbol {{c1::&lt; &amp;amp; &gt;::symbol}} is literal.|Literal &lt;tag&gt; &amp;amp; and \"quote\".<br>Source: synthetic-source.txt, line 1|Topic::Workshop Tier::1",
+          "after": [
+            {
+              "id": "reaudit-note-9",
+              "chunk": 1,
+              "sourceLine": 1,
+              "text": "[Marker] The symbol {{c1::< &amp; >::symbol}} is literal.",
+              "extra": "Literal <tag> &amp; and \"quote\".",
+              "tags": "Topic::Workshop Tier::1",
+              "pipeCount": 2,
+              "needsReview": false,
+              "keep": true,
+              "factIds": [
+                "fact-1"
+              ],
+              "tagFormatContract": "hierarchical-v1",
+              "mappingIssues": []
+            }
+          ]
+        }
+      },
+      "previews": [
+        {
+          "id": "reaudit-note-9",
+          "text": "[Marker] The symbol {{c1::< &amp; >::symbol}} is literal.",
+          "extra": "Literal <tag> &amp; and \"quote\".",
+          "fronts": [
+            {
+              "index": 1,
+              "front": "[Marker] The symbol [symbol] is literal.",
+              "back": "[Marker] The symbol < &amp; > is literal."
+            }
+          ]
+        }
+      ],
+      "requestPacket": {
+        "protocolVersion": 4,
+        "id": "source-1-part-1",
+        "chunk": 1,
+        "part": 1,
+        "parts": 1,
+        "tier": "all",
+        "sourceFactIds": [
+          "fact-1"
+        ],
+        "scopeNoteIds": [
+          "n1"
+        ],
+        "facts": [
+          {
+            "id": "fact-1",
+            "condition": "Workshop",
+            "aliases": [],
+            "subtype": "",
+            "text": "The symbol < &amp; > is literal. Literal <tag> &amp; and \"quote\".",
+            "tier": 1,
+            "bucket": "Educate",
+            "inSelectedTier": true,
+            "sourceTokens": [
+              {
+                "id": 1,
+                "text": "The"
+              },
+              {
+                "id": 2,
+                "text": "symbol"
+              },
+              {
+                "id": 3,
+                "text": "<"
+              },
+              {
+                "id": 4,
+                "text": "&amp;"
+              },
+              {
+                "id": 5,
+                "text": ">"
+              },
+              {
+                "id": 6,
+                "text": "is"
+              },
+              {
+                "id": 7,
+                "text": "literal."
+              },
+              {
+                "id": 8,
+                "text": "Literal"
+              },
+              {
+                "id": 9,
+                "text": "<tag>"
+              },
+              {
+                "id": 10,
+                "text": "&amp;"
+              },
+              {
+                "id": 11,
+                "text": "and"
+              },
+              {
+                "id": 12,
+                "text": "\"quote\"."
+              }
+            ]
+          }
+        ],
+        "notes": [
+          {
+            "id": "n1",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] The symbol {{c1::< &amp; >::symbol}} is literal.",
+            "extra": "Literal <tag> &amp; and \"quote\".",
+            "tags": "Topic::Workshop Tier::1",
+            "tagFormatContract": "hierarchical-v1",
+            "tier": "1",
+            "keep": true,
+            "structurallyValid": true,
+            "inSelectedTier": true,
+            "eligible": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "unresolvedFactIds": [],
+            "reviewTargets": [
+              {
+                "index": 1,
+                "front": "[Marker] The symbol [symbol] is literal.",
+                "answers": [
+                  "< &amp; >"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "mockReceipt": {
+        "factReviews": [
+          {
+            "factId": "fact-1",
+            "targets": [
+              {
+                "status": "tested",
+                "noteRefs": [
+                  {
+                    "noteId": "n1",
+                    "clozeIndices": [
+                      1
+                    ]
+                  }
+                ],
+                "sourceRef": {
+                  "start": 1,
+                  "end": 12
+                },
+                "contextRefs": []
+              }
+            ],
+            "inventory": [
+              {
+                "sourceRef": {
+                  "start": 1,
+                  "end": 12
+                },
+                "role": "target",
+                "reason": "Synthetic fixture target; not a semantic judgment."
+              }
+            ]
+          }
+        ],
+        "noteReviews": [
+          {
+            "noteId": "n1",
+            "text": {
+              "status": "supported",
+              "evidence": [
+                {
+                  "factId": "fact-1",
+                  "sourceRef": {
+                    "start": 1,
+                    "end": 12
+                  }
+                }
+              ]
+            },
+            "extra": {
+              "status": "supported",
+              "evidence": [
+                {
+                  "factId": "fact-1",
+                  "sourceRef": {
+                    "start": 1,
+                    "end": 12
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "findings": []
+      },
+      "acceptedReceipt": {
+        "groupId": "source-1-part-1",
+        "factReviews": [
+          {
+            "factId": "fact-1",
+            "inventory": [
+              {
+                "sourceRef": {
+                  "start": 1,
+                  "end": 12
+                },
+                "sourceSpan": "The symbol < &amp; > is literal. Literal <tag> &amp; and \"quote\".",
+                "sourceStart": 0,
+                "sourceEnd": 65,
+                "role": "target",
+                "reason": "Synthetic fixture target; not a semantic judgment."
+              }
+            ],
+            "targets": [
+              {
+                "sourceRef": {
+                  "start": 1,
+                  "end": 12
+                },
+                "sourceSpan": "The symbol < &amp; > is literal. Literal <tag> &amp; and \"quote\".",
+                "sourceStart": 0,
+                "sourceEnd": 65,
+                "status": "tested",
+                "noteRefs": [
+                  {
+                    "noteId": "reaudit-note-9",
+                    "clozeIndices": [
+                      1
+                    ]
+                  }
+                ],
+                "contextRefs": []
+              }
+            ]
+          }
+        ],
+        "noteReviews": [
+          {
+            "noteId": "reaudit-note-9",
+            "text": {
+              "status": "supported",
+              "evidence": [
+                {
+                  "factId": "fact-1",
+                  "sourceRef": {
+                    "start": 1,
+                    "end": 12
+                  },
+                  "sourceSpan": "The symbol < &amp; > is literal. Literal <tag> &amp; and \"quote\".",
+                  "sourceStart": 0,
+                  "sourceEnd": 65
+                }
+              ]
+            },
+            "extra": {
+              "status": "supported",
+              "evidence": [
+                {
+                  "factId": "fact-1",
+                  "sourceRef": {
+                    "start": 1,
+                    "end": 12
+                  },
+                  "sourceSpan": "The symbol < &amp; > is literal. Literal <tag> &amp; and \"quote\".",
+                  "sourceStart": 0,
+                  "sourceEnd": 65
+                }
+              ]
+            }
+          }
+        ],
+        "findings": [],
+        "citationRecoveries": [],
+        "referenceRecoveries": [],
+        "unresolved": [],
+        "complete": true,
+        "protocolVersion": 4,
+        "packetSignature": "{\"id\":\"source-1-part-1\",\"chunk\":1,\"part\":1,\"parts\":1,\"protocolVersion\":4,\"tier\":\"all\",\"sourceFactIds\":[\"fact-1\"],\"scopeNoteIds\":[\"reaudit-note-9\"],\"facts\":[{\"id\":\"fact-1\",\"condition\":\"Workshop\",\"aliases\":[],\"subtype\":\"\",\"text\":\"The symbol < &amp; > is literal. Literal <tag> &amp; and \\\"quote\\\".\",\"tier\":1,\"bucket\":\"Educate\",\"inSelectedTier\":true}],\"notes\":[{\"id\":\"reaudit-note-9\",\"chunk\":1,\"sourceLine\":1,\"text\":\"[Marker] The symbol {{c1::< &amp; >::symbol}} is literal.\",\"extra\":\"Literal <tag> &amp; and \\\"quote\\\".\",\"tags\":\"Topic::Workshop Tier::1\",\"tagFormatContract\":\"hierarchical-v1\",\"tier\":\"1\",\"keep\":true,\"structurallyValid\":true,\"inSelectedTier\":true,\"eligible\":true,\"factIds\":[\"fact-1\"],\"unresolvedFactIds\":[],\"reviewTargets\":[{\"index\":1,\"front\":\"[Marker] The symbol [symbol] is literal.\",\"answers\":[\"< &amp; >\"]}]}],\"sizeChars\":1106}"
+      },
+      "queueCodes": [
+        "receipt-broad-target"
+      ]
+    },
+    {
+      "id": "missing-receipt-shape-0",
+      "input": {
+        "sourceRef": {
+          "start": 1,
+          "end": 8
+        },
+        "sourceSpan": "Store the red marker in the north drawer.",
+        "sourceStart": 0,
+        "sourceEnd": 41,
+        "status": "tested",
+        "noteRefs": [],
+        "contextRefs": []
+      },
+      "leafWarnings": [],
+      "meaning": "No applicable heuristic result, not a supported verdict."
+    },
+    {
+      "id": "missing-receipt-shape-1",
+      "input": {
+        "sourceRef": {
+          "start": 1,
+          "end": 8
+        },
+        "sourceSpan": "Store the red marker in the north drawer.",
+        "sourceStart": 0,
+        "sourceEnd": 41,
+        "status": "tested",
+        "noteRefs": [
+          {
+            "noteId": "missing",
+            "clozeIndices": [
+              1
+            ]
+          }
+        ],
+        "contextRefs": []
+      },
+      "leafWarnings": [],
+      "meaning": "No applicable heuristic result, not a supported verdict."
+    },
+    {
+      "id": "missing-receipt-shape-2",
+      "input": {
+        "sourceRef": {
+          "start": 1,
+          "end": 8
+        },
+        "sourceSpan": "Store the red marker in the north drawer.",
+        "sourceStart": 0,
+        "sourceEnd": 41,
+        "status": "tested",
+        "noteRefs": [
+          {
+            "noteId": "reaudit-note-10",
+            "clozeIndices": [
+              99
+            ]
+          }
+        ],
+        "contextRefs": []
+      },
+      "leafWarnings": [],
+      "meaning": "No applicable heuristic result, not a supported verdict."
+    },
+    {
+      "id": "unmapped",
+      "card": {
+        "id": "reaudit-note-11",
+        "chunk": 1,
+        "sourceLine": 1,
+        "text": "[Marker] {{c1::north}} Ж.",
+        "extra": "",
+        "tags": "Topic::Workshop Tier::1",
+        "pipeCount": 2,
+        "needsReview": false,
+        "keep": true,
+        "factIds": [],
+        "tagFormatContract": "hierarchical-v1",
+        "mappingIssues": []
+      },
+      "recallWarnings": [],
+      "sourceLinkStatus": {
+        "code": "unmapped",
+        "message": "No source fact is linked. Review the captured source and add its supporting fact IDs."
+      },
+      "numeric": {
+        "status": "Not checked",
+        "checked": 0,
+        "findings": [
+          {
+            "code": "not-checked",
+            "msg": "No valid source mapping."
+          }
+        ]
+      }
+    },
+    {
+      "id": "disputed",
+      "card": {
+        "id": "reaudit-note-11",
+        "chunk": 1,
+        "sourceLine": 1,
+        "text": "[Marker] {{c1::north}} Ж.",
+        "extra": "",
+        "tags": "Topic::Workshop Tier::1",
+        "pipeCount": 2,
+        "needsReview": false,
+        "keep": true,
+        "factIds": [
+          "fact-1"
+        ],
+        "tagFormatContract": "hierarchical-v1",
+        "mappingIssues": [
+          {
+            "code": "out-of-chunk"
+          }
+        ]
+      },
+      "recallWarnings": [],
+      "sourceLinkStatus": {
+        "code": "mapping-review",
+        "message": "Source associations have unresolved mapping diagnostics. Review and confirm the supporting facts."
+      },
+      "numeric": {
+        "status": "Source review needed",
+        "checked": 0,
+        "findings": [
+          {
+            "code": "partial-mapping",
+            "msg": "Mapping diagnostics are present; only validated source links were compared."
+          }
+        ]
+      }
+    },
+    {
+      "id": "numeric-ref-missing",
+      "source": {
+        "metadata": {
+          "schemaVersion": "1.0"
+        },
+        "conditions": [
+          {
+            "id": "workshop",
+            "name": "Workshop",
+            "aliases": [],
+            "facts": [
+              {
+                "id": "fact-1",
+                "text": "Observe for 7 minutes; test the blue marker.",
+                "sourceQuote": "Observe for 7 minutes; test the blue marker.",
+                "latteBucket": "Educate",
+                "tier": 1,
+                "sources": [
+                  {
+                    "filename": "synthetic-source.txt",
+                    "location": "line 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "target": {
+        "sourceRef": {
+          "start": 1,
+          "end": 8
+        },
+        "sourceSpan": "Observe for 7 minutes; test the blue marker.",
+        "sourceStart": 0,
+        "sourceEnd": 44,
+        "status": "tested",
+        "noteRefs": [
+          {
+            "noteId": "missing",
+            "clozeIndices": [
+              1
+            ]
+          }
+        ],
+        "contextRefs": []
+      },
+      "leafWarnings": [],
+      "publicBoundaryRejectsInvalidRef": true
+    },
+    {
+      "id": "suggestion-lifecycle",
+      "suggestion": {
+        "code": "unsupported",
+        "factIds": [
+          "fact-1"
+        ],
+        "noteIds": [
+          "n1"
+        ],
+        "message": "Mock checker proposes an unsupported replacement.",
+        "suggestion": "[Marker] Use {{c1::radiation}} to sterilize the marker."
+      },
+      "stages": {
+        "beforeSuggestion": [
+          {
+            "id": "reaudit-note-10",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "afterSuggestion": [
+          {
+            "id": "reaudit-note-10",
+            "chunk": 1,
+            "sourceLine": 1,
+            "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+            "extra": "",
+            "tags": "Topic::Workshop Tier::1",
+            "pipeCount": 2,
+            "needsReview": false,
+            "keep": true,
+            "factIds": [
+              "fact-1"
+            ],
+            "tagFormatContract": "hierarchical-v1",
+            "mappingIssues": []
+          }
+        ],
+        "afterEachDecision": [
+          {
+            "disposition": "fixed",
+            "cards": [
+              {
+                "id": "reaudit-note-10",
+                "chunk": 1,
+                "sourceLine": 1,
+                "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+                "extra": "",
+                "tags": "Topic::Workshop Tier::1",
+                "pipeCount": 2,
+                "needsReview": false,
+                "keep": true,
+                "factIds": [
+                  "fact-1"
+                ],
+                "tagFormatContract": "hierarchical-v1",
+                "mappingIssues": []
+              }
+            ]
+          },
+          {
+            "disposition": "intentional-context",
+            "cards": [
+              {
+                "id": "reaudit-note-10",
+                "chunk": 1,
+                "sourceLine": 1,
+                "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+                "extra": "",
+                "tags": "Topic::Workshop Tier::1",
+                "pipeCount": 2,
+                "needsReview": false,
+                "keep": true,
+                "factIds": [
+                  "fact-1"
+                ],
+                "tagFormatContract": "hierarchical-v1",
+                "mappingIssues": []
+              }
+            ]
+          },
+          {
+            "disposition": "covered-elsewhere",
+            "cards": [
+              {
+                "id": "reaudit-note-10",
+                "chunk": 1,
+                "sourceLine": 1,
+                "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+                "extra": "",
+                "tags": "Topic::Workshop Tier::1",
+                "pipeCount": 2,
+                "needsReview": false,
+                "keep": true,
+                "factIds": [
+                  "fact-1"
+                ],
+                "tagFormatContract": "hierarchical-v1",
+                "mappingIssues": []
+              }
+            ]
+          },
+          {
+            "disposition": "unresolved",
+            "cards": [
+              {
+                "id": "reaudit-note-10",
+                "chunk": 1,
+                "sourceLine": 1,
+                "text": "[Marker] Store the red marker in the {{c1::north}} drawer.",
+                "extra": "",
+                "tags": "Topic::Workshop Tier::1",
+                "pipeCount": 2,
+                "needsReview": false,
+                "keep": true,
+                "factIds": [
+                  "fact-1"
+                ],
+                "tagFormatContract": "hierarchical-v1",
+                "mappingIssues": []
+              }
+            ]
+          }
+        ]
+      },
+      "decisionEvidence": [
+        {
+          "key": "[\"finding\",\"unsupported\",[\"reaudit-note-10\"],[\"fact-1\"],[],\"\",\"Mock checker proposes an unsupported replacement.\"]",
+          "code": "unsupported",
+          "noteIds": [
+            "reaudit-note-10"
+          ],
+          "factIds": [
+            "fact-1"
+          ],
+          "disposition": "fixed",
+          "coveredBy": null,
+          "reason": "Synthetic manual decision",
+          "at": "2026-09-18T20:29:00.393Z",
+          "current": false,
+          "superseded": true,
+          "tier": "all",
+          "auditPreparedAt": "synthetic-capture"
+        },
+        {
+          "key": "[\"finding\",\"unsupported\",[\"reaudit-note-10\"],[\"fact-1\"],[],\"\",\"Mock checker proposes an unsupported replacement.\"]",
+          "code": "unsupported",
+          "noteIds": [
+            "reaudit-note-10"
+          ],
+          "factIds": [
+            "fact-1"
+          ],
+          "disposition": "intentional-context",
+          "coveredBy": null,
+          "reason": "Synthetic manual decision",
+          "at": "2026-09-18T20:29:00.394Z",
+          "current": false,
+          "superseded": true,
+          "tier": "all",
+          "auditPreparedAt": "synthetic-capture"
+        },
+        {
+          "key": "[\"finding\",\"unsupported\",[\"reaudit-note-10\"],[\"fact-1\"],[],\"\",\"Mock checker proposes an unsupported replacement.\"]",
+          "code": "unsupported",
+          "noteIds": [
+            "reaudit-note-10"
+          ],
+          "factIds": [
+            "fact-1"
+          ],
+          "disposition": "covered-elsewhere",
+          "coveredBy": "reaudit-note-10",
+          "reason": "Synthetic manual decision",
+          "at": "2026-09-18T20:29:00.394Z",
+          "current": false,
+          "superseded": true,
+          "tier": "all",
+          "auditPreparedAt": "synthetic-capture"
+        },
+        {
+          "key": "[\"finding\",\"unsupported\",[\"reaudit-note-10\"],[\"fact-1\"],[],\"\",\"Mock checker proposes an unsupported replacement.\"]",
+          "code": "unsupported",
+          "noteIds": [
+            "reaudit-note-10"
+          ],
+          "factIds": [
+            "fact-1"
+          ],
+          "disposition": "unresolved",
+          "coveredBy": null,
+          "reason": "Synthetic manual decision",
+          "at": "2026-09-18T20:29:00.394Z",
+          "current": true,
+          "superseded": false,
+          "tier": "all",
+          "auditPreparedAt": "synthetic-capture"
+        }
+      ]
+    }
+  ],
+  "mutations": [
+    {
+      "name": "handle-guard-bypass",
+      "outcome": "survived",
+      "error": ""
+    },
+    {
+      "name": "handle-alias-guess",
+      "outcome": "killed",
+      "error": "Expected values to be strictly equal:\n\ntrue !== false\n"
+    },
+    {
+      "name": "inventory-guard-bypass",
+      "outcome": "killed",
+      "error": "Expected values to be strictly equal:\n\ntrue !== false\n"
+    }
+  ],
+  "limitations": [
+    "The shared validReceipt fixture creates protocol-valid mock judgments; it is never the semantic oracle.",
+    "Preview/export equivalence decodes emitted escaping; it does not execute native Anki.",
+    "Leaf empty warnings are tested against public decoder rejection and independent mapping status, not mislabeled a pass."
+  ]
+}

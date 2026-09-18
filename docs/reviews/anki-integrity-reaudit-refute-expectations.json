@@ -1,0 +1,224 @@
+{
+  "schemaVersion": 1,
+  "lens": "Independent source-derived expectations and existing policy",
+  "date": "2026-09-18",
+  "status": "Final votes; a reproduced output and a failing desired assertion do not alone establish an existing-contract defect.",
+  "productionHtml": "Nursing-Study-Suite v16.6.html",
+  "htmlSha256": "8524e35c8b3621e074a0499ba3857a672464b99721e4b502c381dfa29d0b9b12",
+  "reads": [
+    "AGENTS.md",
+    "DECISIONS.md",
+    "CURRENT_STATE.md",
+    "README.md",
+    "DEVELOPMENT.md",
+    "User attachment pasted-text.txt",
+    "Relevant live HTML spans",
+    "New re-audit scripts/evidence/candidates"
+  ],
+  "method": "Read code and policy freshly, rerun all four newly written suites, then independently probe the disputed quote prefix using uniquely anchored live functions. Votes distinguish existing contracts from proposed scope expansions. No private source, browser, live model, production edit or old evidence overwrite.",
+  "votes": [
+    {
+      "id": "A1",
+      "vote": "confirm-defect",
+      "independentOracleJustification": "The source-derived prohibition must survive parsing or the malformed response must remain visibly invalid. Silently dropping an unpiped 'Do not' prefix changes the exported proposition; independent ledger destinations also shift when a malformed first note disappears.",
+      "citedContractAndLines": "HTML:4142-4149,4177-4193; README:183",
+      "executedEvidence": "Transform fails multiline-negation-prefix-lost, dropped-no-pipe-line, truncated-note. Scope is destructive malformed-response handling, not a guarantee that every arbitrary prose line is a note."
+    },
+    {
+      "id": "A2",
+      "vote": "confirm-defect",
+      "independentOracleJustification": "A valid backed-up fact and provenance must survive restore unchanged or report the loss. Length and count clipping are silent changes to otherwise usable records, independent of model semantics.",
+      "citedContractAndLines": "HTML:1715,1726,1732,1746-1747; README saving/backups paragraph",
+      "executedEvidence": "Source failures show 4000/600 clipping, condition/fact/source caps, merge-to-restore and actual persistence reload loss. Bounds themselves may be legitimate; undisclosed loss is the issue."
+    },
+    {
+      "id": "A3",
+      "vote": "confirm-defect",
+      "independentOracleJustification": "A mathematical minus sign denotes a negative value and squared/cubed units are different quantities from linear units. The exact value/unit checker should compare faithfully or return unsupported, never strip a meaningful prefix/suffix into a supported match.",
+      "citedContractAndLines": "HTML:4363-4364,4384-4403,4421-4426",
+      "executedEvidence": "Four transform failures cover changed Unicode minus, faithful Unicode/ASCII minus, cm² and cm³. This lies inside the stated exact value/unit contract."
+    },
+    {
+      "id": "A4",
+      "vote": "rescope-policy",
+      "independentOracleJustification": "Unsupported hint text is a real source-fidelity concern, but this local check explicitly scans revealed Text/Extra. Hints are outside that declared representation; extending it is a scope change rather than proving it miscompares the numbers it actually scans.",
+      "citedContractAndLines": "HTML:4363-4364,4412; README:183,201",
+      "executedEvidence": "Transform and receipt probes preserve hints; fabricated supported hint receipt illustrates semantic-checker limitation. No automatic approval or export-gate contract is established."
+    },
+    {
+      "id": "A5",
+      "vote": "confirm-defect",
+      "independentOracleJustification": "A malformed later model chunk should be quarantined like an ordinary failed chunk; it must not erase previously completed independent chunks. Nested null violates model response structure, not source truth.",
+      "citedContractAndLines": "HTML:2778-2786,2794",
+      "executedEvidence": "Source build-valid/API-error controls pass but nested-primary-shape fails: zero committed prior chunks instead of one."
+    },
+    {
+      "id": "A6",
+      "vote": "confirm-defect",
+      "independentOracleJustification": "An object lacking the required missed array is not evidence of zero omissions. An empty valid array is different from an invalid response and should not yield the same completed audit result.",
+      "citedContractAndLines": "HTML:2812-2836",
+      "executedEvidence": "Source tests reject desired behavior for missed object, null and absent key; valid missed:[] control passes."
+    },
+    {
+      "id": "A7",
+      "vote": "confirm-defect",
+      "independentOracleJustification": "The host knows the supplied filename/chunk. A model-supplied pointer to a never-read file cannot truthfully identify the supplied source; lineage is deterministically checkable without deciding clinical meaning.",
+      "citedContractAndLines": "HTML:2800,2826; README:71-77,205",
+      "executedEvidence": "Source fabricated-first-pass-pointer fails and reaches source export. Limit claim to actual mismatched pointer reproduction, not universal page-level provenance validation."
+    },
+    {
+      "id": "A8",
+      "vote": "rescope-policy",
+      "independentOracleJustification": "The positive diagnostic is unhelpful at zero attempted quotes, but absence of quotes does not make the universal statement literally false; missing-anchor warnings remain available. An attempted/matched denominator is a sound transparency improvement, not evidence of an unsupported quote being approved.",
+      "citedContractAndLines": "HTML:2794-2796,3045-3047; README extraction diagnostics",
+      "executedEvidence": "Source A8-absent-quote-status passes its existing boundary checks. Re-scope to zero-evidence status wording and preserve missing-anchor warnings in any report."
+    },
+    {
+      "id": "A9",
+      "vote": "confirm-defect",
+      "independentOracleJustification": "Receiving non-card prose does not complete the requested card-generation task even if transport ends normally. An explicit unusable-generation result is justified independently by the requested output type.",
+      "citedContractAndLines": "HTML:5817-5818,5847-5848; README:163-183",
+      "executedEvidence": "Lifecycle non-card-stop fails successful-completion assertion. Downstream zero linked count and missing-id diagnostic exist; do not claim hidden successful semantic coverage."
+    },
+    {
+      "id": "N1",
+      "vote": "rescope-policy",
+      "independentOracleJustification": "The final duplicate rows reproduce, but the current contract deliberately preserves different-tag notes and normalizes aliases after existing dedupe without expanding dedupe scope. A new post-normalization merge is a reasonable policy change; the no-final-duplicates assertion cannot itself establish the existing contract.",
+      "citedContractAndLines": "HTML:4203-4209,5820-5826; README:173,193",
+      "executedEvidence": "Transform alias-normalization-collision fails its desired no-identical-rows assertion. The explicit HTML5825 scope-preservation comment is counterevidence to classifying this alone as an unintended coding defect."
+    },
+    {
+      "id": "N2",
+      "vote": "refute",
+      "independentOracleJustification": "The UI explicitly counts source associations, not semantic coverage. A manual content edit preserving an association does not violate that stated meaning; silently erasing source links could also destroy intentional editing context.",
+      "citedContractAndLines": "HTML:4294-4299,5861-5873; README:185,189,197; DECISIONS Anki advisory accounting",
+      "executedEvidence": "Lifecycle verifies retained linked count, old audit invalidation, stopped stale checks and fresh numeric recomputation. The alleged semantic certification is expressly disclaimed."
+    },
+    {
+      "id": "N3",
+      "vote": "rescope-policy",
+      "independentOracleJustification": "Invalid schema fields are coerced to a known shape by design. The source does not tell us the intended tier or bucket, and safetyCritical alone does not establish that this imported fact must be Tier1. Reporting the fallback would improve transparency, but dropped:0 counts deleted records, not unchanged fields.",
+      "citedContractAndLines": "HTML:1710-1712,1724,1737-1744; README:71-76",
+      "executedEvidence": "Source fallback reproduction is real; no source-derived clinical priority demotion is proved. Limit recommendation to disclose/default/reject invalid metadata under an explicitly chosen import policy."
+    },
+    {
+      "id": "MAXTOK",
+      "vote": "rescope-policy",
+      "independentOracleJustification": "Partial-note preservation is compatible with reversible inspection. The actual run records truncation and visibly says cards are missing. Final Complete can confuse workflow completion with complete coverage, but a desired label assertion alone does not establish an existing no-partial-output contract.",
+      "citedContractAndLines": "HTML:5813,5847; README counts/source-review limits",
+      "executedEvidence": "Lifecycle proves explicit warning and retained truncated flag; only final-label assertion fails. Recommend partial/truncated final wording; do not report silent truncation or unsupported-note approval."
+    },
+    {
+      "id": "REPAIR_DEDUPE",
+      "vote": "rescope-policy",
+      "independentOracleJustification": "Invalid records intentionally stay visible and manual repairs preserve Keep choices. No contract authorizes automatic deletion after editing; duplicate review is advisory. Two manually repaired equal notes are not evidence of destructive or source-false behavior.",
+      "citedContractAndLines": "HTML:4208,5861-5873; README:183,193",
+      "executedEvidence": "Lifecycle invalid-repair checks pass, including two retained repaired rows and manual deselection preservation. A post-edit merge would require a separately chosen policy."
+    },
+    {
+      "id": "FACT_RENUMBER",
+      "vote": "refute",
+      "independentOracleJustification": "IDs are names within a particular KB. Re-keying an import avoids collisions, while captured source identity and replacement guards prevent same-session reassignment of old associations to new facts.",
+      "citedContractAndLines": "HTML:1755-1760,4217,4166-4173; README:77,185",
+      "executedEvidence": "Source persistence-id-scope and lifecycle actual App replacement/publication controls pass. No stale same-session association was reproduced."
+    },
+    {
+      "id": "OPERATOR",
+      "vote": "rescope-policy",
+      "independentOracleJustification": "The comparator mismatch is deliberately warn-only and additive. Promoting it to a discard rule would cross explicit approval boundaries; fact/quote entailment is not established by a location check.",
+      "citedContractAndLines": "HTML:2103-2120,2798,2822; DECISIONS quote asymmetry and warn-tier policy",
+      "executedEvidence": "Source operator-warning-policy and pass1-retention-policy pass. The warning is real; no unapproved gate is inferred."
+    },
+    {
+      "id": "EXPORT",
+      "vote": "not-reproduced",
+      "independentOracleJustification": "Quotes do not require escaping as HTML text-node content, and the exporter has explicit plain versus HTML modes. A defect requires demonstrated corruption under the actual receiving import contract rather than missing generic escaping characters.",
+      "citedContractAndLines": "HTML:4473-4481; README:175,205",
+      "executedEvidence": "Transform preview/export and receipt literal entity/hint/Extra preservation controls pass. Native Anki remains untested; therefore neither a native corruption claim nor a native acceptance claim is established."
+    },
+    {
+      "id": "PROBE",
+      "vote": "not-reproduced",
+      "independentOracleJustification": "A swallowed injected exception proves a catch path but not a reachable ordinary-input failure. A deterministic bug needs a production input that causes the quality/composition helper or callback to throw.",
+      "citedContractAndLines": "HTML:2070-2078",
+      "executedEvidence": "Source quality-probe-failure desired assertion fails with an injected throwing helper. No ordinary source failure is independently reproduced in this lens; surface failed probe status as a robustness recommendation."
+    },
+    {
+      "id": "MISSING_LEAF",
+      "vote": "refute",
+      "independentOracleJustification": "An empty list of applicable warnings is not approval. Public receipt validation rejects unknown/absent required evidence, and unmapped/disputed associations stay explicit.",
+      "citedContractAndLines": "HTML:4923-4948,5134-5163; README:189,197,201",
+      "executedEvidence": "Receipt public decoder, unknown evidence, missing supported evidence, unmapped and disputed controls all pass. Six fabricated semantically wrong supported receipts are a distinct model-oracle limitation."
+    },
+    {
+      "id": "POISONED_KB",
+      "vote": "rescope-policy",
+      "independentOracleJustification": "A truthful quote does not entail every asserted fact; later generation only sees the captured KB fact text. The false source claim is obvious under the synthetic oracle but proving arbitrary entailment is beyond the deterministic source-location check.",
+      "citedContractAndLines": "HTML:2097-2101,2794-2798,4166-4173; README:77,135-139,187,201; DECISIONS audit accounting",
+      "executedEvidence": "Source poison-chain executes and retains the unsupported fact through a faithful downstream card. Report the trust-boundary/semantic limitation, not a demonstrated regression in a semantic proof checker."
+    },
+    {
+      "id": "SUGGESTION",
+      "vote": "refute",
+      "independentOracleJustification": "The suggestion and Fixed disposition are advisory/manual metadata, not an automatic edit operation or independent semantic certification.",
+      "citedContractAndLines": "HTML:5164,5395-5402; README:199,201; DECISIONS manual review scope",
+      "executedEvidence": "Receipt suggestion/manual decision tests confirm unchanged Text/Extra/Tags/Keep/export for all dispositions and currentness invalidation after edits."
+    },
+    {
+      "id": "QUOTE_PREFIX",
+      "vote": "rescope-policy",
+      "independentOracleJustification": "The quote ending in 60 is literally a prefix of the source ending in 600 units. The fact claiming 60 units is unsupported, but literal quote presence remains true; the given reproduction does not separate a substring-location implementation defect from missing entailment/full-token policy. Existing comments explicitly preserve the accepted quote set.",
+      "citedContractAndLines": "HTML:2080-2101,2110-2120,2814-2822; DECISIONS quote asymmetry",
+      "executedEvidence": "Fresh independent probe shows literalSubstring and matcher agree [true,false,true] for prefix 60, full 60 units, full 600 units. Source omission test confirms the false fact survives. A partial-numeric-token advisory is justified; making it rejection requires an explicit boundary-policy decision."
+    }
+  ],
+  "journal": [
+    {
+      "command": "node tools/reaudit-anki-source-tests.js",
+      "chunk_id": "c5c130",
+      "wall_time_seconds": 0.3038827,
+      "exit_code": 1,
+      "original_token_count": 471,
+      "output": "PASS source-units-control\nPASS quote-dehyphenation-control\nPASS quote-substring-control\nFAIL QUOTE_PREFIX-numeric-token-boundary — partial numeric token must not admit an additive fact\n\n1 !== 0\n\nPASS import-valid-control\nFAIL N3-invalid-tier-bucket — invalid tier/bucket must not silently become 3/Look\nFAIL A2-fact-quote-truncation — long source text must remain intact or be reported\nFAIL A2-condition-cap — condition cap silently loses a valid condition\nFAIL A2-fact-cap — fact cap silently loses a valid fact\nFAIL A2-per-fact-source-cap — per-fact source cap silently removes provenance\nFAIL A2-merge-restore-length — merge-produced fact silently shortened during restore\n\n4000 !== 4027\n\nPASS build-valid-control\nPASS build-API-error-control\nFAIL A5-nested-primary-shape — nested malformed condition discards the earlier completed chunk\n\n0 !== 1\n\nFAIL A6-omission-shape-{\"missed\":{}} — malformed omission shape must be reported as incomplete/failed\nFAIL A6-omission-shape-{\"missed\":null} — malformed omission shape must be reported as incomplete/failed\nFAIL A6-omission-shape-{} — malformed omission shape must be reported as incomplete/failed\nPASS omission-empty-control\nPASS pass2-discard-control\nPASS pass1-retention-policy\nPASS operator-warning-policy\nPASS source-poison-chain\nFAIL A7-fabricated-first-pass-pointer — first-pass source pointer must bind to the actual source or report mismatch\nPASS A8-absent-quote-status\nFAIL quality-probe-failure — quality probe failure is silent\nPASS MAX_TOKENS-split-control\nPASS publication-control\nPASS import-size-control\nPASS persistence-order-control\nPASS persistence-transaction-control\nFAIL persistence-reload-loss — actual reload normalizer truncates a previously persisted valid fact\n\n4000 !== 4716\n\nPASS persistence-id-scope\n{\"tests\":32,\"pass\":18,\"fail\":14,\"mutationKilled\":2,\"mutationSurvived\":0}\n"
+    },
+    {
+      "command": "node tools/reaudit-anki-transform-tests.js",
+      "chunk_id": "d7d0c7",
+      "wall_time_seconds": 0.369783,
+      "exit_code": 1,
+      "original_token_count": 1733,
+      "output": "{\n  \"suite\": \"Independent synthetic transform re-audit\",\n  \"htmlSha256\": \"8524e35c8b3621e074a0499ba3857a672464b99721e4b502c381dfa29d0b9b12\",\n  \"fixtureCount\": 63,\n  \"assertions\": 923,\n  \"passed\": 914,\n  \"failed\": 9,\n  \"mutantsKilled\": 3,\n  \"failures\": [\n    {\n      \"id\": \"unicode-minus-changed:numeric-verdict\",\n      \"pass\": false,\n      \"error\": \"The mathematical minus sign must not turn negative five into positive five.\"\n    },\n    {\n      \"id\": \"unicode-minus-faithful:numeric-verdict\",\n      \"pass\": false,\n      \"error\": \"ASCII hyphen-minus and mathematical minus denote the same negative value.\\n\\n1 !== 0\\n\"\n    },\n    {\n      \"id\": \"superscript-unit-changed:numeric-verdict\",\n      \"pass\": false,\n      \"error\": \"Square centimeters are not centimeters; unsupported compound units must not donate a matching prefix.\"\n    },\n    {\n      \"id\": \"superscript-cubic-changed:numeric-verdict\",\n      \"pass\": false,\n      \"error\": \"Cubic centimeters are not centimeters.\"\n    },\n    {\n      \"id\": \"multiline-negation-prefix-lost:no-exported-negation-loss\",\n      \"pass\": false,\n      \"error\": \"Dropping the unpiped negation prefix changes the explicit prohibition into its opposite; export must retain the prohibition or require structural repair.\"\n    },\n    {\n      \"id\": \"dropped-no-pipe-line:parsed-notes\",\n      \"pass\": false,\n      \"error\": \"A malformed generated note should remain reviewable and must not shift the next declared note identity.\\n\\n1 !== 2\\n\"\n    },\n    {\n      \"id\": \"dropped-no-pipe-line:no-mapping-index-shift\",\n      \"pass\": false,\n      \"error\": \"A malformed generated note should remain reviewable and must not shift the next declared note identity.\"\n    },\n    {\n      \"id\": \"truncated-note:parsed-notes\",\n      \"pass\": false,\n      \"error\": \"An incomplete final note should remain visible for correction instead of disappearing.\\n\\n1 !== 2\\n\"\n    },\n    {\n      \"id\": \"alias-normalization-collision:no-byte-identical-export-duplicates\",\n      \"pass\": false,\n      \"error\": \"Two identical notes differing only by a proven source alias must not become byte-identical exported notes after dedupe.\\n\\n2 !== 1\\n\"\n    }\n  ],\n  \"mutations\": [\n    {\n      \"id\": \"numeric-supported-short-circuit\",\n      \"killed\": true,\n      \"newlyFailing\": [\n        \"changed-number:numeric-verdict\",\n        \"changed-unit:numeric-verdict\",\n        \"ascii-minus-changed:numeric-verdict\",\n        \"quote-only:numeric-verdict\",\n        \"extra-unsupported-number:numeric-verdict\",\n        \"time-value-changed:numeric-verdict\"\n      ]\n    },\n    {\n      \"id\": \"lint-selection-filter\",\n      \"killed\": true,\n      \"newlyFailing\": [\n        \"nested-cloze:preview-export:false:false:all\",\n        \"nested-cloze:preview-export:false:false:1\",\n        \"nested-cloze:preview-export:false:true:all\",\n        \"nested-cloze:preview-export:false:true:1\",\n        \"nested-cloze:preview-export:true:false:all\",\n        \"nested-cloze:preview-export:true:false:1\",\n        \"nested-cloze:preview-export:true:true:all\",\n        \"nested-cloze:preview-export:true:true:1\",\n        \"nested-cloze:eligible-notes\",\n        \"unclosed-cloze:preview-export:false:false:all\",\n        \"unclosed-cloze:preview-export:false:false:1\",\n        \"unclosed-cloze:preview-export:false:true:all\",\n        \"unclosed-cloze:preview-export:false:true:1\",\n        \"unclosed-cloze:preview-export:true:false:all\",\n        \"unclosed-cloze:preview-export:true:false:1\",\n        \"unclosed-cloze:preview-export:true:true:all\",\n        \"unclosed-cloze:preview-export:true:true:1\",\n        \"unclosed-cloze:eligible-notes\",\n        \"ambiguous-braces:preview-export:false:false:all\",\n        \"ambiguous-braces:preview-export:false:false:1\",\n        \"ambiguous-braces:preview-export:false:true:all\",\n        \"ambiguous-braces:preview-export:false:true:1\",\n        \"ambiguous-braces:preview-export:true:false:all\",\n        \"ambiguous-braces:preview-export:true:false:1\",\n        \"ambiguous-braces:preview-export:true:true:all\",\n        \"ambiguous-braces:preview-export:true:true:1\",\n        \"ambiguous-braces:eligible-notes\",\n        \"zero-index:eligible-notes\",\n        \"empty-answer:preview-export:false:false:all\",\n        \"empty-answer:preview-export:false:false:1\",\n        \"empty-answer:preview-export:false:true:all\",\n        \"empty-answer:preview-export:false:true:1\",\n        \"empty-answer:preview-export:true:false:all\",\n        \"empty-answer:preview-export:true:false:1\",\n        \"empty-answer:preview-export:true:true:all\",\n        \"empty-answer:preview-export:true:true:1\",\n        \"empty-answer:eligible-notes\",\n        \"four-indices:preview-export:false:false:all\",\n        \"four-indices:preview-export:false:false:1\",\n        \"four-indices:preview-export:false:true:all\",\n        \"four-indices:preview-export:false:true:1\",\n        \"four-indices:preview-export:true:false:all\",\n        \"four-indices:preview-export:true:false:1\",\n        \"four-indices:preview-export:true:true:all\",\n        \"four-indices:preview-export:true:true:1\",\n        \"four-indices:eligible-notes\",\n        \"pipe-in-field:preview-export:false:false:all\",\n        \"pipe-in-field:preview-export:false:false:1\",\n        \"pipe-in-field:preview-export:false:true:all\",\n        \"pipe-in-field:preview-export:false:true:1\",\n        \"pipe-in-field:preview-export:true:false:all\",\n        \"pipe-in-field:preview-export:true:false:1\",\n        \"pipe-in-field:preview-export:true:true:all\",\n        \"pipe-in-field:preview-export:true:true:1\",\n        \"pipe-in-field:eligible-notes\",\n        \"edit-pipe-injection:preview-export:false:false:all\",\n        \"edit-pipe-injection:preview-export:false:false:1\",\n        \"edit-pipe-injection:preview-export:false:true:all\",\n        \"edit-pipe-injection:preview-export:false:true:1\",\n        \"edit-pipe-injection:preview-export:true:false:all\",\n        \"edit-pipe-injection:preview-export:true:false:1\",\n        \"edit-pipe-injection:preview-export:true:true:all\",\n        \"edit-pipe-injection:preview-export:true:true:1\",\n        \"edit-pipe-injection:eligible-notes\",\n        \"edit-newline-injection:preview-export:false:false:all\",\n        \"edit-newline-injection:preview-export:false:false:1\",\n        \"edit-newline-injection:preview-export:false:true:all\",\n        \"edit-newline-injection:preview-export:false:true:1\",\n        \"edit-newline-injection:preview-export:true:false:all\",\n        \"edit-newline-injection:preview-export:true:false:1\",\n        \"edit-newline-injection:preview-export:true:true:all\",\n        \"edit-newline-injection:preview-export:true:true:1\",\n        \"edit-newline-injection:eligible-notes\"\n      ]\n    },\n    {\n      \"id\": \"dedupe-key-text-only\",\n      \"killed\": true,\n      \"newlyFailing\": [\n        \"distinct-extra:dedupe-retention\",\n        \"distinct-extra:eligible-notes\",\n        \"distinct-tag:dedupe-retention\",\n        \"distinct-tag:eligible-notes\",\n        \"manual-keep-distinction:dedupe-retention\"\n      ]\n    }\n  ]\n}\n"
+    },
+    {
+      "command": "node tools/reaudit-anki-lifecycle-tests.js",
+      "chunk_id": "3dd4d5",
+      "wall_time_seconds": 0.2717944,
+      "exit_code": 1,
+      "original_token_count": 789,
+      "output": "PASS valid-stage-preservation: one intact selected note and one review\nPASS valid-stage-preservation: raw export preserves exact editable fields\nPASS valid-stage-preservation: real snapshot retains production source shape\nPASS valid-stage-preservation: actual export callback downloads one blob\nPASS valid-stage-preservation: header escapes fields without altering editable note\nFAIL non-card-stop: A9 non-card response is not successful completion\nPASS non-card-stop: zero-note source loss is detectable\nPASS max-tokens-retention: truncation warning survives\nPASS max-tokens-retention: partial valid notes retained for inspection\nFAIL max-tokens-retention: truncated batch not labelled unqualified Complete\nPASS transport-retries-not-regeneration: HTTP and EOF retries produce one final note\nPASS transport-retries-not-regeneration: retry delay honours provider floor\nPASS transport-retries-not-regeneration: all generation requests are real streaming transport\nPASS empty-and-fatal-errors: empty STOP retries then fails without publishing\nPASS empty-and-fatal-errors: fatal HTTP does not retry\nPASS repeat-user-regeneration: second user generation replaces cards and registry\nPASS invalid-repair-and-user-selection: invalid notes remain visible and excluded\nPASS invalid-repair-and-user-selection: repair restores eligibility without content loss\nPASS invalid-repair-and-user-selection: repair/edit preserves manual exclusion\nPASS text-edit-link-association-and-currentness: N2 source association intentionally survives manual edit\nPASS text-edit-link-association-and-currentness: old audit loses currentness after edit\nPASS text-edit-link-association-and-currentness: outdated packet cannot send a new check\nPASS text-edit-link-association-and-currentness: numeric no-values status is explicit\nPASS text-edit-link-association-and-currentness: edit invalidates cached numeric result\nPASS source-replacement-and-publication: real App setter clears registry and old export\nPASS source-replacement-and-publication: real App publication guard rejects stale effect\nPASS cancel-overlap-and-identity-races: cancel prevents partial publication\nPASS cancel-overlap-and-identity-races: overlap cannot publish old cards\nPASS cancel-overlap-and-identity-races: source replacement before child rerender cannot publish\nPASS source-check-pending-retry-queue: preparation creates multiple captured groups without fetch\nPASS source-check-pending-retry-queue: malformed group remains pending while valid group retained\nPASS source-check-pending-retry-queue: resume retries only pending groups using captured prompts\nPASS source-check-pending-retry-queue: retry request body equals original captured body\nPASS source-check-pending-retry-queue: completed check does not rerun\nPASS source-check-cancel-and-edit-during-request: source-check cancel cannot publish late verdict\nPASS source-check-cancel-and-edit-during-request: in-flight edit interrupts source check\nPASS stale-run-guard-mutation: run identity source and abort matrix\nPASS stale-run-guard-mutation: inverted stale guard is killed\n{\"assertions\":38,\"passed\":36,\"failed\":2,\"unexpectedErrors\":0,\"mutantsKilled\":1}\n"
+    },
+    {
+      "command": "node tools/reaudit-anki-receipt-tests.js",
+      "chunk_id": "fefc85",
+      "wall_time_seconds": 0.2101538,
+      "exit_code": 1,
+      "original_token_count": 869,
+      "output": "PASS live-span-tail [control]\nPASS supported-literal-roundtrip [control]\nPASS supported-literal-immutability [control]\nPASS supported-literal-preserved [control]\nPASS supported-paraphrase-roundtrip [control]\nPASS supported-paraphrase-immutability [control]\nPASS supported-paraphrase-preserved [control]\nPASS contradictory-answer-roundtrip [control]\nPASS contradictory-answer-immutability [control]\nFAIL contradictory-answer-semantic-expectation [semantic-limit]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'unsupported'\n\nPASS visible-negation-roundtrip [control]\nPASS visible-negation-immutability [control]\nFAIL visible-negation-semantic-expectation [semantic-limit]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'unsupported'\n\nPASS extra-addition-roundtrip [control]\nPASS extra-addition-immutability [control]\nFAIL extra-addition-semantic-expectation [semantic-limit]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'unsupported'\n\nPASS hint-addition-roundtrip [control]\nPASS hint-addition-immutability [control]\nFAIL hint-addition-semantic-expectation [semantic-limit]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'unsupported'\n\nPASS irrelevant-real-reference-roundtrip [control]\nPASS irrelevant-real-reference-immutability [control]\nFAIL irrelevant-real-reference-semantic-expectation [semantic-limit]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'unsupported'\n\nPASS inconclusive-population-roundtrip [control]\nPASS inconclusive-population-immutability [control]\nFAIL inconclusive-population-semantic-expectation [semantic-limit]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'inconclusive'\n\nPASS entity-and-hint-preservation-roundtrip [control]\nPASS entity-and-hint-preservation-immutability [control]\nPASS entity-and-hint-preservation-preserved [control]\nPASS real-source-shape [control]\nPASS source-footers [control]\nPASS invalid-json-\"\" [control]\nPASS invalid-json-\"{\\\"factReviews\\\":\" [control]\nPASS invalid-json-\"{}\" [control]\nPASS invalid-handle-incomplete [control]\nPASS missing-inventory-tail-incomplete [control]\nPASS missing-cloze-public-decoder [control]\nPASS unknown-evidence-public-decoder [control]\nPASS missing-evidence-no-supported-receipt [control]\nPASS missing-evidence-no-invented-falsehood [control]\nPASS false-negative-checker-does-not-deselect [control]\nPASS missing-receipt-shape-0 [control]\nPASS missing-receipt-shape-1 [control]\nPASS missing-receipt-shape-2 [control]\nPASS unmapped-not-approved [control]\nPASS disputed-not-approved [control]\nPASS receipt-number-not-hidden [control]\nPASS decision-fixed-no-repair [control]\nPASS decision-intentional-context-no-repair [control]\nPASS decision-covered-elsewhere-no-repair [control]\nPASS decision-unresolved-no-repair [control]\nPASS decision-invalidated-text [control]\nPASS decision-invalidated-source [control]\nPASS decision-invalidated-tier [control]\nPASS decision-invalidated-selection [control]\nPASS covered-by-missing-rejected [control]\nPASS complementary-retry-completes [control]\nPASS repeated-retry-no-record-duplication [control]\nPASS changed-packet-cannot-merge [control]\nPASS complete-report-honest-scope [control]\nPASS stale-report-not-complete [control]\n{\"passed\":54,\"failed\":6,\"failuresByCategory\":{\"semantic-limit\":6}}\nSURVIVED handle-guard-bypass\nKILLED handle-alias-guess\nKILLED inventory-guard-bypass\n"
+    },
+    {
+      "command": "@'\nconst fs=require('node:fs'),assert=require('node:assert/strict');\nconst h=fs.readFileSync('Nursing-Study-Suite v16.6.html','utf8');\nconst a='function kbNormForMatch(s)',b='// ── v15.14: operator agreement';\nassert.equal(h.split(a).length,2);assert.equal(h.split(b).length,2);\nconst H=new Function(h.slice(h.indexOf(a),h.indexOf(b))+';return {kbNormForMatch,kbQuoteInSource};')();\nassert.equal(typeof H.kbQuoteInSource,'function');\nconst source='The synthetic marker reads 600 units.';\nconst probes=['The synthetic marker reads 60','The synthetic marker reads 60 units.','The synthetic marker reads 600 units.'];\nconst result=probes.map(quote=>({quote,literalSubstring:source.includes(quote),accepted:H.kbQuoteInSource(quote,H.kbNormForMatch(source))}));\nassert.deepEqual(result.map(x=>x.accepted),[true,false,true]);\nassert.deepEqual(result.map(x=>x.literalSubstring),[true,false,true]);\nconsole.log(JSON.stringify({source,result,oracle:'The first quote is a literal source prefix; the full claim 60 units is unsupported, but the presence-only gate is not an entailment oracle.'},null,2));\n'@ | node",
+      "chunk_id": "37f23a",
+      "wall_time_seconds": 0.2837073,
+      "exit_code": 0,
+      "original_token_count": 149,
+      "output": "{\n  \"source\": \"The synthetic marker reads 600 units.\",\n  \"result\": [\n    {\n      \"quote\": \"The synthetic marker reads 60\",\n      \"literalSubstring\": true,\n      \"accepted\": true\n    },\n    {\n      \"quote\": \"The synthetic marker reads 60 units.\",\n      \"literalSubstring\": false,\n      \"accepted\": false\n    },\n    {\n      \"quote\": \"The synthetic marker reads 600 units.\",\n      \"literalSubstring\": true,\n      \"accepted\": true\n    }\n  ],\n  \"oracle\": \"The first quote is a literal source prefix; the full claim 60 units is unsupported, but the presence-only gate is not an entailment oracle.\"\n}\n"
+    }
+  ],
+  "limitations": [
+    "The six mocked supported semantic receipts are limits of accepting model judgments, not six deterministic coding bugs.",
+    "No independent clinical priority oracle exists for an invalid imported tier.",
+    "No native Anki import or ordinary-input probe exception was reproduced.",
+    "Helper preview equivalence is not native Anki rendering acceptance.",
+    "Advisory policy improvements remain useful even where a strict coding-defect vote is rejected."
+  ]
+}

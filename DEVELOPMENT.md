@@ -4,7 +4,7 @@ This is the task map for maintainers and coding agents. `AGENTS.md` remains the 
 
 ## Repository shape
 
-- `Nursing-Study-Suite v16.6.html` is the complete application.
+- `Nursing-Study-Suite v16.7.html` is the complete application.
 - `latte-tests.js` is the deterministic regression harness and extracts live functions by anchor.
 - `verify-repo.js` is the only ordinary repository verification entry point.
 - `prompt-baseline.json` stores the 11 frozen prompt hashes.
@@ -13,6 +13,7 @@ This is the task map for maintainers and coding agents. `AGENTS.md` remains the 
 - `tools/render-prompts.js` checks or regenerates the generated prompt appendix.
 - `neia-retest.js` and `davis-transcribe-test.js` are explicitly authorized, live-API measurement tools.
 - The remediation regression modules under `tools/` are imported by `latte-tests.js` and exercise extracted shipped functions using synthetic data. Their assertions contribute to the enforced harness total.
+- The 2026-09-18 integrity regression modules add source/build, import/restore, transform, lifecycle and evidence checks to that harness. The separate `audit-anki-*` and `reaudit-anki-*` scripts remain historical audit artifacts; their captured defect expectations and semantic-limit failures are not ordinary repository gates and must not be rewritten to manufacture a green audit.
 - `docs/history/` preserves historical prompt diffs and the dormant v16 design/benchmark. These are reference records, not current implementation instructions.
 
 ## Safe workflow
@@ -39,6 +40,8 @@ This is the task map for maintainers and coding agents. `AGENTS.md` remains the 
 The approved v16.5 Anki master and runtime adapter changes are recorded in `docs/history/ANKI-v16.5-target-allocation.diff` and `docs/history/ANKI-v16.5-adapter.diff`. Internal target planning and reconciliation keep the same two-block response contract. Prompt-contract assertions protect instructions and formatting, not model adherence.
 
 The approved v16.6 changes leave all eleven frozen constants unchanged. Exact runtime changes are recorded in `docs/history/ANKI-v16.6-adapter.diff`, `docs/history/ANKI-v16.6-serializer.diff`, and `docs/history/ANKI-v16.6-audit-builder.diff`. The source packet supplies canonical Condition tokens; reference normalization is lossless and recorded; mixed-context and short-citation signals remain advisory.
+
+The 2026-09-18 integrity changes ship in v16.7. They leave prompt bytes and CDN pins unchanged; the filename, release comment, visible version and generated prompt documentation identify the new release. See the [release verification record](docs/reviews/anki-v16.7-release.md). See [the implementation record](docs/reviews/anki-integrity-implementation-2026-09-18.md) and the current policy additions in `DECISIONS.md`. Deterministic acceptance is separate from unavailable browser/native import checks and from any separately authorized live-material measurement.
 
 ## Stable landmarks inside the HTML
 

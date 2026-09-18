@@ -1,0 +1,461 @@
+{
+  "reviewer": "Independent adversarial refuter: downstream guards and actual user impact",
+  "date": "2026-09-18",
+  "html": "Nursing-Study-Suite v16.6.html",
+  "htmlSha256FromExecutedScripts": "8524e35c8b3621e074a0499ba3857a672464b99721e4b502c381dfa29d0b9b12",
+  "scope": "Fresh shipped-code reads, routed project instructions, current new re-audit artifacts, four independently executed new scripts. No old audit treated as authority; no private course materials, live API, browser, native Anki, or production edits.",
+  "lineNumberConvention": "All bare line references name Nursing-Study-Suite v16.6.html. Ranges refer to read source spans, not browser coverage.",
+  "summary": {
+    "confirmDefect": 11,
+    "rescopePolicy": 6,
+    "refute": 3,
+    "notReproduced": 2
+  },
+  "severityMeaning": "Qualitative impact within this local study app; high denotes potential content/provenance integrity, not a measured clinical incident or security severity.",
+  "votes": [
+    {
+      "id": "A1",
+      "vote": "confirm-defect",
+      "severity": "high",
+      "downstreamPath": [
+        "4147 discards every non-pipe line before note numbering",
+        "4178/4186 maps surviving sourceLine values and flags invalid destinations",
+        "4358–4361 structurally valid survivor stays selected",
+        "4473–4481 exports survivor"
+      ],
+      "testEvidence": "transform: multiline-negation-prefix-lost:no-exported-negation-loss, dropped-no-pipe-line:parsed-notes, dropped-no-pipe-line:no-mapping-index-shift, truncated-note:parsed-notes fail",
+      "impact": "Separate effects: (1) standalone 'Do not' disappears while its following affirmative cloze stays lint-clean and exports; (2) deleting an entire malformed note shifts later mapping identities. Mapping diagnostics and numeric warnings mitigate the latter fixture, not the lost-negation fixture. Original response remains downloadable at 6030; do not claim all evidence is destroyed.",
+      "refutationAttempt": "Selection re-lints surviving fields, but cannot reconstruct omitted text or original note identities. No deterministic downstream restoration exists."
+    },
+    {
+      "id": "A2",
+      "vote": "confirm-defect",
+      "severity": "high",
+      "downstreamPath": [
+        "1715 truncates strings",
+        "1726/1732 slice conditions/facts",
+        "1746/1747 cap quotes/source pointers",
+        "1757 rekeys remaining facts",
+        "10168 hydration normalizes persisted KB"
+      ],
+      "testEvidence": "source: A2-fact-quote-truncation, A2-condition-cap, A2-fact-cap, A2-per-fact-source-cap, A2-merge-restore-length, persistence-reload-loss fail",
+      "impact": "Silent import/restore loss can remove terminal qualifiers, whole facts, or provenance; dropped counts remain zero. Validators see only the altered object, so no later stage recovers lost bytes. Native IndexedDB reload was not executed; real normalization/save helpers were.",
+      "refutationAttempt": "Limits themselves are defensible resource policy, but absent loss accounting is not. A2 counts related cap/truncation manifestations as one defect family."
+    },
+    {
+      "id": "A3",
+      "vote": "confirm-defect",
+      "severity": "medium",
+      "downstreamPath": [
+        "4384/4385 ASCII sign/unit patterns",
+        "4387–4404 tokenize prefix of unsupported forms",
+        "4412 revealed Text/Extra scan",
+        "4423 matching value/unit short-circuits warning",
+        "4426 produces numeric status"
+      ],
+      "testEvidence": "transform: unicode-minus-changed, unicode-minus-faithful, superscript-unit-changed, superscript-cubic-changed numeric-verdict assertions fail",
+      "impact": "Unsupported Unicode minus and exponent forms produce false-clean numeric statuses; equivalent minus spellings can also falsely warn. Warnings are advisory: this is a scanner correctness defect, not a proved clinical approval/export-gate bypass.",
+      "refutationAttempt": "Unsupported-form/remainder guards exist but do not catch the tested leading mathematical minus or unit superscript; ordinary ASCII-minus and other numeric controls pass."
+    },
+    {
+      "id": "A4",
+      "vote": "rescope-policy",
+      "severity": "limitation",
+      "downstreamPath": [
+        "4363 declares revealed-text scope",
+        "4412 uses revealed preview, omitting cloze hints",
+        "5148 local receipt recall checks referenced hidden answers",
+        "README.md:191 documents revealed Text/Extra scope"
+      ],
+      "testEvidence": "transform covers unsupported hint numbers; receipt hint-addition semantic expectation fails while roundtrip/immutability controls pass",
+      "impact": "A numeric hint can contain unsupported information without this narrow scanner warning. It is a real scope gap but not a breach of its documented revealed-text contract. Optional model receipts can also be wrong; their protocol validity is not semantic proof.",
+      "refutationAttempt": "No export block is promised and warn-tier policy is explicit. Expanding scan scope is a policy/product recommendation with dedicated regression controls."
+    },
+    {
+      "id": "A5",
+      "vote": "confirm-defect",
+      "severity": "medium",
+      "downstreamPath": [
+        "2778–2785 catches only top-level extraction validation",
+        "2786 dereferences nested null after catch",
+        "2844–2846 merge/publication never reached",
+        "2867 displays whole-build error"
+      ],
+      "testEvidence": "source: A5-nested-primary-shape fails; build-API-error-control passes",
+      "impact": "A later conditions:[null] response aborts the whole build and leaves earlier completed chunks uncommitted. Error is visible. No claim that an existing previously saved KB is deleted or that this is a silent failure.",
+      "refutationAttempt": "Ordinary API failure is handled per chunk and preserves prior success; nested-shape failure escapes that recovery boundary. Existing output error handling does not preserve the accumulated parts."
+    },
+    {
+      "id": "A6",
+      "vote": "confirm-defect",
+      "severity": "medium",
+      "downstreamPath": [
+        "2812 wrong-shaped missed falls back to []",
+        "2832 emits audit +0 recovered",
+        "2833–2836 warning only for thrown errors",
+        "2846 publishes primary KB"
+      ],
+      "testEvidence": "source: A6-omission-shape-{\"missed\":{}}, A6-omission-shape-{\"missed\":null}, A6-omission-shape-{} fail; omission-empty-control passes",
+      "impact": "Malformed/missing audit inventory is shown as completed-empty instead of unavailable/incomplete. Primary facts remain. This does not prove an actual clinical omission occurred.",
+      "refutationAttempt": "A valid empty array is legitimate, but missing/object/null evidence cannot establish that result. No later guard validates the discarded response shape."
+    },
+    {
+      "id": "A7",
+      "vote": "confirm-defect",
+      "severity": "medium",
+      "downstreamPath": [
+        "2800 overwrites top-level source only",
+        "1697–1701 trusts fact sourcePointer",
+        "4168–4170 immutable snapshot preserves invented pointer",
+        "4464–4481 optional source export repeats it"
+      ],
+      "testEvidence": "source: A7-fabricated-first-pass-pointer fails through build/serializer/snapshot/export",
+      "impact": "A located true quote can be associated with never-read.pdf/page 999 and exported when references enabled. User is sent to invented provenance. Quote location does not validate its file/page metadata.",
+      "refutationAttempt": "Pointer sanitization removes field separators/newlines, not provenance error. Pass 2 assigns actual file/range at 2826 but primary extraction does not."
+    },
+    {
+      "id": "A8",
+      "vote": "rescope-policy",
+      "severity": "low",
+      "downstreamPath": [
+        "2795 skips empty quote without counting miss",
+        "3045–3047 green all-quotes-located branch for zero misses",
+        "validateLatteKnowledgeBase emits missing-short-verbatim-anchor warning"
+      ],
+      "testEvidence": "source: A8-absent-quote-status passes, demonstrating zero misses plus an actual missing-anchor validator warning",
+      "impact": "The green sentence is insufficiently qualified when no quote was attempted. The broader no-diagnostic/no-warning claim is refuted. Checked/missing/failed denominators would communicate evidence better; retention remains approved policy.",
+      "refutationAttempt": "Existing warning survives and is relevant. Zero attempted quotes is vacuous success of the literal count, not proof that every fact was verified. Browser rendering was not run."
+    },
+    {
+      "id": "A9",
+      "vote": "confirm-defect",
+      "severity": "medium",
+      "downstreamPath": [
+        "4147 drops non-card prose",
+        "5817/5818 accept zero received notes",
+        "5844–5847 publish empty batch and Complete success",
+        "5848/5849 log 0/1 links and mapping diagnostics",
+        "5941–5953 renders even empty-batch coverage",
+        "4474 returns empty export"
+      ],
+      "testEvidence": "lifecycle: non-card-stop A9 non-card response is not successful completion fails; zero-note source loss is detectable passes",
+      "impact": "Unusable nonempty STOP output gets successful final status. It does not produce unsupported exported notes or falsely report 1/1 coverage; fixture has 0/1 and a missing-id warning.",
+      "refutationAttempt": "Empty export and coverage guard mitigate harm but do not make the successful generation status accurate."
+    },
+    {
+      "id": "N1",
+      "vote": "confirm-defect",
+      "severity": "low",
+      "downstreamPath": [
+        "4208 dedupe includes raw tag set",
+        "4274–4285 alias normalization rewrites tags",
+        "5826 runs dedupe before normalization",
+        "4431–4441 collision groups remain advisory",
+        "5963–5965 exposes collisions/duplicates",
+        "4479 outputs both rows"
+      ],
+      "testEvidence": "transform: alias-normalization-collision:no-byte-identical-export-duplicates fails",
+      "impact": "Automatic generation produces two byte-identical selected export rows after normalization. Collision warnings make redundancy discoverable; no claim that native Anki creates two distinct notes under its default import mode (not run).",
+      "refutationAttempt": "Warnings do not re-dedupe and the automatic change introduced identity after the one deletion pass. Keep/evidence merging must be preserved in any fix; manual edit policy is different."
+    },
+    {
+      "id": "N2",
+      "vote": "rescope-policy",
+      "severity": "limitation",
+      "downstreamPath": [
+        "5861–5874 updates card object/lint while retaining factIds",
+        "4294–4299 counts associations, not semantics",
+        "README.md:185 explicitly defines association count",
+        "5974/5976 shows outdated audit and disables retry for changed cards",
+        "5388–5392 invalidates review decisions by exact cards identity"
+      ],
+      "testEvidence": "lifecycle: source association intentionally survives manual edit, old audit loses currentness, outdated packet cannot send new check, numeric no-values status explicit, edit invalidates numeric cache all pass",
+      "impact": "Manual unrelated Text edits retain source associations but do not retain a current optional semantic audit. Calling the linked-fact metric a false semantic certification overstates its current documented contract. Optional relinking reminders could improve UX.",
+      "refutationAttempt": "Existing source association is not automatically invalid because wording changes; automatic unlinking would lose legitimate paraphrase/repair links. Genuine unsupported-number edits re-run numeric checking."
+    },
+    {
+      "id": "N3",
+      "vote": "confirm-defect",
+      "severity": "medium",
+      "downstreamPath": [
+        "1737 invalid tier becomes 3",
+        "1741 invalid bucket becomes Look",
+        "1744 retains safetyCritical=true",
+        "validation sees only normalized values",
+        "kbForAnki serializes chosen Tier",
+        "4359 selected tier filter follows emitted tags"
+      ],
+      "testEvidence": "source: N3-invalid-tier-bucket fails; import-valid-control numeric string tier succeeds",
+      "impact": "Unrecognized metadata silently receives substantive classifications with no diagnostic. Imported intended priority is UNKNOWN; do not claim the input proves Tier 1 or a measured safety-critical demotion. Retained safetyCritical=true makes silent arbitrary Tier 3 especially suspicious, not proof of intended tier.",
+      "refutationAttempt": "Coercion supports valid numeric string input, but invalid enum values provide no evidence for chosen priority/bucket. Warning/rejection is justified without inventing an alternative clinical tier."
+    },
+    {
+      "id": "MAXTOK",
+      "vote": "confirm-defect",
+      "severity": "low",
+      "downstreamPath": [
+        "5813 records truncated=true and explicit cards-missing error",
+        "5844 retains metadata/raw output",
+        "5847 emits unconditional green Complete",
+        "4460 diagnostics exposes truncated"
+      ],
+      "testEvidence": "lifecycle: truncation warning survives and partial valid notes retained pass; truncated batch not labelled unqualified Complete fails",
+      "impact": "Conflicting final completion wording despite known truncation. Retaining partial structurally valid notes is not itself a defect; truncation is not silent and the warning/flag remain.",
+      "refutationAttempt": "Strong downstream diagnostic mitigates the status bug. Scope recommendation to final status, with no new export gate."
+    },
+    {
+      "id": "REPAIR_DEDUPE",
+      "vote": "rescope-policy",
+      "severity": "limitation",
+      "downstreamPath": [
+        "4208 invalid notes get null dedupe key",
+        "4358–4361 keeps invalid notes ineligible",
+        "5861 manual repair recalculates eligibility without deduplication",
+        "5963–5965 advisory collision review"
+      ],
+      "testEvidence": "lifecycle: invalid-repair-and-user-selection controls pass; transform/lifecycle record identical repaired rows",
+      "impact": "Manual edits can produce identical eligible rows; invalid notes remain visible for repair and choices are preserved. Automatic post-edit deletion is not established as desired behavior and could conflict with user intent.",
+      "refutationAttempt": "Unlike N1, a user edit is the cause of equivalence. Duplicate warnings exist; no silent automated content removal should be inferred as the fix."
+    },
+    {
+      "id": "FACT_RENUMBER",
+      "vote": "refute",
+      "severity": "none",
+      "downstreamPath": [
+        "1701/1757 assigns snapshot-local fact IDs",
+        "4166 snapshots exact original fact bodies",
+        "10139–10143 replacing KB clears registry",
+        "10209–10210 rejects stale registration",
+        "4217 and 4474 block stale generation/export"
+      ],
+      "testEvidence": "source: persistence-id-scope passes; lifecycle: source-replacement-and-publication and cancel-overlap-and-identity-races controls pass",
+      "impact": "Standalone IDs can change after import, but no active old-to-new same-session reference corruption was reproduced. Historical evidence must carry source identity/snapshot; renumbering alone is not corruption.",
+      "refutationAttempt": "Current source identity and captured snapshot guards defeat the proposed stale association. Native browser timing remains an untested limitation."
+    },
+    {
+      "id": "OPERATOR",
+      "vote": "rescope-policy",
+      "severity": "limitation",
+      "downstreamPath": [
+        "2103–2120 documents additive warning-only operator check",
+        "2798/2822 invokes it after literal quote acceptance",
+        "2840 logs operator disagreement",
+        "DECISIONS.md asymmetry/warning policy"
+      ],
+      "testEvidence": "source: operator-warning-policy, pass1-retention-policy, pass2-discard-control pass",
+      "impact": "Inverted comparator quote remains with explicit warning per approved policy; fact/quote entailment is not independently proven. This is not a missed existing hard gate.",
+      "refutationAttempt": "Promoting warning to rejection changes an intentional measured policy and needs approval, not an audit implementation fix."
+    },
+    {
+      "id": "EXPORT",
+      "vote": "not-reproduced",
+      "severity": "unmeasured",
+      "downstreamPath": [
+        "4475 escapes &<> in text-node content",
+        "4479 outputs tags as third pipe field",
+        "4336 live lint excludes actual pipe/newline fields",
+        "README.md:177 documents plain/header import settings and duplicate mode"
+      ],
+      "testEvidence": "transform preview/export fixture controls and receipt entity-and-hint-preservation controls pass; lifecycle real export callback passes",
+      "impact": "No field-byte loss or preview/export disagreement reproduced in helper fixtures with quotes/entities/hints/Extra. Quotes need not be HTML-escaped in text nodes. Actual Anki parser behavior for tags/quoted delimiters remains untested.",
+      "refutationAttempt": "Do not infer corruption solely from absence of quote escaping or apply HTML escaping to tag tokens without native-import evidence. Helper roundtrip is not a native Anki result."
+    },
+    {
+      "id": "PROBE",
+      "vote": "not-reproduced",
+      "severity": "unmeasured",
+      "downstreamPath": [
+        "2074/2077 catches quality/composition helper or callback exceptions",
+        "2078 proceeds to group units"
+      ],
+      "testEvidence": "source: quality-probe-failure desired warning assertion fails only under injected throwing helper",
+      "impact": "Silent suppression is a confirmed exceptional code path, but no ordinary supported-input trigger was shown. Keep separate from reproduced user-facing defects.",
+      "refutationAttempt": "A mocked thrown exception does not establish real PDF/PPTX inputs reach this path. Native parsing/probe and browser callbacks were not exercised."
+    },
+    {
+      "id": "MISSING_LEAF",
+      "vote": "refute",
+      "severity": "none",
+      "downstreamPath": [
+        "5139 missing/disputed mapping skips an inapplicable local heuristic",
+        "5151/5156 missing receipt inputs return no local warning",
+        "4875–4891 validates target identities/index requirements",
+        "4912 rejects supported field lacking evidence",
+        "4923–4945 public decoder quarantines invalid records",
+        "source-link status remains unmapped/mapping-review"
+      ],
+      "testEvidence": "receipt: invalid-handle-incomplete, missing-cloze-public-decoder, unknown-evidence-public-decoder, missing-evidence-no-supported-receipt, missing-evidence-no-invented-falsehood, unmapped-not-approved, disputed-not-approved pass",
+      "impact": "An empty local heuristic result is not an approval status. Executed public paths remain incomplete/inconclusive with invalid evidence, and do not create unsupported approval from absent leaves.",
+      "refutationAttempt": "Candidate isolates applicability helpers while omitting the upstream protocol guard and separate mapping status. Distinguish this from accepted but semantically false model receipts."
+    },
+    {
+      "id": "POISONED_KB",
+      "vote": "rescope-policy",
+      "severity": "limitation",
+      "downstreamPath": [
+        "2795–2798 verifies sourceQuote location, not entailment of fact.text",
+        "2844 merges false fact with true quote",
+        "5791 structured FACT lines are generation truth",
+        "4415 numeric support uses captured KB text",
+        "4473 exports faithful card"
+      ],
+      "testEvidence": "source: source-poison-chain passes as a limit reproduction; receipt six adversarial semantic expectations fail",
+      "impact": "Wrong primary extraction can propagate faithfully through KB-to-card stages. This is an important source-boundary limitation, not evidence that a deterministic entailment check was bypassed. Mock responses do not measure real model frequency or clinical correctness.",
+      "refutationAttempt": "Literal quote presence, structural validity, and complete references cannot entail a fact. The user-facing caveats and explicit accounting/semantics distinction are material mitigations."
+    },
+    {
+      "id": "SUGGESTION",
+      "vote": "refute",
+      "severity": "none",
+      "downstreamPath": [
+        "5164 suggestions receive advisory warnings",
+        "5395–5400 returns review metadata only",
+        "5532 displays Proposed edit to review",
+        "5534 says Fixed is manual review, not passed AI recheck"
+      ],
+      "testEvidence": "receipt: decision-fixed-no-repair, decision-intentional-context-no-repair, decision-covered-elsewhere-no-repair, decision-unresolved-no-repair all pass; content/selection/export unchanged",
+      "impact": "No automatic source-free clinical repair occurs in the tested path. Users may manually copy suggestions, but that is different from automatic modification.",
+      "refutationAttempt": "Exact function bodies and executed lifecycle show metadata creation only. Source/card/tier/selection changes invalidate captured decisions."
+    },
+    {
+      "id": "QUOTE_PREFIX",
+      "vote": "confirm-defect",
+      "severity": "high",
+      "downstreamPath": [
+        "2082 normalized source strings preserve 60 vs 600 digit sequences",
+        "2100/2101 unbounded includes admits token prefix",
+        "2820 omission quote discard therefore bypassed",
+        "2822 no operator issue for plain numeric quote",
+        "2826/2827 recovered fact published"
+      ],
+      "testEvidence": "source: QUOTE_PREFIX-numeric-token-boundary fails (one admitted when zero expected); quote-substring-control and quote-dehyphenation-control pass",
+      "impact": "A quote ending in token 60 is declared located inside a source ending in token 600; actual omission pass retains the altered fact with no quote/operator warning. This violates literal full-token quote location, separately from semantic entailment.",
+      "refutationAttempt": "Do not demand that every arbitrary source substring imply its fact, and preserve valid phrase-within-sentence matching. The defect is only token-boundary admission of a different numeric token; subsequent numeric card checks read the already-altered KB and cannot restore source truth."
+    }
+  ],
+  "journal": [
+    {
+      "command": "node tools/reaudit-anki-source-tests.js",
+      "chunk_id": "28fa31",
+      "wall_time_seconds": 0.3813343,
+      "exit_code": 1,
+      "original_token_count": 471,
+      "output": "PASS source-units-control\nPASS quote-dehyphenation-control\nPASS quote-substring-control\nFAIL QUOTE_PREFIX-numeric-token-boundary — partial numeric token must not admit an additive fact\n\n1 !== 0\n\nPASS import-valid-control\nFAIL N3-invalid-tier-bucket — invalid tier/bucket must not silently become 3/Look\nFAIL A2-fact-quote-truncation — long source text must remain intact or be reported\nFAIL A2-condition-cap — condition cap silently loses a valid condition\nFAIL A2-fact-cap — fact cap silently loses a valid fact\nFAIL A2-per-fact-source-cap — per-fact source cap silently removes provenance\nFAIL A2-merge-restore-length — merge-produced fact silently shortened during restore\n\n4000 !== 4027\n\nPASS build-valid-control\nPASS build-API-error-control\nFAIL A5-nested-primary-shape — nested malformed condition discards the earlier completed chunk\n\n0 !== 1\n\nFAIL A6-omission-shape-{\"missed\":{}} — malformed omission shape must be reported as incomplete/failed\nFAIL A6-omission-shape-{\"missed\":null} — malformed omission shape must be reported as incomplete/failed\nFAIL A6-omission-shape-{} — malformed omission shape must be reported as incomplete/failed\nPASS omission-empty-control\nPASS pass2-discard-control\nPASS pass1-retention-policy\nPASS operator-warning-policy\nPASS source-poison-chain\nFAIL A7-fabricated-first-pass-pointer — first-pass source pointer must bind to the actual source or report mismatch\nPASS A8-absent-quote-status\nFAIL quality-probe-failure — quality probe failure is silent\nPASS MAX_TOKENS-split-control\nPASS publication-control\nPASS import-size-control\nPASS persistence-order-control\nPASS persistence-transaction-control\nFAIL persistence-reload-loss — actual reload normalizer truncates a previously persisted valid fact\n\n4000 !== 4716\n\nPASS persistence-id-scope\n{\"tests\":32,\"pass\":18,\"fail\":14,\"mutationKilled\":2,\"mutationSurvived\":0}\n"
+    },
+    {
+      "command": "node tools/reaudit-anki-transform-tests.js",
+      "chunk_id": "ae1e77",
+      "wall_time_seconds": 0.4481406,
+      "exit_code": 1,
+      "original_token_count": 1733,
+      "output": "{\n  \"suite\": \"Independent synthetic transform re-audit\",\n  \"htmlSha256\": \"8524e35c8b3621e074a0499ba3857a672464b99721e4b502c381dfa29d0b9b12\",\n  \"fixtureCount\": 63,\n  \"assertions\": 923,\n  \"passed\": 914,\n  \"failed\": 9,\n  \"mutantsKilled\": 3,\n  \"failures\": [\n    {\n      \"id\": \"unicode-minus-changed:numeric-verdict\",\n      \"pass\": false,\n      \"error\": \"The mathematical minus sign must not turn negative five into positive five.\"\n    },\n    {\n      \"id\": \"unicode-minus-faithful:numeric-verdict\",\n      \"pass\": false,\n      \"error\": \"ASCII hyphen-minus and mathematical minus denote the same negative value.\\n\\n1 !== 0\\n\"\n    },\n    {\n      \"id\": \"superscript-unit-changed:numeric-verdict\",\n      \"pass\": false,\n      \"error\": \"Square centimeters are not centimeters; unsupported compound units must not donate a matching prefix.\"\n    },\n    {\n      \"id\": \"superscript-cubic-changed:numeric-verdict\",\n      \"pass\": false,\n      \"error\": \"Cubic centimeters are not centimeters.\"\n    },\n    {\n      \"id\": \"multiline-negation-prefix-lost:no-exported-negation-loss\",\n      \"pass\": false,\n      \"error\": \"Dropping the unpiped negation prefix changes the explicit prohibition into its opposite; export must retain the prohibition or require structural repair.\"\n    },\n    {\n      \"id\": \"dropped-no-pipe-line:parsed-notes\",\n      \"pass\": false,\n      \"error\": \"A malformed generated note should remain reviewable and must not shift the next declared note identity.\\n\\n1 !== 2\\n\"\n    },\n    {\n      \"id\": \"dropped-no-pipe-line:no-mapping-index-shift\",\n      \"pass\": false,\n      \"error\": \"A malformed generated note should remain reviewable and must not shift the next declared note identity.\"\n    },\n    {\n      \"id\": \"truncated-note:parsed-notes\",\n      \"pass\": false,\n      \"error\": \"An incomplete final note should remain visible for correction instead of disappearing.\\n\\n1 !== 2\\n\"\n    },\n    {\n      \"id\": \"alias-normalization-collision:no-byte-identical-export-duplicates\",\n      \"pass\": false,\n      \"error\": \"Two identical notes differing only by a proven source alias must not become byte-identical exported notes after dedupe.\\n\\n2 !== 1\\n\"\n    }\n  ],\n  \"mutations\": [\n    {\n      \"id\": \"numeric-supported-short-circuit\",\n      \"killed\": true,\n      \"newlyFailing\": [\n        \"changed-number:numeric-verdict\",\n        \"changed-unit:numeric-verdict\",\n        \"ascii-minus-changed:numeric-verdict\",\n        \"quote-only:numeric-verdict\",\n        \"extra-unsupported-number:numeric-verdict\",\n        \"time-value-changed:numeric-verdict\"\n      ]\n    },\n    {\n      \"id\": \"lint-selection-filter\",\n      \"killed\": true,\n      \"newlyFailing\": [\n        \"nested-cloze:preview-export:false:false:all\",\n        \"nested-cloze:preview-export:false:false:1\",\n        \"nested-cloze:preview-export:false:true:all\",\n        \"nested-cloze:preview-export:false:true:1\",\n        \"nested-cloze:preview-export:true:false:all\",\n        \"nested-cloze:preview-export:true:false:1\",\n        \"nested-cloze:preview-export:true:true:all\",\n        \"nested-cloze:preview-export:true:true:1\",\n        \"nested-cloze:eligible-notes\",\n        \"unclosed-cloze:preview-export:false:false:all\",\n        \"unclosed-cloze:preview-export:false:false:1\",\n        \"unclosed-cloze:preview-export:false:true:all\",\n        \"unclosed-cloze:preview-export:false:true:1\",\n        \"unclosed-cloze:preview-export:true:false:all\",\n        \"unclosed-cloze:preview-export:true:false:1\",\n        \"unclosed-cloze:preview-export:true:true:all\",\n        \"unclosed-cloze:preview-export:true:true:1\",\n        \"unclosed-cloze:eligible-notes\",\n        \"ambiguous-braces:preview-export:false:false:all\",\n        \"ambiguous-braces:preview-export:false:false:1\",\n        \"ambiguous-braces:preview-export:false:true:all\",\n        \"ambiguous-braces:preview-export:false:true:1\",\n        \"ambiguous-braces:preview-export:true:false:all\",\n        \"ambiguous-braces:preview-export:true:false:1\",\n        \"ambiguous-braces:preview-export:true:true:all\",\n        \"ambiguous-braces:preview-export:true:true:1\",\n        \"ambiguous-braces:eligible-notes\",\n        \"zero-index:eligible-notes\",\n        \"empty-answer:preview-export:false:false:all\",\n        \"empty-answer:preview-export:false:false:1\",\n        \"empty-answer:preview-export:false:true:all\",\n        \"empty-answer:preview-export:false:true:1\",\n        \"empty-answer:preview-export:true:false:all\",\n        \"empty-answer:preview-export:true:false:1\",\n        \"empty-answer:preview-export:true:true:all\",\n        \"empty-answer:preview-export:true:true:1\",\n        \"empty-answer:eligible-notes\",\n        \"four-indices:preview-export:false:false:all\",\n        \"four-indices:preview-export:false:false:1\",\n        \"four-indices:preview-export:false:true:all\",\n        \"four-indices:preview-export:false:true:1\",\n        \"four-indices:preview-export:true:false:all\",\n        \"four-indices:preview-export:true:false:1\",\n        \"four-indices:preview-export:true:true:all\",\n        \"four-indices:preview-export:true:true:1\",\n        \"four-indices:eligible-notes\",\n        \"pipe-in-field:preview-export:false:false:all\",\n        \"pipe-in-field:preview-export:false:false:1\",\n        \"pipe-in-field:preview-export:false:true:all\",\n        \"pipe-in-field:preview-export:false:true:1\",\n        \"pipe-in-field:preview-export:true:false:all\",\n        \"pipe-in-field:preview-export:true:false:1\",\n        \"pipe-in-field:preview-export:true:true:all\",\n        \"pipe-in-field:preview-export:true:true:1\",\n        \"pipe-in-field:eligible-notes\",\n        \"edit-pipe-injection:preview-export:false:false:all\",\n        \"edit-pipe-injection:preview-export:false:false:1\",\n        \"edit-pipe-injection:preview-export:false:true:all\",\n        \"edit-pipe-injection:preview-export:false:true:1\",\n        \"edit-pipe-injection:preview-export:true:false:all\",\n        \"edit-pipe-injection:preview-export:true:false:1\",\n        \"edit-pipe-injection:preview-export:true:true:all\",\n        \"edit-pipe-injection:preview-export:true:true:1\",\n        \"edit-pipe-injection:eligible-notes\",\n        \"edit-newline-injection:preview-export:false:false:all\",\n        \"edit-newline-injection:preview-export:false:false:1\",\n        \"edit-newline-injection:preview-export:false:true:all\",\n        \"edit-newline-injection:preview-export:false:true:1\",\n        \"edit-newline-injection:preview-export:true:false:all\",\n        \"edit-newline-injection:preview-export:true:false:1\",\n        \"edit-newline-injection:preview-export:true:true:all\",\n        \"edit-newline-injection:preview-export:true:true:1\",\n        \"edit-newline-injection:eligible-notes\"\n      ]\n    },\n    {\n      \"id\": \"dedupe-key-text-only\",\n      \"killed\": true,\n      \"newlyFailing\": [\n        \"distinct-extra:dedupe-retention\",\n        \"distinct-extra:eligible-notes\",\n        \"distinct-tag:dedupe-retention\",\n        \"distinct-tag:eligible-notes\",\n        \"manual-keep-distinction:dedupe-retention\"\n      ]\n    }\n  ]\n}\n"
+    },
+    {
+      "command": "node tools/reaudit-anki-lifecycle-tests.js",
+      "chunk_id": "2a132e",
+      "wall_time_seconds": 0.4212778,
+      "exit_code": 1,
+      "original_token_count": 789,
+      "output": "PASS valid-stage-preservation: one intact selected note and one review\nPASS valid-stage-preservation: raw export preserves exact editable fields\nPASS valid-stage-preservation: real snapshot retains production source shape\nPASS valid-stage-preservation: actual export callback downloads one blob\nPASS valid-stage-preservation: header escapes fields without altering editable note\nFAIL non-card-stop: A9 non-card response is not successful completion\nPASS non-card-stop: zero-note source loss is detectable\nPASS max-tokens-retention: truncation warning survives\nPASS max-tokens-retention: partial valid notes retained for inspection\nFAIL max-tokens-retention: truncated batch not labelled unqualified Complete\nPASS transport-retries-not-regeneration: HTTP and EOF retries produce one final note\nPASS transport-retries-not-regeneration: retry delay honours provider floor\nPASS transport-retries-not-regeneration: all generation requests are real streaming transport\nPASS empty-and-fatal-errors: empty STOP retries then fails without publishing\nPASS empty-and-fatal-errors: fatal HTTP does not retry\nPASS repeat-user-regeneration: second user generation replaces cards and registry\nPASS invalid-repair-and-user-selection: invalid notes remain visible and excluded\nPASS invalid-repair-and-user-selection: repair restores eligibility without content loss\nPASS invalid-repair-and-user-selection: repair/edit preserves manual exclusion\nPASS text-edit-link-association-and-currentness: N2 source association intentionally survives manual edit\nPASS text-edit-link-association-and-currentness: old audit loses currentness after edit\nPASS text-edit-link-association-and-currentness: outdated packet cannot send a new check\nPASS text-edit-link-association-and-currentness: numeric no-values status is explicit\nPASS text-edit-link-association-and-currentness: edit invalidates cached numeric result\nPASS source-replacement-and-publication: real App setter clears registry and old export\nPASS source-replacement-and-publication: real App publication guard rejects stale effect\nPASS cancel-overlap-and-identity-races: cancel prevents partial publication\nPASS cancel-overlap-and-identity-races: overlap cannot publish old cards\nPASS cancel-overlap-and-identity-races: source replacement before child rerender cannot publish\nPASS source-check-pending-retry-queue: preparation creates multiple captured groups without fetch\nPASS source-check-pending-retry-queue: malformed group remains pending while valid group retained\nPASS source-check-pending-retry-queue: resume retries only pending groups using captured prompts\nPASS source-check-pending-retry-queue: retry request body equals original captured body\nPASS source-check-pending-retry-queue: completed check does not rerun\nPASS source-check-cancel-and-edit-during-request: source-check cancel cannot publish late verdict\nPASS source-check-cancel-and-edit-during-request: in-flight edit interrupts source check\nPASS stale-run-guard-mutation: run identity source and abort matrix\nPASS stale-run-guard-mutation: inverted stale guard is killed\n{\"assertions\":38,\"passed\":36,\"failed\":2,\"unexpectedErrors\":0,\"mutantsKilled\":1}\n"
+    },
+    {
+      "command": "node tools/reaudit-anki-receipt-tests.js",
+      "chunk_id": "8178ea",
+      "wall_time_seconds": 0.3155065,
+      "exit_code": 1,
+      "original_token_count": 869,
+      "output": "PASS live-span-tail [control]\nPASS supported-literal-roundtrip [control]\nPASS supported-literal-immutability [control]\nPASS supported-literal-preserved [control]\nPASS supported-paraphrase-roundtrip [control]\nPASS supported-paraphrase-immutability [control]\nPASS supported-paraphrase-preserved [control]\nPASS contradictory-answer-roundtrip [control]\nPASS contradictory-answer-immutability [control]\nFAIL contradictory-answer-semantic-expectation [semantic-limit]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'unsupported'\n\nPASS visible-negation-roundtrip [control]\nPASS visible-negation-immutability [control]\nFAIL visible-negation-semantic-expectation [semantic-limit]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'unsupported'\n\nPASS extra-addition-roundtrip [control]\nPASS extra-addition-immutability [control]\nFAIL extra-addition-semantic-expectation [semantic-limit]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'unsupported'\n\nPASS hint-addition-roundtrip [control]\nPASS hint-addition-immutability [control]\nFAIL hint-addition-semantic-expectation [semantic-limit]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'unsupported'\n\nPASS irrelevant-real-reference-roundtrip [control]\nPASS irrelevant-real-reference-immutability [control]\nFAIL irrelevant-real-reference-semantic-expectation [semantic-limit]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'unsupported'\n\nPASS inconclusive-population-roundtrip [control]\nPASS inconclusive-population-immutability [control]\nFAIL inconclusive-population-semantic-expectation [semantic-limit]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'supported'\n- 'inconclusive'\n\nPASS entity-and-hint-preservation-roundtrip [control]\nPASS entity-and-hint-preservation-immutability [control]\nPASS entity-and-hint-preservation-preserved [control]\nPASS real-source-shape [control]\nPASS source-footers [control]\nPASS invalid-json-\"\" [control]\nPASS invalid-json-\"{\\\"factReviews\\\":\" [control]\nPASS invalid-json-\"{}\" [control]\nPASS invalid-handle-incomplete [control]\nPASS missing-inventory-tail-incomplete [control]\nPASS missing-cloze-public-decoder [control]\nPASS unknown-evidence-public-decoder [control]\nPASS missing-evidence-no-supported-receipt [control]\nPASS missing-evidence-no-invented-falsehood [control]\nPASS false-negative-checker-does-not-deselect [control]\nPASS missing-receipt-shape-0 [control]\nPASS missing-receipt-shape-1 [control]\nPASS missing-receipt-shape-2 [control]\nPASS unmapped-not-approved [control]\nPASS disputed-not-approved [control]\nPASS receipt-number-not-hidden [control]\nPASS decision-fixed-no-repair [control]\nPASS decision-intentional-context-no-repair [control]\nPASS decision-covered-elsewhere-no-repair [control]\nPASS decision-unresolved-no-repair [control]\nPASS decision-invalidated-text [control]\nPASS decision-invalidated-source [control]\nPASS decision-invalidated-tier [control]\nPASS decision-invalidated-selection [control]\nPASS covered-by-missing-rejected [control]\nPASS complementary-retry-completes [control]\nPASS repeated-retry-no-record-duplication [control]\nPASS changed-packet-cannot-merge [control]\nPASS complete-report-honest-scope [control]\nPASS stale-report-not-complete [control]\n{\"passed\":54,\"failed\":6,\"failuresByCategory\":{\"semantic-limit\":6}}\nSURVIVED handle-guard-bypass\nKILLED handle-alias-guess\nKILLED inventory-guard-bypass\n"
+    }
+  ],
+  "inspectionJournal": {
+    "status": "Read-only inspection commands exited 0. Shell execution outputs may be tool-truncated; targeted follow-up reads filled the important guard paths.",
+    "files": [
+      "AGENTS.md",
+      "DECISIONS.md",
+      "CURRENT_STATE.md",
+      "README.md",
+      "DEVELOPMENT.md",
+      "user supplied pasted-text.txt",
+      "docs/reviews/anki-integrity-reaudit-candidates.json",
+      "new four stage evidence docs"
+    ],
+    "sourceReadRanges": [
+      [
+        1645,
+        1780
+      ],
+      [
+        2070,
+        2123
+      ],
+      [
+        2745,
+        2867
+      ],
+      [
+        3036,
+        3054
+      ],
+      [
+        4142,
+        4218
+      ],
+      [
+        4274,
+        4304
+      ],
+      [
+        4358,
+        4484
+      ],
+      [
+        4824,
+        4838
+      ],
+      [
+        4864,
+        4958
+      ],
+      [
+        5134,
+        5180
+      ],
+      [
+        5385,
+        5410
+      ],
+      [
+        5524,
+        5540
+      ],
+      [
+        5770,
+        5890
+      ],
+      [
+        5937,
+        5968
+      ],
+      [
+        6007,
+        6037
+      ],
+      [
+        10135,
+        10146
+      ],
+      [
+        10206,
+        10214
+      ]
+    ],
+    "readMethod": "Get-Content -LiteralPath plus numbered range iteration; rg -n for guard names and README association/coverage/numeric/export wording."
+  },
+  "limitations": [
+    "No independent runtime browser/native Anki/IndexedDB testing.",
+    "New fixtures are synthetic boundary mocks; semantic wrong-model receipts show limits, not measured failure rates.",
+    "All four desired-behavior scripts intentionally exit 1. Failed aspirations are not automatically confirmed implementation defects; votes incorporate documented policy and downstream guards.",
+    "Source report says quality probe failure but only an injected throwing helper reproduces it.",
+    "This refuter created only this new vote artifact."
+  ]
+}

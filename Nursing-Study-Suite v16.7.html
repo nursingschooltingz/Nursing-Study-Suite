@@ -8,7 +8,8 @@
      Babel, so this adds narrow resource directives without a default-src/script-src migration. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net">
 <title>LATTE Study Suite</title>
-<!-- v16.6 (2026-09-13): lossless audit reference normalization, mixed Text/Extra review, exact source condition tags, and advisory context/evidence checks. All eleven frozen prompts, Flash/Medium, and selection/semantic warning guards remain unchanged. Verification: docs/reviews/anki-v16.6-implementation.md.
+<!-- v16.7 (2026-09-18): text-only Anki data integrity, lossless KB import/restore, per-chunk recovery, bounded quote checks, honest generation status, numeric hint checks, and preserved merge/edit provenance. All eleven frozen prompts, Flash/Medium, and advisory warning tiers remain unchanged. Verification: docs/reviews/anki-v16.7-release.md.
+     v16.6 (2026-09-13): lossless audit reference normalization, mixed Text/Extra review, exact source condition tags, and advisory context/evidence checks. All eleven frozen prompts, Flash/Medium, and selection/semantic warning guards remain unchanged. Verification: docs/reviews/anki-v16.6-implementation.md.
      v16.4 (2026-09-13): exact audit note/source addresses, source inventory accounting, independent record recovery, and whole-deck recall review. All 11 frozen prompts, generation settings and export warning tiers are preserved. Verification: docs/reviews/anki-v16.4-implementation.md.
      v16.2 (2026-09-13): Anki Flash/Medium default; source-only dynamic adapter, advisory retrieval/tag diagnostics, editable source links, explicit target/field check records, and reproducible private reports. All 11 frozen prompts, warning tiers and three-field exports are preserved. Local verification and measurement limits: docs/reviews/anki-v16.2-implementation.md.
      v16.1 (2026-09-11): Anki source fidelity and review tools; explicit empty-Extra default, source-supported explanations, many-to-many fact mapping, answer-exposure and source warnings, and an optional source check with reviewable suggestions. Only the approved Anki prompt baseline changes; Flash/Low, advisory warnings and three-field exports are preserved. Verification and measurement limits: docs/reviews/anki-v16.1-release.md.
@@ -1712,64 +1713,74 @@ function mergeLatteParts(parts,course='',exam=''){
 // This coerces to a known shape, drops unusable entries, and reports what it dropped.
 const KB_IMPORT_MAX_BYTES=25*1024*1024;
 const KB_BUCKETS=['BriefPatho','Look','Assess','Tests','Treatments','Educate'];
-const _kbStr=(v,max=4000)=>typeof v==='string'?v.slice(0,max):(v==null?'':String(v).slice(0,max));
-// Explicit key skip: a crafted "__proto__"/"constructor"/"prototype" own-key in parsed
-// JSON must never reach a spread/assign path. (Copies onto a plain object literal; the
-// key skip is what does the work.)
+// v16.7: preserve source and provenance strings; the file-size gate bounds external input.
+const _kbStr=v=>typeof v==='string'?v:(v==null?'':String(v));
+// Explicit key skip: untrusted JSON keys must never reach a spread/assign path.
 const _kbSafeKeys=o=>{const out={};for(const k of Object.keys(o||{})){if(k==='__proto__'||k==='constructor'||k==='prototype')continue;out[k]=o[k];}return out;};
-function kbNormalizeImported(raw){
+function kbNormalizeImported(raw,{restore=false}={}){
   if(!raw||typeof raw!=='object'||Array.isArray(raw))throw new Error('This file is not a LATTE Knowledge Base object.');
   const src=_kbSafeKeys(raw);
   if(!Array.isArray(src.conditions))throw new Error('This JSON does not contain a LATTE Knowledge Base (no conditions array).');
   const dropped={conditions:0,facts:0};
+  // v16.7: a resource cap must reject the import, never silently keep a shortened KB.
+  // App-created snapshots have already been saved; restoring them must not impose import caps.
+  const bounded=(value,max,path)=>{if(!restore&&value.length>max)throw new Error(path+' contains '+value.length+' entries; the import limit is '+max+'. No Knowledge Base was imported. Split the source file before importing.');return value;};
+  const unusable=(kind,path)=>{if(restore)throw new Error('Saved Knowledge Base has an invalid '+path+'. Existing saved data was preserved.');dropped[kind]++;};
+  // v16.7: restoring typed source bytes must never stringify malformed stored objects.
+  const str=(value,path,required=false)=>{if(restore&&(required||value!=null)&&typeof value!=='string')throw new Error('Saved Knowledge Base '+path+' must be text. Existing saved data was preserved.');return _kbStr(value);};
   const conditions=[];
-  for(const c0 of src.conditions.slice(0,2000)){
-    if(!c0||typeof c0!=='object'||Array.isArray(c0)){dropped.conditions++;continue;}
-    const c=_kbSafeKeys(c0);
-    const name=_kbStr(c.name,300).trim();
-    if(!name){dropped.conditions++;continue;}
+  for(const [ci,c0] of bounded(src.conditions,2000,'conditions').entries()){
+    const cp='conditions['+ci+']';
+    if(!c0||typeof c0!=='object'||Array.isArray(c0)){unusable('conditions',cp);continue;}
+    const c=_kbSafeKeys(c0),name=str(c.name,cp+'.name',true);
+    if(!name.trim()){unusable('conditions',cp+'.name');continue;}
     const facts=[];
-    for(const f0 of (Array.isArray(c.facts)?c.facts:[]).slice(0,5000)){
-      if(!f0||typeof f0!=='object'||Array.isArray(f0)){dropped.facts++;continue;}
-      const f=_kbSafeKeys(f0);
-      const text=_kbStr(f.text).trim();
-      if(!text){dropped.facts++;continue;}
-      const tier=[1,2,3].includes(Number(f.tier))?Number(f.tier):3;
+    if(!Array.isArray(c.facts)&&(restore||c.facts!=null))unusable('facts',cp+'.facts');
+    for(const [fi,f0] of bounded(Array.isArray(c.facts)?c.facts:[],5000,cp+'.facts').entries()){
+      const fp=cp+'.facts['+fi+']';
+      if(!f0||typeof f0!=='object'||Array.isArray(f0)){unusable('facts',fp);continue;}
+      const f=_kbSafeKeys(f0),text=str(f.text,fp+'.text',true);
+      if(!text.trim()){unusable('facts',fp+'.text');continue;}
+      // v16.7: unknown priority/category cannot be safely guessed from a malformed import.
+      const tier=(typeof f.tier==='number'||typeof f.tier==='string'&&f.tier.trim())?Number(f.tier):NaN;
+      if(![1,2,3].includes(tier))throw new Error(fp+'.tier must be 1, 2, or 3. Correct this value before '+(restore?'restoring':'importing')+'; no priority was assigned.');
+      if(!KB_BUCKETS.includes(f.latteBucket))throw new Error(fp+'.latteBucket must be one of '+KB_BUCKETS.join(', ')+'. Correct this value before '+(restore?'restoring':'importing')+'; no category was assigned.');
+      if((restore||f.sources!=null)&&!Array.isArray(f.sources))throw new Error(fp+'.sources must be an array. No provenance was discarded.');
+      const sources=bounded(f.sources||[],50,fp+'.sources').map((s,si)=>{
+        if(!s||typeof s!=='object'||Array.isArray(s))throw new Error(fp+'.sources['+si+'] must be a source object. No provenance was discarded.');
+        const x=_kbSafeKeys(s);return{...(restore?x:{}),filename:str(x.filename,fp+'.sources['+si+'].filename'),location:str(x.location,fp+'.sources['+si+'].location')};
+      });
       facts.push({
-        id:_kbStr(f.id,60)||'',
-        text,tier,
-        latteBucket:KB_BUCKETS.includes(f.latteBucket)?f.latteBucket:'Look',
-        subtype:f.subtype==null?null:_kbStr(f.subtype,60),
-        factType:_kbStr(f.factType,60)||'other',
-        safetyCritical:!!f.safetyCritical,
-        recovered:!!f.recovered,
-        sourceQuote:_kbStr(f.sourceQuote,600),
-        sources:Array.isArray(f.sources)?f.sources.slice(0,50).filter(s=>s&&typeof s==='object').map(s=>{const x=_kbSafeKeys(s);return{filename:_kbStr(x.filename,300),location:_kbStr(x.location,300)};}):[],
+        ...(restore?f:{}),id:str(f.id,fp+'.id',true)||'',text,tier,latteBucket:f.latteBucket,
+        subtype:f.subtype==null?null:str(f.subtype,fp+'.subtype'),factType:str(f.factType,fp+'.factType')||'other',
+        safetyCritical:!!f.safetyCritical,recovered:!!f.recovered,sourceQuote:str(f.sourceQuote,fp+'.sourceQuote'),sources,
       });
     }
-    // v15.14: was dropped.conditions++, which counted a condition the loop then KEPT.
-    if(!Array.isArray(c.facts)&&c.facts!=null)dropped.facts++;
-    conditions.push({id:_kbStr(c.id,80)||kbSlug(name),name,aliases:Array.isArray(c.aliases)?c.aliases.slice(0,50).map(a=>_kbStr(a,200)).filter(Boolean):[],facts});
+    if((restore||c.aliases!=null)&&!Array.isArray(c.aliases))throw new Error(cp+'.aliases must be an array. No aliases were discarded.');
+    const cid=str(c.id,cp+'.id',true);if(restore&&!cid)unusable('conditions',cp+'.id');
+    conditions.push({...(restore?c:{}),id:cid||kbSlug(name),name,aliases:bounded(c.aliases||[],50,cp+'.aliases').map((a,ai)=>str(a,cp+'.aliases['+ai+']',true)).filter(Boolean),facts});
   }
-  if(!conditions.length)throw new Error('No usable conditions were found in this file.');
-  // Re-key fact ids so downstream fact-id diffing (Anki coverage) stays sound even if
-  // the imported file had duplicates, gaps, or none at all.
-  let n=0;for(const c of conditions)for(const f of c.facts)f.id='fact-'+(++n);
-  // v15.14: and the same for condition ids, which an imported file is free to duplicate or
-  // omit. They are React keys and the selection handle, so a collision makes one condition
-  // unreachable in the UI.
+  // v16.7: an intentionally empty saved KB is a valid snapshot, not malformed input.
+  if(!conditions.length&&!restore)throw new Error('No usable conditions were found in this file.');
+  // v16.7: imports establish a fresh identity; restore retains the saved fact identifiers.
+  const factIds=new Set();let n=0;
+  for(const c of conditions)for(const f of c.facts){
+    if(restore){if(!f.id||factIds.has(f.id))throw new Error('Saved Knowledge Base has missing or duplicate fact IDs. Existing saved data was preserved.');factIds.add(f.id);}
+    else f.id='fact-'+(++n);
+  }
   const seenCondIds=new Set();
-  for(const c of conditions){let id=c.id,k=2;while(seenCondIds.has(id))id=c.id+'-'+(k++);seenCondIds.add(id);c.id=id;}
+  for(const c of conditions){
+    if(restore&&seenCondIds.has(c.id))throw new Error('Saved Knowledge Base has duplicate condition IDs. Existing saved data was preserved.');
+    let id=c.id,k=2;while(seenCondIds.has(id))id=c.id+'-'+(k++);seenCondIds.add(id);c.id=id;
+  }
+  if(restore&&(!src.metadata||typeof src.metadata!=='object'||Array.isArray(src.metadata)))throw new Error('Saved Knowledge Base metadata must be an object. Existing saved data was preserved.');
   const meta=_kbSafeKeys(src.metadata||{});
-  // v15: side arrays (medications, diagnostics, …) now get the same proto-key strip as
-  // conditions/facts — they enter state and IndexedDB, so sanitize before they grow a UI.
-  const arr=k=>Array.isArray(src[k])?src[k].slice(0,5000).map(x=>x&&typeof x==='object'&&!Array.isArray(x)?_kbSafeKeys(x):x):[];
+  const arr=k=>{if((restore||src[k]!=null)&&!Array.isArray(src[k]))throw new Error(k+' must be an array. No source data was discarded.');return bounded(src[k]||[],5000,k).map(x=>x&&typeof x==='object'&&!Array.isArray(x)?_kbSafeKeys(x):x);};
+  if((restore||src.sources!=null)&&!Array.isArray(src.sources))throw new Error('sources must be an array. No provenance was discarded.');
   return {kb:{
-    metadata:{course:_kbStr(meta.course,300),exam:_kbStr(meta.exam,300),createdAt:_kbStr(meta.createdAt,80),schemaVersion:_kbStr(meta.schemaVersion,20)||'1.1'},
-    sources:Array.isArray(src.sources)?src.sources.slice(0,500):[],
-    conditions,
-    medications:arr('medications'),diagnostics:arr('diagnostics'),scoringTools:arr('scoringTools'),
-    formulas:arr('formulas'),contradictions:arr('contradictions'),
+    ...(restore?src:{}),metadata:{...(restore?meta:{}),course:str(meta.course,'metadata.course'),exam:str(meta.exam,'metadata.exam'),createdAt:str(meta.createdAt,'metadata.createdAt'),schemaVersion:str(meta.schemaVersion,'metadata.schemaVersion')||'1.1'},
+    sources:bounded(src.sources||[],500,'sources'),conditions,
+    medications:arr('medications'),diagnostics:arr('diagnostics'),scoringTools:arr('scoringTools'),formulas:arr('formulas'),contradictions:arr('contradictions'),
   },dropped};
 }
 // ── Durable Knowledge Base persistence (IndexedDB; localStorage is migration fallback only) ──
@@ -1999,7 +2010,8 @@ async function kbSourceUnits(file,{signal,onProgress,composition}={}){
     const units=[];
     await pdfWalkPages(file,{signal,onPage:async(text,i,pg,total)=>{
       units.push({kind:'page',n:i,text:'\n--- PAGE '+i+' ---\n'+text});
-      if(composition){try{units[units.length-1].composition=await kbPageComposition(pg);}catch(e){}}
+      // v16.7: unavailable composition evidence must not look like a successful empty probe.
+      if(composition){try{units[units.length-1].composition=await kbPageComposition(pg);}catch(e){units[units.length-1].compositionError=String(e.message||e);}}
       if(onProgress&&(i%10===0||i===total))onProgress(i,total);
     }});
     return units;
@@ -2071,10 +2083,13 @@ async function kbBuildSourceChunks(file,maxChars=45000,overlap=1,opts){
   const units=await kbSourceUnits(file,opts);
   // v15.4: report text-layer quality before grouping, so the caller can warn the user
   // rather than billing them for a run over a page of nothing.
-  if(opts&&opts.onQuality){try{const q=kbTextQuality(units);if(q)opts.onQuality(q);}catch(e){}}
+  // v16.7: keep extraction usable when optional diagnostics fail, but preserve that failure.
+  const unavailable=(kind,error)=>{if(opts&&opts.onDiagnostic)opts.onDiagnostic({kind,message:String(error.message||error)});};
+  if(opts&&opts.onQuality){try{const q=kbTextQuality(units);if(q)opts.onQuality(q);}catch(e){unavailable('text quality',e);}}
   // v15.10: composition is reported the same way quality is — measured during the scan,
   // handed to the caller, never consulted by the extraction path itself.
-  if(opts&&opts.onComposition){try{const c=kbCompositionSummary(units);if(c)opts.onComposition(c);}catch(e){}}
+  for(const unit of units)if(unit.compositionError)unavailable('page '+unit.n+' composition',unit.compositionError);
+  if(opts&&opts.onComposition){try{const c=kbCompositionSummary(units);if(c)opts.onComposition(c);}catch(e){unavailable('composition summary',e);}}
   return kbGroupUnits(units,maxChars,overlap);
 }
 // Verify a model-supplied verbatim quote actually occurs in the source chunk.
@@ -2086,19 +2101,56 @@ function kbNormForMatch(s){return String(s||'').toLowerCase().replace(/[^a-z0-9]
 // 'absent'. Not one quote was fabricated; every failure was a typesetting artifact. The 83
 // are safely recoverable, so they are now recovered.
 //
-// The fallback is STRICTLY ADDITIVE: the plain normalized match is tried first and its
-// result is returned unchanged when it succeeds. No quote that verified before this change
-// can begin failing because of it. That property is what makes this safe to apply to pass 2,
-// where a failed match discards the fact.
+// The de-hyphenation fallback is additive to the plain match. v16.7 separately tightens
+// both paths at numeric edges: a quote ending in 60 must not match the prefix of 600.
+// This approved bounded change affects pass-2 admission; partial numeric anchors receive
+// their own diagnostic. It does not change the separate WARN-only operator policy.
 //
 // It also cannot manufacture a false match across records. De-hyphenation only rejoins a
 // token broken by a line break; it never reorders, and it never bridges two rows of a table.
 // The 107 reading-order failures are untouched by design — see kbClassifyQuoteMiss.
+// v16.7: search every occurrence; a partial numeric token cannot prove a source location.
+// Non-numeric substring behavior is unchanged, and later complete occurrences still count.
+function kbQuoteNumericBoundedMatch(needle,source){
+  const q=String(needle||''),s=String(source||'');if(!q)return false;
+  for(let at=s.indexOf(q);at!==-1;at=s.indexOf(q,at+1)){
+    const left=/[0-9]/.test(q[0])&&at>0&&/[0-9]/.test(s[at-1]);
+    const end=at+q.length,right=/[0-9]/.test(q[q.length-1])&&end<s.length&&/[0-9]/.test(s[end]);
+    if(!left&&!right)return true;
+  }
+  return false;
+}
 function kbQuoteInSource(quote,sourceNorm,sourceDehyphNorm){
   const q=kbNormForMatch(quote);
   if(q.length<10)return false;
-  if(sourceNorm.includes(q))return true;
-  return !!sourceDehyphNorm&&sourceDehyphNorm.includes(kbDehyphNormForMatch(quote));
+  if(kbQuoteNumericBoundedMatch(q,sourceNorm))return true;
+  return !!sourceDehyphNorm&&kbQuoteNumericBoundedMatch(kbDehyphNormForMatch(quote),sourceDehyphNorm);
+}
+// v16.7: validate nested model envelopes before leaving the per-chunk recovery boundary.
+// Quarantine the malformed response; never publish a partly interpreted object as complete.
+function kbValidateExtractionEnvelope(value,audit=false){
+  const object=v=>!!v&&typeof v==='object'&&!Array.isArray(v);
+  const fact=(f,path)=>{
+    if(!object(f)||typeof f.text!=='string'||!f.text.trim())throw new Error(path+' must be a fact with nonempty text');
+    if(f.sourceQuote!=null&&typeof f.sourceQuote!=='string')throw new Error(path+'.sourceQuote must be text');
+    if(f.sourcePointer!=null&&!object(f.sourcePointer))throw new Error(path+'.sourcePointer must be an object');
+  };
+  const key=audit?'missed':'conditions';
+  if(!object(value)||!Array.isArray(value[key]))throw new Error('response must contain a '+key+' array');
+  if(audit)value.missed.forEach((f,i)=>fact(f,'missed['+i+']'));
+  else value.conditions.forEach((c,i)=>{
+    const path='conditions['+i+']';
+    if(!object(c)||typeof c.name!=='string'||!c.name.trim()||!Array.isArray(c.facts))throw new Error(path+' must have a name and facts array');
+    if(c.aliases!=null&&(!Array.isArray(c.aliases)||c.aliases.some(a=>typeof a!=='string')))throw new Error(path+'.aliases must be a text array');
+    c.facts.forEach((f,j)=>fact(f,path+'.facts['+j+']'));
+  });
+  return value;
+}
+// v16.7: wording reflects the denominator; zero attempted checks cannot become green proof.
+function kbQuoteCheckSummary(diag){
+  const checked=Number(diag.quoteChecked)||0,missing=Number(diag.quoteMissing)||0,failed=Number(diag.quoteMiss)||0,matched=Math.max(0,checked-failed);
+  return{checked,missing,failed,matched,complete:checked>0&&missing===0&&failed===0,
+    text:checked+' first-pass quote(s) checked: '+matched+' matched, '+failed+' unverified; '+missing+' fact(s) missing a quote.'};
 }
 // ── v15.14: operator agreement — a STRICTLY ADDITIVE check layered on the matcher above ──
 // kbNormForMatch replaces [^a-z0-9]+ with a space, so "HR < 60" and "HR > 60" BOTH normalize
@@ -2164,8 +2216,8 @@ function kbDehyphNormForMatch(s){
 // Reason codes, ordered cheapest-to-fix first. 'tooShort' exists so the rollup reconciles
 // with quoteMiss: kbQuoteInSource fails a sub-10-char quote outright, and a reason bucket
 // that silently dropped those would not sum to the count shown beside it.
-const KB_QUOTE_MISS_REASONS=['tooShort','hyphenation','reordered','partial','absent'];
-const KB_QUOTE_MISS_LABEL={tooShort:'too short to verify',hyphenation:'line-break hyphenation or ligature',reordered:'reading order (columns/tables)',partial:'partly present — paraphrase or seam',absent:'not present in this chunk'};
+const KB_QUOTE_MISS_REASONS=['tooShort','numericBoundary','hyphenation','reordered','partial','absent'];
+const KB_QUOTE_MISS_LABEL={tooShort:'too short to verify',numericBoundary:'partial numeric token — check the complete source number',hyphenation:'line-break hyphenation or ligature',reordered:'reading order (columns/tables)',partial:'partly present — paraphrase or seam',absent:'not present in this chunk'};
 // Diagnostics only. Returns null when the quote is NOT a miss, so a reason code can never
 // be mistaken for a verification result. sourceTokens is an optional prebuilt Set; without
 // it the token bag is rebuilt per call, which is fine at the volume misses occur in.
@@ -2178,8 +2230,11 @@ const KB_QUOTE_MISS_LABEL={tooShort:'too short to verify',hyphenation:'line-brea
 function kbClassifyQuoteMiss(quote,sourceNorm,sourceDehyphNorm,sourceTokens){
   const q=kbNormForMatch(quote);
   if(q.length<10)return 'tooShort';
-  if(String(sourceNorm||'').includes(q))return null;
-  if(sourceDehyphNorm&&sourceDehyphNorm.includes(kbDehyphNormForMatch(quote)))return 'hyphenation';
+  // v16.7: an old substring hit at a partial number is a distinct miss, not an absent quote.
+  if(kbQuoteNumericBoundedMatch(q,sourceNorm))return null;
+  const d=kbDehyphNormForMatch(quote);
+  if(sourceDehyphNorm&&kbQuoteNumericBoundedMatch(d,sourceDehyphNorm))return 'hyphenation';
+  if(String(sourceNorm||'').includes(q)||(sourceDehyphNorm&&sourceDehyphNorm.includes(d)))return 'numericBoundary';
   // Two things this must get right, both found by running it against real drug text:
   // 1. Word-boundary membership, not substring containment — "ate" lives inside
   //    "moderate" and would push every score toward 'reordered'.
@@ -2682,7 +2737,7 @@ function KnowledgeBaseBuilder(){
     const parts=[];const problems=[];const stats=[];abortRef.current=controller;
     // v15.10: build-time QA collectors for the v16 §11 benchmark. Keyed by filename so a
     // multi-file run stays attributable. Never written into the Knowledge Base.
-    const quality={},composition={};
+    const quality={},composition={},diagnosticsUnavailable=[];
     // Honor the sidebar toggle, exactly like every other tool in the suite.
     const {model,level}=cfg.forTool('knowledge');
     const auditCfg=cfg.forTool('knowledgeAudit');
@@ -2711,6 +2766,7 @@ function KnowledgeBaseBuilder(){
         try{const chunks=await kbBuildSourceChunks(f,chunkChars,overlapUnits,{signal:controller.signal,onProgress:(p,tot)=>owned_addLog(`Reading ${f.name} — page ${p}/${tot}`),
           composition:probeComposition,
           onComposition:c=>{composition[f.name]=c;},
+          onDiagnostic:d=>{const issue={file:f.name,...d};diagnosticsUnavailable.push(issue);const msg=f.name+': '+d.kind+' diagnostics unavailable — '+d.message;problems.push(msg);owned_addLog('⚠ '+msg,'warn');},
           onQuality:q=>{
             quality[f.name]=q;
             if(q.avg<100||q.empty>=Math.ceil(q.pages*0.6)){
@@ -2759,11 +2815,13 @@ function KnowledgeBaseBuilder(){
           opMismatch++;
           if(opDetail.length<25)opDetail.push({pass,quote:String(f.sourceQuote||'').slice(0,240),fact:String(f.text||'').slice(0,160),latteBucket:f.latteBucket||null});
         };
-        let meta=null,parsed=null;
+        let meta=null,parsed=null,primaryResponse=null;
         // ---- Pass 1: extraction ----
         try{
           const prompt=KB_EXTRACTION_PROMPT.replace('ONE supplied source file',()=>'ONE supplied source chunk named "'+file.name+'" ('+chunk.label+')')+focusBlock;
           const raw=await geminiRequest(cfg.apiKey,model,{contents:[{parts:[{text:'SOURCE FILE: '+file.name+'\nSOURCE RANGE: '+chunk.label+'\n'+chunk.text},{text:prompt}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:65536,thinkingConfig:{thinkingLevel:level}}},{signal:controller.signal,retries:2,onMeta:m=>{meta=m;}});
+          // v16.7: retain raw model evidence when shape validation quarantines a response.
+          primaryResponse={text:raw,meta};
           // A truncated chunk is split and requeued rather than discarded. On Gemini 3
           // thinking and output share one budget, so a dense chunk at high thinking can
           // hit the ceiling mid-JSON — halving it recovers the content instead of losing it.
@@ -2775,24 +2833,29 @@ function KnowledgeBaseBuilder(){
             }
             throw new Error('output hit MAX_TOKENS and cannot be split further');
           }
-          parsed=extractJSON(raw);
-          if(!parsed||!Array.isArray(parsed.conditions))throw new Error('response was not a knowledge-base object');
+          parsed=kbValidateExtractionEnvelope(extractJSON(raw));
         }catch(e){
           if(e.name==='AbortError')throw e;
           problems.push(tag+': '+(e.message||String(e)));
-          stats.push({tag,file:file.name,label:chunk.label,chars:chunk.text.length,facts:0,recovered:0,discarded:0,quoteMiss:0,quoteMissDetail:[],quoteMissByReason:{},discardByReason:{},dehyphSaved:0,opMismatch:0,opDetail:[],failed:true});
+          stats.push({tag,file:file.name,label:chunk.label,chars:chunk.text.length,facts:0,recovered:0,discarded:0,quoteMiss:0,quoteMissDetail:[],quoteMissByReason:{},discardByReason:{},dehyphSaved:0,opMismatch:0,opDetail:[],primaryResponse,failed:true});
           owned_addLog(`✕ ${tag}: ${e.message||e}`,'err');bump(verifyPass?2:1);continue;
         }
         let nFacts=(parsed.conditions||[]).reduce((n,c)=>n+((c.facts||[]).length),0);
         // Quote spot-check on pass 1: flag only. pdf.js mangles spacing, so a failed
         // match is weak evidence — and dropping a primary fact would cause the very
         // omission this whole feature exists to prevent.
-        let quoteMiss=0;
+        // v16.7: denominator and original pointer evidence belong to this exact source chunk.
+        let quoteMiss=0,quoteChecked=0,quoteMissing=0;const sourcePointerEvidence=[];
         // v15.11: the authoritative check now includes the de-hyphenated fallback. The
         // second call re-tests the plain matcher purely to count what the fallback rescued,
         // so the panel can show the fix earning its keep — and show it stop, if it ever does.
         for(const c of parsed.conditions||[])for(const f of c.facts||[]){
-          if(!String(f.sourceQuote||'').trim())continue;
+          // v16.7: model pointers are claims; only the runtime knows the file/range it read.
+          const bound={filename:file.name,location:chunk.label};
+          sourcePointerEvidence.push({condition:c.name,fact:f.text,modelPointer:f.sourcePointer??null,boundPointer:bound});
+          f.sourcePointer=bound;
+          if(!String(f.sourceQuote||'').trim()){quoteMissing++;continue;}
+          quoteChecked++;
           if(!kbQuoteInSource(f.sourceQuote,srcNorm,srcDehyph)){quoteMiss++;noteMiss(1,f);continue;}
           if(!kbQuoteInSource(f.sourceQuote,srcNorm))dehyphSaved++;
           if(!kbQuoteOperatorsAgree(f.sourceQuote,srcOpNorm,srcOpDehyph))noteOp(1,f);
@@ -2802,14 +2865,16 @@ function KnowledgeBaseBuilder(){
         owned_addLog(`✓ ${tag} — ${nFacts} fact(s)`,'ok');
 
         // ---- Pass 2: omission audit (optional) ----
-        let recovered=0,discarded=0;
+        let recovered=0,discarded=0,auditStatus=verifyPass?'pending':'not-run',auditResponse=null;
         if(verifyPass){
           if(controller.signal.aborted)throw new DOMException('Aborted','AbortError');
           try{
             const inventory=(parsed.conditions||[]).map(c=>`# ${c.name}\n`+(c.facts||[]).map(f=>`- [${f.latteBucket}] ${f.text}`).join('\n')).join('\n\n')||'(nothing was extracted from this chunk)';
             let vmeta=null;
             const vraw=await geminiRequest(cfg.apiKey,auditCfg.model,{contents:[{parts:[{text:'(A) SOURCE CHUNK — '+file.name+' ('+chunk.label+')\n'+chunk.text},{text:'(B) FACTS ALREADY EXTRACTED FROM THIS CHUNK\n'+inventory},{text:KB_VERIFY_PROMPT+focusBlock}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:65536,thinkingConfig:{thinkingLevel:auditCfg.level}}},{signal:controller.signal,retries:1,onMeta:m=>{vmeta=m;}});
-            const vp=extractJSON(vraw);const missed=Array.isArray(vp?.missed)?vp.missed:[];
+            // v16.7: a missing/wrong-shaped omission inventory is unresolved evidence, not zero omissions.
+            auditResponse={text:vraw,meta:vmeta};
+            const vp=kbValidateExtractionEnvelope(extractJSON(vraw),true),missed=vp.missed;
             if(missed.length){
               // Code-enforced grounding: a recovered fact survives only if its claimed
               // verbatim quote is actually present in this chunk. Additive content gets
@@ -2828,22 +2893,22 @@ function KnowledgeBaseBuilder(){
               }
               if(recovered)parts.push({source:{filename:file.name,range:chunk.label+' (recovered)'},conditions:[...byCond.entries()].map(([name,facts])=>({name,aliases:[],facts}))});
             }
+            auditStatus=vmeta?.truncated?'truncated':'complete';
             if(vmeta?.truncated)owned_addLog(`  ⚠ audit output truncated for ${tag} — some omissions may be unreported`,'warn');
             owned_addLog(`  ↳ audit: +${recovered} recovered${discarded?`, ${discarded} discarded (quote not found in source)`:''}`,recovered?'ok':'');
           }catch(e){
             if(e.name==='AbortError')throw e;
+            auditStatus='failed';
             problems.push(tag+' [audit]: '+(e.message||String(e)));
             owned_addLog(`  ⚠ audit failed for ${tag}: ${e.message||e}`,'warn');
           }
           bump(1);
         }
         if(opMismatch)owned_addLog(`  ⚠ ${tag}: ${opMismatch} verified quote(s) disagree with the source on a comparator or arrow — check these by eye`,'err');
-        stats.push({tag,file:file.name,label:chunk.label,chars:chunk.text.length,facts:nFacts,recovered,discarded,quoteMiss,quoteMissDetail:missDetail,quoteMissByReason:missByReason,discardByReason,dehyphSaved,opMismatch,opDetail,failed:false});
+        stats.push({tag,file:file.name,label:chunk.label,chars:chunk.text.length,facts:nFacts,recovered,discarded,auditStatus,quoteChecked,quoteMissing,quoteMatched:quoteChecked-quoteMiss,sourcePointerEvidence,primaryResponse,auditResponse,quoteMiss,quoteMissDetail:missDetail,quoteMissByReason:missByReason,discardByReason,dehyphSaved,opMismatch,opDetail,failed:false});
       }
-      if(!parts.length)throw new Error('No source chunk completed successfully. '+problems.join(' | '));
-      const kb=mergeLatteParts(parts,course,exam);
-      if(!replacementSlot.current.current(run))return;
-      K.setKnowledgeBase(kb);owned_setSelected(kb.conditions[0]?.id||null);owned_setWarnings(problems);
+      // v16.7: publish diagnostics even when every chunk failed; a failed build never replaces the KB.
+      const kb=parts.length?mergeLatteParts(parts,course,exam):null;
       const flagged=kbFlagUnderextraction(stats,scoped);
       // v15.11: two independent rollups. byReason sums to quoteMiss and discardByReason
       // sums to discarded — each reconciles against the number printed next to it, which
@@ -2853,15 +2918,20 @@ function KnowledgeBaseBuilder(){
         for(const k of Object.keys(s.quoteMissByReason||{}))byReason[k]=(byReason[k]||0)+s.quoteMissByReason[k];
         for(const k of Object.keys(s.discardByReason||{}))discardByReason[k]=(discardByReason[k]||0)+s.discardByReason[k];
       }
-      owned_setDiag({chunks:flagged,gaps:kbBucketGaps(kb),
+      owned_setDiag({buildStatus:kb?'complete':'failed',chunks:flagged,gaps:kb?kbBucketGaps(kb):[],
         recovered:stats.reduce((n,s)=>n+s.recovered,0),
         discarded:stats.reduce((n,s)=>n+s.discarded,0),
         quoteMiss:stats.reduce((n,s)=>n+s.quoteMiss,0),
+        quoteChecked:stats.reduce((n,s)=>n+(s.quoteChecked||0),0),quoteMissing:stats.reduce((n,s)=>n+(s.quoteMissing||0),0),quoteMatched:stats.reduce((n,s)=>n+(s.quoteMatched||0),0),
         byReason,discardByReason,dehyphSaved:stats.reduce((n,s)=>n+(s.dehyphSaved||0),0),
         opMismatch:stats.reduce((n,s)=>n+(s.opMismatch||0),0),
         opDetail:stats.flatMap(s=>(s.opDetail||[]).map(d=>({...d,tag:s.tag}))).slice(0,60),
-        quality,composition,chunkChars,overlapUnits,
+        quality,composition,diagnosticsUnavailable,chunkChars,overlapUnits,
         model,level,auto:cfg.autoProfile,verified:verifyPass,focus:focusBlock?(scoped?'scope':'prioritize'):null});
+      owned_setWarnings(problems);
+      if(!kb)throw new Error('No source chunk completed successfully. '+problems.join(' | '));
+      if(!replacementSlot.current.current(run))return;
+      K.setKnowledgeBase(kb);owned_setSelected(kb.conditions[0]?.id||null);
       owned_setProg(100);
       owned_addLog(`Knowledge Base built: ${kb.conditions.length} condition(s), ${(kb.conditions||[]).reduce((n,c)=>n+(c.facts||[]).length,0)} fact(s).`,'ok');
     }catch(e){if(replacementSlot.current.owns(run))setError(e.name==='AbortError'?'Knowledge Base extraction cancelled. Completed chunks were not committed.':e.message||String(e));}
@@ -2874,11 +2944,11 @@ function KnowledgeBaseBuilder(){
   const exportDiag=()=>{
     if(!diag)return;
     const payload={
-      kind:'latte-extraction-diagnostics',schemaVersion:1,exportedAt:new Date().toISOString(),
-      run:{model:diag.model,level:diag.level,autoProfile:diag.auto,auditPass:diag.verified,focus:diag.focus,chunkChars:diag.chunkChars,overlap:diag.overlapUnits,course,exam},
-      totals:{chunks:diag.chunks.length,flagged:diag.chunks.filter(c=>c.flag).length,recovered:diag.recovered,discarded:diag.discarded,quoteMiss:diag.quoteMiss,quoteMissByReason:diag.byReason,discardByReason:diag.discardByReason,dehyphSaved:diag.dehyphSaved,opMismatch:diag.opMismatch},
+      kind:'latte-extraction-diagnostics',schemaVersion:2,exportedAt:new Date().toISOString(),
+      run:{buildStatus:diag.buildStatus,model:diag.model,level:diag.level,autoProfile:diag.auto,auditPass:diag.verified,focus:diag.focus,chunkChars:diag.chunkChars,overlap:diag.overlapUnits,course,exam},
+      totals:{chunks:diag.chunks.length,flagged:diag.chunks.filter(c=>c.flag).length,recovered:diag.recovered,discarded:diag.discarded,quoteMiss:diag.quoteMiss,quoteChecked:diag.quoteChecked,quoteMissing:diag.quoteMissing,quoteMatched:diag.quoteMatched,quoteMissByReason:diag.byReason,discardByReason:diag.discardByReason,dehyphSaved:diag.dehyphSaved,opMismatch:diag.opMismatch},
       operatorMismatches:diag.opDetail,
-      textQuality:diag.quality,pageComposition:diag.composition,
+      textQuality:diag.quality,pageComposition:diag.composition,diagnosticsUnavailable:diag.diagnosticsUnavailable,
       chunks:diag.chunks,bucketGaps:diag.gaps
     };
     downloadBlob(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),'LATTE-Extraction-Diagnostics-'+new Date().toISOString().slice(0,10)+'.json');
@@ -2898,7 +2968,7 @@ function KnowledgeBaseBuilder(){
     :nothingToBuild?(cardChunks.length?'No card clears the gate':'Transcribe the cards first')
     :'Build Knowledge Base';
   const kb=K.knowledgeBase,md=useMemo(()=>renderKBMarkdown(kb),[kb]),validation=useMemo(()=>validateLatteKnowledgeBase(kb),[kb]),facts=(kb.conditions||[]).reduce((n,c)=>n+(c.facts||[]).length,0),sel=(kb.conditions||[]).find(c=>c.id===selected);
-  return <div className="tool-panel"><h2 className="tool-title">🧠 LATTE Knowledge Base</h2><p className="tool-desc">Upload once, extract source-grounded LATTE facts once, then reuse them for Anki, priority analysis, and NCLEX generation.</p>{K.persistenceError&&<div className="error-banner"><span>⚠</span><div>{K.persistenceError}</div></div>}<div role="status" style={{fontSize:12,marginBottom:10}}>Browser save: {K.persistenceStatus}</div>{K.recoveryChoices?.length>0&&<div className="card">{K.recoveryChoices.map((record,index)=><div key={index}><strong>Saved copy {index+1}</strong> · {(record.kb?.conditions||[]).length} conditions <button className="btn-ghost" onClick={()=>downloadBlob(new Blob([JSON.stringify(record.kb||EMPTY_LATTE_KB,null,2)],{type:'application/json'}),'LATTE-Knowledge-Base-recovery-'+(index+1)+'.json')}>Export copy</button><button className="btn-ghost" onClick={()=>K.chooseRecovery(index)}>Use this copy</button><details><summary>Inspect copy</summary><pre style={{whiteSpace:'pre-wrap',maxHeight:240,overflow:'auto'}}>{JSON.stringify(record.kb||EMPTY_LATTE_KB,null,2)}</pre></details></div>)}</div>}
+  return <div className="tool-panel"><h2 className="tool-title">🧠 LATTE Knowledge Base</h2><p className="tool-desc">Upload once, extract source-grounded LATTE facts once, then reuse them for Anki, priority analysis, and NCLEX generation.</p>{K.persistenceError&&<div className="error-banner"><span>⚠</span><div>{K.persistenceError}</div></div>}<div role="status" style={{fontSize:12,marginBottom:10}}>Browser save: {K.persistenceStatus}</div>{K.recoveryChoices?.length>0&&<div className="card"><p>Saving is paused while these copies are preserved. Choose a saved copy, or import/build a replacement and use the current workspace. The saved copies are archived before saving resumes.</p><button className="btn-secondary" onClick={()=>K.chooseRecovery(-1)}>Use current workspace</button>{K.recoveryChoices.map((record,index)=><div key={index}><strong>Saved copy {index+1}</strong> · {(record.kb?.conditions||[]).length} conditions <button className="btn-ghost" onClick={()=>downloadBlob(new Blob([JSON.stringify(record.kb||EMPTY_LATTE_KB,null,2)],{type:'application/json'}),'LATTE-Knowledge-Base-recovery-'+(index+1)+'.json')}>Export copy</button><button className="btn-ghost" onClick={()=>K.chooseRecovery(index)}>Use this copy</button><details><summary>Inspect copy</summary><pre style={{whiteSpace:'pre-wrap',maxHeight:240,overflow:'auto'}}>{JSON.stringify(record.kb||EMPTY_LATTE_KB,null,2)}</pre></details></div>)}</div>}
     <div role="button" tabIndex={0} aria-label="Add PDF, PPTX, or flashcard image source files" onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fileRef.current?.click();}}} className="upload-zone" onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();addFiles(e.dataTransfer.files)}}><h3>Drop PDF, PPTX, or flashcard photos</h3><p>Large sources are processed in page or slide chunks; successful chunks are retained even if another chunk fails. Flashcard photos are transcribed first, and you review the transcript before it becomes facts.</p><input aria-label="Source files" ref={fileRef} type="file" multiple accept=".pdf,.pptx,.jpg,.jpeg,.png,.webp,.heic,.heif" style={{display:'none'}} onChange={e=>{addFiles(e.target.files);e.target.value=''}}/></div>
     {files.length>0&&<div style={{marginTop:8}}>{files.map((f,i)=><div className="file-chip" key={cardFileId(f)}><div className={'f-icon '+getExt(f.name)}>{getExt(f.name)}</div><span className="f-name">{f.name}</span><span className="f-size">{formatSize(f.size)}</span><button className="f-rm" aria-label={'Remove source '+f.name} onClick={()=>{destroyPdfDoc(f);currentFiles.current=currentFiles.current.filter(x=>cardFileId(x)!==cardFileId(f));txAbortRef.current?.abort();abortRef.current?.abort();setTranscripts(p=>{const n={...p};delete n[cardFileId(f)];return n;});setTxReviewed(false);setFiles(currentFiles.current);}}>×</button></div>)}</div>}
     <div className="form-grid" style={{margin:'14px 0'}}><div className="field-block"><label htmlFor="kb-course">Course <span className="badge-opt">optional</span></label><input id="kb-course" type="text" value={course} onChange={e=>setCourse(e.target.value)} placeholder="Course name"/></div><div className="field-block"><label htmlFor="kb-exam">Exam / unit <span className="badge-opt">optional</span></label><input id="kb-exam" type="text" value={exam} onChange={e=>setExam(e.target.value)} placeholder="Exam or unit name"/></div></div>
@@ -3014,7 +3084,12 @@ function KnowledgeBaseBuilder(){
     {logs.length>0&&<div style={{marginTop:10,maxHeight:150,overflowY:'auto',fontFamily:'JetBrains Mono',fontSize:12,background:'var(--bg-deep)',border:'1px solid var(--border)',borderRadius:6,padding:8,lineHeight:1.7}}>
       {logs.map((l,i)=><div key={i} style={{color:l.t==='ok'?'var(--accent-green)':l.t==='err'?'var(--accent-red)':l.t==='warn'?'var(--accent-warm)':'var(--text-dim)'}}>[{l.ts}] {l.m}</div>)}
     </div>}
-    {error&&<div className="error-banner" style={{marginTop:10}}>⚠ {error}</div>}{warnings.length>0&&<div className="tip-banner" style={{marginTop:10}}>Completed with {warnings.length} skipped chunk(s): {warnings.slice(0,3).join(' · ')}{warnings.length>3?' …':''}</div>}
+    {error&&<div className="error-banner" style={{marginTop:10}}>⚠ {error}</div>}{warnings.length>0&&<div className="tip-banner" style={{marginTop:10}}>Build notices ({warnings.length}): {warnings.slice(0,3).join(' · ')}{warnings.length>3?' …':''}</div>}
+    {/* v16.7: a failed first build has no KB browser, but its quarantined response must remain downloadable. */}
+    {diag&&diag.buildStatus==='failed'&&!(kb.conditions||[]).length&&<div className="tip-banner" style={{marginTop:10}}>
+      Extraction diagnostics: {diag.chunks.length} failed chunk(s). {kbQuoteCheckSummary(diag).text}
+      <button className="btn-secondary" style={{marginLeft:8}} onClick={exportDiag}>Export failed-build diagnostics</button>
+    </div>}
     {(kb.conditions||[]).length>0&&<><div className="stats-grid" style={{margin:'16px 0'}}><div className="stat-box"><div className="stat-val">{kb.conditions.length}</div><div className="stat-lbl">Conditions</div></div><div className="stat-box"><div className="stat-val">{facts}</div><div className="stat-lbl">Facts</div></div><div className="stat-box"><div className="stat-val">{kb.sources.length}</div><div className="stat-lbl">Chunks</div></div><div className="stat-box"><div className="stat-val" style={{color:validation.some(x=>x.severity==='error')?'var(--accent-red)':'var(--accent-green)'}}>{validation.filter(x=>x.severity==='error').length}</div><div className="stat-lbl">Validation Errors</div></div></div>
       {validation.length>0&&<div className={validation.some(x=>x.severity==='error')?'error-banner':'tip-banner'} style={{marginBottom:10}}>Knowledge-base validation: {validation.filter(x=>x.severity==='error').length} error(s), {validation.filter(x=>x.severity==='warning').length} warning(s).</div>}
       {diag&&<div style={{marginBottom:12,padding:'11px 13px',borderRadius:8,border:'1px solid '+(diag.chunks.some(c=>c.flag)?'var(--warning-border)':'var(--success-border)'),background:diag.chunks.some(c=>c.flag)?'var(--warning-bg)':'var(--success-bg)'}}>
@@ -3042,12 +3117,12 @@ function KnowledgeBaseBuilder(){
               {c.flag&&<span style={{color:'var(--accent-warm)'}}> — {KB_FLAG_LABEL[c.flag]}</span>}
             </div>)}
           </div>
-          {diag.quoteMiss>0
-            ?<div style={{fontSize:12,color:'var(--text-dim)',marginTop:7,lineHeight:1.5}}>{diag.quoteMiss} first-pass quote(s) could not be located verbatim in the source. Often just PDF spacing artifacts — these facts are kept, not dropped, but they are the ones worth spot-checking.</div>
-            :<div style={{fontSize:12,color:'var(--accent-green)',marginTop:7,lineHeight:1.5}}>✓ Every first-pass quote was located verbatim in the source.</div>}
+          {/* v16.7: report attempted and missing anchors separately; location never proves entailment. */}
+          <div style={{fontSize:12,color:kbQuoteCheckSummary(diag).complete?'var(--accent-green)':'var(--text-dim)',marginTop:7,lineHeight:1.5}}>{kbQuoteCheckSummary(diag).text} First-pass facts are retained for review; a located quote does not establish that its fact preserves the source meaning.</div>
+          {(diag.diagnosticsUnavailable||[]).length>0&&<div style={{fontSize:12,color:'var(--accent-warm)',marginTop:7}}>⚠ Diagnostics unavailable: {diag.diagnosticsUnavailable.map(d=>d.file+' ('+d.kind+')').join('; ')}. See the build warnings for details.</div>}
           {diag.byReason&&Object.keys(diag.byReason).length>0&&<div style={{fontSize:12,color:'var(--text-dim)',marginTop:5,lineHeight:1.5}}>
             Those {diag.quoteMiss} by reason: {KB_QUOTE_MISS_REASONS.filter(r=>diag.byReason[r]).map(r=>diag.byReason[r]+' ' + KB_QUOTE_MISS_LABEL[r]).join(' · ')}
-            <div style={{marginTop:3}}>Reading-order misses come from multi-column or tabular layout: the words are all there, but hundreds of characters apart in the text stream, so the fact is sound and only its proof fails. A non-zero hyphenation count here would mean the de-hyphenation fallback has regressed.</div>
+            <div style={{marginTop:3}}>Reading-order misses can come from multi-column or tabular layout: matching words may be far apart in the text stream. Review the source to decide whether the fact is sound; word presence alone does not establish meaning. A non-zero hyphenation count here would mean the de-hyphenation fallback has regressed.</div>
           </div>}
           {diag.discarded>0&&diag.discardByReason&&Object.keys(diag.discardByReason).length>0&&<div style={{fontSize:12,color:'var(--text-dim)',marginTop:5,lineHeight:1.5}}>
             The {diag.discarded} audit discard(s) by reason: {KB_QUOTE_MISS_REASONS.filter(r=>diag.discardByReason[r]).map(r=>diag.discardByReason[r]+' ' + KB_QUOTE_MISS_LABEL[r]).join(' · ')}
@@ -4140,14 +4215,25 @@ function ankiChunkText(text,max=12000,overlapPages=2){
 }
 
 function ankiParseCards(raw,chunkNo=1,tagFormatContract=null){
-  // v16.5: only callers with a captured generation contract may reject stray tag tokens.
-  const cbr=/```[\s\S]*?\n([\s\S]*?)```/g;const blocks=[];let m;while((m=cbr.exec(raw))!==null)blocks.push(m[1].trim());
-  const ankiBlock=blocks[0]||raw;const cards=[];let noteLine=0;
-  ankiBlock.split('\n').forEach(line=>{
-    const t=line.trim();if(!t||!t.includes('|'))return;noteLine++;const pts=t.split('|');
-    if(pts.length>=2){const malformed=pts.length!==3;cards.push({id:uid(),chunk:chunkNo,sourceLine:noteLine,text:pts[0].trim(),extra:(pts[1]||'').trim(),tags:pts.slice(2).join('|').trim(),pipeCount:pts.length-1,needsReview:malformed,keep:true,factIds:[],...(tagFormatContract==='hierarchical-v1'?{tagFormatContract}:{})});}
+  // v16.7: dropping unpiped lines deleted qualifiers and shifted ledger addresses.
+  // Retain physical lines and quarantine both sides of an ambiguous boundary;
+  // only a deliberate Text repair may clear the captured parse issue.
+  const cbr=/\x60\x60\x60[^\n]*\n([\s\S]*?)\x60\x60\x60/g,blocks=[];let m;
+  while((m=cbr.exec(String(raw||'')))!==null)blocks.push(m[1].replace(/\r\n?/g,'\n'));
+  const ankiBlock=(blocks[0]??String(raw||'').replace(/^\x60\x60\x60[^\n]*\n/,'')).replace(/\r\n?/g,'\n');
+  const lines=ankiBlock.split('\n'),cards=[];
+  if(!lines.some(line=>line.includes('|')||/\{\{c\d*:?/i.test(line)))return {cards,ledger:blocks[1]||''};
+  // v16.7: whitespace cannot separate a dropped qualifier from its plausible remainder.
+  const fragment=(index,step)=>{while(index>=0&&index<lines.length&&!lines[index].trim())index+=step;return index>=0&&index<lines.length&&!lines[index].includes('|');};
+  lines.forEach((line,index)=>{
+    const t=line.trim();if(!t)return;const pts=t.split('|'),parseIssues=[];
+    if(pts.length===1)parseIssues.push('unpiped-fragment');
+    else if(fragment(index-1,-1)||fragment(index+1,1))parseIssues.push('adjacent-unpiped-line');
+    const card={id:uid(),chunk:chunkNo,sourceLine:index+1,text:pts[0].trim(),extra:(pts[1]||'').trim(),tags:pts.slice(2).join('|').trim(),pipeCount:pts.length-1,parseIssues,needsReview:pts.length!==3||parseIssues.length>0,keep:true,factIds:[],...(tagFormatContract==='hierarchical-v1'?{tagFormatContract}:{})};
+    card.parseProvenance=[{noteId:card.id,chunk:chunkNo,sourceLine:index+1,rawText:line,text:card.text,extra:card.extra,tags:card.tags,pipeCount:card.pipeCount,parseIssues:[...parseIssues]}];
+    cards.push(card);
   });
-  return{cards,ledger:blocks[1]||''};
+  return {cards,ledger:blocks[1]||''};
 }
 
 // ── KB coverage + card lint (verified against surviving cards) ──
@@ -4202,11 +4288,24 @@ function attachCoverageToCards(cards,ledgers,snapshot,chunkIds){
 }
 // v15.17: only equivalent valid Text, Extra, effective tags and keep choices may merge sources.
 function ankiDedupeCards(cards){
-  const seen=new Map(),out=[];
+  const seen=new Map(),out=[],copy=value=>JSON.parse(JSON.stringify(value));
+  const union=(a,b)=>{const values=new Map();for(const item of [...a,...b])values.set(JSON.stringify(item),item);return [...values.values()];};
   for(const original of cards){
-    const c={...original,factIds:[...(original.factIds||[])],mappingIssues:[...(original.mappingIssues||[])]};
+    // v16.7: an exact merge must retain every original address and normalization,
+    // including after alias repair or an explicit user-requested merge after edits.
+    const c=copy(original);c.factIds=[...(c.factIds||[])];c.mappingIssues=[...(c.mappingIssues||[])];
+    c.mergedNoteIds=[...new Set(c.mergedNoteIds||[c.id])];
+    c.sourceLocations=c.sourceLocations||[{noteId:c.id,chunk:c.chunk??null,sourceLine:c.sourceLine??null,factIds:[...c.factIds],mappingIssues:copy(c.mappingIssues)}];
+    c.parseProvenance=c.parseProvenance||[];
+    c.conditionTagNormalizations=c.conditionTagNormalizations||[];
+    if(c.conditionTagNormalization)c.conditionTagNormalizations=union(c.conditionTagNormalizations,[copy(c.conditionTagNormalization)]);
     const key=lintAnkiCard(c).length?null:JSON.stringify([String(c.text||''),String(c.extra||''),[...new Set(String(c.tags||'').trim().split(/\s+/))].sort(),!!c.keep]);
-    if(key&&seen.has(key)){const kept=seen.get(key);kept.factIds=[...new Set([...kept.factIds,...c.factIds])];kept.mappingIssues.push(...c.mappingIssues);continue;}
+    if(key&&seen.has(key)){
+      const kept=seen.get(key);kept.factIds=[...new Set([...kept.factIds,...c.factIds])];kept.mappingIssues=union(kept.mappingIssues,c.mappingIssues);
+      for(const field of ['mergedNoteIds','sourceLocations','parseProvenance','conditionTagNormalizations','sourceLinkEdits'])kept[field]=union(kept[field]||[],c[field]||[]);
+      if(c.sourceLinksNeedReview)kept.sourceLinksNeedReview=true;
+      continue;
+    }
     if(key)seen.set(key,c);out.push(c);
   }
   return out;
@@ -4335,6 +4434,8 @@ function ankiTagFormatIssues(card){
 }
 function lintAnkiCard(c){
   const p=parseAnkiClozes(c.text),issues=[];
+  // v16.7: a structurally plausible remainder cannot bypass a missing generated qualifier.
+  if((c.parseIssues||[]).length)issues.push('parse-boundary');
   if(!p.spans.length)issues.push('no-cloze');
   if(p.issues.length)issues.push('cloze-structure');
   if(ankiTier(c.tags)==='?')issues.push('no-tier');
@@ -4345,7 +4446,8 @@ function lintAnkiCard(c){
   if(parseAnkiClozes(c.extra).issues.length)issues.push('cloze-structure');
   return [...new Set(issues)];
 }
-const LINT_LABEL={'no-cloze':'no {{c…}} cloze','cloze-structure':'invalid flat cloze syntax','no-tier':'requires one complete Tier::1–3 tag','many-cloze':'>3 cloze indices','tag-format':'generated tags require nonempty ::-separated names; repair stray words','pipe-format':'each field must be one line without pipes'};
+// v16.7: a neighboring unpiped fragment can contain a lost qualifier; make its required Text repair visible.
+const LINT_LABEL={'parse-boundary':'generated line boundary needs source review; repair Text before export','no-cloze':'no {{c…}} cloze','cloze-structure':'invalid flat cloze syntax','no-tier':'requires one complete Tier::1–3 tag','many-cloze':'>3 cloze indices','tag-format':'generated tags require nonempty ::-separated names; repair stray words','pipe-format':'each field must be one line without pipes'};
 function ankiRenderClozes(parsed,index,revealed=false){
   if(parsed.issues.length)return 'Structural error: '+parsed.issues.join('; ')+'. Edit in Table.';
   let out='',cursor=0;
@@ -4363,7 +4465,8 @@ function ankiSelection(cards,current=true,tier='all'){
 // v15.17: Anki checks exact value/unit tokens in revealed text. The case validator's
 // threshold-instantiation and quote-support policies serve a different task.
 function ankiNumericText(value){
-  return String(value||'').toLowerCase().replace(/[µμ]g/g,'mcg')
+  // v16.7: mathematical minus is a sign, not an ignorable delimiter before a value.
+  return String(value||'').toLowerCase().replace(/−/g,'-').replace(/[µμ]g/g,'mcg')
     .replace(/\bmicrograms?\b/g,'mcg').replace(/\bmilligrams?\b/g,'mg')
     .replace(/\bkilograms?\b/g,'kg').replace(/\bgrams?\b/g,'g')
     .replace(/\bmillilit(?:er|re)s?\b/g,'ml').replace(/\blit(?:er|re)s?\b/g,'l')
@@ -4382,7 +4485,9 @@ function ankiDecimal(value){
   return (negative&&normalized!=='0'?'-':'')+normalized;
 }
 const ANKI_NUMBER_PART=String.raw`[+-]?(?:\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?|\.\d+)`;
-const ANKI_UNIT_PART=String.raw`(?!(?:to)\b)(?:[a-z°]+|%)(?:\s*\/\s*[a-z]+)*`;
+// v16.7: consume the complete exponent-bearing unit before deciding support;
+// unsupported square/cubic units must never donate a matching linear-unit prefix.
+const ANKI_UNIT_PART=String.raw`(?!(?:to)\b)(?:[a-z°]+(?:\^?[+-]?\d+|[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻]+)?|%)(?:\s*\/\s*[a-z]+(?:\^?[+-]?\d+|[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻]+)?)*`;
 const ANKI_SUPPORTED_UNIT=/^(?:mcg|mg|g|kg|ml|l|meq|mmol|unit|lb|oz|bpm|mmhg|breath|hr|min|sec|day|week|month|year|cm|mm|°c|°f|%)(?:\/(?:kg|ml|l|dl|hr|min|sec|day|dose|m2))*$/;
 function ankiNumericTokens(value){
   const text=ankiNumericText(value),tokens=[],unsupported=[],blocked=[];
@@ -4410,6 +4515,8 @@ function ankiNumericAudit(card,batch,current){
   const ids=ankiLinkedIds(card,batch.snapshot);
   if(!ids.length)return notChecked('No valid source mapping.');
   const parsed=ankiNumericTokens(ankiPreviewText(card.text,0,true)+' '+ankiPreviewText(card.extra,0,true));
+  // v16.7: hints remain visible study content; compare them separately without changing eligibility.
+  const hints=[...parseAnkiClozes(card.text).spans,...parseAnkiClozes(card.extra).spans].filter(span=>span.hint).map(span=>ankiNumericTokens(span.hint));
   const supported=new Set(),quoted=new Set();
   for(const id of ids){
     const fact=batch.snapshot.byId[id],ft=ankiNumericTokens(fact.text);
@@ -4423,8 +4530,13 @@ function ankiNumericAudit(card,batch,current){
     if(supported.has(token.key))continue;
     findings.push(quoted.has(token.key)?{code:'quote-only',msg:token.key+': Found only in source quote; review source.'}:{code:'numeric-discrepancy',msg:token.key+': no exact value/unit occurrence in linked fact text.'});
   }
-  const status=findings.some(x=>x.code==='numeric-discrepancy')?'Numeric discrepancy':findings.length?'Source review needed':parsed.tokens.length?'No numeric mismatch detected':'No supported numeric values found';
-  return {status,checked:parsed.tokens.length,findings};
+  for(const hint of hints){
+    for(const form of hint.unsupported)findings.push({code:'hint-unsupported-form',msg:'Visible hint: unsupported numeric form '+form+'. Review the source.'});
+    for(const token of hint.tokens)if(!supported.has(token.key))findings.push(quoted.has(token.key)?{code:'hint-quote-only',msg:'Visible hint: '+token.key+' occurs only in the source quote.'}:{code:'hint-numeric-discrepancy',msg:'Visible hint: '+token.key+' has no exact value/unit occurrence in linked fact text.'});
+  }
+  const hintChecked=hints.reduce((sum,hint)=>sum+hint.tokens.length,0);
+  const status=findings.some(x=>x.code==='numeric-discrepancy')?'Numeric discrepancy':findings.length?'Source review needed':parsed.tokens.length+hintChecked?'No numeric mismatch detected':'No supported numeric values found';
+  return {status,checked:parsed.tokens.length,hintChecked,findings};
 }
 // v15.17: exact rendered fronts can collide even when full Text differs. Preserve
 // punctuation/case/qualifiers and visible siblings; these groups are advisory only.
@@ -4455,7 +4567,7 @@ function ankiBatchDiagnostics(cards,batch,current){
     sharedGaps:{warned:styleCount('shared-gaps')},listRecall:{warned:styleCount('list-recall')},
     unmappedNotes:raw.filter(c=>!ankiLinkedIds(c,batch&&batch.snapshot).length).length,partialMappings:raw.filter(c=>(c.mappingIssues||[]).length).length,
     collisions:{groups:groups.length,affectedReviews:groups.reduce((n,g)=>n+g.members.length,0),differentAnswer:groups.filter(g=>g.kind==='different-answer').length,sameAnswer:groups.filter(g=>g.kind==='same-answer').length},
-    numeric:{warnedNotes:audits.filter(a=>a.status==='Numeric discrepancy'||a.status==='Source review needed').length,checkedNotes:audits.filter(a=>a.checked>0).length,checkedTokens:audits.reduce((n,a)=>n+a.checked,0),notChecked:audits.filter(a=>a.status==='Not checked').map(a=>a.findings[0].msg),discrepancies:count('numeric-discrepancy'),quoteOnly:count('quote-only'),unsupported:audits.filter(a=>a.findings.some(x=>x.code.startsWith('unsupported'))).length},
+    numeric:{warnedNotes:audits.filter(a=>a.status==='Numeric discrepancy'||a.status==='Source review needed').length,checkedNotes:audits.filter(a=>a.checked>0||a.hintChecked>0).length,checkedTokens:audits.reduce((n,a)=>n+a.checked,0),checkedHintTokens:audits.reduce((n,a)=>n+(a.hintChecked||0),0),hintDiscrepancies:count('hint-numeric-discrepancy'),notChecked:audits.filter(a=>a.status==='Not checked').map(a=>a.findings[0].msg),discrepancies:count('numeric-discrepancy'),quoteOnly:count('quote-only'),unsupported:audits.filter(a=>a.findings.some(x=>x.code.startsWith('unsupported'))).length},
     current:ankiCurrentStatistics(cards,batch,current,live),
     truncated:!!(batch&&batch.truncated),stale:!current};
 }
@@ -5066,13 +5178,15 @@ function ankiSourceLinkStatus(card,snapshot){
   const ids=Array.isArray(card.factIds)?card.factIds:[],resolved=ids.filter(id=>snapshot?.byId?.[id]);
   if(!resolved.length)return {code:'unmapped',message:'No source fact is linked. Review the captured source and add its supporting fact IDs.'};
   if(resolved.length!==ids.length||(card.mappingIssues||[]).length)return {code:'mapping-review',message:'Source associations have unresolved mapping diagnostics. Review and confirm the supporting facts.'};
+  if(card.sourceLinksNeedReview)return {code:'edited-review',message:'Text or Extra changed. Review the captured facts and confirm or update the source links; the association count does not verify the edited wording.'};
   return {code:'linked',message:'Source associations identify support; they do not prove source fidelity or complete recall.'};
 }
 function ankiSetSourceLinks(card,ids,snapshot,at=new Date().toISOString()){
   if(!Array.isArray(ids)||ids.some(id=>typeof id!=='string'||!snapshot?.byId?.[id])||new Set(ids).size!==ids.length)throw new Error('Use each available captured fact ID at most once. Unknown source IDs were not applied.');
-  if(JSON.stringify(ids)===JSON.stringify(card.factIds||[])&&!(card.mappingIssues||[]).length)return card;
+  // v16.7: confirming links after a content edit records review without erasing the original source association.
+  if(JSON.stringify(ids)===JSON.stringify(card.factIds||[])&&!(card.mappingIssues||[]).length&&!card.sourceLinksNeedReview)return card;
   const edit={at,before:[...(card.factIds||[])],after:[...ids],previousIssues:(card.mappingIssues||[]).map(x=>({...x}))};
-  return {...card,factIds:[...ids],mappingIssues:[],unresolvedFactIds:[],sourceLinkEdits:[...(card.sourceLinkEdits||[]),edit]};
+  return {...card,factIds:[...ids],mappingIssues:[],unresolvedFactIds:[],sourceLinksNeedReview:false,sourceLinksReviewedAt:at,sourceLinkEdits:[...(card.sourceLinkEdits||[]),edit]};
 }
 // v16.2: hashes identify the exact captured input and notes, not their correctness.
 // Hashing is local; unavailable Web Crypto is reported rather than hiding the evidence.
@@ -5080,7 +5194,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '16.6';}
+function suiteVersion(){return '16.7';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -5089,7 +5203,7 @@ function ankiSourceAuditLabel(run,current=true){
 async function ankiSourceAuditEvidence(run,getInputs,exportedAt=new Date().toISOString()){
   const groups=run.groups||[],facts=(run.batch?.snapshot?.facts||Array.from(new Map(groups.flatMap(g=>g.facts).map(f=>[f.id,f])).values())).map(f=>({id:f.id,condition:f.condition,aliases:[...(f.aliases||[])],subtype:f.subtype,text:f.text,tier:f.tier,bucket:f.bucket}));
   // v16.5: private evidence hashes include the format contract used for note eligibility.
-  const cards=(run.cards||Array.from(new Map(groups.flatMap(g=>g.notes).map(n=>[n.id,n])).values())).map(c=>({id:c.id,chunk:c.chunk,sourceLine:c.sourceLine,text:c.text,extra:c.extra,tags:c.tags,tagFormatContract:c.tagFormatContract||null,keep:c.keep,factIds:[...(c.factIds||[])],mappingIssues:(c.mappingIssues||[]).map(x=>({...x})),sourceLinkEdits:c.sourceLinkEdits||[],conditionTagNormalization:c.conditionTagNormalization||null}));
+  const cards=(run.cards||Array.from(new Map(groups.flatMap(g=>g.notes).map(n=>[n.id,n])).values())).map(c=>({id:c.id,chunk:c.chunk,sourceLine:c.sourceLine,text:c.text,extra:c.extra,tags:c.tags,tagFormatContract:c.tagFormatContract||null,keep:c.keep,factIds:[...(c.factIds||[])],mappingIssues:(c.mappingIssues||[]).map(x=>({...x})),sourceLinkEdits:c.sourceLinkEdits||[],sourceLinksNeedReview:!!c.sourceLinksNeedReview,sourceLinksReviewedAt:c.sourceLinksReviewedAt||null,conditionTagNormalization:c.conditionTagNormalization||null}));
   // v16.5: preserve generation decisions separately from a read-only check of captured audit notes.
   const conditionTagDiagnostics=ankiConditionTagDiagnostics(run.cards||Array.from(new Map(groups.flatMap(g=>g.notes).map(n=>[n.id,n])).values()),run.batch);
   const [sourceSnapshotSha256,cardSnapshotSha256,builderSha256]=await Promise.all([ankiSha256(JSON.stringify(facts)),ankiSha256(JSON.stringify(cards)),run.builderSource?ankiSha256(run.builderSource):Promise.resolve(null)]);
@@ -5099,7 +5213,7 @@ async function ankiSourceAuditEvidence(run,getInputs,exportedAt=new Date().toISO
   const metadata={schemaVersion:4,suiteVersion:suiteVersion(),exportedAt,preparedAt:run.preparedAt||null,startedAt:run.startedAt||null,finishedAt:run.finishedAt||null,currentAtExport:current,checkComplete:isComplete,checkedGroups:checked,totalGroups:total,retainedGroups:(run.results||[]).length,unresolvedRecords:(run.results||[]).flatMap(r=>r.unresolved||[]),pendingGroups,failedGroups:(run.failures||[]).map(f=>f.groupId),recoveredCitations:(run.results||[]).reduce((n,g)=>n+(g.citationRecoveries||[]).length,0),referenceNormalizations:(run.results||[]).reduce((n,g)=>n+(g.referenceRecoveries||[]).length,0),sourceSnapshotSha256,cardSnapshotSha256,hashEncoding:'SHA-256 of UTF-8 JSON: ordered captured fact context and current note fields; not the uploaded KB file bytes.',hashesAvailable:!!sourceSnapshotSha256&&!!cardSnapshotSha256,
     generation:{model:run.batch?.model||null,thinkingLevel:run.batch?.thinkingLevel||null,startedAt:run.batch?.startedAt||null,completedAt:run.batch?.completedAt||null,context:{outcomes:run.batch?.context?.outcomes||'',points:run.batch?.context?.points||'',focusContext:run.batch?.context?.focusContext||''},promptHashes:run.batch?.promptHashes||null},
     audit:{model:run.model||null,thinkingLevel:run.thinkingLevel||null,tier:run.tier,builderSha256,contract:'v4 exact packet-local note handles and source token ranges; complete source inventory, role-separated target references, independently validated records',limitations:'Model judgments remain advisory; validated references and completed requests do not certify correctness or completeness.'}};
-  return {status,runStatus:run.status,message:run.message||'',model:run.model,thinkingLevel:run.thinkingLevel,tier:run.tier,metadata,groups,noteHandleMaps:groups.filter(g=>g.protocolVersion===4).map(g=>({groupId:g.id,notes:g.notes.map((n,i)=>({handle:'n'+(i+1),noteId:n.id}))})),conditionTagDiagnostics,mappingDiagnostics:cards.map(c=>({noteId:c.id,factIds:c.factIds,mappingIssues:c.mappingIssues})),results:run.results||[],responses:run.responses||[],failures:run.failures||[],failureHistory:run.failureHistory||[],sessions:run.sessions||[],reviewDecisions:ankiReviewDecisionEvidence(inputs?.reviewDecisions||[],inputs?.reviewItems||[],{...inputs,current},run),noteEdits:cards.filter(c=>c.sourceLinkEdits.length||c.conditionTagNormalization).map(c=>({noteId:c.id,sourceLinkEdits:c.sourceLinkEdits,conditionTagNormalization:c.conditionTagNormalization})),filename:'anki-source-'+(run.status==='prepared'?'packet':isComplete?'report':'incomplete')+'-'+status+'.json'};
+  return {status,runStatus:run.status,message:run.message||'',model:run.model,thinkingLevel:run.thinkingLevel,tier:run.tier,metadata,noteProvenance:ankiNoteProvenance(run.cards||[]),groups,noteHandleMaps:groups.filter(g=>g.protocolVersion===4).map(g=>({groupId:g.id,notes:g.notes.map((n,i)=>({handle:'n'+(i+1),noteId:n.id}))})),conditionTagDiagnostics,mappingDiagnostics:cards.map(c=>({noteId:c.id,factIds:c.factIds,mappingIssues:c.mappingIssues,sourceLinksNeedReview:c.sourceLinksNeedReview,sourceLinksReviewedAt:c.sourceLinksReviewedAt})),results:run.results||[],responses:run.responses||[],failures:run.failures||[],failureHistory:run.failureHistory||[],sessions:run.sessions||[],reviewDecisions:ankiReviewDecisionEvidence(inputs?.reviewDecisions||[],inputs?.reviewItems||[],{...inputs,current},run),noteEdits:cards.filter(c=>c.sourceLinkEdits.length||c.conditionTagNormalization).map(c=>({noteId:c.id,sourceLinkEdits:c.sourceLinkEdits,conditionTagNormalization:c.conditionTagNormalization})),filename:'anki-source-'+(run.status==='prepared'?'packet':isComplete?'report':'incomplete')+'-'+status+'.json'};
 }
 
 // v16.0: audit validity follows the exact captured notes, source batch and export tier.
@@ -5404,6 +5518,25 @@ function ankiReviewDecisionEvidence(decisions,items,inputs,run){
   // v16.3: export explicit review records without source object references or runtime credentials.
   return decisions.map(d=>({key:d.key,code:d.code,noteIds:[...d.noteIds],factIds:[...d.factIds],disposition:d.disposition,coveredBy:d.coveredBy,reason:d.reason,at:d.at,current:latest.get(d.key)===d&&ankiReviewDecisionCurrent(d,indexed.get(d.key),inputs,run),superseded:latest.get(d.key)!==d,tier:d.scope.tier,auditPreparedAt:d.scope.preparedAt}));
 }
+// v16.7: merges and manual repairs retain downloadable, source-scoped evidence without runtime settings.
+function ankiNoteProvenance(cards){
+  const list=v=>Array.isArray(v)?v:[],copy=v=>v==null?v:JSON.parse(JSON.stringify(v));
+  const pick=(v,keys)=>Object.fromEntries(keys.split(' ').filter(k=>v&&Object.hasOwn(v,k)).map(k=>[k,copy(v[k])]));
+  return list(cards).map(c=>({
+    ...pick(c,'id chunk sourceLine text extra tags keep factIds parseIssues sourceLinksNeedReview sourceLinksReviewedAt mergedNoteIds'),
+    sourceLocations:list(c.sourceLocations).map(x=>pick(x,'noteId chunk sourceLine factIds mappingIssues')),
+    parseProvenance:list(c.parseProvenance).map(x=>pick(x,'noteId chunk sourceLine rawText text extra tags pipeCount parseIssues')),
+    conditionTagNormalizations:list(c.conditionTagNormalizations).map(x=>pick(x,'noteId chunk sourceLine status code message condition canonicalTag actualTags factIds before after reason')),
+    sourceLinkEdits:list(c.sourceLinkEdits).map(x=>pick(x,'at before after previousIssues'))
+  }));
+}
+// v16.7: transport completion did not distinguish unusable, truncated or repairable output.
+function ankiGenerationOutcome(cards,summary,batch){
+  if(!cards.length)return {status:'unusable',label:'No notes generated',level:'err'};
+  if(batch.truncated||(batch.chunkIssues||[]).length)return {status:'partial',label:'Partial generation',level:'warn'};
+  if(summary.invalid)return {status:'needs-repair',label:'Review required',level:'warn'};
+  return {status:'complete',label:'Complete',level:'ok'};
+}
 function AnkiStyleBadges({issues}){
   return issues.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:4,marginTop:5}}>{issues.map(x=><span key={x.code} title={x.msg} style={{fontSize:12,color:'var(--accent-warm)'}}>⚠ {x.msg}</span>)}</div>;
 }
@@ -5421,10 +5554,11 @@ function AnkiCollisionReferences({groups=[]}){
 }
 function AnkiNoteDiagnostics({card,audit,current}){
   return <details style={{fontSize:12,marginTop:6,color:audit.findings.length?'var(--accent-warm)':'var(--text-dim)'}}>
-    <summary>{audit.status} · {audit.checked} numeric token{audit.checked===1?'':'s'} checked</summary>
+    <summary>{audit.status} · {audit.checked} revealed numeric token{audit.checked===1?'':'s'} checked · {audit.hintChecked||0} hint token(s) checked</summary>
     {audit.findings.map((x,i)=><div key={i}>{x.msg}</div>)}
     <div>Source association (retained after edits): {current?(card.factIds||[]).map(id=><FactTag key={id} factId={id}/>):'earlier KB; links inactive'}{current&&!(card.factIds||[]).length&&'unavailable'}</div>
-    <div>Checks value/unit occurrence only; comparators, roles, and clinical meaning still need review.</div>
+    <div>Checks value/unit occurrence in revealed Text, Extra and visible hints; comparators, roles, and clinical meaning still need review.</div>
+    {card.sourceLinksNeedReview&&<div>Text or Extra changed; review and confirm the source links.</div>}
   </details>;
 }
 function AnkiReviewCard({card,initialIndex}){
@@ -5455,6 +5589,7 @@ function AnkiSourceLinkEditor({card,batch,current,onChange}){
   const facts=batch?.snapshot?.facts||[],selected=facts.find(f=>f.id===chosen);
   return <details style={{marginTop:10}}><summary>Edit source links</summary>
     <p>Choose only facts that support this note. Applying links records your edit; it does not verify the wording or change the source KB.</p>
+    {card.sourceLinksNeedReview&&<p>Review the changed Text and Extra against the captured facts, then apply these links again to record your manual review.</p>}
     <label>Browse captured facts <select aria-label={'Source fact for note '+card.id} value={chosen} disabled={!current} onChange={e=>setChosen(e.target.value)}><option value="">Choose a fact</option>{facts.map(f=><option key={f.id} value={f.id}>{f.id} · {f.condition} · {f.text.slice(0,85)}</option>)}</select></label>
     {selected&&<div style={{whiteSpace:'pre-wrap',marginTop:6}}>{selected.text}<button className="btn-secondary" disabled={!current} onClick={()=>setDraft(p=>Array.from(new Set([...p.split(/[\s,;]+/).filter(Boolean),selected.id])).join(', '))}>Add to draft links</button></div>}
     <label style={{display:'block',marginTop:8}}>Supporting fact IDs <input aria-label={'Source links for note '+card.id} value={draft} disabled={!current} onChange={e=>setDraft(e.target.value)} placeholder="fact-1, fact-2"/></label>
@@ -5485,7 +5620,7 @@ function AnkiReviewSource({card,batch,current,initialIndex,expanded=false,onSour
   // v16.2: share the parent tag result; rebuilding its registry per closed note was quadratic.
   const tagCheck=conditionCheck||(open?ankiConditionTagCheck(card,batch?.snapshot):null),linkStatus=ankiSourceLinkStatus(card,batch?.snapshot);
   return <details open={open} onToggle={e=>setOpen(e.currentTarget.open)} style={{marginTop:8,fontSize:12}}>
-    <summary>Review and source · {(card.factIds||[]).length} linked fact(s)</summary>
+    <summary>Review and source · {(card.factIds||[]).length} linked fact(s){card.sourceLinksNeedReview?' · edited; review links':''}</summary>
     {open&&<div style={{overflowWrap:'anywhere'}}>
       <AnkiReviewCard card={card} initialIndex={initialIndex}/>
       <p>Hidden answers by review: {parseAnkiClozes(card.text).indices.map(n=><span key={n} style={{display:'block'}}>c{n}: {parseAnkiClozes(card.text).spans.filter(x=>x.index===n).map(x=>x.answer).join(' / ')}</span>)}</p>
@@ -5613,6 +5748,9 @@ function AnkiGenerator(){
     return map;
   },[cards,collisionGroups]);
   const actionableCollisions=useMemo(()=>ankiCollisionGroups(coverage.kept),[coverage.kept]);
+  // v16.7: manual repairs may create exact duplicates; merging remains an explicit choice and preserves different Keep states.
+  const exactDuplicateCount=useMemo(()=>cards.length-ankiDedupeCards(cards).length,[cards]);
+  const mergeExactDuplicates=()=>{if(!current||busy||auditBusy||(K.isCurrentSource&&!K.isCurrentSource(batch.sourceKB)))return;setCards(rows=>ankiDedupeCards(rows));};
   // Original evidence recomputes on source-currentness changes, preserving Not checked for a stale batch.
   const originalDiagnostics=useMemo(()=>ankiBatchDiagnostics(batch?.rawCards||[],batch,current),[batch,current]);
   const diagnostics=useMemo(()=>({...originalDiagnostics,current:ankiCurrentStatistics(cards,batch,current,coverage)}),[originalDiagnostics,cards,batch,current,coverage]);
@@ -5760,7 +5898,7 @@ function AnkiGenerator(){
     activeRun.current?.ctl.abort();
     const ctl=new AbortController();setAbortCtl(ctl);
     const sourceKB=K.knowledgeBase,snapshot=ankiSourceSnapshot(sourceKB);
-    const runState={sourceKB,ctl,snapshot,model,thinkingLevel:toolLevel,startedAt:new Date().toISOString(),context:{outcomes,points,focusContext},rawResponses:[],truncated:false};activeRun.current=runState;
+    const runState={sourceKB,ctl,snapshot,model,thinkingLevel:toolLevel,startedAt:new Date().toISOString(),context:{outcomes,points,focusContext},rawResponses:[],chunkIssues:[],truncated:false};activeRun.current=runState;
     const isCurrent=()=>ankiRunIsCurrent(runState,activeRun.current,currentKB.current)&&(!K.isCurrentSource||K.isCurrentSource(sourceKB));
     const focusBlock=buildFocusBlock();
     try{
@@ -5815,15 +5953,17 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
         runState.rawResponses.push(resp);runState.partialResponse='';
         // v16.5: this structured-KB run owns the hierarchical tag contract; generic parser calls do not.
         const{cards:cc,ledger:cl}=ankiParseCards(resp,i+1,'hierarchical-v1');ledgers.push({chunk:i+1,text:cl});all=[...all,...cc];allLedg+=cl?'\n--- Chunk '+(i+1)+' ---\n'+cl:'';
-        setProg(((i+1)/n)*100);log(`Chunk ${i+1} done — ${cc.length} received notes`,'ok');
+        // v16.7: a nonempty STOP response can still contain no note records; retain evidence and mark it incomplete.
+        if(!cc.length)runState.chunkIssues.push({chunk:i+1,code:'no-note-records',message:'Response contained no usable note records.'});
+        setProg(((i+1)/n)*100);log(`Chunk ${i+1} done — ${cc.length} received notes`,cc.length?'ok':'warn');
       }
       // Key on the FULL normalized text. The old 120-char prefix key silently dropped
       // distinct notes that shared an opening — exactly the zero-skip guarantee v10c
       // works hardest to enforce. A surviving near-duplicate is deletable in the UI;
       // a dropped card is not recoverable.
       const mappingIssues=attachCoverageToCards(all,ledgers,snapshot,chunkIds);
-      // v16.2: normalize only proven source aliases after existing dedupe; raw output and dedupe scope remain intact.
-      const normalized=ankiNormalizeConditionTags(ankiDedupeCards(all),snapshot),deduped=normalized.cards;
+      // v16.7: proven alias normalization can create exact duplicates; merge again while retaining original provenance.
+      const normalized=ankiNormalizeConditionTags(ankiDedupeCards(all),snapshot),deduped=ankiDedupeCards(normalized.cards);
       if(normalized.changes.length)log('Normalized '+normalized.changes.length+' condition tag(s) from supplied aliases; original tags retained.','warn');
       if(normalized.issues.length)log(normalized.issues.length+' condition/source metadata discrepancy(s) need review.','warn');
       if(all.length-deduped.length>0)log(`Removed ${all.length-deduped.length} duplicate(s); their fact IDs were merged into the surviving cards.`,'warn');
@@ -5841,10 +5981,11 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
       if(abbrevCount)log(`⚠ ${abbrevCount} card(s) contain an error-prone dose abbreviation (q.d., IU, bare U, trailing/missing zero). They are still exportable — fix the transcription before drilling them.`,'warn');
       const lintCount=deduped.filter(c=>c.lint.length).length;
       if(!isCurrent())return;
-      const completed={sourceKB,snapshot,chunkIds,context:runState.context,parsedNotes:all.length,rawCards:all,postDedupeNotes:deduped.length,rawResponses:runState.rawResponses,mappingIssues,truncated:runState.truncated,model,thinkingLevel:toolLevel,startedAt:runState.startedAt,completedAt:new Date().toISOString(),promptHashes:runState.promptHashes,conditionTagChanges:normalized.changes,conditionTagOutcomes:normalized.outcomes};
+      const completed={sourceKB,snapshot,chunkIds,context:runState.context,parsedNotes:all.length,rawCards:all,postDedupeNotes:deduped.length,rawResponses:runState.rawResponses,mappingIssues,truncated:runState.truncated,chunkIssues:runState.chunkIssues||[],model,thinkingLevel:toolLevel,startedAt:runState.startedAt,completedAt:new Date().toISOString(),promptHashes:runState.promptHashes,conditionTagChanges:normalized.changes,conditionTagOutcomes:normalized.outcomes};
       const summary=ankiBatchSummary(deduped,completed,true);
+      completed.outcome=ankiGenerationOutcome(deduped,summary,completed);
       setBatch(completed);setCards(deduped);setLedger(allLedg);
-      log('Complete! '+all.length+' received notes; '+deduped.length+' after dedupe; '+summary.kept.length+' kept notes → '+summary.reviews+' review cards.','ok');
+      log(completed.outcome.label+'! '+all.length+' received notes; '+deduped.length+' after dedupe; '+summary.kept.length+' kept notes → '+summary.reviews+' review cards.',completed.outcome.level);
       log('Facts linked to kept notes: '+summary.coveredCount+'/'+summary.total+'.','ok');
       if(mappingIssues.length)log(mappingIssues.length+' mapping diagnostics; inspect the Fact Coverage Map.','warn');
       if(lintCount)log(lintCount+' structurally invalid note(s) excluded from export; correct them in Table.','warn');
@@ -5860,7 +6001,11 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
   // v15.17: structural eligibility and manual selection are independent; edits never flip keep.
   const updateField=useCallback((id,f,v)=>setCards(p=>p.map(c=>{
     if(c.id!==id)return c;
+    if(c[f]===v)return c;
     const next={...c,[f]:v};
+    // v16.7: edits retain traceability but make the supporting links a fresh manual review; only Text repair resolves a parsed boundary.
+    if(f==='text'||f==='extra')next.sourceLinksNeedReview=true;
+    if(f==='text')next.parseIssues=[];
     if(f==='text'||f==='extra'||f==='tags'){
       // v15.17: revalidate the actual edited fields; selection belongs to the student.
       next.pipeCount=2;
@@ -5939,6 +6084,7 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
       {/* v16.0: even an empty completed batch needs source coverage and optional audit controls. */}
       {/* Cards */}
       {(cards.length>0||batch)&&<div style={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:18}}>
+        {batch?.outcome&&<p role="status" style={{color:batch.outcome.level==='ok'?'var(--accent-green)':'var(--accent-warm)'}}>{batch.outcome.label}{batch.truncated?' · response truncated':''}{batch.chunkIssues?.length?' · '+batch.chunkIssues.length+' chunk(s) returned no note records':''}. Original responses remain in batch diagnostics.</p>}
         {batch&&!current&&<p role="alert" style={{color:'var(--accent-warm)'}}>These notes belong to an earlier Knowledge Base. Generate a new batch to restore source links, coverage, and export.</p>}
         {current&&<div style={{marginBottom:12,padding:'10px 12px',borderRadius:8,border:'1px solid '+(coverage.uncovered.length?'var(--error-border)':'var(--success-border)'),background:coverage.uncovered.length?'var(--error-bg)':'var(--success-bg)'}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap'}}>
@@ -5965,7 +6111,7 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
         <details style={{fontSize:12,marginBottom:10}}><summary>Possible duplicate reviews ({reviewCandidates.length} groups)</summary><p>Same answers with overlapping sources and similar context. Different decisions may still need separate cards; nothing is removed.</p>{reviewCandidates.map((g,i)=><div key={i} style={{padding:8,border:'1px solid var(--border)',marginTop:6}}>{g.members.map(m=><div key={m.noteId+':'+m.index}><button className="btn-ghost" onClick={()=>openNote(m.noteId,m.index)}>Review {m.noteId} · c{m.index}</button><div>{m.front}</div><div>Answer: {m.answers.join(' / ')}</div></div>)}</div>)}</details>
         <label style={{fontSize:12}}>Review findings <select aria-label="Anki review findings" value={warningFilter} onChange={e=>{setWarningFilter(e.target.value);setStyleOnly(false);}}><option value="all">All notes</option><option value="answer-visible">Answer visible</option><option value="shared-gaps">Several gaps hide together</option><option value="list-recall">3+ gaps hide together</option><option value="long-front">Long front</option><option value="front-anchor">Condition/topic cue</option><option value="front-label">Retrieval label</option><option value="article-clue">Article clue</option><option value="duplicate">Possible duplicate</option><option value="source">Numeric/source warnings</option><option value="mapping">Source-link review</option><option value="condition-tag">Condition-tag discrepancies</option></select></label>
         <details style={{margin:'12px 0',padding:10,border:'1px solid var(--border)',borderRadius:8}}><summary>Optional · Check against KB</summary>
-          <p>Checks source meaning, missing recall targets, duplicate targets and priority loss. Uses the captured fact text and all note tiers, with Tier {tierFilter==='all'?'1–3':tierFilter} selected for export. Findings are suggestions, not clinical validation.</p>
+          <p>Checks source meaning, missing recall targets, duplicate targets and priority loss. Uses the captured fact text and all note tiers, with Tier {tierFilter==='all'?'1–3':tierFilter} selected for export. Findings are suggestions, not clinical validation. This checks against the captured KB, so a mistake already in that KB can survive the check; compare questionable facts with the original source.</p>
           {/* v16.2: preparation and a completed AI check must not share an ambiguous download label. */}
           <p>Prepare a review packet locally, then run the check explicitly. The checker accounts for source words as targets or context, then compares complete note claims. Valid records survive an incomplete check; unresolved records remain available for review and retry.</p>
           <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:8}}><label>Checker model <select aria-label="Source checker model" value={auditFamily} disabled={auditBusy} onChange={e=>setAuditFamily(e.target.value)}><option value="flash">Flash</option><option value="pro">Pro</option></select></label><label>Checker thinking <select aria-label="Source checker thinking" value={auditLevel} disabled={auditBusy} onChange={e=>setAuditLevel(e.target.value)}>{['low','medium','high'].map(level=><option key={level} value={level}>{level}</option>)}</select></label></div>
@@ -5977,12 +6123,13 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
             {(sourceAudit.failures||[]).length>0&&<details><summary>Unresolved or failed groups ({sourceAudit.failures.length})</summary>{sourceAudit.failures.map(f=><div key={f.groupId} style={{padding:8,overflowWrap:'anywhere'}}><b>{f.groupId} · {f.type} · attempt {f.attempt}</b><p>{f.error}</p>{f.detail&&<div>Location: {f.detail.path}{f.detail.factId&&' · '+f.detail.factId}{f.detail.noteId&&' · '+f.detail.noteId}{f.detail.sourceSpan&&<p style={{whiteSpace:'pre-wrap'}}>Rejected citation: {f.detail.sourceSpan}</p>}</div>}</div>)}</details>}
             {(sourceAudit.results||[]).some(g=>g.citationRecoveries?.length>0)&&<details><summary>Canonical citation matches recorded</summary>{sourceAudit.results.flatMap(g=>(g.citationRecoveries||[]).map((r,i)=><div key={g.groupId+':'+i} style={{padding:8,overflowWrap:'anywhere'}}>{g.groupId} · {r.path} · {r.factId} · {r.method}<p>Returned: {r.originalSourceSpan}</p><p>Captured source: {r.sourceSpan}</p></div>))}</details>}
             {auditBusy&&<button className="btn-secondary" onClick={cancelSourceAudit}>Cancel source check</button>}
-            {sourceAudit.results.map(g=><div key={g.groupId} style={{marginTop:8}}><b>{g.groupId}</b><AnkiAuditReceipts result={g} onOpen={openNote} canOpen={sourceAudit.cards===cards&&sourceAudit.batch===batch&&current}/>{!g.findings.length&&<p>No validated findings in this group; unresolved records and semantic gaps may remain.</p>}{g.findings.map((f,i)=><div key={i} style={{padding:8,border:'1px solid var(--border)',marginTop:6}}><b>{f.code}</b> — {f.message}{f.suggestion&&<p style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}><strong>Suggested correction:</strong> {f.suggestion}</p>}<div>{f.factIds.join(', ')}</div>{f.noteIds.map(id=><button key={id} className="btn-ghost" disabled={sourceAudit.cards!==cards||sourceAudit.batch!==batch} onClick={()=>openNote(id)}>{id}</button>)}</div>)}</div>)}
+            {sourceAudit.results.map(g=><div key={g.groupId} style={{marginTop:8}}><b>{g.groupId}</b><AnkiAuditReceipts result={g} onOpen={openNote} canOpen={sourceAudit.cards===cards&&sourceAudit.batch===batch&&current}/>{!g.findings.length&&<p>No validated findings in this group; unresolved records and semantic gaps may remain.</p>}{g.findings.map((f,i)=><div key={i} style={{padding:8,border:'1px solid var(--border)',marginTop:6}}><b>{f.code}</b> — {f.message}{f.suggestion&&<p style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}><strong>Proposed edit to review — not applied:</strong> {f.suggestion}</p>}<div>{f.factIds.join(', ')}</div>{f.noteIds.map(id=><button key={id} className="btn-ghost" disabled={sourceAudit.cards!==cards||sourceAudit.batch!==batch} onClick={()=>openNote(id)}>{id}</button>)}</div>)}</div>)}
             <button className="btn-secondary" disabled={savingEvidence} onClick={saveSourceAudit}>{savingEvidence?'Saving evidence...':sourceAudit.status==='prepared'?'Download unrun review packet':'Download source-check report'}</button>{evidenceError&&<p role="alert">{evidenceError}</p>}
           </div>}
         </details>
         <AnkiReviewQueue items={reviewItems} decisions={reviewDecisions} inputs={auditInputs.current} run={sourceAudit} eligible={selected.kept} onDecision={saveReviewDecision} onOpen={openNote} onEdit={editNote} disabled={busy||!current}/>
         {inspectNote&&cards.find(c=>c.id===inspectNote.id)&&<div style={{padding:12,border:'1px solid var(--accent)',borderRadius:8,marginBottom:12}}><button className="btn-secondary" onClick={()=>setInspectNote(null)}>Close selected review</button><AnkiReviewSource conditionCheck={conditionTagIssues.get(inspectNote.id)} key={inspectNote.id} card={cards.find(c=>c.id===inspectNote.id)} batch={batch} current={current} initialIndex={inspectNote.index} expanded onSourcesChange={busy?null:updateSourceLinks}/></div>}
+        {exactDuplicateCount>0&&<p><button className="btn-secondary" onClick={mergeExactDuplicates} disabled={!current||busy||auditBusy}>Merge {exactDuplicateCount} exact duplicate note(s)</button> Only identical valid Text, Extra, tags and Keep choices merge; source links and original note locations are retained.</p>}
         <p style={{fontSize:12}}>Excluded from export: {selected.invalid} structural · {selected.manualExcluded} manually unchecked. Structural repairs restore eligibility; checkboxes record your choice.</p>
         <p style={{fontSize:12,color:'var(--text-dim)',margin:'0 0 10px'}}>Style warnings are suggestions; notes stay exportable. The style filter affects review only. Export includes all kept notes in the selected tier.</p>
         {includeSources&&<p style={{fontSize:12}}>{missingPointers} kept note(s) in this tier have no usable source pointer; exported as “Source: unavailable”. References are added only to the exported Extra field.</p>}
@@ -6027,7 +6174,7 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
       </details>}
       {batch&&<details style={{marginTop:14}}><summary>Batch diagnostics · original responses before edits and exclusions</summary>
         <pre style={{fontSize:12,whiteSpace:'pre-wrap'}}>{JSON.stringify(diagnostics,null,2)}</pre>
-        <button className="btn-secondary" onClick={()=>downloadBlob(new Blob([JSON.stringify({suiteVersion:suiteVersion(),model:batch.model,thinkingLevel:batch.thinkingLevel,startedAt:batch.startedAt,completedAt:batch.completedAt,promptHashes:batch.promptHashes,context:batch.context,snapshot:batch.snapshot,chunkIds:batch.chunkIds,mappingIssues:batch.mappingIssues,conditionTagChanges:batch.conditionTagChanges,conditionTagOutcomes:batch.conditionTagOutcomes||null,diagnostics,rawResponses:batch.rawResponses},null,2)],{type:'application/json'}),'anki-batch-diagnostics.json')}>Save diagnostics and original responses</button>
+        <button className="btn-secondary" onClick={()=>downloadBlob(new Blob([JSON.stringify({suiteVersion:suiteVersion(),model:batch.model,thinkingLevel:batch.thinkingLevel,startedAt:batch.startedAt,completedAt:batch.completedAt,promptHashes:batch.promptHashes,context:batch.context,snapshot:batch.snapshot,chunkIds:batch.chunkIds,outcome:batch.outcome||null,truncated:!!batch.truncated,chunkIssues:batch.chunkIssues||[],mappingIssues:batch.mappingIssues,conditionTagChanges:batch.conditionTagChanges,conditionTagOutcomes:batch.conditionTagOutcomes||null,noteProvenance:ankiNoteProvenance(cards),diagnostics,rawResponses:batch.rawResponses},null,2)],{type:'application/json'}),'anki-batch-diagnostics.json')}>Save diagnostics and original responses</button>
       </details>}
       {batch&&batch.mappingIssues.length>0&&<details style={{marginTop:14}}><summary>Mapping diagnostics ({batch.mappingIssues.length}) · {batch.parsedNotes} parsed notes</summary>{batch.mappingIssues.map((x,i)=><div key={i} style={{fontSize:12}}>{x.code} — {x.id||x.noteId} · chunk {x.chunk}, line {Number.isFinite(x.line)?x.line:x.code==='missing-id'?'missing':'invalid'}</div>)}</details>}
       {ledger&&<div style={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:16,marginTop:14}}>
@@ -10165,7 +10312,11 @@ function App(){
         if(!alive)return;saveQueue.current.setHead(durable,kbCaptureFallbacks());
         if(reconciled.choices.length){setRecoveryChoices(reconciled.choices);setPersistenceStatus('conflict');setPersistenceError('Saved copies disagree. Both are preserved. Export or inspect each copy, then choose one to continue saving.');}
         else{
-          if(kbMutation.current===started&&reconciled.record){const kb=reconciled.record.kb?kbNormalizeImported(reconciled.record.kb).kb:EMPTY_LATTE_KB;currentKnowledge.current=kb;publishKnowledgeBase(kb);}
+          if(kbMutation.current===started&&reconciled.record){
+            try{const kb=reconciled.record.kb?kbNormalizeImported(reconciled.record.kb,{restore:true}).kb:EMPTY_LATTE_KB;currentKnowledge.current=kb;publishKnowledgeBase(kb);}
+            // v16.7: rejected saved data stays exportable; a recovery choice pauses writes, not the whole session.
+            catch(e){setRecoveryChoices([reconciled.record]);setPersistenceStatus('conflict');setPersistenceError('Saved copy could not be restored: '+(e.message||String(e))+' Export or inspect the preserved copy. Import a corrected copy or build a new Knowledge Base, then choose Use current workspace to resume saving.');setHydrated(true);return;}
+          }
           setPersistenceStatus(unavailable?'fallback':'ready');setPersistenceError(unavailable?'IndexedDB is unavailable. Export JSON regularly; the browser fallback may have limited space.':'');
         }
         setHydrated(true);
@@ -10183,9 +10334,12 @@ function App(){
   const chooseRecovery=useCallback(async index=>{
     const choices=recoveryChoices,mutation=kbMutation.current;try{
       await kbArchiveRecovery(choices);if(!mounted.current||kbMutation.current!==mutation)return;
-      const record=choices[index];if(!record)return;
-      setRecoveryChoices([]);setKnowledgeBase(record.kb?kbNormalizeImported(record.kb).kb:EMPTY_LATTE_KB);
-    }catch{setPersistenceError('Could not preserve both recovery copies. Existing data is unchanged. Export both copies before retrying.');}
+      // v16.7: explicit replacement archives the preserved copies before saving the current workspace.
+      const record=index===-1?{kb:currentKnowledge.current}:choices[index];if(!record)return;
+      // v16.7: validate the entire saved copy before clearing recovery choices.
+      const kb=record.kb?kbNormalizeImported(record.kb,{restore:true}).kb:EMPTY_LATTE_KB;
+      setRecoveryChoices([]);setPersistenceError('');setKnowledgeBase(kb);
+    }catch(e){setPersistenceError('Could not restore this recovery copy: '+(e.message||String(e))+'. Existing data is unchanged. Export the saved copies before retrying.');}
   },[recoveryChoices,setKnowledgeBase]);
 
   // cfg.thinkingLevel stays in the API for all existing consumers, derived from the

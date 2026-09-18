@@ -6,7 +6,7 @@ async function runAnkiNormalizationDiagnosticsTests({S,t,section}){
   const start=S.indexOf('function ankiParseCards(raw'),end=S.indexOf('function AnkiStyleBadges',start);
   if(start<0||end<=start)throw Error('Anki normalization evidence extraction anchors moved.');
   const {webcrypto}=require('crypto');
-  const H=new Function('uid','globalThis','TextEncoder',S.slice(start,end)+';return {ankiNormalizeConditionTags,ankiConditionTagDiagnostic,ankiConditionTagDiagnostics,ankiSourceAuditEvidence};')(()=> 'synthetic',{crypto:webcrypto},TextEncoder);
+  const H=new Function('uid','globalThis','TextEncoder',S.slice(start,end)+';return {ankiNormalizeConditionTags,ankiConditionTagDiagnostic,ankiConditionTagDiagnostics,ankiSourceAuditEvidence,ankiNoteProvenance};')(()=> 'synthetic',{crypto:webcrypto},TextEncoder);
   const facts=[{id:'fact-1',condition:'Heart Failure',aliases:['HF'],text:'Synthetic first target.',tier:1,bucket:'Look'},{id:'fact-2',condition:'Heart Failure',aliases:['HF'],text:'Synthetic second target.',tier:1,bucket:'Look'},{id:'fact-3',condition:'Renal Failure',aliases:['RF'],text:'Synthetic third target.',tier:1,bucket:'Look'}];
   const snapshot={facts,byId:Object.fromEntries(facts.map(f=>[f.id,f]))};
   const card=(id,tags,extra={})=>({id,chunk:2,sourceLine:7,text:'[Synthetic] Target: {{c1::answer}}.',extra:'',tags,keep:true,factIds:['fact-1'],mappingIssues:[],...extra});
@@ -58,9 +58,9 @@ async function runAnkiNormalizationDiagnosticsTests({S,t,section}){
   t('live generation completion retains all normalization decisions alongside existing edits',complete.conditionTagOutcomes===clean.outcomes&&complete.conditionTagChanges===clean.changes&&complete.conditionTagOutcomes.length===complete.postDedupeNotes);
   const saveStart=S.indexOf('JSON.stringify({suiteVersion:suiteVersion(),model:batch.model'),saveEnd=S.indexOf(',null,2)',saveStart);
   if(saveStart<0||saveEnd<=saveStart)throw Error('Anki batch diagnostic download extraction anchors moved.');
-  const saved=JSON.parse(new Function('batch','diagnostics','suiteVersion','return '+S.slice(saveStart,saveEnd+8))(complete,{},()=> 'synthetic-version'));
+  const saved=JSON.parse(new Function('batch','diagnostics','suiteVersion','cards','ankiNoteProvenance','return '+S.slice(saveStart,saveEnd+8))(complete,{},()=> 'synthetic-version',clean.cards,H.ankiNoteProvenance));
   t('live Save diagnostics payload includes all captured normalization outcomes',saved.conditionTagOutcomes.length===3&&saved.conditionTagOutcomes[1].status==='canonical'&&saved.conditionTagOutcomes[2].code==='non-alias-condition');
-  const oldSaved=JSON.parse(new Function('batch','diagnostics','suiteVersion','return '+S.slice(saveStart,saveEnd+8))({model:'legacy'}, {},()=> 'synthetic-version'));
+  const oldSaved=JSON.parse(new Function('batch','diagnostics','suiteVersion','cards','ankiNoteProvenance','return '+S.slice(saveStart,saveEnd+8))({model:'legacy'}, {},()=> 'synthetic-version',[],H.ankiNoteProvenance));
   t('legacy batch downloads use null for uncaptured normalization outcomes',oldSaved.conditionTagOutcomes===null);
 
   const cleanCanonical=[originals[1]],generation=H.ankiNormalizeConditionTags(cleanCanonical,snapshot);

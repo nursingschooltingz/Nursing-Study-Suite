@@ -1,0 +1,115 @@
+{
+  "status": "Provisional hypotheses for independent refutation, not findings.",
+  "candidates": [
+    {
+      "id": "A1",
+      "claim": "Non-pipe response content is silently discarded; qualifiers can vanish and later note line numbers attach the wrong fact.",
+      "suite": "transform"
+    },
+    {
+      "id": "A2",
+      "claim": "KB import/restore silently truncates text/quotes and drops conditions/facts above caps.",
+      "suite": "source"
+    },
+    {
+      "id": "A3",
+      "claim": "Numeric tokenization drops Unicode minus and unit exponents; can also warn falsely for equivalent ASCII/Unicode negative forms.",
+      "suite": "transform"
+    },
+    {
+      "id": "A4",
+      "claim": "Numeric hints are not checked because only revealed text enters scanner. Determine defect versus explicit narrow advisory scope.",
+      "suite": "transform"
+    },
+    {
+      "id": "A5",
+      "claim": "A later nested malformed primary extraction conditions:[null] prevents committing earlier successful chunks, unlike normal API error.",
+      "suite": "source"
+    },
+    {
+      "id": "A6",
+      "claim": "Wrong-shaped omission response becomes +0 recovered rather than inconclusive.",
+      "suite": "source"
+    },
+    {
+      "id": "A7",
+      "claim": "A model-controlled first-pass pointer names a never-read file/page and reaches Anki source export.",
+      "suite": "source"
+    },
+    {
+      "id": "A8",
+      "claim": "No quotes attempted still displays green Every first-pass quote was located text. Missing-anchor validator warnings exist; assess overstatement.",
+      "suite": "source"
+    },
+    {
+      "id": "A9",
+      "claim": "Nonempty STOP non-card prose commits successful zero-note generation rather than malformed response status.",
+      "suite": "lifecycle"
+    },
+    {
+      "id": "N1",
+      "claim": "Deduplication precedes alias normalization; two alias/canonical variants become byte-identical selected export rows.",
+      "suite": "transform"
+    },
+    {
+      "id": "N2",
+      "claim": "Arbitrary Text edits retain fact IDs and all-tier linked association count. Is the documented association count misrepresenting semantic coverage?",
+      "suite": "lifecycle"
+    },
+    {
+      "id": "N3",
+      "claim": "Invalid tier/bucket silently become Tier3/Look including safetyCritical import, with dropped0 and no validator issue.",
+      "suite": "source"
+    },
+    {
+      "id": "MAXTOK",
+      "claim": "Partial parsable MAX_TOKENS output retained with explicit warning/truncated flag but final green Complete log.",
+      "suite": "lifecycle"
+    },
+    {
+      "id": "REPAIR_DEDUPE",
+      "claim": "Invalid duplicates are exempt from dedupe and remain identical after manual repair. Determine whether automatic deletion is justified.",
+      "suite": "transform/lifecycle"
+    },
+    {
+      "id": "FACT_RENUMBER",
+      "claim": "Import/build rekeys fact IDs; determine actual same-session stale association against source replacement guards and captured snapshots.",
+      "suite": "source/lifecycle"
+    },
+    {
+      "id": "OPERATOR",
+      "claim": "Quote operator mismatch only warns and fact/quote entailment is not checked. Deliberate policy versus bug.",
+      "suite": "source"
+    },
+    {
+      "id": "EXPORT",
+      "claim": "Header exporter escapes only &<> in Text/Extra, not quotes/Tags. Demonstrate actual data loss or classify native Anki gap.",
+      "suite": "transform"
+    },
+    {
+      "id": "PROBE",
+      "claim": "kbBuildSourceChunks catches quality/probe exceptions silently. Need reachable ordinary-input failure rather than injected throwing helper only.",
+      "suite": "source"
+    },
+    {
+      "id": "MISSING_LEAF",
+      "claim": "Receipt/recall leaf returns [] on missing evidence. Public decoder rejects invalid receipts and mapping status stays inconclusive; determine actual approval.",
+      "suite": "receipt"
+    },
+    {
+      "id": "POISONED_KB",
+      "claim": "Source false fact with true quote becomes faithful KB->card->export. Source-boundary limitation rather than deterministic semantic checker bug.",
+      "suite": "source"
+    },
+    {
+      "id": "SUGGESTION",
+      "claim": "Unsupported model suggestions or Fixed manual decision apply clinical edits. Tests so far show no changes and explicit manual metadata.",
+      "suite": "receipt"
+    }
+  ,{
+    "id": "QUOTE_PREFIX",
+    "claim": "A quote ending in numeric token 60 is accepted inside source 600; actual omission pass retains altered 60 fact with no quote/operator warning.",
+    "suite": "source/stage-extraction"
+  }
+]
+}

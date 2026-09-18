@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 2564;
+const EXPECTED_ASSERTIONS = 2820;
 
 let file;
 try {
@@ -466,8 +466,8 @@ t('pass-1 misses and pass-2 discards roll up separately',
   S.includes('const byReason={},discardByReason={};'));
 t('each breakdown is labelled with the number it reconciles against',
   S.includes('Those {diag.quoteMiss} by reason:') && S.includes('The {diag.discarded} audit discard(s) by reason:'));
-t('a clean run says so instead of rendering nothing',
-  S.includes('Every first-pass quote was located verbatim in the source.'));
+t('quote summary reports its denominator instead of claiming zero-check success',
+  S.includes('kbQuoteCheckSummary(diag).text') && S.includes('checked>0&&missing===0&&failed===0'));
 
 t('a quote that IS present returns null, never a reason code',
   classify('developed hypokalemia after diuresis', 'The patient developed hypokalemia after diuresis.') === null);
@@ -500,7 +500,7 @@ t('clinical terms are still scored — the stopword list must not swallow them',
 t('every reason the classifier can emit has a display label',
   QM.KB_QUOTE_MISS_REASONS.every(r => typeof QM.KB_QUOTE_MISS_LABEL[r] === 'string' && QM.KB_QUOTE_MISS_LABEL[r].length));
 {
-  const emitted = ['tooShort', 'hyphenation', 'reordered', 'partial', 'absent'];
+  const emitted = ['tooShort', 'numericBoundary', 'hyphenation', 'reordered', 'partial', 'absent'];
   t('the reason list matches what the classifier actually returns',
     emitted.every(r => QM.KB_QUOTE_MISS_REASONS.includes(r)) && QM.KB_QUOTE_MISS_REASONS.length === emitted.length);
 }
@@ -544,7 +544,7 @@ t('the probe is opt-in', S.includes('const [probeComposition,setProbeComposition
 // probe inside onPage still sees the operator list that cleanup() is about to release.
 t('the probe runs before cleanup() releases the operator list',
   /if\(onPage\)await onPage\([^)]*\);\s*\}finally\{\s*try\{pg\.cleanup\(\);\}catch\(e\)\{\}/.test(S) &&
-  S.includes('if(composition){try{units[units.length-1].composition=await kbPageComposition(pg);}catch(e){}}'));
+  S.includes('if(composition){try{units[units.length-1].composition=await kbPageComposition(pg);}catch(e){units[units.length-1].compositionError=String(e.message||e);}}'));
 t('diagnostics export exists and is not a Knowledge Base', S.includes("kind:'latte-extraction-diagnostics'"));
 t('the panel no longer claims diagnostics never reach any export',
   !S.includes('never written into the Knowledge Base or any export.'));
@@ -2716,6 +2716,11 @@ section('v15.14 — clamps, backoff, storage');
   require('./tools/anki-audit-v166-tests').runAnkiAuditV166Tests({S,t,section});
   require('./tools/anki-generator-v166-tests').runAnkiGeneratorV166Tests({S,t,section});
   require('./tools/anki-quality-v166-tests').runAnkiQualityV166Tests({S,t,section});
+  await require('./tools/anki-integrity-source-regression')(S,t);
+  await require('./tools/anki-integrity-import-regression').runTests(S,t);
+  require('./tools/anki-integrity-transform-regression').runAnkiIntegrityTransformRegression({S,t,section});
+  await require('./tools/anki-integrity-lifecycle-regression').runAnkiIntegrityLifecycleTests({S,t,section});
+  await require('./tools/anki-integrity-evidence-regression').runAnkiIntegrityEvidenceTests({S,t,section});
 
   console.log('\n════════════════════════════');
   const total = pass + fail;
