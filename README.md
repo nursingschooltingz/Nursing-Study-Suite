@@ -8,7 +8,7 @@ Turn your lecture PDFs and PowerPoints into a complete, source-cited study syste
 
 The whole suite is **one HTML file**. There is nothing to install, no account to create, and no website collecting your data. You open the file in your web browser, paste in a free Google Gemini API key, upload your study materials, and go.
 
-**Latest release: v16.7.** [Download the single HTML file](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v16.7/Nursing-Study-Suite.v16.7.html), save it, then open it in your browser. The [repository HTML](Nursing-Study-Suite%20v16.7.html) includes the data-integrity fixes described below. Flash / Medium remains the Anki default. Existing saved profiles stay intact; choose **Use recommended Anki profile** to update yours. See the [release verification record](docs/reviews/anki-v16.7-release.md) for checks and remaining limits.
+**Latest release: v16.8.** [Download the single HTML file](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v16.8/Nursing-Study-Suite.v16.8.html), save it, then open it in your browser. The [repository HTML](Nursing-Study-Suite%20v16.8.html) includes the production-review fixes described below. Flash / Medium remains the Anki default. Existing saved profiles stay intact; choose **Use recommended Anki profile** to update yours. See the [release verification record](docs/reviews/production-v16.8-release.md) for checks and remaining limits.
 
 Use **Knowledge** to build or import your source, **Priority** to organize study time, **Anki** for recall, **NCLEX Extract** for existing questions, **NCLEX Generate** for new practice, and **Case Studies** for unfolding cases. **Settings** shows or hides the shared API/model panel. On phones and smaller tablets it starts collapsed; **Add API key** opens it directly. Switching tools preserves your inputs and outputs. A keyboard **Skip to study workspace** link bypasses navigation.
 
@@ -32,7 +32,7 @@ Use **Knowledge** to build or import your source, **Priority** to organize study
 
 That's genuinely it. Everything below is detail.
 
-**Is it safe? What happens to my files?** Your PDFs are read *inside your own browser*. The extracted text is sent to Google's Gemini AI (the same company as Gmail) to be organized — and nowhere else. Nothing is uploaded to any other server, there are no accounts, and your Knowledge Base is stored in your own browser on your own computer.
+**What happens to my files?** Your files are read *inside your own browser*. Extracted text and selected card photos are sent to Google's Gemini API for generation and transcription, along with your API key for authentication. The suite has no application server or accounts, and your Knowledge Base is stored in your browser. Google's processing and retention depend on your API service and account terms.
 
 **Does it cost money?** Google's Gemini API has a free tier that is enough for regular study use. If you hit a temporary "rate limit" message, wait a minute and try again, or generate in smaller batches.
 
@@ -110,6 +110,8 @@ The **focus box** helps here too — tell it things like *"Only Ch. 61–63 are 
 3. Click **Build Knowledge Base**. Watch the log: it runs an extraction pass and then a second **audit pass** that re-reads each chunk hunting for facts the first pass missed. Recovered facts are only kept if their quoted text is actually found in your source — the suite verifies this in code, not on the AI's word.
 4. Browse the result: conditions on the left, facts (with tiers, buckets, and source pointers) on the right. **⬇ Study View** exports the whole thing as a readable markdown study guide.
 
+PPTX files are limited to 64 MiB and 2,000 slides, with separate limits on expanded XML and extracted text. If a deck exceeds a limit, split it or convert it to PDF; the suite rejects the deck instead of silently shortening it. Cancel stops extraction before it can publish a partial result.
+
 **Extraction diagnostics.** After a build, a panel reports checked, matched, unverified and missing first-pass quotes separately, plus thin chunks and incomplete omission checks. A quote ending in `60` does not establish a match inside `600`. Primary facts remain available with quote warnings; omission recovery requires a matching quote. Comparator/arrow disagreements remain warnings. Source pointers identify the file and chunk actually read, and diagnostics retain the model's original pointer. A located quote still does not prove that its fact preserves the source's meaning.
 
 Malformed chunk responses are recorded while other completed chunks remain usable. A build with no successful chunks preserves the previous KB and offers failure diagnostics. Optional source-quality or page-probe failures are also reported. **Export JSON** saves original responses and the report; it can contain source material, so treat it like the source itself.
@@ -167,6 +169,8 @@ The generator now plans each substantive source target before writing and rechec
 ### Preview and style checks
 
 After generation, switch to **Preview**, select a cloze number (c1/c2/c3), and click **Show answer** to reveal the answer and Extra. Gaps sharing a number hide together; the other answers remain visible. Use **Edit in Table** to revise a note.
+
+Table, List and Preview show up to 50 notes per page. Use **Previous notes** and **Next notes** to browse the rest. Paging does not limit selection, source checks or exports; **Edit in Table** opens the page containing that note.
 
 Amber style warnings separately flag missing condition/topic cues and retrieval labels, possible article clues, several gaps hidden together (including a specific three-or-more-gap warning), a review front longer than the soft 15-word target, or an answer repeated on the visible front. The last check includes hints and other visible cloze answers. These are suggestions: keep necessary clinical qualifiers and omit anchors that would reveal the answer. The warnings update as you edit and never uncheck notes or prevent export.
 
@@ -309,7 +313,7 @@ Use it as your reflexive "wait, is that true?" button. One honest limitation: th
 
 **Phone or tablet?** Navigation, settings, forms and fact review reflow for smaller screens. Wide study tables scroll within their own panels. A laptop still gives you more room for large source sets and detailed editing.
 
-**Privacy, one more time, plainly:** your files are read in your browser; extracted text goes to Google's Gemini API for generation and nowhere else; the suite has no server, no accounts, no analytics; your key and your KB stay on your machine. Don't feed it real patient information — it's a study tool for coursework materials.
+**Privacy, one more time, plainly:** your files are read in your browser. Extracted text and selected card photos are sent to Google's Gemini API for generation and transcription. Your API key is retained in browser session storage and sent to Gemini to authenticate requests; the Knowledge Base is saved in your browser. The suite has no application server, accounts, or analytics. Google's processing and retention depend on your API service and account terms. Don't feed it real patient information — it's a study tool for coursework materials.
 
 **A note on AI accuracy.** Language models can be confidently wrong. This suite's answer to that isn't "trust us" — it's the citation system: verbatim quotes checked in code, packet-scoped fact IDs, numeric audits, coverage reports, and a Fact Inspector one click away. Use them. If a card or question ever contradicts your source, the receipt trail will show you in seconds — and your source wins.
 

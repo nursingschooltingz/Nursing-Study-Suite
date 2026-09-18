@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 2820;
+const EXPECTED_ASSERTIONS = 2974;
 
 let file;
 try {
@@ -705,7 +705,7 @@ t('the same file always yields the same identity',
   CARD.cardFileId({ name: 'a.jpg', size: 1, lastModified: 2 }));
 t('transcripts are keyed on that identity, not on the basename',
   S.includes('out[cardFileId(f)]={file:f.name,transcript:runs[0]') &&
-  S.includes('out[cardFileId(f)]={file:f.name,error:'));
+  S.includes('const id=cardFileId(f);out[id]={file:f.name,error:'));
 t('removing a source deletes its transcript and clears the review',
   S.includes('setTranscripts(p=>{const n={...p};delete n[cardFileId(f)];return n;});setTxReviewed(false);'));
 t('the file-chip key matches the transcript key, so neither can collide alone',
@@ -2459,7 +2459,7 @@ section('v15.14 — tier 3');
   // T3.11 — one intake path, a stale-guarded page count, a visible inverted range.
   t('the NCLEX picker and drop zone share one filtered, de-duplicating intake',
     S.includes('addPdfs(e.dataTransfer.files);') && S.includes('addPdfs(e.target.files);') &&
-    S.includes('const addPdfs=fl=>setFiles('));
+    S.includes('const addPdfs=fl=>{const selected=Array.from(fl||[]);setFiles('));
   t('a slow page-count resolve cannot overwrite a newer file', S.includes('return()=>{stale=true;};'));
   t('page ranges are only reseeded when the file in slot 0 actually changes',
     S.includes('if(firstFileRef.current!==id){'));
@@ -2545,21 +2545,21 @@ section('v15.14 — clamps, backoff, storage');
     S.includes('setChunkChars(Math.max(6000,Math.min(120000,Number(e.target.value)||30000)))'));
 }
 {
-  const RD = new Function(spanFrom('function geminiRetryDelayMs', 'return Math.max(hintSec?Math.min(hintSec,60)*1000:0,exp);\n}') + ';return geminiRetryDelayMs;')();
+  const RD = new Function(spanFrom('function geminiRetryDelayMs', 'return Math.max(Number.isFinite(headerMs)?headerMs:0,Number.isFinite(infoMs)?infoMs:0,exp);\n}') + ';return geminiRetryDelayMs;')();
   const hdr = v => ({ get: () => v });
   // The v1beta endpoint does not send Retry-After; it returns the wait as a
   // google.rpc.RetryInfo detail in the error body, which the old code parsed and discarded.
   const body37 = { error: { details: [{ '@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay: '37s' }] } };
   t('a RetryInfo detail is honoured', RD(body37, hdr(null), 0) === 37000);
   t('a Retry-After header still works when present', RD({}, hdr('12'), 0) === 12000);
-  t('RetryInfo wins over the header when both are present', RD(body37, hdr('2'), 0) === 37000);
+  t('the longer RetryInfo floor wins over a shorter header', RD(body37, hdr('2'), 0) === 37000);
   t('with no hint at all it falls back to the exponential curve',
     RD({}, hdr(null), 0) >= 2000 && RD({}, hdr(null), 0) < 3000);
   // A hint is a floor for how long to wait, never a licence to retry sooner than our curve.
   t('a short hint never shortens the backoff below the curve',
     RD({ error: { details: [{ '@type': 'google.rpc.RetryInfo', retryDelay: '1s' }] } }, hdr(null), 3) > 8000);
-  t('a pathological hint is capped at 60s',
-    RD({ error: { details: [{ '@type': 'google.rpc.RetryInfo', retryDelay: '99999s' }] } }, hdr(null), 0) === 60000);
+  t('a long valid server hint is never shortened before the transport decides whether to wait',
+    RD({ error: { details: [{ '@type': 'google.rpc.RetryInfo', retryDelay: '99999s' }] } }, hdr(null), 0) === 99999000);
   t('a malformed body cannot throw',
     typeof RD(null, null, 0) === 'number' && typeof RD({ error: { details: 'nope' } }, hdr(null), 0) === 'number');
 }
@@ -2721,6 +2721,12 @@ section('v15.14 — clamps, backoff, storage');
   require('./tools/anki-integrity-transform-regression').runAnkiIntegrityTransformRegression({S,t,section});
   await require('./tools/anki-integrity-lifecycle-regression').runAnkiIntegrityLifecycleTests({S,t,section});
   await require('./tools/anki-integrity-evidence-regression').runAnkiIntegrityEvidenceTests({S,t,section});
+
+  section('production review regressions');
+  await require('./tools/production-priority-tests')(S,t);
+  await require('./tools/production-correctness-tests').runTests(S,t);
+  require('./tools/production-anki-performance-tests')(S,t);
+  await require('./tools/production-resource-transport-tests').runTests(S,t);
 
   console.log('\n════════════════════════════');
   const total = pass + fail;

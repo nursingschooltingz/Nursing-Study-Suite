@@ -21,7 +21,7 @@ function syntheticKB(label='A'){
       tier:1,latteBucket:'Look',factType:'other',safetyCritical:false,
       sources:[{filename:'Synthetic '+label+' source',location:'page 1'}]
     }]
-  }],medications:[],diagnostics:[],scoringTools:[],formulas:[],contradictions:[]};
+  }],sources:[],medications:[],diagnostics:[],scoringTools:[],formulas:[],contradictions:[]};
 }
 
 function fixtureScript(config){
@@ -88,7 +88,7 @@ const remediation={
   snapshot(){return remediationClone({state:this.state,pending:this.pending.map(({id,kind,stage,snapshot})=>({id,kind,stage,snapshot})),events:this.events,exports:this.exports,errors:this.errors,csp:this.csp,geminiCalls:this.geminiCalls.map(({id,status})=>({id,status}))});}
 };
 window.__remediation=remediation;
-Object.assign(remediation,{getPdfDoc,destroyPdfDoc,pdfWalkPages,cardFilePayload});
+Object.assign(remediation,{getPdfDoc,destroyPdfDoc,pdfWalkPages,cardFilePayload,extractPptxText,PPTX_LIMITS});
 if(typeof pdfEnsureVerifiedWorker==='function')Object.assign(remediation,{pdfEnsureVerifiedWorker,pdfDisposeWorker,PDF_WORKER_URLS,PDF_WORKER_INTEGRITY});
 const remediationDiagnostics=ankiBatchDiagnostics,remediationNumeric=ankiNumericAudit;
 ankiBatchDiagnostics=(...args)=>{remediation.perf.originalDiagnostics++;return remediationDiagnostics(...args);};

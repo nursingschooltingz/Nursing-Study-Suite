@@ -1,5 +1,17 @@
 # Current maintainer state
 
+## v16.8 production-review release (2026-09-18)
+
+The user authorized implementing the [production review](docs/reviews/production-review-2026-09-18.md), then explicitly requested committing, publishing and updating releases. All thirteen actionable findings are addressed, plus a file-picker lifetime defect discovered during native browser acceptance. The canonical application is `Nursing-Study-Suite v16.8.html`; the release asset is `Nursing-Study-Suite.v16.8.html`. See the [release verification record](docs/reviews/production-v16.8-release.md).
+
+Case grounding now rejects unsupported compound-unit prefixes. NCLEX chunking preserves source coverage and all A–F choices. Saved-KB recovery preserves readable and damaged copies, archives them before saving resumes, and requires restored storage access plus reload when bytes cannot be read. Failed card reruns retain earlier transcripts for inspection while blocking their use as current evidence. Priority captures its source, cancels obsolete work, reports partial/truncated harvests in exports, and avoids synthesis without usable evidence.
+
+Anki mounts up to 50 notes per page in all three views while checks and exports retain their full-deck scope. Style caching, count-only duplicate detection and lazy recall indexing remove edit-time work. PPTX extraction has byte/text/reference budgets and cancellation checks; print previews discard opener authority; long provider retry floors are surfaced without an early automatic retry. Privacy and source-limit documentation reflect actual behavior.
+
+Verification: **2,974 passing assertions**, full JSX transformation, prompt documentation and all eleven unchanged frozen prompt hashes; 34 focused resource/transport assertions including actual JSZip; 47 reported synthetic browser checks across Priority, Anki, recovery, cards, persistence, operation ownership, source replacement and output policies. At 1,000 notes, the post-fix median Extra-edit measurement was **97 ms** across three runs, versus one pre-fix observation of 801 ms on this host. These are instrumented synthetic measurements, not clinical, live-provider or cross-device acceptance. See the [implementation record](docs/reviews/production-fixes-2026-09-18.md) for exact scope, reproducible commands, performance observations and remaining limits.
+
+No live Gemini calls, private-material testing or native Anki import were performed during implementation. Frozen prompts, model defaults, warning tiers and runtime dependencies remain unchanged. Existing study export formats are preserved; Priority exports gain source/completeness notices and card failure receipts gain explicit latest-attempt metadata. The prior release sections below are historical checkpoints.
+
 ## v16.7 text-only Anki integrity release (2026-09-18)
 
 The user approved implementing the [independent re-audit](docs/reviews/anki-integrity-reaudit-2026-09-18.md), including its bounded policy changes. The user subsequently authorized committing and publishing these changes as v16.7. The canonical application is `Nursing-Study-Suite v16.7.html`; the release asset is `Nursing-Study-Suite.v16.7.html`. This checkpoint supersedes earlier descriptions of parser filtering, import truncation/defaults, exact-dedupe ordering, numeric-hint scope and quote admission below; the named release sections remain historical evidence.

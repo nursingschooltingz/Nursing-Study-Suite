@@ -53,7 +53,7 @@ async function runAnkiReviewQueueTests({S,t,section}){
   const replaced=await H.ankiSourceAuditEvidence(run,()=>({...exportInputs,reviewRun:laterRun,reviewDecisions:[laterDecision]}));
   t('a later prepared audit cannot lend current decisions to an earlier exported run',replaced.metadata.preparedAt===run.preparedAt&&!replaced.reviewDecisions[0].current);
   t('partial status label is distinct from completion',H.ankiSourceAuditLabel(run).startsWith('Partial —')&&H.ankiSourceAuditLabel(run).includes('1/2 groups'));
-  t('visible footer and reports share the canonical release version',H.suiteVersion()==='16.7'&&S.includes('Version {suiteVersion()} <span>Built for your next step.</span>')&&evidence.metadata.suiteVersion==='16.7');
+  t('visible footer and reports share the canonical release version',H.suiteVersion()==='16.8'&&S.includes('Version {suiteVersion()} <span>Built for your next step.</span>')&&evidence.metadata.suiteVersion==='16.8');
   const normalized=await H.ankiSourceAuditEvidence({...run,results:[{...run.results[0],referenceRecoveries:[{method:'mixed-context-status',before:{status:'extra-only'},after:{status:'visible-only'}}]}]},inputs);
   t('reference normalization metadata survives partial evidence export independently of citations',normalized.status==='partial'&&normalized.metadata.referenceNormalizations===1&&normalized.metadata.recoveredCitations===1&&normalized.results[0].referenceRecoveries[0].before.status==='extra-only');
   t('receipt UI exposes normalization history and mixed Text Extra locations',S.includes('data-anki-reference-recoveries')&&S.includes("?' · Text and Extra':''"));

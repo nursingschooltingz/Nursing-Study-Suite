@@ -9,6 +9,26 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [16.8] — 2026-09-18
+
+### Fixed
+
+- Reject unsupported compound-unit prefixes in case grounding; preserve NCLEX text across chunk boundaries and parse all six A–F choices.
+- Preserve damaged fallback bytes alongside readable saved KBs, archive recovery copies before resuming saves, and prevent failed card retranscription from leaving old evidence buildable.
+- Bind Priority analysis to its captured KB, retain source/completeness notices in exports, and stop before synthesis when harvesting yields no usable evidence.
+- Capture selected files before browser input reset so Knowledge and NCLEX selections survive deferred state updates.
+- Bound PPTX compressed input, expanded XML, slide references and extracted text; propagate cancellation; sever print-preview opener authority; respect provider retry-delay floors.
+- Repair the synthetic browser fixture and clarify image/API-key transmission in the privacy documentation.
+
+### Performance
+
+- Render Anki Table/List/Preview in 50-note pages while preserving full-deck selection, checks and export. Cache style diagnostics and remove duplicate copying/index construction from edit-time work.
+
+### Verification
+
+- The unified verifier passes 2,974 assertions, all eleven frozen prompt hashes and full JSX transformation. Synthetic browser acceptance, resource tests, measured performance and compatibility limits are recorded in the [production-fix implementation record](docs/reviews/production-fixes-2026-09-18.md).
+- Released as `Nursing-Study-Suite.v16.8.html`. Model settings, frozen prompts, dependency pins and warning tiers are unchanged. See the [release verification record](docs/reviews/production-v16.8-release.md).
+
 ## [16.7] — 2026-09-18
 
 ### Fixed

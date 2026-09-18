@@ -153,9 +153,10 @@ async function storageTests(browser,report){
     await other.close();
   });report('concurrent fallback writers preserve both saved and in-memory snapshots instead of silently replacing the fallback');
   await withFixture(browser,{fallback:{}},async({page})=>{
-    await waitStatus(page,'error');const stores=await page.evaluate(()=>window.__remediation.readStores());
+    await waitStatus(page,'conflict');const stores=await page.evaluate(()=>window.__remediation.readStores());
     assert.equal(stores.local.latte_knowledge_snapshot_v2,'{}');assert.deepEqual(stores.indexed,[]);
     assert((await page.evaluate(()=>window.__remediation.state.persistenceError)).includes('preserved'));
+    assert.equal(await page.evaluate(()=>window.__remediation.state.recovery[0].raw),'{}');
   });report('malformed fallback metadata blocks migration and remains intact');
   await withFixture(browser,{hold:['load']},async({page})=>{
     await page.evaluate(()=>window.__remediation.unmount());await releaseFirst(page,'load');
@@ -179,6 +180,7 @@ async function outputPolicyTests(browser,report){
     assert(markup.includes('Preserved words'));assert(markup.includes('<table>'));assert(markup.includes('A &lt; B'));
     const popupPromise=context.waitForEvent('page');await page.evaluate(md=>window.__remediation.print(md),markdown);
     const popup=await popupPromise;await popup.waitForLoadState();
+    assert.equal(await popup.evaluate(()=>window.opener),null,'print preview must not retain the study-window opener');
     assert((await popup.locator('body').innerText()).includes('Preserved words'));
     assert.equal(await popup.locator('img,picture,source,audio,video,svg,iframe,object,embed').count(),0);
     await page.evaluate(md=>window.__remediation.printIframe(md),markdown);

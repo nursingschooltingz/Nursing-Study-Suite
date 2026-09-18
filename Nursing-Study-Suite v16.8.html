@@ -8,7 +8,8 @@
      Babel, so this adds narrow resource directives without a default-src/script-src migration. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net">
 <title>LATTE Study Suite</title>
-<!-- v16.7 (2026-09-18): text-only Anki data integrity, lossless KB import/restore, per-chunk recovery, bounded quote checks, honest generation status, numeric hint checks, and preserved merge/edit provenance. All eleven frozen prompts, Flash/Medium, and advisory warning tiers remain unchanged. Verification: docs/reviews/anki-v16.7-release.md.
+<!-- v16.8 (2026-09-18): production-review fixes for case grounding, NCLEX source coverage, saved-data recovery, card retranscription, Priority source ownership, bounded PPTX extraction, retry floors and print isolation; paginated Anki editing. All eleven frozen prompts, model defaults and warning tiers remain unchanged. Verification: docs/reviews/production-v16.8-release.md.
+     v16.7 (2026-09-18): text-only Anki data integrity, lossless KB import/restore, per-chunk recovery, bounded quote checks, honest generation status, numeric hint checks, and preserved merge/edit provenance. All eleven frozen prompts, Flash/Medium, and advisory warning tiers remain unchanged. Verification: docs/reviews/anki-v16.7-release.md.
      v16.6 (2026-09-13): lossless audit reference normalization, mixed Text/Extra review, exact source condition tags, and advisory context/evidence checks. All eleven frozen prompts, Flash/Medium, and selection/semantic warning guards remain unchanged. Verification: docs/reviews/anki-v16.6-implementation.md.
      v16.4 (2026-09-13): exact audit note/source addresses, source inventory accounting, independent record recovery, and whole-deck recall review. All 11 frozen prompts, generation settings and export warning tiers are preserved. Verification: docs/reviews/anki-v16.4-implementation.md.
      v16.2 (2026-09-13): Anki Flash/Medium default; source-only dynamic adapter, advisory retrieval/tag diagnostics, editable source links, explicit target/field check records, and reproducible private reports. All 11 frozen prompts, warning tiers and three-field exports are preserved. Local verification and measurement limits: docs/reviews/anki-v16.2-implementation.md.
@@ -653,14 +654,19 @@ function uid(){
 // error. Extracting client-side guarantees the slide content actually reaches the
 // model, and preserves per-slide numbering so Source Pointers stay citable.
 const _OOXML_A_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main';
-function _pptxRunText(xml) {
+function _pptxRunText(xml,maxChars=PPTX_LIMITS.textChars) {
   const doc = new DOMParser().parseFromString(xml, 'application/xml');
   let runs = doc.getElementsByTagNameNS(_OOXML_A_NS, 't');
   if (!runs || !runs.length) runs = doc.getElementsByTagName('a:t');
-  const out = [];
+  const out = [];let chars=0;
   for (let i = 0; i < runs.length; i++) {
-    const t = runs[i].textContent;
-    if (t && t.trim()) out.push(t.trim());
+    // v16.7: DrawingML a:t is leaf text; nested runs duplicated descendants before the final limit.
+    if(runs[i].firstElementChild)throw new Error('PPTX text runs contain nested markup. Repair the deck or convert it to PDF.');
+    const t=(runs[i].textContent||'').trim();
+    if(!t)continue;
+    const extra=t.length+(out.length?1:0); // both slide and note joins use a one-character separator
+    if(extra>maxChars-chars)throw new Error('PPTX extracted text exceeds the safe limit. Split the deck before importing.');
+    chars+=extra;out.push(t);
   }
   return out;
 }
@@ -680,42 +686,99 @@ function _relsMap(xml){
   for(const rel of _xmlElementsByLocalName(doc,'Relationship'))map.set(rel.getAttribute('Id'),{target:rel.getAttribute('Target')||'',type:rel.getAttribute('Type')||''});
   return map;
 }
-async function extractPptxText(file) {
+// v16.7: eager ZIP strings allowed compressed decks to exhaust the tab before chunking.
+const PPTX_LIMITS=Object.freeze({fileBytes:64*1024*1024,entries:10000,xmlBytes:4*1024*1024,totalBytes:32*1024*1024,slides:2000,textChars:4*1024*1024});
+function pptxCheckAbort(signal){if(signal?.aborted)throw new DOMException('Aborted','AbortError');}
+function pptxAwait(promise,signal){
+  if(!signal)return promise;
+  return new Promise((resolve,reject)=>{
+    let done=false;
+    const finish=(fn,value)=>{if(done)return;done=true;signal.removeEventListener('abort',abort);fn(value);};
+    const abort=()=>finish(reject,new DOMException('Aborted','AbortError'));
+    // Observe the source promise even if cancellation wins during its creation.
+    Promise.resolve(promise).then(value=>{if(signal.aborted)abort();else finish(resolve,value);},error=>finish(reject,error));
+    if(signal.aborted)abort();else signal.addEventListener('abort',abort,{once:true});
+  });
+}
+function pptxReadXml(entry,budget,signal){
+  pptxCheckAbort(signal);
+  // Count actual output bytes before decoding/DOM parsing; ZIP size headers are not trusted.
+  return new Promise((resolve,reject)=>{
+    const stream=entry.internalStream('uint8array'),chunks=[];let size=0,done=false;
+    const fail=error=>{if(done)return;done=true;stream.pause();chunks.length=0;signal?.removeEventListener('abort',abort);reject(error);};
+    const abort=()=>fail(new DOMException('Aborted','AbortError'));
+    stream.on('data',chunk=>{
+      // JSZip can finish its current inflate block after pause; retain none of those bytes.
+      if(done)return;
+      if(signal?.aborted){abort();return;}
+      if(chunk.length>PPTX_LIMITS.xmlBytes-size||chunk.length>PPTX_LIMITS.totalBytes-budget.bytes){fail(new Error('PPTX XML expansion exceeds the safe extraction limit. Split the deck or convert it to PDF.'));return;}
+      size+=chunk.length;budget.bytes+=chunk.length;chunks.push(chunk);
+    }).on('error',fail).on('end',()=>{
+      if(done)return;
+      if(signal?.aborted){abort();return;}
+      try{
+        const decoder=new TextDecoder('utf-8'),text=chunks.map(chunk=>decoder.decode(chunk,{stream:true}));text.push(decoder.decode());
+        const result=text.join('');done=true;chunks.length=0;signal?.removeEventListener('abort',abort);resolve(result);
+      }catch(error){fail(error);}
+    });
+    signal?.addEventListener('abort',abort,{once:true});
+    if(signal?.aborted)abort();else stream.resume();
+  });
+}
+async function extractPptxText(file,{signal}={}) {
+  pptxCheckAbort(signal);
   if (typeof JSZip === 'undefined') throw new Error('JSZip failed to load — cannot read PPTX. Convert the deck to PDF and re-upload.');
-  const zip = await JSZip.loadAsync(file);
+  if(!Number.isFinite(file.size)||file.size>PPTX_LIMITS.fileBytes)throw new Error('PPTX exceeds the 64 MiB source limit. Split the deck or convert it to PDF.');
+  // JSZip metadata parsing is not interruptible; its input is bounded first, then entries are capped.
+  const zip = await pptxAwait(JSZip.loadAsync(file),signal);
+  pptxCheckAbort(signal);
+  const entries=Object.keys(zip.files),budget={bytes:0};
+  if(entries.length>PPTX_LIMITS.entries)throw new Error('PPTX contains too many ZIP entries. Split the deck or convert it to PDF.');
+  const read=name=>pptxReadXml(zip.files[name],budget,signal);
   let slides=[];
   // PowerPoint presentation order is defined by presentation.xml relationships, not slide filenames.
   if(zip.files['ppt/presentation.xml']&&zip.files['ppt/_rels/presentation.xml.rels']){
-    const presXml=await zip.files['ppt/presentation.xml'].async('string');
+    const presXml=await read('ppt/presentation.xml');
     const presDoc=new DOMParser().parseFromString(presXml,'application/xml');
-    const rels=_relsMap(await zip.files['ppt/_rels/presentation.xml.rels'].async('string'));
-    slides=_xmlElementsByLocalName(presDoc,'sldId').map(el=>{
+    const rels=_relsMap(await read('ppt/_rels/presentation.xml.rels'));
+    const references=_xmlElementsByLocalName(presDoc,'sldId');
+    if(references.length>PPTX_LIMITS.slides)throw new Error('PPTX contains more than 2,000 slide references. Split the deck before importing.');
+    slides=references.map(el=>{
       const rid=el.getAttribute('r:id')||el.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id');
       const rel=rels.get(rid);return rel?_zipNormalizePath('ppt/presentation.xml',rel.target):null;
     }).filter(n=>n&&zip.files[n]);
   }
-  // Fallback for malformed decks.
-  if(!slides.length)slides=Object.keys(zip.files).filter(n=>/^ppt\/slides\/slide\d+\.xml$/.test(n)).sort((a,b)=>parseInt(a.match(/slide(\d+)/)[1])-parseInt(b.match(/slide(\d+)/)[1]));
+  // Fallback for malformed decks. Repeated valid references retain presentation order.
+  if(!slides.length)slides=entries.filter(n=>/^ppt\/slides\/slide\d+\.xml$/.test(n)).sort((a,b)=>parseInt(a.match(/slide(\d+)/)[1])-parseInt(b.match(/slide(\d+)/)[1]));
   if (!slides.length) throw new Error('No slides found in "' + file.name + '" — is it a valid .pptx?');
+  if(slides.length>PPTX_LIMITS.slides)throw new Error('PPTX contains more than 2,000 slides. Split the deck before importing.');
   let out = '';
   for (let i = 0; i < slides.length; i++) {
+    pptxCheckAbort(signal);
     const slidePath=slides[i];
-    const body = _pptxRunText(await zip.files[slidePath].async('string'));
+    // v16.7: reserve framing and earlier output before collecting or joining another slide.
+    const marker='\n--- SLIDE ' + (i + 1) + ' ---\n';
+    const remaining=PPTX_LIMITS.textChars-out.length-marker.length-1;
+    if(remaining<0)throw new Error('PPTX extracted text exceeds the safe limit. Split the deck before importing.');
+    const body = _pptxRunText(await read(slidePath),remaining).join('\n');
     const slideBase=slidePath.split('/').pop();
     const relPath='ppt/slides/_rels/'+slideBase+'.rels';
     let notes = '';
     if(zip.files[relPath]){
-      const rels=_relsMap(await zip.files[relPath].async('string'));
+      const rels=_relsMap(await read(relPath));
       const noteRel=[...rels.values()].find(r=>/\/notesSlide$/i.test(r.type));
       const notesPath=noteRel?_zipNormalizePath(slidePath,noteRel.target):'';
       if(notesPath&&zip.files[notesPath]){
-        const n=_pptxRunText(await zip.files[notesPath].async('string'));
-        if(n.length)notes='\n[Speaker notes] '+n.join(' ');
+        const prefix='\n[Speaker notes] ';
+        const n=_pptxRunText(await read(notesPath),Math.max(0,remaining-body.length-prefix.length));
+        if(n.length)notes=prefix+n.join(' ');
       }
     }
-    out += '\n--- SLIDE ' + (i + 1) + ' ---\n' + body.join('\n') + notes + '\n';
+    const segment=marker+body+notes+'\n';
+    if(segment.length>PPTX_LIMITS.textChars-out.length)throw new Error('PPTX extracted text exceeds the safe limit. Split the deck before importing.');
+    out += segment;
   }
-  return out;
+  pptxCheckAbort(signal);return out;
 }
 
 
@@ -761,17 +824,24 @@ const _sleep=(ms,signal)=>new Promise((resolve,reject)=>{
 // per-minute limits are the constraint this whole build is paced around (see the
 // AUDIT_POOL_WIDTH note), so honouring the figure the API actually supplies is not cosmetic.
 //
-// The server hint is a FLOOR, not a licence to retry sooner than our own curve would, so the
-// two are combined with max(). Capped at 60s so a pathological value cannot hang a run.
+// v16.7: server hints are floors; clipping 120s to 60s retried inside the closed quota window.
 function geminiRetryDelayMs(err,headers,attempt){
   const exp=Math.pow(2,attempt+1)*1000+Math.random()*1000;
-  let ra=NaN;
-  try{ra=parseInt(headers&&headers.get?headers.get('retry-after'):NaN,10);}catch(e){}
-  const details=(err&&err.error&&err.error.details)||[];
-  const ri=Array.isArray(details)?details.find(d=>d&&/RetryInfo$/.test(String(d['@type']||''))):null;
-  const riSec=ri?parseFloat(String(ri.retryDelay||'').replace(/s$/,'')):NaN;
-  const hintSec=Number.isFinite(riSec)&&riSec>0?riSec:(Number.isFinite(ra)&&ra>0?ra:0);
-  return Math.max(hintSec?Math.min(hintSec,60)*1000:0,exp);
+  let headerMs=0;
+  try{
+    const value=String(headers?.get?.('retry-after')||'').trim();
+    if(/^\d+(?:\.\d+)?$/.test(value))headerMs=Number(value)*1000;
+    else if(value){const when=Date.parse(value);if(Number.isFinite(when))headerMs=Math.max(0,when-Date.now());}
+  }catch(e){}
+  const details=err?.error?.details;
+  let infoMs=0;
+  if(Array.isArray(details))for(const detail of details){
+    if(!detail||!/RetryInfo$/.test(String(detail['@type']||'')))continue;
+    const value=String(detail.retryDelay||'');
+    if(/^\d+(?:\.\d{1,9})?s$/.test(value))infoMs=Math.max(infoMs,Number(value.slice(0,-1))*1000);
+  }
+  // Invalid/infinite hints cannot produce an overflowing browser timeout.
+  return Math.max(Number.isFinite(headerMs)?headerMs:0,Number.isFinite(infoMs)?infoMs:0,exp);
 }
 // v15.17: an SSE line is not an event, and EOF alone never proves the artifact completed.
 function geminiSSEParser(onEvent){
@@ -873,6 +943,12 @@ async function geminiRequest(apiKey,model,body,{signal,retries=2,onUpdate,onMeta
     }
     if(!failure)return result;
     if(failure.name==='AbortError'||failure.isFatal||attempt===retries)throw failure;
+    // v16.7: show a long provider wait instead of silently retrying before its floor.
+    if(retryDelay>60000){
+      failure.name='RetryDeferredError';failure.retryDeferred=true;failure.retryAfterMs=retryDelay;
+      failure.message='The provider requested a wait of '+Math.ceil(retryDelay/1000)+' seconds. No automatic retry was sent; wait before trying again. '+failure.message;
+      throw failure;
+    }
     await _sleep(retryDelay,signal);
   }
 }
@@ -1230,7 +1306,8 @@ function exportAsPdf(mdContent,title,subtitle){
   // v15.3: belt-and-suspenders. Same-origin about:blank cannot throw on .document access
   // (COOP governs cross-origin), but the read is wrapped so any exotic blocker/embedding
   // environment falls back to iframe printing instead of dying mid-export.
-  try{win=window.open('','_blank');winDoc=win?win.document:null;}catch(e){win=null;winDoc=null;}
+  // v16.7: retained external links may navigate the preview; their destination must have no opener.
+  try{win=window.open('','_blank');if(win)win.opener=null;winDoc=win?win.document:null;}catch(e){win=null;winDoc=null;}
   if(!win||!winDoc){printViaIframe(html);return;}
   win.document.open();
   win.document.write(html);
@@ -1856,12 +1933,14 @@ async function kbDeletePersisted(record,expected=null){
   return kbSavePersisted({...record,kb:null,meta:{...record.meta,deleted:true,bytes:'null'}},expected);
 }
 function kbReconcileStored(records){
-  const choices=[];
-  for(const record of records.filter(Boolean)){
+  // v16.7: unreadable raw fallback copies are recovery evidence, never equivalent to empty KB tombstones.
+  const damaged=records.filter(record=>record?.recoveryError),choices=[];
+  for(const record of records.filter(record=>record&&!record.recoveryError)){
     const same=choices.find(x=>JSON.stringify(x.kb)===JSON.stringify(record.kb));
     if(same){if(!same.meta&&record.meta){same.meta=record.meta;}continue;}
     choices.push({...record});
   }
+  if(damaged.length)return {record:null,choices:[...choices,...damaged]};
   if(choices.length<2)return {record:choices[0]||null,choices:[]};
   // Only metadata written by this app within one writer lineage orders snapshots.
   const newest=choices.find(x=>x.meta&&choices.every(y=>y===x||y.meta&&y.meta.writer===x.meta.writer&&y.meta.sequence<x.meta.sequence||x.meta.parent===kbStoredKey(y)));
@@ -1869,11 +1948,18 @@ function kbReconcileStored(records){
 }
 function kbReadFallbacks(){
   const records=[];
+  // v16.7: one malformed fallback previously hid healthy durable data and prevented every later save.
+  // Preserve its exact bytes alongside readable copies for explicit archive-and-replace recovery.
   for(const key of [KB_FALLBACK_KEY,KB_LEGACY_KEY]){
-    const raw=localStorage.getItem(key);if(!raw)continue;
-    let parsed;try{parsed=JSON.parse(raw);}catch{throw new Error('A saved Knowledge Base could not be read. Existing browser data was preserved.');}
-    if(key===KB_FALLBACK_KEY&&(!parsed||!Object.hasOwn(parsed,'kb')||!parsed.meta||parsed.meta.bytes!==JSON.stringify(parsed.kb)))throw new Error('Saved fallback metadata is invalid. Existing browser data was preserved.');
-    records.push(key===KB_FALLBACK_KEY?kbStoredRecord(parsed.kb,parsed.meta):kbStoredRecord(parsed));
+    let raw;
+    try{raw=localStorage.getItem(key);}
+    catch(e){records.push({kb:null,storageKey:key,raw:null,unavailable:true,recoveryError:'Browser fallback access failed: '+String(e.message||e)+'. Restore browser storage access, then reload before choosing a recovery copy.'});continue;}
+    if(!raw)continue;
+    try{
+      const parsed=JSON.parse(raw);
+      if(key===KB_FALLBACK_KEY&&(!parsed||!Object.hasOwn(parsed,'kb')||!parsed.meta||parsed.meta.bytes!==JSON.stringify(parsed.kb)))throw new Error('Saved fallback metadata is invalid.');
+      records.push(key===KB_FALLBACK_KEY?kbStoredRecord(parsed.kb,parsed.meta):kbStoredRecord(parsed));
+    }catch(e){records.push({kb:null,storageKey:key,raw,recoveryError:String(e.message||e)+' Existing raw browser data was preserved.'});}
   }
   return records;
 }
@@ -1992,7 +2078,8 @@ function kbUnitLabel(units){
 async function kbSourceUnits(file,{signal,onProgress,composition}={}){
   const name=(file.name||'').toLowerCase();
   if(name.endsWith('.pptx')){
-    const text=await extractPptxText(file);
+    // v16.7: PPTX extraction must share the same Cancel signal as PDF extraction.
+    const text=await extractPptxText(file,{signal});
     // v15: split on the slide markers extractPptxText actually emits. v14 split on
     // /(fact-\d+)/gi (FactText's regex, pasted here), which collapsed every deck into ONE
     // unit mislabeled "slide 1", broke per-slide source pointers, ignored the chunk-size
@@ -2626,7 +2713,8 @@ function KnowledgeBaseBuilder(){
   // v15.12: flashcard photos join PDFs and decks as a source type. They take a different
   // path — transcription first, then the same extractor — so they are filtered apart below
   // rather than handed to kbBuildSourceChunks, which would throw on them.
-  const addFiles=fl=>setFiles(p=>[...p,...Array.from(fl).filter(f=>/\.(pdf|pptx|jpe?g|png|webp|heic|heif)$/i.test(f.name)).filter(f=>!p.some(x=>x.name===f.name&&x.size===f.size&&x.lastModified===f.lastModified))]);
+  // v16.7: input reset and drop completion invalidate their FileList before deferred React updates; capture the selected files during the event.
+  const addFiles=fl=>{const selected=Array.from(fl);setFiles(p=>[...p,...selected.filter(f=>/\.(pdf|pptx|jpe?g|png|webp|heic|heif)$/i.test(f.name)).filter(f=>!p.some(x=>x.name===f.name&&x.size===f.size&&x.lastModified===f.lastModified))]);};
   const importJSON=async file=>{
     if(!kbConfirmReplace('Importing this file'))return;
     const run=replacementSlot.current.start();abortRef.current=run.ctl;setBusy(true);
@@ -2684,7 +2772,15 @@ function KnowledgeBaseBuilder(){
             onPayload:p=>{if(p.resized&&r===0)txLog('  ⓘ '+f.name+' resized '+p.resized.from+' → '+p.resized.to+' to stay under the request ceiling','');}}));}
           catch(e){if(e.name==='AbortError')throw e;err=e.message||String(e);}
         }
-        if(!runs.length){out[cardFileId(f)]={file:f.name,error:err||'transcription failed'};txLog('✕ '+f.name+': '+err,'err');continue;}
+        if(!runs.length){
+          // v16.7: failed retries left an older clean transcript buildable and hid the failed comparison.
+          const id=cardFileId(f);out[id]={file:f.name,error:err||'transcription failed',runs:[],requestedRuns:txRuns,comparisonIncomplete:true};
+          if(txAbortRef.current===controller&&!controller.signal.aborted){
+            setTranscripts(previous=>cardPublishTranscript(previous,id,{...previous[id],...out[id],retainedTranscript:previous[id]?.retainedTranscript||previous[id]||null},currentFiles.current));
+            setTxErr(f.name+': '+out[id].error+'. This card is blocked until transcription succeeds; any earlier transcript is retained for inspection.');
+          }
+          txLog('✕ '+f.name+': '+err,'err');continue;
+        }
         if(txAbortRef.current!==controller||controller.signal.aborted)throw new DOMException('Aborted','AbortError');
         const agreement=runs.length>1?cardCompareRuns(runs):null;
         out[cardFileId(f)]={file:f.name,transcript:runs[0],runs,agreement,comparisonIncomplete:runs.length<txRuns,error:err||''};
@@ -2968,7 +3064,7 @@ function KnowledgeBaseBuilder(){
     :nothingToBuild?(cardChunks.length?'No card clears the gate':'Transcribe the cards first')
     :'Build Knowledge Base';
   const kb=K.knowledgeBase,md=useMemo(()=>renderKBMarkdown(kb),[kb]),validation=useMemo(()=>validateLatteKnowledgeBase(kb),[kb]),facts=(kb.conditions||[]).reduce((n,c)=>n+(c.facts||[]).length,0),sel=(kb.conditions||[]).find(c=>c.id===selected);
-  return <div className="tool-panel"><h2 className="tool-title">🧠 LATTE Knowledge Base</h2><p className="tool-desc">Upload once, extract source-grounded LATTE facts once, then reuse them for Anki, priority analysis, and NCLEX generation.</p>{K.persistenceError&&<div className="error-banner"><span>⚠</span><div>{K.persistenceError}</div></div>}<div role="status" style={{fontSize:12,marginBottom:10}}>Browser save: {K.persistenceStatus}</div>{K.recoveryChoices?.length>0&&<div className="card"><p>Saving is paused while these copies are preserved. Choose a saved copy, or import/build a replacement and use the current workspace. The saved copies are archived before saving resumes.</p><button className="btn-secondary" onClick={()=>K.chooseRecovery(-1)}>Use current workspace</button>{K.recoveryChoices.map((record,index)=><div key={index}><strong>Saved copy {index+1}</strong> · {(record.kb?.conditions||[]).length} conditions <button className="btn-ghost" onClick={()=>downloadBlob(new Blob([JSON.stringify(record.kb||EMPTY_LATTE_KB,null,2)],{type:'application/json'}),'LATTE-Knowledge-Base-recovery-'+(index+1)+'.json')}>Export copy</button><button className="btn-ghost" onClick={()=>K.chooseRecovery(index)}>Use this copy</button><details><summary>Inspect copy</summary><pre style={{whiteSpace:'pre-wrap',maxHeight:240,overflow:'auto'}}>{JSON.stringify(record.kb||EMPTY_LATTE_KB,null,2)}</pre></details></div>)}</div>}
+  return <div className="tool-panel"><h2 className="tool-title">🧠 LATTE Knowledge Base</h2><p className="tool-desc">Upload once, extract source-grounded LATTE facts once, then reuse them for Anki, priority analysis, and NCLEX generation.</p>{K.persistenceError&&<div className="error-banner"><span>⚠</span><div>{K.persistenceError}</div></div>}<div role="status" style={{fontSize:12,marginBottom:10}}>Browser save: {K.persistenceStatus}</div>{K.recoveryChoices?.length>0&&<div className="card"><p>Saving is paused while these copies are preserved. Choose a saved copy, or import/build a replacement and use the current workspace. The saved copies are archived before saving resumes.</p><button className="btn-secondary" onClick={()=>K.chooseRecovery(-1)}>Use current workspace</button>{K.recoveryChoices.map((record,index)=>record.recoveryError?<div key={index}><strong>Unreadable saved copy {index+1}</strong> · {record.storageKey}<p>{record.recoveryError}</p>{typeof record.raw==='string'&&<><button className="btn-ghost" onClick={()=>downloadBlob(new Blob([record.raw],{type:'text/plain'}),'LATTE-Knowledge-Base-recovery-'+(index+1)+'-raw.txt')}>Export raw copy</button><details><summary>Inspect raw copy</summary><pre style={{whiteSpace:'pre-wrap',maxHeight:240,overflow:'auto'}}>{record.raw}</pre></details></>}</div>:<div key={index}><strong>Saved copy {index+1}</strong> · {(record.kb?.conditions||[]).length} conditions <button className="btn-ghost" onClick={()=>downloadBlob(new Blob([JSON.stringify(record.kb||EMPTY_LATTE_KB,null,2)],{type:'application/json'}),'LATTE-Knowledge-Base-recovery-'+(index+1)+'.json')}>Export copy</button><button className="btn-ghost" onClick={()=>K.chooseRecovery(index)}>Use this copy</button><details><summary>Inspect copy</summary><pre style={{whiteSpace:'pre-wrap',maxHeight:240,overflow:'auto'}}>{JSON.stringify(record.kb||EMPTY_LATTE_KB,null,2)}</pre></details></div>)}</div>}
     <div role="button" tabIndex={0} aria-label="Add PDF, PPTX, or flashcard image source files" onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fileRef.current?.click();}}} className="upload-zone" onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();addFiles(e.dataTransfer.files)}}><h3>Drop PDF, PPTX, or flashcard photos</h3><p>Large sources are processed in page or slide chunks; successful chunks are retained even if another chunk fails. Flashcard photos are transcribed first, and you review the transcript before it becomes facts.</p><input aria-label="Source files" ref={fileRef} type="file" multiple accept=".pdf,.pptx,.jpg,.jpeg,.png,.webp,.heic,.heif" style={{display:'none'}} onChange={e=>{addFiles(e.target.files);e.target.value=''}}/></div>
     {files.length>0&&<div style={{marginTop:8}}>{files.map((f,i)=><div className="file-chip" key={cardFileId(f)}><div className={'f-icon '+getExt(f.name)}>{getExt(f.name)}</div><span className="f-name">{f.name}</span><span className="f-size">{formatSize(f.size)}</span><button className="f-rm" aria-label={'Remove source '+f.name} onClick={()=>{destroyPdfDoc(f);currentFiles.current=currentFiles.current.filter(x=>cardFileId(x)!==cardFileId(f));txAbortRef.current?.abort();abortRef.current?.abort();setTranscripts(p=>{const n={...p};delete n[cardFileId(f)];return n;});setTxReviewed(false);setFiles(currentFiles.current);}}>×</button></div>)}</div>}
     <div className="form-grid" style={{margin:'14px 0'}}><div className="field-block"><label htmlFor="kb-course">Course <span className="badge-opt">optional</span></label><input id="kb-course" type="text" value={course} onChange={e=>setCourse(e.target.value)} placeholder="Course name"/></div><div className="field-block"><label htmlFor="kb-exam">Exam / unit <span className="badge-opt">optional</span></label><input id="kb-exam" type="text" value={exam} onChange={e=>setExam(e.target.value)} placeholder="Exam or unit name"/></div></div>
@@ -3430,10 +3526,13 @@ function kbForPriority(kb,{tiers=[1,2,3],conditionQuery=""}={}){
     "Do not change supplied facts, tiers, qualifiers, values, or source pointers. The analyzer still assigns its own cascade tier from the item text.",
     ""
   ];
+  // v16.7: packet headers are not evidence; empty selections must make no model calls.
+  let factCount=0;
   for(const c of kb.conditions||[]){
     if(q&&!String(c.name||"").toLowerCase().includes(q)&&!(c.aliases||[]).some(a=>String(a).toLowerCase().includes(q)))continue;
     const facts=(c.facts||[]).filter(f=>tiers.includes(Number(f.tier)));
     if(!facts.length)continue;
+    factCount+=facts.length;
     lines.push("## "+c.name);
     for(const f of facts){
       const src=kbSourceText(f);
@@ -3441,9 +3540,22 @@ function kbForPriority(kb,{tiers=[1,2,3],conditionQuery=""}={}){
     }
     lines.push("");
   }
-  return lines.join("\n").trim();
+  return factCount?lines.join("\n").trim():'';
 }
-
+// v16.7: completeness and captured-source limits must survive every Priority export.
+function paResultNotice({source,activeKB,harvest,meta,error,busy}){
+  const lines=[];
+  if(source&&!artifactSourceCurrent(source,activeKB))lines.push('Source: earlier Knowledge Base. This analysis belongs to the source captured when the run started.');
+  if(harvest&&(harvest.failed.length||harvest.truncated.length)){
+    lines.push('Source coverage: '+harvest.successful+' of '+harvest.total+' chunks harvested.');
+    if(harvest.failed.length)lines.push('Missing source chunks: '+harvest.failed.map(f=>f.chunk).join(', ')+'. This guide is incomplete.');
+    if(harvest.truncated.length)lines.push('Truncated source chunks: '+harvest.truncated.join(', ')+'. Some supplied facts may be missing.');
+  }
+  if(meta?.truncated)lines.push('Analysis output was truncated; review it before studying.');
+  if(error)lines.push('Analysis status: '+error);
+  else if(busy)lines.push('Analysis is still in progress; this output is incomplete.');
+  return lines.length?'> '+lines.join('\n> ')+'\n\n':'';
+}
 function PriorityAnalyzer(){
   // v16.0: named controls, visible selection states, and reflowing groups replace inaccessible fixed layouts.
   const cfg=useConfig();
@@ -3466,23 +3578,36 @@ function PriorityAnalyzer(){
 
   // v15.17: results view starts during synthesis, so step cannot own busy/reentry.
   const analysisSlot=useRef(createOperationSlot());const [analysisBusy,setAnalysisBusy]=useState(false);
+  const analysisSource=useRef(null);const [resultSource,setResultSource]=useState(null),[harvestState,setHarvestState]=useState(null);
   useEffect(()=>()=>analysisSlot.current.cancel(),[]);
+  // v16.7: mounted tools outlive KB replacement; an old run must stop before publishing or spending again.
+  useEffect(()=>{
+    if(analysisSlot.current.active&&analysisSource.current!==K.knowledgeBase){
+      analysisSlot.current.cancel();analysisSource.current=null;setAnalysisBusy(false);setIsStreaming(false);setAbortController(null);
+      setError('Knowledge Base changed. The earlier analysis was stopped.');setStep(p=>p==='processing'?'error':p);
+    }
+  },[K.knowledgeBase]);
   async function runAnalysis(){
     if(!cfg.apiKey||analysisSlot.current.active)return;
-    if(!(K.knowledgeBase.conditions||[]).length){setError('Build the LATTE Knowledge Base first.');return;}
-    const analysisText=kbForPriority(K.knowledgeBase,{tiers:kbTiers,conditionQuery:kbConditionFilter});
-    if(!analysisText.trim()){setError('The current Knowledge Base filters contain no facts. Include another tier or clear the condition filter.');return;}
+    if(!(K.knowledgeBase.conditions||[]).length){setError('Build the LATTE Knowledge Base first.');setStep('error');return;}
+    const source=artifactSourceSnapshot(K.knowledgeBase);
+    const analysisText=kbForPriority(source.kb,{tiers:kbTiers,conditionQuery:kbConditionFilter});
+    if(!analysisText.trim()){setError('The current Knowledge Base filters contain no facts. Include another tier or clear the condition filter.');setStep('error');return;}
     const textChunks=paChunkText(analysisText,chunkSize,overlapSize);const total=textChunks.length;
     const chunkItems=[...textChunks.map((_,i)=>({id:`ext-${i}`,name:`Chunk ${i+1}/${total}`,phase:'extraction',status:'pending'})),{id:'synthesis',name:'Final Synthesis',phase:'synthesis',status:'pending'}];
-    const run=analysisSlot.current.start(),controller=run.ctl;setAnalysisBusy(true);
-    const guard=fn=>(...args)=>{if(analysisSlot.current.owns(run))fn(...args);};
+    const run=analysisSlot.current.start(),controller=run.ctl;analysisSource.current=source.sourceKB;setAnalysisBusy(true);setResultSource(source);
+    const sourceCurrent=()=>!K.isCurrentSource||K.isCurrentSource(source.sourceKB);
+    const current=()=>analysisSlot.current.current(run)&&sourceCurrent();
+    const guard=fn=>(...args)=>{if(analysisSlot.current.owns(run)&&sourceCurrent())fn(...args);};
     const [owned_setStep,owned_setProgress,owned_setPhase,owned_setOutput,owned_setParsedTiers,owned_setError,owned_setMeta,owned_setChunks,owned_setIsStreaming]=[setStep,setProgress,setPhase,setOutput,setParsedTiers,setError,setMeta,setChunks,setIsStreaming].map(guard);
     owned_setStep('processing');owned_setProgress(0);owned_setPhase(`${total} chunks`);owned_setOutput('');owned_setParsedTiers(null);owned_setError('');owned_setMeta(null);owned_setChunks(chunkItems);
     setAbortController(controller);
     const totalSteps=total+1;let completed=0;const extractions=[];let gotOutput=false;
+    const harvest={total,successful:0,failed:[],truncated:[]};
+    const publishHarvest=guard(()=>setHarvestState({...harvest,failed:[...harvest.failed],truncated:[...harvest.truncated]}));publishHarvest();
     try{
       for(let i=0;i<total;i++){
-        if(controller.signal.aborted)throw new DOMException('Aborted','AbortError');
+        if(!current())throw new DOMException('Aborted','AbortError');
         owned_setChunks(p=>p.map(c=>c.id===`ext-${i}`?{...c,status:'running'}:c));owned_setPhase(`Extracting chunk ${i+1}/${total}...`);owned_setProgress(Math.floor(completed/totalSteps*90));
         let prevSummary='';if(extractions.length>0){const last=extractions[extractions.length-1];prevSummary=last.length>2000?last.slice(0,2000)+'\n[...truncated]':last;}
         try{
@@ -3490,19 +3615,26 @@ function PriorityAnalyzer(){
           // v15: harvest resolves through the profile table like every other stage,
           // instead of a hardcoded flashModel + forced 'low' the UI could not express.
           const hCfg=cfg.forTool('priorityHarvest');
-          const result=await callGemini(cfg.apiKey,hCfg.model,[{text:prompt}],{thinkingLevel:hCfg.level,signal:controller.signal});
-          if(!analysisSlot.current.current(run))throw new DOMException('Aborted','AbortError');
-          extractions.push(result);owned_setChunks(p=>p.map(c=>c.id===`ext-${i}`?{...c,status:'done'}:c));
-        }catch(err){if(err.name==='AbortError')throw err;owned_setChunks(p=>p.map(c=>c.id===`ext-${i}`?{...c,status:'error'}:c));extractions.push(`[ERROR: ${err.message}]`);}
+          let harvestMeta=null;
+          const result=await callGemini(cfg.apiKey,hCfg.model,[{text:prompt}],{thinkingLevel:hCfg.level,signal:controller.signal,onMeta:m=>{harvestMeta=m;}});
+          if(!current())throw new DOMException('Aborted','AbortError');
+          if(!String(result||'').trim())throw new Error('No usable text was returned for this source chunk.');
+          extractions.push(result);harvest.successful++;if(harvestMeta?.truncated)harvest.truncated.push(i+1);
+          owned_setChunks(p=>p.map(c=>c.id===`ext-${i}`?{...c,status:'done'}:c));
+        }catch(err){if(err.name==='AbortError'||!current())throw new DOMException('Aborted','AbortError');owned_setChunks(p=>p.map(c=>c.id===`ext-${i}`?{...c,status:'error'}:c));harvest.failed.push({chunk:i+1,message:err.message||String(err)});}
+        publishHarvest();
         completed++;owned_setProgress(Math.floor(completed/totalSteps*90));
       }
+      if(!current())throw new DOMException('Aborted','AbortError');
+      // v16.7: transport failures are metadata, never study evidence for synthesis.
+      if(!extractions.length)throw new Error('No source chunks were harvested successfully. Review the errors and try again.');
       owned_setChunks(p=>p.map(c=>c.id==='synthesis'?{...c,status:'running'}:c));owned_setPhase('Synthesizing...');
       const synthPrompt=paBuildSynthPrompt(extractions,context);
       const {model:synthModel,level:synthLevel}=cfg.forTool('priority');
       owned_setIsStreaming(true);
-      const full=await callGemini(cfg.apiKey,synthModel,[{text:synthPrompt}],{thinkingLevel:synthLevel,signal:controller.signal,onUpdate:t=>{if(!analysisSlot.current.current(run))return;gotOutput=true;owned_setOutput(t);owned_setStep('results');},onMeta:owned_setMeta});
+      const full=await callGemini(cfg.apiKey,synthModel,[{text:synthPrompt}],{thinkingLevel:synthLevel,signal:controller.signal,onUpdate:t=>{if(!current())return;gotOutput=true;owned_setOutput(t);owned_setStep('results');},onMeta:owned_setMeta});
       owned_setIsStreaming(false);
-      if(!analysisSlot.current.current(run))throw new DOMException('Aborted','AbortError');
+      if(!current())throw new DOMException('Aborted','AbortError');
       owned_setOutput(full);owned_setParsedTiers(paParseTiers(full));owned_setChunks(p=>p.map(c=>c.id==='synthesis'?{...c,status:'done'}:c));owned_setProgress(100);owned_setStep('results');
     }catch(e){
       owned_setIsStreaming(false);
@@ -3511,12 +3643,18 @@ function PriorityAnalyzer(){
       // Keep whatever streamed in before the cancel — the error view would discard it.
       owned_setStep(cancelled&&gotOutput?'results':'error');
       owned_setChunks(p=>p.map(c=>c.status==='running'?{...c,status:'error'}:c));
-    }finally{if(analysisSlot.current.finish(run)){setAbortController(null);setAnalysisBusy(false);setIsStreaming(false);}}
+    }finally{if(analysisSlot.current.finish(run)){
+      // v16.7: a late continuation can finish before the source-change effect; retain an explicit stopped state.
+      if(!sourceCurrent()){setError('Knowledge Base changed. The earlier analysis was stopped.');setStep(p=>p==='processing'?'error':p);}
+      analysisSource.current=null;setAbortController(null);setAnalysisBusy(false);setIsStreaming(false);
+    }}
   }
 
-  const copyOutput=()=>copyText(output); // v15: shared helper — navigator.clipboard is undefined under file://
-  const downloadMd=()=>exportAsMd(output,'priority-analysis.md');
-  const resetAll=()=>{analysisSlot.current.cancel();setAnalysisBusy(false);setAbortController(null);setIsStreaming(false);setStep('idle');setOutput('');setParsedTiers(null);setError('');setProgress(0);setChunks([]);};
+  const resultNotice=paResultNotice({source:resultSource,activeKB:K.knowledgeBase,harvest:harvestState,meta,error,busy:analysisBusy});
+  const exportOutput=resultNotice+output;
+  const copyOutput=()=>copyText(exportOutput); // v15: shared helper — navigator.clipboard is undefined under file://
+  const downloadMd=()=>exportAsMd(exportOutput,'priority-analysis.md');
+  const resetAll=()=>{analysisSlot.current.cancel();analysisSource.current=null;setResultSource(null);setHarvestState(null);setMeta(null);setAnalysisBusy(false);setAbortController(null);setIsStreaming(false);setStep('idle');setOutput('');setParsedTiers(null);setError('');setProgress(0);setChunks([]);};
 
   const tiers=parsedTiers;
   // Same O(n^2) guard as the Study Guide — see note there.
@@ -3565,12 +3703,13 @@ function PriorityAnalyzer(){
             {abortController&&<button className="btn-danger" style={{width:'100%',marginTop:10}} onClick={()=>abortController.abort()}>Cancel</button>}
           </div>}
 
+          {resultNotice&&<div role="status" style={{whiteSpace:'pre-wrap',padding:12,marginBottom:12,border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',color:'var(--accent-warm)'}}>{resultNotice.replace(/^> ?/gm,'').trim()}</div>}
           {step==='results'&&<>
             {isStreaming&&abortController&&<button className="btn-danger" style={{width:'100%',marginBottom:10}} onClick={()=>abortController.abort()}>■ Stop</button>}
             {!isStreaming&&<TruncationNotice meta={meta}/>}
             <div className="output-toolbar" style={{marginBottom:14}}>
               <h2 style={{fontSize:16,fontWeight:700,color:'var(--text-bright)'}}>Priority Analysis</h2>
-              <div className="output-toolbar-actions"><button className="btn-secondary" onClick={copyOutput}>📋 Copy</button><button className="btn-secondary" onClick={downloadMd}>⬇ .md</button><button className="btn-secondary" onClick={()=>exportAsTxt(output,'priority-analysis.txt')}>⬇ .txt</button><button className="btn-secondary" onClick={()=>exportAsPdf(output,'Pyramid Priority Analysis','LATTE Knowledge Base')}>🖨 PDF</button><button className="btn-secondary" onClick={resetAll}>↺ New</button></div>
+              <div className="output-toolbar-actions"><button className="btn-secondary" onClick={copyOutput}>📋 Copy</button><button className="btn-secondary" onClick={downloadMd}>⬇ .md</button><button className="btn-secondary" onClick={()=>exportAsTxt(exportOutput,'priority-analysis.txt')}>⬇ .txt</button><button className="btn-secondary" onClick={()=>exportAsPdf(exportOutput,'Pyramid Priority Analysis','LATTE Knowledge Base')}>🖨 PDF</button><button className="btn-secondary" onClick={resetAll}>↺ New</button></div>
             </div>
             {tiers&&(tiers.tier1||tiers.tier2||tiers.tier3)?<>
               {tiers.tier1&&<div className="tier-section t1"><div className="tier-header"><span className="tier-badge t1">TIER 1</span><span className="tier-title">Must Know</span></div><div className="tier-body" dangerouslySetInnerHTML={{__html:mdToSafeHtml(tiers.tier1)}}/></div>}
@@ -4287,6 +4426,15 @@ function attachCoverageToCards(cards,ledgers,snapshot,chunkIds){
   return issues;
 }
 // v15.17: only equivalent valid Text, Extra, effective tags and keep choices may merge sources.
+// v16.7: a duplicate count must not deep-copy every note's provenance on each edit.
+function ankiExactMergeKey(card){
+  return lintAnkiCard(card).length?null:JSON.stringify([String(card.text||''),String(card.extra||''),[...new Set(String(card.tags||'').trim().split(/\s+/))].sort(),!!card.keep]);
+}
+function ankiExactDuplicateCount(cards){
+  const seen=new Set();let count=0;
+  for(const card of cards){const key=ankiExactMergeKey(card);if(!key)continue;if(seen.has(key))count++;else seen.add(key);}
+  return count;
+}
 function ankiDedupeCards(cards){
   const seen=new Map(),out=[],copy=value=>JSON.parse(JSON.stringify(value));
   const union=(a,b)=>{const values=new Map();for(const item of [...a,...b])values.set(JSON.stringify(item),item);return [...values.values()];};
@@ -4299,7 +4447,7 @@ function ankiDedupeCards(cards){
     c.parseProvenance=c.parseProvenance||[];
     c.conditionTagNormalizations=c.conditionTagNormalizations||[];
     if(c.conditionTagNormalization)c.conditionTagNormalizations=union(c.conditionTagNormalizations,[copy(c.conditionTagNormalization)]);
-    const key=lintAnkiCard(c).length?null:JSON.stringify([String(c.text||''),String(c.extra||''),[...new Set(String(c.tags||'').trim().split(/\s+/))].sort(),!!c.keep]);
+    const key=ankiExactMergeKey(c);
     if(key&&seen.has(key)){
       const kept=seen.get(key);kept.factIds=[...new Set([...kept.factIds,...c.factIds])];kept.mappingIssues=union(kept.mappingIssues,c.mappingIssues);
       for(const field of ['mergedNoteIds','sourceLocations','parseProvenance','conditionTagNormalizations','sourceLinkEdits'])kept[field]=union(kept[field]||[],c[field]||[]);
@@ -4697,15 +4845,28 @@ function ankiStyleWarnings(card){
   if(exposed.length)issues.push({code:'answer-visible',indices:[...new Set(exposed.map(x=>x.index))],msg:exposed.map(x=>'c'+x.index+': '+x.answer).join('; ')+' — answer also appears on the visible review front.'});
   return issues;
 }
-function ankiReviewFilter(cards,tier,styleOnly){
+// v16.7: filters, local review and rows repeatedly checked unchanged note objects after every edit.
+function ankiCreateStyleCache(check=ankiStyleWarnings){
+  const cache=new WeakMap();
+  return card=>{if(!cache.has(card))cache.set(card,check(card));return cache.get(card);};
+}
+function ankiReviewFilter(cards,tier,styleOnly,getWarnings=ankiStyleWarnings){
   // v16.0: warning-code filters narrow inspection only; booleans retain the prior contract.
   return cards.filter(c=>{
     if(tier!=='all'&&ankiTier(c.tags)!==String(tier))return false;
     if(!styleOnly||styleOnly==='all')return true;
-    const warnings=ankiStyleWarnings(c);
+    const warnings=getWarnings(c);
     return styleOnly===true||styleOnly==='style'?warnings.length>0:warnings.some(x=>x.code===styleOnly);
   });
 }
+// v16.7: rendering thousands of editable rows made each keystroke rebuild the full note interface.
+// Paging limits mounted rows only; selection, checks, coverage and exports still use the entire deck.
+const ANKI_NOTE_PAGE_SIZE=50;
+function ankiPageRows(cards,page){
+  const pages=Math.max(1,Math.ceil(cards.length/ANKI_NOTE_PAGE_SIZE)),active=Math.max(0,Math.min(pages-1,Math.floor(Number(page)||0))),start=active*ANKI_NOTE_PAGE_SIZE;
+  return {rows:cards.slice(start,start+ANKI_NOTE_PAGE_SIZE),page:active,pages,start,end:Math.min(start+ANKI_NOTE_PAGE_SIZE,cards.length),total:cards.length};
+}
+function ankiPageForNote(cards,id){return Math.floor(Math.max(0,cards.findIndex(card=>card.id===id))/ANKI_NOTE_PAGE_SIZE);}
 // v16.0: an optional fidelity audit must see all source facts, including unmapped ones,
 // and current selected review targets. Quote text was not Anki input and is not evidence here.
 const ANKI_SOURCE_AUDIT_GROUP_CHARS=24000;
@@ -5194,7 +5355,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '16.7';}
+function suiteVersion(){return '16.8';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -5237,18 +5398,19 @@ function ankiRecallNumbers(value){
   return out;
 }
 // v16.3: build indexes once for each queue render; never scan the entire registry per finding.
-function ankiRecallContext(run,cards,batch){
+// v16.7: local-only review has no receipts to reconcile; avoid parsing/indexing the deck for unused searches.
+function ankiRecallContext(run,cards,batch,includeReceipts=true){
   const notes=cards||run?.cards||[...new Map((run?.groups||[]).flatMap(g=>g.notes||[]).map(n=>[n.id,n])).values()];
   const facts=batch?.snapshot?.facts||run?.batch?.snapshot?.facts||[...new Map((run?.groups||[]).flatMap(g=>g.facts||[]).map(f=>[f.id,f])).values()];
   const noteById=new Map(notes.map(n=>[n.id,n])),factById=new Map(facts.map(f=>[f.id,f])),byId=Object.create(null);
   for(const fact of facts)byId[fact.id]=fact;
-  const noteSignatures=new Map(notes.map(n=>[n.id,JSON.stringify([n.text,n.extra,n.tags,!!n.keep,n.factIds||[],n.mappingIssues||[]])])),factSignatures=new Map(facts.map(f=>[f.id,JSON.stringify([f.condition,f.aliases||[],f.subtype,f.text,f.tier,f.bucket])])),parsedById=new Map(notes.map(n=>[n.id,parseAnkiClozes(n.text)]));
-  return {notes,facts,noteById,factById,noteSignatures,factSignatures,parsedById,reconciliationIndex:ankiReconciliationIndex(notes,factById,parsedById),snapshot:{facts,byId}};
+  const noteSignatures=new Map(notes.map(n=>[n.id,JSON.stringify([n.text,n.extra,n.tags,!!n.keep,n.factIds||[],n.mappingIssues||[]])])),factSignatures=new Map(facts.map(f=>[f.id,JSON.stringify([f.condition,f.aliases||[],f.subtype,f.text,f.tier,f.bucket])])),parsedById=includeReceipts?new Map(notes.map(n=>[n.id,parseAnkiClozes(n.text)])):new Map();
+  return {notes,facts,noteById,factById,noteSignatures,factSignatures,parsedById,reconciliationIndex:includeReceipts?ankiReconciliationIndex(notes,factById,parsedById):new Map(),snapshot:{facts,byId}};
 }
-function ankiRecallIssues(card,snapshot){
+function ankiRecallIssues(card,snapshot,getWarnings=ankiStyleWarnings){
   if(!card||lintAnkiCard(card).length)return [];
   const ids=[...new Set(card.factIds||[])],noteIds=[card.id],indices=list=>(list||[]).map(index=>({noteId:card.id,index}));
-  const issues=ankiStyleWarnings(card).filter(w=>w.code==='answer-visible'||w.code==='list-recall').map(w=>({code:w.code,message:w.msg,noteIds,factIds:ids,clozeIndices:indices(w.indices),sourceSpan:''}));
+  const issues=getWarnings(card).filter(w=>w.code==='answer-visible'||w.code==='list-recall').map(w=>({code:w.code,message:w.msg,noteIds,factIds:ids,clozeIndices:indices(w.indices),sourceSpan:''}));
   const byId=snapshot?.byId||Object.fromEntries((snapshot?.facts||[]).map(f=>[f.id,f]));
   if(!ids.length||ids.some(id=>!byId[id])||(card.mappingIssues||[]).length)return issues;
   const source=ids.map(id=>{const f=byId[id];return [f.text,f.condition,...(f.aliases||[])].join(' ');}).join('\n'),text=String(card.text||'')+'\n'+String(card.extra||'');
@@ -5432,8 +5594,8 @@ function ankiEvidenceReviewIssues(noteReview,run,context){
   }
   return out;
 }
-function ankiAuditReviewItems(run,cards,batch,tier='all'){
-  const rows=cards||[],ctx=ankiRecallContext(run,rows,batch),items=new Map(),sortIds=ids=>[...new Set(ids||[])].sort(),selected=ankiSelection(rows,true,tier).kept,active=new Set(selected.map(n=>n.id));
+function ankiAuditReviewItems(run,cards,batch,tier='all',getWarnings=ankiStyleWarnings){
+  const rows=cards||[],hasReceipts=ankiSourceAuditCurrent(run,{cards,batch,tier,current:true}),ctx=ankiRecallContext(run,rows,batch,hasReceipts),items=new Map(),sortIds=ids=>[...new Set(ids||[])].sort(),selected=ankiSelection(rows,true,tier).kept,active=new Set(selected.map(n=>n.id));
   const add=(issue,source,suggestion='',suggestionWarnings=[])=>{
     const noteIds=sortIds(issue.noteIds).filter(id=>ctx.noteById.has(id)),factIds=sortIds(issue.factIds).filter(id=>ctx.factById.has(id)),clozeIndices=[...new Map((issue.clozeIndices||[]).map(ref=>[JSON.stringify([ref.noteId,ref.index]),{noteId:ref.noteId,index:ref.index}])).values()].sort((a,b)=>a.noteId.localeCompare(b.noteId)||a.index-b.index),sourceSpan=issue.sourceSpan||'';
     // Findings have no sourceSpan field; keep different claims about the same notes separate.
@@ -5476,7 +5638,7 @@ function ankiAuditReviewItems(run,cards,batch,tier='all'){
       }
     }
   }
-  for(const card of selected)for(const issue of ankiRecallIssues(card,ctx.snapshot))add(issue,'local');
+  for(const card of selected)for(const issue of ankiRecallIssues(card,ctx.snapshot,getWarnings))add(issue,'local');
   return [...items.values()];
 }
 
@@ -5690,6 +5852,7 @@ function AnkiGenerator(){
   const [cards,setCards]=useState([]);
   const [ledger,setLedger]=useState('');
   const [view,setView]=useState('table');
+  const [notePage,setNotePage]=useState(0);
   const [styleOnly,setStyleOnly]=useState(false); // v15.16: review filter only; export still uses kept notes in the selected tier.
   const [tierFilter,setTierFilter]=useState('all');
   const [warningFilter,setWarningFilter]=useState('all');
@@ -5718,7 +5881,7 @@ function AnkiGenerator(){
     }
   },[cards,batch,tierFilter,current]);
   useEffect(()=>()=>{auditRun.current?.ctl.abort();auditRun.current=null;},[]);
-  useEffect(()=>{if(editFocus&&view==='table'){const field=document.getElementById('anki-text-'+editFocus);if(field){field.scrollIntoView({block:'center'});field.focus();setEditFocus(null);}}},[editFocus,view,warningFilter,styleOnly]);
+  useEffect(()=>{if(editFocus&&view==='table'){const field=document.getElementById('anki-text-'+editFocus);if(field){field.scrollIntoView({block:'center'});field.focus();setEditFocus(null);}}},[editFocus,view,warningFilter,styleOnly,notePage]);
   const sourceConflicts=useMemo(()=>ankiSourceConflicts(batch?.snapshot||ankiSourceSnapshot(K.knowledgeBase)),[batch,K.knowledgeBase]);
   const reviewCandidates=useMemo(()=>current?ankiReviewCandidates(cards):[],[cards,current]);
   const candidateIds=useMemo(()=>new Set(reviewCandidates.flatMap(g=>g.members.map(m=>m.noteId))),[reviewCandidates]);
@@ -5729,8 +5892,9 @@ function AnkiGenerator(){
   const sourceLinkIssues=useMemo(()=>new Map(cards.map(c=>[c.id,ankiSourceLinkStatus(c,batch?.snapshot)])),[cards,batch]);
   const conditionTagIssues=useMemo(()=>new Map(cards.map(c=>[c.id,ankiConditionTagCheck(c,batch?.snapshot,conditionIndex)])),[cards,batch,conditionIndex]);
   const selected=useMemo(()=>ankiSelection(cards,current,tierFilter),[cards,current,tierFilter]);
+  const styleWarnings=useMemo(()=>ankiCreateStyleCache(),[batch]);
   // v16.3: stale checks retain downloadable evidence but cannot contribute current queue claims.
-  const reviewItems=useMemo(()=>current?ankiAuditReviewItems(ankiSourceAuditCurrent(sourceAudit,{cards,batch,tier:tierFilter,current})?sourceAudit:null,cards,batch,tierFilter):[],[sourceAudit,cards,batch,tierFilter,current]);
+  const reviewItems=useMemo(()=>current?ankiAuditReviewItems(ankiSourceAuditCurrent(sourceAudit,{cards,batch,tier:tierFilter,current})?sourceAudit:null,cards,batch,tierFilter,styleWarnings):[],[sourceAudit,cards,batch,tierFilter,current,styleWarnings]);
   auditInputs.current={...auditInputs.current,reviewItems,reviewDecisions,reviewRun:sourceAudit};
   useEffect(()=>setReviewDecisions([]),[batch]);
   const saveReviewDecision=(item,disposition,coveredBy,reason)=>{
@@ -5749,7 +5913,7 @@ function AnkiGenerator(){
   },[cards,collisionGroups]);
   const actionableCollisions=useMemo(()=>ankiCollisionGroups(coverage.kept),[coverage.kept]);
   // v16.7: manual repairs may create exact duplicates; merging remains an explicit choice and preserves different Keep states.
-  const exactDuplicateCount=useMemo(()=>cards.length-ankiDedupeCards(cards).length,[cards]);
+  const exactDuplicateCount=useMemo(()=>ankiExactDuplicateCount(cards),[cards]);
   const mergeExactDuplicates=()=>{if(!current||busy||auditBusy||(K.isCurrentSource&&!K.isCurrentSource(batch.sourceKB)))return;setCards(rows=>ankiDedupeCards(rows));};
   // Original evidence recomputes on source-currentness changes, preserving Not checked for a stale batch.
   const originalDiagnostics=useMemo(()=>ankiBatchDiagnostics(batch?.rawCards||[],batch,current),[batch,current]);
@@ -5778,14 +5942,16 @@ function AnkiGenerator(){
   const getTier=useCallback(ankiTier,[]);
   const filteredCards=useMemo(()=>tierFilter==='all'?cards:cards.filter(c=>getTier(c.tags)===tierFilter),[cards,tierFilter,getTier]);
   const displayedCards=useMemo(()=>{
-    const rows=ankiReviewFilter(filteredCards,'all',styleOnly);
+    const rows=ankiReviewFilter(filteredCards,'all',styleOnly,styleWarnings);
     if(warningFilter==='source')return rows.filter(c=>numericAudits.get(c.id)?.findings.length||(c.factIds||[]).some(id=>conflictIds.has(id)));
     if(warningFilter==='duplicate')return rows.filter(c=>candidateIds.has(c.id));
     if(warningFilter==='mapping')return rows.filter(c=>sourceLinkIssues.get(c.id)?.code!=='linked');
     if(warningFilter==='condition-tag')return rows.filter(c=>conditionTagIssues.get(c.id)?.status==='review');
-    return ankiReviewFilter(rows,'all',warningFilter);
-  },[filteredCards,styleOnly,warningFilter,numericAudits,conflictIds,candidateIds,sourceLinkIssues,conditionTagIssues]);
-  const styleCount=useMemo(()=>filteredCards.filter(c=>ankiStyleWarnings(c).length>0).length,[filteredCards]);
+    return ankiReviewFilter(rows,'all',warningFilter,styleWarnings);
+  },[filteredCards,styleOnly,warningFilter,numericAudits,conflictIds,candidateIds,sourceLinkIssues,conditionTagIssues,styleWarnings]);
+  const notePageInfo=useMemo(()=>ankiPageRows(displayedCards,notePage),[displayedCards,notePage]);
+  const pagedCards=notePageInfo.rows;
+  const styleCount=useMemo(()=>filteredCards.filter(c=>styleWarnings(c).length>0).length,[filteredCards,styleWarnings]);
   const tierCounts=useMemo(()=>{const ct={'1':0,'2':0,'3':0,'?':0};cards.forEach(c=>{const t=getTier(c.tags);ct[t]=(ct[t]||0)+1;});return ct;},[cards,getTier]);
 
   const log=useCallback((msg,t='')=>setLogs(p=>[...p.slice(-200),{msg,t,ts:new Date().toLocaleTimeString()}]),[]); // v15.14: capped, like the KB builder
@@ -5863,7 +6029,8 @@ function AnkiGenerator(){
   };
   const cancelSourceAudit=()=>{const run=auditRun.current;if(run){run.ctl.abort();auditRun.current=null;setAuditBusy(false);setSourceAudit(ankiSourceAuditState(run,'cancelled','Completed source-check groups are retained.'));}};
   const openNote=(id,index)=>{setInspectNote({id,index});};
-  const editNote=id=>{setView('table');setStyleOnly(false);setWarningFilter('all');setEditFocus(id);};
+  // v16.7: Edit in Table must mount the requested note before its existing focus effect runs.
+  const editNote=id=>{setView('table');setStyleOnly(false);setWarningFilter('all');setNotePage(ankiPageForNote(filteredCards,id));setEditFocus(id);};
   const saveSourceAudit=async()=>{
     if(!sourceAudit||savingEvidence)return;
     setSavingEvidence(true);setEvidenceError('');
@@ -5893,7 +6060,7 @@ function AnkiGenerator(){
     if(!cfg.apiKey){log('Enter API key first.','err');return;}
     if(!(K.knowledgeBase.conditions||[]).length){log('Build the LATTE Knowledge Base first.','err');return;}
     cancelSourceAudit();setSourceAudit(null);setInspectNote(null);
-    setBusy(true);setProg(0);setLogs([]);setCards([]);setLedger('');setBatch(null);setInterruptedRun(null);setShowUncovered(false);
+    setBusy(true);setProg(0);setLogs([]);setCards([]);setLedger('');setBatch(null);setInterruptedRun(null);setShowUncovered(false);setNotePage(0);
     // v15.17: capture identity before awaiting; a replaced KB or superseded run cannot publish.
     activeRun.current?.ctl.abort();
     const ctl=new AbortController();setAbortCtl(ctl);
@@ -6101,15 +6268,15 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
         </div>}
         <div style={{display:'flex',gap:6,marginBottom:10,flexWrap:'wrap',alignItems:'center'}}>
           <span style={{fontSize:12,color:'var(--text-dim)',fontWeight:500}}>TIERS:</span>
-          {['1','2','3'].map(t=><button key={t} aria-pressed={tierFilter===t} className={`tier-btn t${t} ${tierFilter===t?'active':''}`} onClick={()=>setTierFilter(tierFilter===t?'all':t)}>T{t} <b>{tierCounts[t]} notes</b></button>)}
-          {tierFilter!=='all'&&<button className="btn-secondary" style={{padding:'3px 8px',fontSize:12}} onClick={()=>setTierFilter('all')}>Show All</button>}
-          <label style={{display:'flex',gap:5,alignItems:'center',fontSize:12,marginLeft:8}}><input type="checkbox" checked={styleOnly} onChange={e=>setStyleOnly(e.target.checked)}/>Style warnings ({styleCount})</label>
+          {['1','2','3'].map(t=><button key={t} aria-pressed={tierFilter===t} className={`tier-btn t${t} ${tierFilter===t?'active':''}`} onClick={()=>{setTierFilter(tierFilter===t?'all':t);setNotePage(0);}}>T{t} <b>{tierCounts[t]} notes</b></button>)}
+          {tierFilter!=='all'&&<button className="btn-secondary" style={{padding:'3px 8px',fontSize:12}} onClick={()=>{setTierFilter('all');setNotePage(0);}}>Show All</button>}
+          <label style={{display:'flex',gap:5,alignItems:'center',fontSize:12,marginLeft:8}}><input type="checkbox" checked={styleOnly} onChange={e=>{setStyleOnly(e.target.checked);setNotePage(0);}}/>Style warnings ({styleCount})</label>
         </div>
         {current&&<p style={{fontSize:12}}>Notes needing source-link review: {cards.filter(c=>sourceLinkIssues.get(c.id)?.code!=='linked').length} · Condition-tag discrepancies: {cards.filter(c=>conditionTagIssues.get(c.id)?.status==='review').length}. Use the review filter, then open Review and source to inspect or edit links.</p>}
         <p style={{fontSize:12}}>Identical-front groups: {actionableCollisions.length} among kept notes · {collisionGroups.length} across current rows. Warnings do not change selection.</p>
         <AnkiCollisionWarnings groups={collisionGroups} current={current}/>
         <details style={{fontSize:12,marginBottom:10}}><summary>Possible duplicate reviews ({reviewCandidates.length} groups)</summary><p>Same answers with overlapping sources and similar context. Different decisions may still need separate cards; nothing is removed.</p>{reviewCandidates.map((g,i)=><div key={i} style={{padding:8,border:'1px solid var(--border)',marginTop:6}}>{g.members.map(m=><div key={m.noteId+':'+m.index}><button className="btn-ghost" onClick={()=>openNote(m.noteId,m.index)}>Review {m.noteId} · c{m.index}</button><div>{m.front}</div><div>Answer: {m.answers.join(' / ')}</div></div>)}</div>)}</details>
-        <label style={{fontSize:12}}>Review findings <select aria-label="Anki review findings" value={warningFilter} onChange={e=>{setWarningFilter(e.target.value);setStyleOnly(false);}}><option value="all">All notes</option><option value="answer-visible">Answer visible</option><option value="shared-gaps">Several gaps hide together</option><option value="list-recall">3+ gaps hide together</option><option value="long-front">Long front</option><option value="front-anchor">Condition/topic cue</option><option value="front-label">Retrieval label</option><option value="article-clue">Article clue</option><option value="duplicate">Possible duplicate</option><option value="source">Numeric/source warnings</option><option value="mapping">Source-link review</option><option value="condition-tag">Condition-tag discrepancies</option></select></label>
+        <label style={{fontSize:12}}>Review findings <select aria-label="Anki review findings" value={warningFilter} onChange={e=>{setWarningFilter(e.target.value);setStyleOnly(false);setNotePage(0);}}><option value="all">All notes</option><option value="answer-visible">Answer visible</option><option value="shared-gaps">Several gaps hide together</option><option value="list-recall">3+ gaps hide together</option><option value="long-front">Long front</option><option value="front-anchor">Condition/topic cue</option><option value="front-label">Retrieval label</option><option value="article-clue">Article clue</option><option value="duplicate">Possible duplicate</option><option value="source">Numeric/source warnings</option><option value="mapping">Source-link review</option><option value="condition-tag">Condition-tag discrepancies</option></select></label>
         <details style={{margin:'12px 0',padding:10,border:'1px solid var(--border)',borderRadius:8}}><summary>Optional · Check against KB</summary>
           <p>Checks source meaning, missing recall targets, duplicate targets and priority loss. Uses the captured fact text and all note tiers, with Tier {tierFilter==='all'?'1–3':tierFilter} selected for export. Findings are suggestions, not clinical validation. This checks against the captured KB, so a mistake already in that KB can survive the check; compare questionable facts with the original source.</p>
           {/* v16.2: preparation and a completed AI check must not share an ambiguous download label. */}
@@ -6135,7 +6302,7 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
         {includeSources&&<p style={{fontSize:12}}>{missingPointers} kept note(s) in this tier have no usable source pointer; exported as “Source: unavailable”. References are added only to the exported Extra field.</p>}
         {(styleOnly||warningFilter!=='all')&&!displayedCards.length&&<p role="status" style={{fontSize:12}}>No matching review findings in this tier.</p>}
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10,flexWrap:'wrap',gap:6}}>
-          <span style={{fontSize:12,color:'var(--text-dim)'}}><b style={{color:'var(--text)'}}>{displayedCards.length}</b> shown · {filteredCards.length} notes · <b style={{color:'var(--accent-green)'}}>{keptCount}</b> kept notes → {selected.reviews} review cards{filteredCards.filter(c=>c.lint&&c.lint.length).length>0&&<span style={{color:'var(--accent-warm)'}}> · {filteredCards.filter(c=>c.lint&&c.lint.length).length} lint</span>}</span>
+          <span style={{fontSize:12,color:'var(--text-dim)'}}><b style={{color:'var(--text)'}}>{displayedCards.length}</b> matching · {filteredCards.length} notes · <b style={{color:'var(--accent-green)'}}>{keptCount}</b> kept notes → {selected.reviews} review cards{filteredCards.filter(c=>c.lint&&c.lint.length).length>0&&<span style={{color:'var(--accent-warm)'}}> · {filteredCards.filter(c=>c.lint&&c.lint.length).length} lint</span>}</span>
           <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
             <label style={{display:'flex',alignItems:'center',gap:5,fontSize:12,color:'var(--text-dim)',cursor:'pointer',userSelect:'none'}} title="Prepend #separator:Pipe / #notetype:Cloze / #tags column:3 and HTML-escape < > & so the file imports in one click. Leave off if your importer maps fields manually.">
               <input type="checkbox" checked={ankiHeader} onChange={e=>setAnkiHeader(e.target.checked)} style={{accentColor:'var(--accent)'}}/>Anki header
@@ -6148,23 +6315,28 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
           </div>
         </div>
 
+        {displayedCards.length>ANKI_NOTE_PAGE_SIZE&&<nav aria-label="Anki note pages" style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap',marginBottom:12}}>
+          <button className="btn-secondary" disabled={notePageInfo.page===0} onClick={()=>setNotePage(notePageInfo.page-1)}>Previous notes</button>
+          <span aria-live="polite">Notes {notePageInfo.start+1}–{notePageInfo.end} of {notePageInfo.total} · Page {notePageInfo.page+1} of {notePageInfo.pages}</span>
+          <button className="btn-secondary" disabled={notePageInfo.page+1>=notePageInfo.pages} onClick={()=>setNotePage(notePageInfo.page+1)}>Next notes</button>
+        </nav>}
         {view==='table'&&<div className="anki-tbl-wrap"><table aria-label="Editable Anki notes"><thead><tr><th scope="col" style={{width:36}}>Keep</th><th scope="col" style={{width:38}}>Tier</th><th scope="col">Text</th><th scope="col" style={{width:'16%'}}>Extra</th><th scope="col" style={{width:'16%'}}>Tags</th><th scope="col" style={{width:36}}>Remove</th></tr></thead><tbody>
-          {displayedCards.map(c=><tr key={c.id} className={c.keep?'':'dim'} style={c.lint&&c.lint.length?{boxShadow:'inset 3px 0 0 var(--accent-red)'}:undefined} title={c.lint&&c.lint.length?('Lint: '+c.lint.map(x=>LINT_LABEL[x]||x).join(', ')):undefined}><td><input aria-label={'Keep note '+c.id} type="checkbox" checked={c.keep} onChange={()=>toggle(c.id)} style={{accentColor:'var(--accent)'}}/></td><td><TierBadge tier={getTier(c.tags)}/>{c.lint&&c.lint.length>0&&<span style={{color:'var(--accent-red)',fontSize:12,fontWeight:700,marginLeft:3}}>!</span>}</td><td><textarea id={'anki-text-'+c.id} aria-label={'Text for note '+c.id} className="cell-ta" value={c.text} rows={2} onChange={e=>updateField(c.id,'text',e.target.value)}/><AnkiStyleBadges issues={ankiStyleWarnings(c)}/><AnkiNoteDiagnostics card={c} audit={numericAudits.get(c.id)} current={current}/><AnkiCollisionReferences groups={collisionsByNote.get(c.id)}/><AnkiReviewSource conditionCheck={conditionTagIssues.get(c.id)} card={c} batch={batch} current={current} onSourcesChange={busy?null:updateSourceLinks}/></td><td><textarea aria-label={'Extra for note '+c.id} className="cell-ta" value={c.extra} rows={2} onChange={e=>updateField(c.id,'extra',e.target.value)}/></td><td><textarea aria-label={'Tags for note '+c.id} className="cell-ta tags-ta" value={c.tags} rows={2} onChange={e=>updateField(c.id,'tags',e.target.value)}/></td><td><button className="f-rm" aria-label={'Delete note '+c.id} onClick={()=>del(c.id)}>×</button></td></tr>)}
+          {pagedCards.map(c=><tr key={c.id} className={c.keep?'':'dim'} style={c.lint&&c.lint.length?{boxShadow:'inset 3px 0 0 var(--accent-red)'}:undefined} title={c.lint&&c.lint.length?('Lint: '+c.lint.map(x=>LINT_LABEL[x]||x).join(', ')):undefined}><td><input aria-label={'Keep note '+c.id} type="checkbox" checked={c.keep} onChange={()=>toggle(c.id)} style={{accentColor:'var(--accent)'}}/></td><td><TierBadge tier={getTier(c.tags)}/>{c.lint&&c.lint.length>0&&<span style={{color:'var(--accent-red)',fontSize:12,fontWeight:700,marginLeft:3}}>!</span>}</td><td><textarea id={'anki-text-'+c.id} aria-label={'Text for note '+c.id} className="cell-ta" value={c.text} rows={2} onChange={e=>updateField(c.id,'text',e.target.value)}/><AnkiStyleBadges issues={styleWarnings(c)}/><AnkiNoteDiagnostics card={c} audit={numericAudits.get(c.id)} current={current}/><AnkiCollisionReferences groups={collisionsByNote.get(c.id)}/><AnkiReviewSource conditionCheck={conditionTagIssues.get(c.id)} card={c} batch={batch} current={current} onSourcesChange={busy?null:updateSourceLinks}/></td><td><textarea aria-label={'Extra for note '+c.id} className="cell-ta" value={c.extra} rows={2} onChange={e=>updateField(c.id,'extra',e.target.value)}/></td><td><textarea aria-label={'Tags for note '+c.id} className="cell-ta tags-ta" value={c.tags} rows={2} onChange={e=>updateField(c.id,'tags',e.target.value)}/></td><td><button className="f-rm" aria-label={'Delete note '+c.id} onClick={()=>del(c.id)}>×</button></td></tr>)}
         </tbody></table></div>}
 
-        {view==='list'&&displayedCards.map(c=><div key={c.id} style={{display:'flex',gap:8,padding:'10px 12px',background:c.keep?'var(--bg-input)':'var(--bg-card-alt)',border:'1px solid var(--border)',borderRadius:6,marginBottom:4,fontSize:12}}>
+        {view==='list'&&pagedCards.map(c=><div key={c.id} style={{display:'flex',gap:8,padding:'10px 12px',background:c.keep?'var(--bg-input)':'var(--bg-card-alt)',border:'1px solid var(--border)',borderRadius:6,marginBottom:4,fontSize:12}}>
           <input aria-label={'Keep note '+c.id} type="checkbox" checked={c.keep} onChange={()=>toggle(c.id)} style={{accentColor:'var(--accent)',marginTop:2}}/>
           <TierBadge tier={getTier(c.tags)}/>
-          <div style={{flex:1,minWidth:0}}><div style={{fontFamily:'JetBrains Mono',fontSize:12,lineHeight:1.5,wordBreak:'break-word'}}>{c.text}</div><AnkiStyleBadges issues={ankiStyleWarnings(c)}/><AnkiNoteDiagnostics card={c} audit={numericAudits.get(c.id)} current={current}/><AnkiCollisionReferences groups={collisionsByNote.get(c.id)}/><AnkiReviewSource conditionCheck={conditionTagIssues.get(c.id)} card={c} batch={batch} current={current} onSourcesChange={busy?null:updateSourceLinks}/>{c.extra&&<div style={{fontSize:12,color:'var(--text-dim)',marginTop:2}}>Extra: {c.extra}</div>}{c.tags&&<div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:4}}>{c.tags.split(/\s+/).map((t,j)=><span key={j} style={{fontSize:12,padding:'1px 6px',borderRadius:8,background:'var(--bg-card-alt)',color:'var(--text-dim)',border:'1px solid var(--border)'}}>{t}</span>)}</div>}{c.lint&&c.lint.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:4}}>{c.lint.map((x,j)=><span key={j} style={{fontSize:12,padding:'1px 6px',borderRadius:8,background:'var(--error-bg)',color:'var(--accent-red)',border:'1px solid var(--error-border)'}}>{LINT_LABEL[x]||x}</span>)}</div>}{c.abbrev&&c.abbrev.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:4}}>{c.abbrev.map((x,j)=><span key={j} title={x} style={{fontSize:12,padding:'1px 6px',borderRadius:8,background:'var(--warning-bg)',color:'var(--accent-warm)',border:'1px solid var(--warning-border)'}}>unsafe abbreviation</span>)}</div>}</div>
+          <div style={{flex:1,minWidth:0}}><div style={{fontFamily:'JetBrains Mono',fontSize:12,lineHeight:1.5,wordBreak:'break-word'}}>{c.text}</div><AnkiStyleBadges issues={styleWarnings(c)}/><AnkiNoteDiagnostics card={c} audit={numericAudits.get(c.id)} current={current}/><AnkiCollisionReferences groups={collisionsByNote.get(c.id)}/><AnkiReviewSource conditionCheck={conditionTagIssues.get(c.id)} card={c} batch={batch} current={current} onSourcesChange={busy?null:updateSourceLinks}/>{c.extra&&<div style={{fontSize:12,color:'var(--text-dim)',marginTop:2}}>Extra: {c.extra}</div>}{c.tags&&<div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:4}}>{c.tags.split(/\s+/).map((t,j)=><span key={j} style={{fontSize:12,padding:'1px 6px',borderRadius:8,background:'var(--bg-card-alt)',color:'var(--text-dim)',border:'1px solid var(--border)'}}>{t}</span>)}</div>}{c.lint&&c.lint.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:4}}>{c.lint.map((x,j)=><span key={j} style={{fontSize:12,padding:'1px 6px',borderRadius:8,background:'var(--error-bg)',color:'var(--accent-red)',border:'1px solid var(--error-border)'}}>{LINT_LABEL[x]||x}</span>)}</div>}{c.abbrev&&c.abbrev.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:4}}>{c.abbrev.map((x,j)=><span key={j} title={x} style={{fontSize:12,padding:'1px 6px',borderRadius:8,background:'var(--warning-bg)',color:'var(--accent-warm)',border:'1px solid var(--warning-border)'}}>unsafe abbreviation</span>)}</div>}</div>
           <button className="f-rm" aria-label={'Delete note '+c.id} onClick={()=>del(c.id)}>×</button>
         </div>)}
       </div>}
 
       {/* v15.16: preview uses the same editable notes and selection; no extra generation call. */}
-      {cards.length>0&&view==='preview'&&<div style={{display:'grid',gap:10}}>{displayedCards.map(c=><div key={c.id} style={{padding:12,background:c.keep?'var(--bg-input)':'var(--bg-card-alt)',border:'1px solid var(--border)',borderRadius:8}}>
+      {cards.length>0&&view==='preview'&&<div style={{display:'grid',gap:10}}>{pagedCards.map(c=><div key={c.id} style={{padding:12,background:c.keep?'var(--bg-input)':'var(--bg-card-alt)',border:'1px solid var(--border)',borderRadius:8}}>
         <div style={{display:'flex',gap:8,alignItems:'center'}}><label style={{fontSize:12}}><input type="checkbox" checked={c.keep} onChange={()=>toggle(c.id)}/> Keep</label><TierBadge tier={getTier(c.tags)}/><button className="btn-secondary" style={{marginLeft:'auto',padding:'3px 9px'}} onClick={()=>editNote(c.id)}>Edit in Table</button></div>
         <AnkiReviewCard card={c}/>
-        <AnkiStyleBadges issues={ankiStyleWarnings(c)}/><AnkiNoteDiagnostics card={c} audit={numericAudits.get(c.id)} current={current}/><AnkiCollisionReferences groups={collisionsByNote.get(c.id)}/><AnkiReviewSource conditionCheck={conditionTagIssues.get(c.id)} card={c} batch={batch} current={current} onSourcesChange={busy?null:updateSourceLinks}/>
+        <AnkiStyleBadges issues={styleWarnings(c)}/><AnkiNoteDiagnostics card={c} audit={numericAudits.get(c.id)} current={current}/><AnkiCollisionReferences groups={collisionsByNote.get(c.id)}/><AnkiReviewSource conditionCheck={conditionTagIssues.get(c.id)} card={c} batch={batch} current={current} onSourcesChange={busy?null:updateSourceLinks}/>
         {(c.lint||[]).length>0&&<div style={{color:'var(--accent-red)',fontSize:12,marginTop:5}}>Structural lint: {c.lint.map(x=>LINT_LABEL[x]||x).join(', ')}</div>}
         {(c.abbrev||[]).map((msg,i)=><div key={i} style={{color:'var(--accent-warm)',fontSize:12,marginTop:5}}>{msg}</div>)}
       </div>)}</div>}
@@ -6198,9 +6370,15 @@ function nclexChunkText(text,size,overlap){
   // the tab died. The stride is now >=1 no matter what the inputs held.
   size=Math.max(500,Number(size)||0);
   overlap=Math.max(0,Math.min(Number(overlap)||0,size-1));
-  const stride=Math.max(1,size-overlap,Math.floor(size*0.3));
   const chunks=[];let i=0;
-  while(i<text.length){let end=Math.min(i+size,text.length);if(end<text.length){const nl=text.lastIndexOf('\n',end);if(nl>i+size*0.5)end=nl+1;}chunks.push(text.slice(i,end));i+=stride;}
+  // v16.7: newline shortening changed the chunk end but not the old fixed stride, leaving source gaps.
+  while(i<text.length){
+    let end=Math.min(i+size,text.length);
+    if(end<text.length){const nl=text.lastIndexOf('\n',end-1);if(nl>i+size*0.5)end=nl+1;}
+    chunks.push(text.slice(i,end));if(end===text.length)break;
+    // Keep overlap and bounded forward progress relative to this actual chunk, never beyond its end.
+    i=Math.max(i+Math.max(1,Math.floor((end-i)*0.3)),end-overlap);
+  }
   return chunks;
 }
 
@@ -6298,7 +6476,8 @@ function nclexSplitByQNum(text){
 // The run must ASCEND from 1 (or from a), which is what stops a numbered list inside the stem
 // - "Vitals: 1. HR 110 2. BP 88/50" - from being taken for the choice list: the real choices
 // further down form the longer run, and the longest run wins (latest wins on a tie).
-const NCLEX_OPTION_MARK=/(?:^|\n|\s)\(?([1-9]|[a-eA-E])[.)]\s+/g;
+// v16.7: a sixth lettered SATA option was folded into E because the marker stopped at E.
+const NCLEX_OPTION_MARK=/(?:^|\n|\s)\(?([1-9]|[a-fA-F])[.)]\s+/g;
 function nclexOptionRank(lab){return /[0-9]/.test(lab)?parseInt(lab,10):lab.toLowerCase().charCodeAt(0)-96;}
 function nclexSplitStemOptions(text){
   const s=String(text||'');
@@ -6435,9 +6614,10 @@ function NCLEXExtractor(){
 
   const {model,level:toolLevel}=cfg.forTool('nclex');
   // v15.14: one intake path, filtering and de-duplicating on the same rule as the KB builder.
-  const addPdfs=fl=>setFiles(p=>[...p,...Array.from(fl||[])
+  // v16.7: capture the event's live FileList before input reset or drop completion empties it.
+  const addPdfs=fl=>{const selected=Array.from(fl||[]);setFiles(p=>[...p,...selected
     .filter(f=>/.pdf$/i.test(f.name||'')||f.type==='application/pdf')
-    .filter(f=>!p.some(x=>x.name===f.name&&x.size===f.size&&x.lastModified===f.lastModified))]);
+    .filter(f=>!p.some(x=>x.name===f.name&&x.size===f.size&&x.lastModified===f.lastModified))]);};
 
   // Auto-detect page count when files change
   const firstFileRef=useRef('');
@@ -8828,16 +9008,22 @@ function caseParseThreshold(factText){
   if(!t)return null;
   const NUM='([+-]?(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d+)?|[+-]?\\.\\d+)';
   const UNIT='\\s*([a-z%]+(?:\\s*\\/\\s*[a-z0-9]+)*|\\/\\s*min)?';
-  const validUnit=u=>!u||CASE_SUPPORTED_UNIT.test(u);
+  // v16.7: threshold parsing must reject the same unsupported unit tails as direct numeric evidence.
+  // A source bound in mg/(kg min), mg² or mg·kg cannot donate a plain mg threshold.
+  const validUnit=(u,match)=>{
+    if(u&&!CASE_SUPPORTED_UNIT.test(u))return false;
+    const tail=t.slice(match.index+match[0].length);
+    return !/^(?:[\p{L}0-9]|\.\d|\s*\/\s*(?:\([^\r\n)]*\)?|[^\s,;!?]+)|[·⋅⁄^%°⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻][^\s,;!?]*|[ \t]*[·⋅*×][ \t]*[\p{L}µμ][^\s,;!?]*|[+−-][\p{L}µμ][^\s,;!?]*)/u.test(tail);
+  };
   const rng=t.match(new RegExp(NUM+'\\s*(?:[-–—]|to)\\s*'+NUM+UNIT));
   if(rng){
     const lo=Number(caseDecimal(rng[1])),hi=Number(caseDecimal(rng[2])),unit=(rng[3]||'').replace(/\s+/g,'');
-    if(isFinite(lo)&&isFinite(hi)&&hi>lo&&validUnit(unit))return{op:'range',lo,hi,unit};
+    if(isFinite(lo)&&isFinite(hi)&&hi>lo&&validUnit(unit,rng))return{op:'range',lo,hi,unit};
   }
   for(const[src,op]of[['(?:<=|≤|no\\s+more\\s+than|at\\s+most)','<='],['(?:>=|≥|at\\s+least)','>='],
                       ['(?:<|less\\s+than|below|under)','<'],['(?:>|greater\\s+than|above|over)','>']]){
     const m=t.match(new RegExp(src+'\\s*'+NUM+UNIT));
-    if(m){const unit=(m[2]||'').replace(/\s+/g,'');if(validUnit(unit))return{op,value:Number(caseDecimal(m[1])),unit};}
+    if(m){const unit=(m[2]||'').replace(/\s+/g,'');if(validUnit(unit,m))return{op,value:Number(caseDecimal(m[1])),unit};}
   }
   return null;
 }
@@ -10308,8 +10494,12 @@ function App(){
       try{
         let durable=null,unavailable=false;
         try{durable=await kbLoadPersisted();}catch{unavailable=true;}
-        const reconciled=kbReconcileStored([durable,...kbReadFallbacks()]);
-        if(!alive)return;saveQueue.current.setHead(durable,kbCaptureFallbacks());
+        const fallbackRecords=kbReadFallbacks();let capturedFallbacks;
+        // v16.7: failed fallback access also enters paused recovery; it cannot leave hydration pending forever.
+        try{capturedFallbacks=kbCaptureFallbacks();}
+        catch(e){fallbackRecords.push({kb:null,storageKey:'browser fallback',raw:null,unavailable:true,recoveryError:'Browser fallback access failed: '+String(e.message||e)+'. Restore browser storage access, then reload before choosing a recovery copy.'});}
+        const reconciled=kbReconcileStored([durable,...fallbackRecords]);
+        if(!alive)return;saveQueue.current.setHead(durable,capturedFallbacks);
         if(reconciled.choices.length){setRecoveryChoices(reconciled.choices);setPersistenceStatus('conflict');setPersistenceError('Saved copies disagree. Both are preserved. Export or inspect each copy, then choose one to continue saving.');}
         else{
           if(kbMutation.current===started&&reconciled.record){
@@ -10333,9 +10523,12 @@ function App(){
   },[hydrated,recoveryChoices,saveRequest]);
   const chooseRecovery=useCallback(async index=>{
     const choices=recoveryChoices,mutation=kbMutation.current;try{
-      await kbArchiveRecovery(choices);if(!mounted.current||kbMutation.current!==mutation)return;
-      // v16.7: explicit replacement archives the preserved copies before saving the current workspace.
       const record=index===-1?{kb:currentKnowledge.current}:choices[index];if(!record)return;
+      // v16.7: raw failures are exportable evidence, not usable KBs; inaccessible bytes cannot be safely replaced.
+      if(record.recoveryError)throw new Error('This raw copy cannot be restored directly. Export it for correction, or choose a readable copy or the current workspace.');
+      if(choices.some(copy=>copy.unavailable))throw new Error('Browser fallback bytes could not be read. Restore browser storage access, then reload before choosing a recovery copy.');
+      await kbArchiveRecovery(choices);if(!mounted.current||kbMutation.current!==mutation)return;
+      // v16.7: explicit replacement archives every preserved copy before saving the chosen workspace.
       // v16.7: validate the entire saved copy before clearing recovery choices.
       const kb=record.kb?kbNormalizeImported(record.kb,{restore:true}).kb:EMPTY_LATTE_KB;
       setRecoveryChoices([]);setPersistenceError('');setKnowledgeBase(kb);
