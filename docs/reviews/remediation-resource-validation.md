@@ -28,7 +28,7 @@ All eight existing script resources matched their SHA-384 pins. The PDF worker i
 The browser run used an existing external Playwright installation, headless Chrome and disposable browser contexts:
 
 ```powershell
-$env:NODE_PATH='C:\Users\sai13\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\node_modules'
+$env:NODE_PATH='C:\Users\<user>\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\node_modules'
 node tools/remediation-pdf-browser-tests.js
 ```
 

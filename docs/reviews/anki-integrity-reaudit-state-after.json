@@ -429,51 +429,51 @@
   ],
   "priorAudit": [
     {
-      "path": "C:\\Users\\sai13\\Proton Drive\\sai136ob\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\docs\\reviews\\anki-data-integrity-audit-2026-09-18.md",
+      "path": "C:\\Users\\<user>\\Proton Drive\\<account>\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\docs\\reviews\\anki-data-integrity-audit-2026-09-18.md",
       "sha256": "F7BB150C0D17E10332115F90AFC22035E542BE6FA0E5C618878D0C9592141EBB"
     },
     {
-      "path": "C:\\Users\\sai13\\Proton Drive\\sai136ob\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\docs\\reviews\\anki-data-integrity-execution-results.json",
+      "path": "C:\\Users\\<user>\\Proton Drive\\<account>\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\docs\\reviews\\anki-data-integrity-execution-results.json",
       "sha256": "0B01D1F02C27A1A944956562B74D0A613143ED8E25333443186765FB1E002CB3"
     },
     {
-      "path": "C:\\Users\\sai13\\Proton Drive\\sai136ob\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\docs\\reviews\\anki-data-integrity-lifecycle-evidence.md",
+      "path": "C:\\Users\\<user>\\Proton Drive\\<account>\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\docs\\reviews\\anki-data-integrity-lifecycle-evidence.md",
       "sha256": "D82E7A3B632DBC1E58426691E844C8817BC639FEA5B40D6F9F631227C5C57332"
     },
     {
-      "path": "C:\\Users\\sai13\\Proton Drive\\sai136ob\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\docs\\reviews\\anki-data-integrity-receipt-evidence.md",
+      "path": "C:\\Users\\<user>\\Proton Drive\\<account>\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\docs\\reviews\\anki-data-integrity-receipt-evidence.md",
       "sha256": "70E179EDD1FD53BD314490AD108A436735D7A94F29D21D5F1DA104C63AB284F4"
     },
     {
-      "path": "C:\\Users\\sai13\\Proton Drive\\sai136ob\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\docs\\reviews\\anki-data-integrity-receipt-results.json",
+      "path": "C:\\Users\\<user>\\Proton Drive\\<account>\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\docs\\reviews\\anki-data-integrity-receipt-results.json",
       "sha256": "678AA3F82AD06D4AC55BC4B3F5CEF1FC638C66C67737EDBD50E826247E05042C"
     },
     {
-      "path": "C:\\Users\\sai13\\Proton Drive\\sai136ob\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\docs\\reviews\\anki-data-integrity-source-evidence.md",
+      "path": "C:\\Users\\<user>\\Proton Drive\\<account>\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\docs\\reviews\\anki-data-integrity-source-evidence.md",
       "sha256": "62371B6A384E405BEB6718AC2EDEB36772FC093CB7A0293318B9DC3FD38A7F6D"
     },
     {
-      "path": "C:\\Users\\sai13\\Proton Drive\\sai136ob\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\docs\\reviews\\anki-data-integrity-transform-evidence.md",
+      "path": "C:\\Users\\<user>\\Proton Drive\\<account>\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\docs\\reviews\\anki-data-integrity-transform-evidence.md",
       "sha256": "62A4594C9F80AB0F73135B9EC640E6F43ABA849978B7E41EFC99F7AC2A921F28"
     },
     {
-      "path": "C:\\Users\\sai13\\Proton Drive\\sai136ob\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\docs\\reviews\\anki-data-integrity-transform-results.json",
+      "path": "C:\\Users\\<user>\\Proton Drive\\<account>\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\docs\\reviews\\anki-data-integrity-transform-results.json",
       "sha256": "DD5611333C54B2FF6891DF39E91DBE779107DD90059F691525B5BBDD83232F2D"
     },
     {
-      "path": "C:\\Users\\sai13\\Proton Drive\\sai136ob\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\tools\\audit-anki-lifecycle-tests.js",
+      "path": "C:\\Users\\<user>\\Proton Drive\\<account>\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\tools\\audit-anki-lifecycle-tests.js",
       "sha256": "52547DF99074C3A07AF327035B62CF49540287E0904A435599AC4FA62FFD80B3"
     },
     {
-      "path": "C:\\Users\\sai13\\Proton Drive\\sai136ob\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\tools\\audit-anki-receipt-tests.js",
+      "path": "C:\\Users\\<user>\\Proton Drive\\<account>\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\tools\\audit-anki-receipt-tests.js",
       "sha256": "A8E60AF262CBA0A9EBEC8D0BDA255FD223D62D098676B730BB3DD54BC5E8AB5A"
     },
     {
-      "path": "C:\\Users\\sai13\\Proton Drive\\sai136ob\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\tools\\audit-anki-source-tests.js",
+      "path": "C:\\Users\\<user>\\Proton Drive\\<account>\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\tools\\audit-anki-source-tests.js",
       "sha256": "CDF0C93C9F6BB20102A14095500DAE1019C5850CA94B87FC2572BFE1B2FD8F5D"
     },
     {
-      "path": "C:\\Users\\sai13\\Proton Drive\\sai136ob\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\tools\\audit-anki-transform-tests.js",
+      "path": "C:\\Users\\<user>\\Proton Drive\\<account>\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\tools\\audit-anki-transform-tests.js",
       "sha256": "B1B8089912091EBA0D07E2C1CDFB6B0D735BE90EBCBA07858B48142D8710B56B"
     }
   ],

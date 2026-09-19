@@ -11,7 +11,7 @@ Canonical file: `Nursing-Study-Suite v15.17.html`; SHA-256: `924accd6eb97d58728d
 Use an existing external Playwright installation; no application or repository dependency is added. The Codex runtime used here provides it at:
 
 ```powershell
-$env:NODE_PATH='C:\Users\sai13\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\node_modules'
+$env:NODE_PATH='C:\Users\<user>\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\node_modules'
 node tools/remediation-browser-tests.js --self-test
 node tools/remediation-browser-tests.js --output-policy
 node tools/remediation-worksheet-browser-tests.js

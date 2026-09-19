@@ -375,7 +375,7 @@ Every behavior change needs a non-vacuous regression assertion against shipped f
 
 ## Security scan artifact and telemetry
 
-The Security plugin finalized scan `730611ba-a58c-4ee5-9bc9-3067a133115d`, with two Low findings and partial source coverage. Its canonical [generated security report](C:/Users/sai13/AppData/Local/Temp/codex-security-scans-a6jYOO/Nursing-Study-Suite/95bd91c990d3914644b69334f752b13dc84567a5_20260918T213401Z_50kvbgnz/report.md) is separate from this broader engineering review.
+The Security plugin finalized scan `730611ba-a58c-4ee5-9bc9-3067a133115d`, with two Low findings and partial source coverage. Its canonical generated security report was written to a local scan directory outside this repository and is separate from this broader engineering review.
 
 The plugin warned that working-tree contents changed during the scan and retained findings against its original snapshot. The only new nonignored repository artifact is this review report; both tracked working-tree and staged diffs were empty at completion. The two previously untracked review files remain untouched.
 

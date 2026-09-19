@@ -194,7 +194,7 @@
     {
       "command": "git rev-parse HEAD\nGet-FileHash -Algorithm SHA256 -LiteralPath 'Nursing-Study-Suite v16.6.html'\nTest-Path -LiteralPath 'docs/reviews/anki-integrity-reaudit-stage-receipt.json'",
       "exitCode": 0,
-      "output": "b6eb73ceabb7c8d292c186b07148c86949b37d34\n\r\nAlgorithm       Hash                                                                   Path\r\n---------       ----                                                                   ----\r\nSHA256          8524E35C8B3621E074A0499BA3857A672464B99721E4B502C381DFA29D0B9B12       C:\\Users\\sai13\\Proton Drive\\sai…\r\nFalse\r\n\r\n"
+      "output": "b6eb73ceabb7c8d292c186b07148c86949b37d34\n\r\nAlgorithm       Hash                                                                   Path\r\n---------       ----                                                                   ----\r\nSHA256          8524E35C8B3621E074A0499BA3857A672464B99721E4B502C381DFA29D0B9B12       C:\\Users\\<user>\\Proton Drive\\<account>…\r\nFalse\r\n\r\n"
     }
   ],
   "result": {

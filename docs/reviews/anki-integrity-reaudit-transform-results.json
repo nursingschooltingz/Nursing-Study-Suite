@@ -3,11 +3,11 @@
   "scope": "Independent synthetic transform re-audit",
   "command": [
     "C:\\Program Files\\nodejs\\node.exe",
-    "C:\\Users\\sai13\\Proton Drive\\sai136ob\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\tools\\reaudit-anki-transform-tests.js",
+    "C:\\Users\\<user>\\Proton Drive\\<account>\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\tools\\reaudit-anki-transform-tests.js",
     "--out",
     "docs/reviews/anki-integrity-reaudit-transform-results.json"
   ],
-  "suitePath": "C:\\Users\\sai13\\Proton Drive\\sai136ob\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\Nursing-Study-Suite v16.6.html",
+  "suitePath": "C:\\Users\\<user>\\Proton Drive\\<account>\\My files\\AI Prompts\\Nursing-Study-Suite\\Nursing-Study-Suite\\Nursing-Study-Suite v16.6.html",
   "htmlSha256": "8524e35c8b3621e074a0499ba3857a672464b99721e4b502c381dfa29d0b9b12",
   "extraction": [
     {

@@ -371,7 +371,7 @@
   ],
   "commands": [
     {
-      "command": "Get-Content -LiteralPath 'C:/Users/sai13/.codex/attachments/27bccd70-748b-49c3-9fad-de3a645080de/pasted-text.txt'; Get-Content -LiteralPath 'AGENTS.md'; Get-Content -LiteralPath 'DECISIONS.md'; Get-Content -LiteralPath 'CURRENT_STATE.md'; Get-Content -LiteralPath 'DEVELOPMENT.md'; Get-Content -LiteralPath 'README.md'",
+      "command": "Get-Content -LiteralPath 'C:/Users/<user>/.codex/attachments/27bccd70-748b-49c3-9fad-de3a645080de/pasted-text.txt'; Get-Content -LiteralPath 'AGENTS.md'; Get-Content -LiteralPath 'DECISIONS.md'; Get-Content -LiteralPath 'CURRENT_STATE.md'; Get-Content -LiteralPath 'DEVELOPMENT.md'; Get-Content -LiteralPath 'README.md'",
       "exitCode": 0,
       "result": "Read task and routed context; output truncated. Targeted source-profile/policy sections revisited."
     },

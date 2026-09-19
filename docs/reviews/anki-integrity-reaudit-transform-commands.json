@@ -3,7 +3,7 @@
   "agent": "reaudit_transform",
   "scope": "Executed read-only discovery commands, artifact creation actions and offline synthetic test commands. No live API/browser/private-material actions.",
   "initialRead": {
-    "command": "Get-Content -LiteralPath 'C:\\Users\\sai13\\.codex\\attachments\\27bccd70-748b-49c3-9fad-de3a645080de\\pasted-text.txt'; Get-Content -LiteralPath 'AGENTS.md'; Get-Content -LiteralPath 'DECISIONS.md'; Get-Content -LiteralPath 'CURRENT_STATE.md'; Get-Content -LiteralPath 'DEVELOPMENT.md'; Get-Content -LiteralPath 'README.md'",
+    "command": "Get-Content -LiteralPath 'C:\\Users\\<user>\\.codex\\attachments\\27bccd70-748b-49c3-9fad-de3a645080de\\pasted-text.txt'; Get-Content -LiteralPath 'AGENTS.md'; Get-Content -LiteralPath 'DECISIONS.md'; Get-Content -LiteralPath 'CURRENT_STATE.md'; Get-Content -LiteralPath 'DEVELOPMENT.md'; Get-Content -LiteralPath 'README.md'",
     "exit_code": 0,
     "chunk_id": "274b82",
     "original_token_count": 28785,

@@ -18,7 +18,7 @@
       "PASS  11 frozen prompt constants match prompt-baseline.json",
       "PASS  Prompts.md contains live bytes for all 12 prompt constants",
       "3045 passed · 0 failed",
-      "PASS  Babel parse with C:\\Users\\sai13\\AppData\\Local\\Temp\\nursing-study-suite-verify\\node_modules\\@babel\\standalone\\babel.js",
+      "PASS  Babel parse with C:\\Users\\<user>\\AppData\\Local\\Temp\\nursing-study-suite-verify\\node_modules\\@babel\\standalone\\babel.js",
       "ALL REPOSITORY GATES PASSED"
     ]
   },

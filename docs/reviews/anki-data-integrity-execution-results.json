@@ -10,7 +10,7 @@
       "command": "node verify-repo.js",
       "exit": 0,
       "expectedExit": 0,
-      "output": "\n════════════════════════════\n2564 passed · 0 failed\nPASS  Babel parse with C:\\Users\\sai13\\AppData\\Local\\Temp\\nursing-study-suite-verify\\node_modules\\@babel\\standalone\\babel.js\n\nALL REPOSITORY GATES PASSED\n[BABEL] Note: The code generator has deoptimised the styling of undefined as it exceeds the max of 500KB."
+      "output": "\n════════════════════════════\n2564 passed · 0 failed\nPASS  Babel parse with C:\\Users\\<user>\\AppData\\Local\\Temp\\nursing-study-suite-verify\\node_modules\\@babel\\standalone\\babel.js\n\nALL REPOSITORY GATES PASSED\n[BABEL] Note: The code generator has deoptimised the styling of undefined as it exceeds the max of 500KB."
     },
     {
       "command": "node tools/audit-anki-source-tests.js",
