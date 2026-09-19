@@ -8,9 +8,11 @@ Turn your lecture PDFs and PowerPoints into a complete, source-cited study syste
 
 The whole suite is **one HTML file**. There is nothing to install, no account to create, and no website collecting your data. You open the file in your web browser, paste in a free Google Gemini API key, upload your study materials, and go.
 
-**Latest release: v16.9.** [Download the single HTML file](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v16.9/Nursing-Study-Suite.v16.9.html), save it, then open it in your browser. The [repository HTML](Nursing-Study-Suite%20v16.9.html) includes the review follow-up fixes described below. Flash / Medium remains the Anki default. Existing saved profiles stay intact; choose **Use recommended Anki profile** to update yours. See the [release verification record](docs/reviews/v16.9-release.md) for checks and remaining limits.
+**Latest release: v17.0.** [Download the single HTML file](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v17.0/Nursing-Study-Suite.v17.0.html), save it, then open it in your browser. The [repository HTML](Nursing-Study-Suite%20v17.0.html) is a rebuilt interface — same six tools, same generated study material, same saved data. Your existing Knowledge Base, saved model profiles and exported files all carry over untouched. Flash / Medium remains the Anki default. See the [interface verification record](docs/reviews/v17.0-interface.md) for checks and remaining limits.
 
-Use **Knowledge** to build or import your source, **Priority** to organize study time, **Anki** for recall, **NCLEX Extract** for existing questions, **NCLEX Generate** for new practice, and **Case Studies** for unfolding cases. **Settings** shows or hides the shared API/model panel. On phones and smaller tablets it starts collapsed; **Add API key** opens it directly. Switching tools preserves your inputs and outputs. A keyboard **Skip to study workspace** link bypasses navigation.
+The left rail lists the six tools in the order you use them, grouped by stage. **Source:** *Knowledge Base* builds or imports the cited facts everything else reads from. **Plan:** *Priority* sorts those facts into Tier 1/2/3. **Practice:** *Anki* for recall, *NCLEX Extract* for questions out of a review book you already own, *NCLEX Generate* for new ones written from your facts, and *Case Studies* for unfolding cases.
+
+Inside each tool, what you supply sits on the left and what it produced sits on the right, with the larger share of the screen. Optional settings stay collapsed and show their current value on the closed row, so you can open them when you need them and ignore them when you don't. **Settings** — the API key and model choices shared by all six tools — opens as a panel from the right and closes with Escape; when no key is set, the **Add API key** chip in the header opens it directly. Switching tools preserves your inputs, your results and any unsaved edits. A keyboard **Skip to study workspace** link bypasses navigation.
 
 ---
 
@@ -27,8 +29,8 @@ Use **Knowledge** to build or import your source, **Priority** to organize study
 1. **[Download the suite file](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/latest)** — grab the `.html` file from the latest release and save it somewhere you can find it. Your Desktop or a "Nursing" folder is fine.
 2. **Double-click the file.** It opens in your web browser like a webpage. That's the whole "installation."
 3. **Get a free Gemini API key** (5 minutes, instructions in the next section), select **Add API key**, and paste it into **Gemini API key** in Settings. The key is like a library card that lets the app talk to Google's AI.
-4. **Go to the first tab ("Knowledge")**, add the PDF or PowerPoint for your *current exam only* — just the relevant chapters, not the whole textbook — and click **Build Knowledge Base**. Wait a few minutes while it reads your material and extracts every testable fact, each one stamped with where it came from.
-5. **Use the other tabs.** Once the Knowledge Base exists, every other tool feeds from it: generate a prioritized study guide, Anki flashcards, practice questions, or a full clinical case study — all built from *your* lectures, not generic internet content.
+4. **Go to the first tool ("Knowledge Base")**, add the PDF or PowerPoint for your *current exam only* — just the relevant chapters, not the whole textbook — and click **Build Knowledge Base**. Wait a few minutes while it reads your material and extracts every testable fact, each one stamped with where it came from.
+5. **Use the other tools.** Once the Knowledge Base exists, every other tool feeds from it: generate a prioritized study guide, Anki flashcards, practice questions, or a full clinical case study — all built from *your* lectures, not generic internet content.
 
 That's genuinely it. Everything below is detail.
 
@@ -71,9 +73,9 @@ Those fact IDs then appear throughout everything the suite generates — practic
 
 ---
 
-## Choosing a model (the left sidebar)
+## Choosing a model (Settings)
 
-The sidebar controls which Gemini model does the work. Two ways to run it:
+Open **Settings** from the bottom of the left rail. The panel that slides in from the right controls which Gemini model does the work, and closes with Escape or its × button. Two ways to run it:
 
 **Auto profile (recommended — the default).** Toggle showing **✋ Manual / Auto profile**. In Auto mode, each tool uses a tuned model + "thinking level" combination — fast models for bulk extraction, more thinking for rule-heavy work like priority synthesis. There's a **Reset to recommended** button if you experiment and want the defaults back. If you don't know what to pick: leave Auto on and never think about this again.
 
@@ -89,9 +91,9 @@ The **Flash Model / Pro Model** text boxes exist so the suite doesn't go stale: 
 
 ---
 
-# The tools, in tab order
+# The tools, in rail order
 
-## Tab 1 — LATTE Knowledge Base
+## 01 · Source — LATTE Knowledge Base
 
 *Extract once → reusable facts for every study output.*
 
@@ -140,13 +142,13 @@ Removing a photo also removes its transcript from build inputs. If repeat transc
 
 **Saving and backups.** The KB auto-saves in your browser and survives closing it — but it lives *in that browser on that computer*. **Export JSON** regularly (before exams, before rebuilding) — that file is your backup and your way to move between computers via **Import JSON**. Clearing your browser data deletes the KB; your exported JSON is the safety net.
 
-The Knowledge tab shows the current browser-save status. If saved copies disagree or a saved record cannot be restored safely, it preserves them and offers **Inspect**, **Export copy**, and **Use this copy**. You can also import or build a replacement, then choose **Use current workspace**. Choosing either path first archives the preserved copies; if that archive cannot be saved, they are not overwritten and saving remains paused. Saving also stops on a detected conflict with another tab. Export your in-memory KB before closing, then reload to reconcile. Before opening an older suite version, export the current KB and any recovery copies: older versions cannot interpret the new fallback/save-order metadata.
+The workspace header shows the current browser-save status, and the Knowledge Base results area holds the recovery controls. If saved copies disagree or a saved record cannot be restored safely, it preserves them and offers **Inspect**, **Export copy**, and **Use this copy**. You can also import or build a replacement, then choose **Use current workspace**. Choosing either path first archives the preserved copies; if that archive cannot be saved, they are not overwritten and saving remains paused. Saving also stops on a detected conflict with another tab. Export your in-memory KB before closing, then reload to reconcile. Before opening an older suite version, export the current KB and any recovery copies: older versions cannot interpret the new fallback/save-order metadata.
 
 Import preserves full fact text, quotes and source strings. Invalid tier/category values or exceeded collection limits reject the import with an explanation instead of guessing values or keeping a shortened KB. Invalid rows that can be skipped are counted in the import notice. Restoring an app-saved KB preserves its IDs and content; invalid saved records stay available for recovery instead of being silently shortened or repaired.
 
 **Rebuilding replaces.** Building or importing over an existing KB *replaces* it — the suite will show you exactly what you're about to lose ("3 conditions, 147 facts") and ask you to confirm. When in doubt: export first.
 
-## Tab 2 — Pyramid Priority Analyzer
+## 02 · Plan — Pyramid Priority Analyzer
 
 *Triage study content into Tier 1/2/3 priorities.*
 
@@ -154,7 +156,7 @@ This tab answers the question every nursing student asks the night before an exa
 
 **How to use it:** feed it your content, adjust **Chunk size / Overlap** only if you have a very long document (defaults are fine), and run. Then work the output: **Filter by Strategy**, **Search Disease/Keyword**, or **Show All**, and export as **.md**, **.txt**, or **Print / Save as PDF**. Study Tier 1 until you're solid before touching Tier 2.
 
-## Tab 3 — LATTE Anki Generator
+## 03 · Practice — LATTE Anki Generator
 
 *Anki cloze cards with LATTE tagging + tiers.*
 
@@ -234,7 +236,7 @@ Practical plays: five days out, build a **filtered deck** on `Tier::1` and clear
 3. **⬇ Export .txt**, then in Anki: **File → Import**, pick the file. With the header on, separator (Pipe), HTML, note type (**Cloze**), and the tags column are set automatically — just confirm and import.
 4. New to Anki itself? It's a free flashcard app (`apps.ankiweb.net`) built on spaced repetition — it schedules each card right before you'd forget it. Turn on the built-in **FSRS** scheduler in Anki's settings; it's the modern algorithm and works beautifully with these cards.
 
-## Tab 4 — NCLEX Question Extractor
+## 04 · Practice — NCLEX Question Extractor
 
 *Extract practice questions from review PDFs.*
 
@@ -249,7 +251,7 @@ Every export — **.md**, **.txt**, **Copy** and **PDF** — puts all the questi
 
 You can **Abort** mid-run and keep everything extracted so far. Results appear as browsable cards with a filter, plus **Copy** and text export.
 
-## Tab 5 — NCLEX Question Generator
+## 05 · Practice — NCLEX Question Generator
 
 *Generate NEW NCLEX questions from your LATTE guide.*
 
@@ -269,7 +271,7 @@ Replacing the KB cancels pending worksheet/case generation from the old source. 
 
 Cancelling an item audit keeps the completed worksheet and any finished verdicts. Non-MCQ questions show **N/A**, and a rejected repair keeps the previous item. Case JSON Copy retains the case fields and adds `_suiteReview` with source/audit notices and validation findings.
 
-## Tab 6 — Clinical Case Study Generator
+## 06 · Practice — Clinical Case Study Generator
 
 *Source-grounded unfolding nursing cases.*
 
@@ -277,7 +279,7 @@ Builds an unfolding case — a patient whose situation evolves across stages, wi
 
 **How to use it:** pick a **Condition**, a **Difficulty** (Foundational / Exam-level / Advanced), how many **Stages** and **Questions per stage**, and which question types to include — MCQ, SATA, Prioritization, Ordering, Calculation (only when your facts contain the needed numbers), Patient education. Generate, then work through it stage by stage.
 
-**Why you can trust what it produces** — this tab has the strictest checking in the suite, and it runs automatically in code after every generation:
+**Why you can trust what it produces** — this tool has the strictest checking in the suite, and it runs automatically in code after every generation:
 
 - Every clinical value and every rationale must **cite fact IDs from your KB packet** — citations to facts that weren't supplied are hard errors.
 - Numeric values are **audited against complete values and units in cited facts or source quotes**: a made-up "K⁺ 2.4 mEq/L" pinned to a fact that only says "monitor potassium" is an error. The established threshold-instantiation exceptions remain; values outside a cited threshold can describe deterioration and warn. An assumed calculation weight stays separately identified and must be used consistently.
@@ -287,7 +289,7 @@ A validation panel reports the results: **errors** mean the case broke the rules
 
 ## The Fact Inspector (works everywhere)
 
-Not a tab — a drawer that opens when you **click any fact ID badge** anywhere in the suite. It shows:
+Not a tool — a drawer that opens when you **click any fact ID badge** anywhere in the suite. It shows:
 
 - the fact's full text, tier, LATTE bucket, and safety flag
 - the **verbatim quote** from your source material

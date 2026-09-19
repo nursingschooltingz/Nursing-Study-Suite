@@ -15,7 +15,7 @@ function worksheet(types=['MCQ','MCQ','MCQ','MCQ','MCQ']){
 async function prepare(page,text,responses=[]){
   await page.waitForFunction(()=>window.__remediation?.state?.knowledgeBase?.conditions.length===1);
   await page.getByTitle('NCLEX Question Generator',{exact:true}).click();
-  const panel=page.locator('.tool-panel').filter({has:page.getByRole('heading',{name:/NCLEX Question Generator/})});
+  const panel=page.locator('.workbench').filter({has:page.getByRole('region',{name:'NCLEX generation scope and batch settings'})});
   await panel.locator('input[type=number][min="5"]').fill('5');
   await panel.locator('select').filter({has:page.locator('option[value="5"]')}).selectOption('5');
   await page.getByRole('checkbox',{name:/Fact allocation/}).uncheck();
@@ -39,7 +39,8 @@ async function worksheetTests(browser,report=console.log){
   await withFixture(browser,{indexed:syntheticKB('A')},async({page})=>{
     await prepare(page,worksheet(),Array.from({length:5},()=>({text:'PASS',defer:true,abortOnSignal:true})));
     await page.waitForFunction(()=>window.__remediation.geminiCalls.length===3);
-    await page.getByRole('heading',{name:'5 Questions · 1 concepts',exact:true}).waitFor();
+    await page.getByRole('heading',{name:'NCLEX worksheet',exact:true}).waitFor();
+    await page.getByText('5 questions · 1 concepts',{exact:true}).waitFor();
     await cancelAudit(page);
     const md=await exportView(page);assert(md.includes('Item quality audit: interrupted.'));
     assert(md.includes('Completeness: 5 of 5 requested questions'));assert(md.includes('Which synthetic marker should be selected for scenario 1?'));

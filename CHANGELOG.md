@@ -9,6 +9,34 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [17.0] — 2026-09-19
+
+Interface overhaul. Presentation only: no study logic, prompt, validation tier, storage key or
+export format changed.
+
+### Changed
+
+- **Shell.** The nav rail plus a permanent 292px settings column plus a scrolling main area became a workflow rail beside a workspace. Navigation groups the same six tools under the three stages they actually belong to — Source, Plan, Practice — numbers them `01`–`06`, and names each one's role. Extraction and generation remain separate tools.
+- **Workspace header.** One compact band carrying the active tool, its purpose, and live chips for Knowledge Base size, browser-save state and API-key state.
+- **Settings.** Moved from a permanent column into a dismissable right-hand drawer, so configuration no longer sits beside every study result. It starts closed at every width, takes focus on open, closes on Escape or its named close button, and restores focus to its trigger. It has no scrim, so the workspace underneath stays usable.
+- **Every tool.** The single stack of settings ending in an output box became a compact setup column beside a substantially larger results surface. Required inputs are numbered steps; secondary configuration is collapsible and reports its current value while closed; the run action sits under the last input and sticks to the column foot once it scrolls.
+- **Outputs.** Each tool opens its results with what was produced, how much of it there is, and what you can do with it. Knowledge Base intake, transcript review, diagnostics and the browser are now four distinct regions; Anki's export control moved out of the middle of the note list into the results headline; NCLEX and case answers keep their existing reveal behaviour.
+- **Empty states.** Each tool names the next useful action instead of reserving a large empty output panel.
+- **Design system.** One stylesheet defines the tokens, type roles, surfaces, borders, radii, shadows and control states. Blue carries navigation, selection and structure; orange is the accent and the one important action per stage, and never paints a status surface, so amber, red and green keep their meanings. Playfair Display carries the brand, tool titles, results headlines and tier titles.
+- **Responsive.** Three recompositions rather than one squeeze: the wide bench, a narrow bench, then a labelled horizontal tool strip over stacked task sections with 44px touch targets. The run action leaves its sticky position when stacked so it cannot cover content.
+
+### Fixed
+
+- The two Knowledge Base view buttons printed raw backslash-u escape sequences; those escapes sat in JSX text, where they are literal characters. Present since the labels were added.
+- Below 1080px, a stage group in the tool strip could shrink below its own content and lay the next group on top of the previous label. Caught by direct box measurement, which the acceptance runner now performs at every width.
+- A run log moved behind a collapsed disclosure also hid its failure lines. Each typed run log now opens itself when it holds an error entry, and its closed summary counts those errors.
+
+### Verification
+
+- The unified verifier passes 3,050 assertions, all eleven frozen prompt hashes and full JSX transformation. All ten CDN integrity pins were rechecked live and none was edited.
+- Isolated browser acceptance passes at 360, 768, 1024 and 1440 px — empty and populated, keyboard focus, both drawers, and state retention across tool switches — with no live API calls. Ten further browser runners re-run and pass.
+- Scope, the two behavioural findings the acceptance runs caught, and what was **not** tested are recorded in the [interface verification record](docs/reviews/v17.0-interface.md).
+
 ## [16.9] — 2026-09-19
 
 ### Fixed

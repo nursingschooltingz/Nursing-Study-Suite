@@ -188,7 +188,7 @@ async function outputPolicyTests(browser,report){
     const frame=page.frameLocator('iframe').first();assert((await frame.locator('body').innerText()).includes('Preserved words'));
     assert.equal(await frame.locator('img,picture,source,audio,video,svg,iframe,object,embed').count(),0);
     assert.equal(await page.locator('.nav-logo').count(),1,'trusted app remains mounted');
-    assert(await page.locator('.nav-rail svg').count()>0,'trusted application icons survive the output policy');
+    assert(await page.locator('.rail svg').count()>0,'trusted application icons survive the output policy');
     await page.evaluate(()=>{const img=document.createElement('img');img.id='synthetic-csp-probe';img.src='https://unapproved.invalid/csp-probe';document.body.appendChild(img);});
     await page.waitForFunction(()=>window.__remediation.csp.some(x=>x.directive.startsWith('img-src')&&x.uri.includes('unapproved.invalid/csp-probe')));
     await page.locator('#synthetic-csp-probe').evaluate(node=>node.remove());

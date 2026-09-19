@@ -21,15 +21,18 @@ const tabs=[
 async function settle(page){await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));}
 async function choose(page,id){
   const title=tabs.find(t=>t[0]===id)?.[1];if(!title)throw Error('Unknown fixture tool: '+id);
-  await page.getByTitle(title,{exact:true}).click();await settle(page);
-  assert.equal(await page.locator('.tool-panel:visible').count(),1,'exactly one tool is visible');
+  await page.getByTitle(title,{exact:true}).click();
+  // Screenshots must show each tool from its top, whatever the previous tool left scrolled.
+  await page.evaluate(()=>{window.scrollTo(0,0);document.querySelectorAll('.workspace,.setup-scroll,.wb-results').forEach(n=>{n.scrollTop=0;});});
+  await settle(page);
+  assert.equal(await page.locator('.workbench:visible').count(),1,'exactly one tool is visible');
   assert.equal(await page.getByTitle(title,{exact:true}).getAttribute('aria-current'),'page','active tool is programmatically identified');
 }
 async function layout(page,label){
   const issues=await page.evaluate(()=>{
     const rows=[];
     const visible=e=>e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden';
-    for(const e of [document.documentElement,...document.querySelectorAll('.main-area,.tool-panel,[role=dialog]')]){
+    for(const e of [document.documentElement,...document.querySelectorAll('.workspace,.workbench,.wb-setup,.wb-results,.tool-panel,[role=dialog]')]){
       if(!visible(e))continue;
       // Tables intentionally have their own scroll container. Page and tool panels do not.
       if(e.scrollWidth>e.clientWidth+2)rows.push({node:e.className||e.tagName,client:e.clientWidth,scroll:e.scrollWidth});
@@ -56,17 +59,35 @@ async function focusVisible(page){
   assert(result.visible&&(result.outline!=='none'&&result.width>=2||result.shadow!=='none'),'keyboard focus has a visible indicator');
 }
 async function ankiLabels(page){
-  const wraps=await page.locator('.tool-panel:visible .anki-tbl-wrap th,.tool-panel:visible .segmented-control button').evaluateAll(nodes=>nodes.flatMap(node=>{
+  const wraps=await page.locator('.workbench:visible .anki-tbl-wrap th,.workbench:visible .segmented-control button').evaluateAll(nodes=>nodes.flatMap(node=>{
     if(node.textContent.trim()!=='Preview'&&node.tagName!=='TH')return [];
     const range=document.createRange();range.selectNodeContents(node);
     return range.getClientRects().length>1?[node.textContent.trim()]:[];
   }));
   assert.deepEqual(wraps,[],'Anki column headings and Preview label stay on one line');
 }
+// v17.0: the rail lays its six tools out in a scrolling strip below 1080px. A stage group that
+// shrinks below its own content silently prints the next group on top of the previous label, and
+// a scrolling container hides that from the overflow check — so measure the boxes directly.
+async function toolStrip(page){
+  const boxes=await page.locator('.rail-item').evaluateAll(nodes=>nodes.map(node=>{
+    const r=node.getBoundingClientRect();
+    return {label:node.innerText.split('\n').join(' '),left:Math.round(r.left),right:Math.round(r.right),top:Math.round(r.top),bottom:Math.round(r.bottom)};
+  }));
+  assert.equal(boxes.length,6,'every tool stays reachable from the rail');
+  const overlaps=[];
+  for(let i=0;i<boxes.length;i++)for(let j=i+1;j<boxes.length;j++){
+    const a=boxes[i],b=boxes[j];
+    if(a.left<b.right-1&&b.left<a.right-1&&a.top<b.bottom-1&&b.top<a.bottom-1)overlaps.push(a.label+' overlaps '+b.label);
+  }
+  assert.deepEqual(overlaps,[],'rail items must not overlap each other');
+}
 async function settings(page,directory,width){
   const trigger=page.getByRole('button',{name:'Study settings',exact:true});
   if(await trigger.getAttribute('aria-expanded')!=='true')await trigger.click();
   const panel=page.getByRole('complementary',{name:'Study settings',exact:true});await panel.waitFor();
+  // Measure and capture the settled drawer, not its 160ms opening transition.
+  await panel.evaluate(node=>Promise.all(node.getAnimations().map(animation=>animation.finished)));
   assert.equal(await page.getByLabel('Gemini API key',{exact:true}).getAttribute('type'),'password','API key remains concealed');
   const auto=page.getByRole('switch',{name:'Auto profile — per-tool model and thinking level',exact:true});
   const before=await auto.getAttribute('aria-checked');await auto.focus();await page.keyboard.press('Space');
@@ -77,7 +98,7 @@ async function settings(page,directory,width){
   assert(await trigger.evaluate(node=>node===document.activeElement),'settings close restores trigger focus');
 }
 async function drawer(page,directory,width){
-  const tag=page.locator('.tool-panel:visible').getByTitle('Inspect fact-1',{exact:true}).first();
+  const tag=page.locator('.workbench:visible').getByTitle('Inspect fact-1',{exact:true}).first();
   await tag.click();const dialog=page.getByRole('dialog');await dialog.waitFor();
   // Measure the settled drawer, not the deliberate 16px opening translation.
   await dialog.evaluate(node=>Promise.all(node.getAnimations().map(animation=>animation.finished)));
@@ -108,13 +129,14 @@ async function createOutputs(page){
   await page.getByRole('heading',{name:'Priority Analysis',exact:true}).waitFor();
 
   await choose(page,'nclexgen');
-  const panel=page.locator('.tool-panel:visible');
+  const panel=page.locator('.workbench:visible');
   await panel.locator('input[type=number][min="5"]').fill('5');
   await panel.locator('select').filter({has:page.locator('option[value="5"]')}).selectOption('5');
   await page.getByRole('checkbox',{name:/Fact allocation/}).uncheck();
   await page.evaluate(text=>window.__remediation.queueGemini(text),worksheet(Array(5).fill('Ordering')));
   await page.getByRole('button',{name:'▶ Generate 5 Questions (1 batch)',exact:true}).click();
-  await page.getByRole('heading',{name:'5 Questions · 1 concepts',exact:true}).waitFor();
+  await page.getByRole('heading',{name:'NCLEX worksheet',exact:true}).waitFor();
+  await page.getByText('5 questions · 1 concepts',{exact:true}).waitFor();
   await page.getByRole('button',{name:'▶ Generate 5 Questions (1 batch)',exact:true}).waitFor();
 
   await choose(page,'cases');
@@ -146,10 +168,11 @@ async function visualTests(browser,{screenshots,report=console.log}={}){
       await page.setViewportSize({width,height:900});
       await page.reload({waitUntil:'load'});await page.waitForFunction(()=>window.__remediation?.state?.persistenceStatus==='ready');
       await page.locator('#remediation-fixture-label').evaluate(node=>{node.style.maxWidth='100vw';node.style.boxSizing='border-box';});
-      assert.equal(await page.getByRole('button',{name:'Study settings',exact:true}).getAttribute('aria-expanded'),width>800?'true':'false','initial settings visibility follows available width');
-      if(await page.getByRole('button',{name:'Close study settings',exact:true}).isVisible())await page.getByRole('button',{name:'Close study settings',exact:true}).click();
+      assert.equal(await page.getByRole('button',{name:'Study settings',exact:true}).getAttribute('aria-expanded'),'false','every width starts on the study tool, not on configuration');
+      assert.equal(await page.getByRole('complementary',{name:'Study settings',exact:true}).count(),0,'the settings drawer is closed until it is asked for');
       for(const [id] of tabs){await choose(page,id);await check(width+'px empty '+id,()=>layout(page,width+'px '+id));await capture(page,screenshots,width+'-empty-'+id);}
       await check(width+'px keyboard focus',()=>focusVisible(page));
+      await check(width+'px tool strip',()=>toolStrip(page));
       await check(width+'px settings',()=>settings(page,screenshots,width));
     }
     assert.deepEqual(warnings,[],'interacting with empty views reports no console warnings or errors');

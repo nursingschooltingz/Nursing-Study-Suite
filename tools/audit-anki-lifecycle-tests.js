@@ -19,7 +19,7 @@ const setup=span('const ANKI_MASTER_PROMPT=', 'function splitOversizedConditionB
   span('function kbForAnki(kb){','// ── KB source chunking')+
   span('const NEIA_TERMINOLOGY_RULES=','// Deterministic post-generation validation.');
 const component=span('function AnkiGenerator(){','function NCLEXExtractor');
-const renderAt=component.indexOf('\n  return(\n    <div className="tool-panel">');
+const renderAt=component.indexOf('\n  return <Workbench');
 assert(renderAt>0&&component.slice(0,renderAt).includes('const exportTxt=useCallback'),'component tail includes live export handler');
 const probeReturn=`return {run,cards,batch,busy,logs,coverage,selected,interruptedRun,numericAudits,current,abortCtl,sourceAudit,auditBusy,updateField,updateSourceLinks,toggle,del,exportTxt,setTierFilter,setWarningFilter,setStyleOnly,prepareSourceAudit,runSourceAudit,cancelSourceAudit,sourceAuditCurrent:ankiSourceAuditCurrent(sourceAudit,{cards,batch,tier:tierFilter,current})};}`;
 const transportSource=span('function geminiRetryDelayMs(', 'function extractJSON(');

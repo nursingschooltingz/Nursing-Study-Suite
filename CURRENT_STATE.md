@@ -1,5 +1,36 @@
 # Current maintainer state
 
+## v17.0 interface overhaul (2026-09-19)
+
+The user asked for a complete interface overhaul rather than another palette pass, and explicitly
+granted permission to restructure the presentation layer. The canonical application is
+`Nursing-Study-Suite v17.0.html`. This is a presentation-only release: no study logic, prompt,
+validation tier, storage key or export format changed.
+
+The shell is now a workflow rail — Source / Plan / Practice, the same six tools numbered `01`–`06`
+with extraction and generation still separate — beside a compact workspace header and a
+setup-beside-results workbench. Settings moved out of its permanent 292px column into a dismissable
+right-hand drawer, which is what freed the bench to split. Every tool gained numbered required
+steps, collapsible secondary configuration that reports its value while closed, a results headline
+carrying the export actions, and an empty state naming the next useful action. One stylesheet now
+defines the tokens, type roles, surfaces and control states; blue carries navigation and structure,
+orange is the accent and the one important action per stage and never paints a status surface.
+
+Verification: **3,050 passing assertions / 0 failed**, all eleven unchanged frozen prompt hashes,
+prompt documentation, LF/version checks, full JSX transformation, and all ten CDN pins rechecked
+live without edits. Isolated browser acceptance passes at 360, 768, 1024 and 1440 px with no live
+API calls, plus ten further browser runners.
+
+Three findings were caught by those acceptance runs and fixed: the first drawer implementation's
+scrim blocked the workspace, moving run logs behind a collapsed disclosure also hid their failure
+lines, and a stage group in the narrow-width tool strip could shrink below its content and lay the
+next group on top of the previous tool's label. All three are recorded, with everything that was
+**not** tested, in the [interface verification record](docs/reviews/v17.0-interface.md).
+
+Open, unrelated: `tools/anki-source-review-browser-tests.js` waits for the text
+`Suggested correction:`, which has never existed in the shipped HTML. It fails identically at
+v16.9 (verified against commit `75e338d`). It is not a repository gate.
+
 ## v16.9 review follow-up release (2026-09-19)
 
 Two independent reviews of the shipped v16.8 build found twelve defects; all twelve are fixed, and the

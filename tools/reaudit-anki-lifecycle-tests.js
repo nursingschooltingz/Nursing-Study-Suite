@@ -27,7 +27,7 @@ const helperNames=[...helpersCode.matchAll(/^(?:async )?function (\w+)\(/gm)].ma
 const transportCode=span('function geminiRetryDelayMs(', 'function extractJSON(');
 if(!transportCode.includes('return geminiRequest(apiKey,model,body,{signal,retries,onUpdate,onMeta});'))throw Error('Missing transport tail');
 const safetyCode=span('const SAFETY_SETTINGS=[','// Single core for ALL Gemini traffic.');
-const generatorCode=span('function AnkiGenerator(){','  return(\n    <div className="tool-panel">\n      <h2 className="tool-title">LATTE Anki Generator</h2>');
+const generatorCode=span('function AnkiGenerator(){','  return <Workbench\n    setupLabel="Anki source and focus context"');
 if(!generatorCode.includes('const liveAbbrev=useMemo(')||!generatorCode.includes('const exportTxt=useCallback('))throw Error('Missing full generator pre-JSX tail');
 const master=span('const ANKI_MASTER_PROMPT=`','function splitOversizedConditionBlock(');
 const appSetter=span('  const setKnowledgeBase=useCallback(value=>{','  const [persistenceStatus,setPersistenceStatus]=useState(\'loading\');');
