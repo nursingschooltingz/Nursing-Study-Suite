@@ -27,9 +27,23 @@ lines, and a stage group in the narrow-width tool strip could shrink below its c
 next group on top of the previous tool's label. All three are recorded, with everything that was
 **not** tested, in the [interface verification record](docs/reviews/v17.0-interface.md).
 
-Open, unrelated: `tools/anki-source-review-browser-tests.js` waits for the text
-`Suggested correction:`, which has never existed in the shipped HTML. It fails identically at
-v16.9 (verified against commit `75e338d`). It is not a repository gate.
+## Anki source-check label drift, closed (2026-09-19, post-v17.0)
+
+`tools/anki-source-review-browser-tests.js` had been failing since **v16.7**, not because of the
+interface release. It waited for `Suggested correction:` — the label v16.1 shipped. v16.7 remediated
+data-integrity finding **SUGGESTION**, "display proposed edits as not applied", by renaming it to
+`Proposed edit to review — not applied:`, because the old wording implied the checker had already
+rewritten the note. The runner was never updated.
+
+The app's label is the intended one, so the test was corrected, not the application. **The shipped
+HTML is byte-identical to the published v17.0 release**; only test files changed.
+
+The real defect was coverage: that trust label lived only in an optional browser runner, so it
+drifted through two releases with `node verify-repo.js` green. The mandatory gate now owns it —
+`tools/anki-review-evidence-tests.js` asserts the unapplied-proposal wording is present and the
+pre-remediation wording is gone, and that assertion fails against the v16.6 bytes. The runner's
+hard-pinned `suiteVersion` literal, still `'16.9'` a release later, now reads the shipped version
+instead. All twelve browser runners pass.
 
 ## v16.9 review follow-up release (2026-09-19)
 

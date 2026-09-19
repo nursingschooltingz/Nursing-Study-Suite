@@ -109,6 +109,13 @@ async function runAnkiReviewEvidenceTests({ S, t, section }) {
   t('live adapter preserves population, certainty and distinct action or eligibility relationships', adapter.includes("preserve each fact's independent population, trigger, action, timing and certainty (may, often, as prescribed, if indicated)") && adapter.includes('AND/OR, preparation versus administration, or distinct eligibility criteria'));
   t('live adapter requires recall of substantive list members without splitting equivalent units or inseparable decisions', adapter.includes('Never leave a substantive list member permanently visible merely to satisfy a cloze limit.') && adapter.includes('Test that target elsewhere when needed, preserving equivalent units and inseparable clinical decisions.') && S.includes('ANKI_MASTER_PROMPT+focusBlock+kbAdapter'));
   t('helper extraction reaches the live currency predicate and evidence filename tail', helperSource.includes("filename:'anki-source-'") && (await H.ankiSourceAuditEvidence(run, { ...inputs, current: false }, exportedAt)).status === 'outdated');
+  // v17.0: v16.7 remediated data-integrity finding SUGGESTION by renaming this label from
+  // "Suggested correction:", which implied the checker had already rewritten the note. Only an
+  // optional browser runner covered the wording, so it drifted for two releases with the
+  // verifier green. The remediated meaning is a trust contract, so the mandatory gate now owns
+  // it: the label must state the edit is unapplied, and the pre-remediation wording must be gone.
+  t('a checker suggestion is labelled as an unapplied proposal, not an applied correction',
+    S.includes('<strong>Proposed edit to review — not applied:</strong> {f.suggestion}') && !S.includes('Suggested correction:'));
 }
 
 module.exports = { runAnkiReviewEvidenceTests };

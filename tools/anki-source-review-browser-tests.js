@@ -2,8 +2,14 @@
 'use strict';
 
 // Optional browser acceptance: synthetic fixture only, mocked Gemini, no course files.
-const assert=require('assert/strict'),http=require('http'),fs=require('fs');
+const assert=require('assert/strict'),http=require('http'),fs=require('fs'),path=require('path');
 const {page:basePage}=require('./anki-browser-fixture');
+const {resolveSuiteFile,suiteVersionFromFilename}=require('./repo-checks');
+// v17.0: read the shipped version instead of pinning a literal. The previous pin was still
+// '16.9' one release later; an optional runner that nothing gates rots between releases, and
+// the point of the assertion is that exported evidence carries the version of the app that
+// produced it — not that the app is any particular version.
+const SUITE_VERSION=suiteVersionFromFilename(resolveSuiteFile({rootDir:path.join(__dirname,'..')}));
 const {interceptContext}=require('./remediation-browser-tests');
 const {validReceipt}=require('./fixtures/anki-audit-response');
 function page(){
@@ -100,7 +106,15 @@ async function main(){
     const cardsBeforeAudit=await view.getByLabel('Text for note ',{exact:false}).evaluateAll(fields=>fields.map(f=>f.value));
     await run();
     await view.getByText(/^Completed — review findings and target records/).waitFor();
-    await view.getByText('Suggested correction:',{exact:true}).first().waitFor();
+    // v17.0: this waited for "Suggested correction:", the label v16.1 shipped. v16.7 remediated
+    // data-integrity finding SUGGESTION — "display proposed edits as not applied" — by renaming
+    // it, because the old wording implied the checker had already rewritten the note. The
+    // assertion was never updated, so this runner has failed since v16.7 without anything in
+    // `node verify-repo.js` noticing. It now also checks the property that finding protects, so
+    // a label that stops saying the edit is unapplied fails here instead of passing quietly.
+    const proposalLabel=view.getByText('Proposed edit to review — not applied:',{exact:true}).first();
+    await proposalLabel.waitFor();
+    assert.match((await proposalLabel.innerText()).trim(),/\bnot applied:$/,'the proposed-edit label must state that nothing was applied to the note');
     assert((await view.getByText(/Ask for the supplied timing without adding a new value/).count())>0,'proposed correction is visible');
     assert.deepEqual(await view.getByLabel('Text for note ',{exact:false}).evaluateAll(fields=>fields.map(f=>f.value)),cardsBeforeAudit,'suggestions preserve original cards');
     assert((await view.evaluate(()=>window.__ankiReviewFixture.calls.length))>0,'explicit run invokes mocked audit');
@@ -110,7 +124,7 @@ async function main(){
     assert.equal(evidence.metadata.checkComplete,true);assert.equal(evidence.metadata.currentAtExport,true);assert(evidence.metadata.startedAt&&evidence.metadata.finishedAt);
     assert.equal(evidence.metadata.sourceSnapshotSha256,packet.metadata.sourceSnapshotSha256);assert.equal(evidence.metadata.cardSnapshotSha256,packet.metadata.cardSnapshotSha256);
     assert(evidence.results.every(g=>Array.isArray(g.factReviews)&&Array.isArray(g.noteReviews)),'completed report retains every returned review receipt');
-    assert.equal(evidence.metadata.schemaVersion,4);assert.equal(evidence.metadata.suiteVersion,'16.9');
+    assert.equal(evidence.metadata.schemaVersion,4);assert.equal(evidence.metadata.suiteVersion,SUITE_VERSION);
     assert(evidence.noteHandleMaps.every(g=>g.notes.every(n=>/^n[1-9]\d*$/.test(n.handle))),'private report retains exact local-to-internal handle maps');
     assert(evidence.results.every(g=>g.complete&&g.factReviews.every(f=>f.inventory.length>0)),'completed groups account for every selected source fact');
     await view.getByText('Checked targets and note fields ·',{exact:false}).first().click();

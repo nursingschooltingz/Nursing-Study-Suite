@@ -10,10 +10,10 @@
   },
   "verification": {
     "command": "node verify-repo.js",
-    "passed": 3050,
+    "passed": 3051,
     "failed": 0,
     "previousTotal": 3045,
-    "addedAssertions": 5,
+    "addedAssertions": 6,
     "summary": [
       "PASS  one canonical suite HTML; LF-only; filename and release comment agree",
       "PASS  11 frozen prompt constants match prompt-baseline.json",
@@ -151,17 +151,18 @@
       "production-recovery-browser-tests",
       "production-resource-browser-tests",
       "anki-v166-browser-tests",
-      "anki-generation-quality-browser-tests"
+      "anki-generation-quality-browser-tests",
+      "anki-source-review-browser-tests"
     ],
-    "knownFailing": [
-      {
-        "runner": "anki-source-review-browser-tests",
-        "reason": "waits for text \"Suggested correction:\" that has never existed in the shipped HTML",
-        "preexisting": true,
-        "verifiedAgainst": "75e338d",
-        "repositoryGate": false
-      }
-    ]
+    "knownFailing": [],
+    "postReleaseFix": {
+      "runner": "anki-source-review-browser-tests",
+      "wasFailingSince": "v16.7",
+      "cause": "waited for the pre-remediation label \"Suggested correction:\"; v16.7 renamed it to \"Proposed edit to review — not applied:\" when remediating data-integrity finding SUGGESTION",
+      "resolution": "test corrected, application label unchanged; shipped HTML byte-identical to the published v17.0 asset",
+      "gateCoverageAdded": "tools/anki-review-evidence-tests.js asserts the unapplied-proposal wording is present and the pre-remediation wording is gone",
+      "nonVacuous": "the added predicate fails against the v16.6 bytes (b6eb73c)"
+    }
   },
   "scope": {
     "kind": "presentation-layer overhaul",
