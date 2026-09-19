@@ -8,7 +8,8 @@
      Babel, so this adds narrow resource directives without a default-src/script-src migration. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net">
 <title>LATTE Study Suite</title>
-<!-- v16.8 (2026-09-18): production-review fixes for case grounding, NCLEX source coverage, saved-data recovery, card retranscription, Priority source ownership, bounded PPTX extraction, retry floors and print isolation; paginated Anki editing. All eleven frozen prompts, model defaults and warning tiers remain unchanged. Verification: docs/reviews/production-v16.8-release.md.
+<!-- v16.9 (2026-09-19): review follow-up fixes for case threshold prose, blank calculation answers, the A–F/Fahrenheit option collision, split-mode question boundaries and answer recovery, scalar NCLEX metadata, CSV-significant Anki fields, wrapped worksheet options, malformed card sections, cancelled comparisons, stale Priority notices and hidden-tier editing. All eleven frozen prompts, model defaults and warning tiers remain unchanged. Verification: docs/reviews/v16.9-release.md.
+     v16.8 (2026-09-18): production-review fixes for case grounding, NCLEX source coverage, saved-data recovery, card retranscription, Priority source ownership, bounded PPTX extraction, retry floors and print isolation; paginated Anki editing. All eleven frozen prompts, model defaults and warning tiers remain unchanged. Verification: docs/reviews/production-v16.8-release.md.
      v16.7 (2026-09-18): text-only Anki data integrity, lossless KB import/restore, per-chunk recovery, bounded quote checks, honest generation status, numeric hint checks, and preserved merge/edit provenance. All eleven frozen prompts, Flash/Medium, and advisory warning tiers remain unchanged. Verification: docs/reviews/anki-v16.7-release.md.
      v16.6 (2026-09-13): lossless audit reference normalization, mixed Text/Extra review, exact source condition tags, and advisory context/evidence checks. All eleven frozen prompts, Flash/Medium, and selection/semantic warning guards remain unchanged. Verification: docs/reviews/anki-v16.6-implementation.md.
      v16.4 (2026-09-13): exact audit note/source addresses, source inventory accounting, independent record recovery, and whole-deck recall review. All 11 frozen prompts, generation settings and export warning tiers are preserved. Verification: docs/reviews/anki-v16.4-implementation.md.
@@ -2525,6 +2526,10 @@ async function cardTranscribe(apiKey,model,level,file,opts){
     generationConfig:{responseMimeType:'application/json',maxOutputTokens:65536,thinkingConfig:{thinkingLevel:level}}},opts);
   const p=extractJSON(raw);
   if(!p||!Array.isArray(p.sections))throw new Error('response was not a card transcript');
+  // v16.9: the outer array alone admitted a null section, which threw while reading its heading,
+  // and string bullets, which turned one sentence into one bullet per character in the source text.
+  if(p.sections.some(x=>!x||typeof x!=='object'||Array.isArray(x)||(x.bullets!=null&&!Array.isArray(x.bullets))))
+    throw new Error('card transcript sections are malformed');
   return p;
 }
 // Pairing key. A BACK face does not carry the condition name — only the running header and
@@ -2770,7 +2775,19 @@ function KnowledgeBaseBuilder(){
         for(let r=0;r<txRuns;r++){
           try{runs.push(await cardTranscribe(cfg.apiKey,model,level,f,{signal:controller.signal,retries:1,
             onPayload:p=>{if(p.resized&&r===0)txLog('  ⓘ '+f.name+' resized '+p.resized.from+' → '+p.resized.to+' to stay under the request ceiling','');}}));}
-          catch(e){if(e.name==='AbortError')throw e;err=e.message||String(e);}
+          catch(e){
+            // v16.9: cancelling partway through a requested comparison skipped the publish below,
+            // so an earlier transcript stayed current with comparisonIncomplete false and remained
+            // buildable. A partial attempt is published as incomplete, like a failed one.
+            if(e.name==='AbortError'){
+              if(runs.length&&txAbortRef.current===controller){
+                const id=cardFileId(f);
+                setTranscripts(previous=>cardPublishTranscript(previous,id,{...previous[id],file:f.name,transcript:runs[0],runs:[...runs],agreement:null,requestedRuns:txRuns,comparisonIncomplete:true,error:'',retainedTranscript:previous[id]?.retainedTranscript||previous[id]||null},currentFiles.current));
+              }
+              throw e;
+            }
+            err=e.message||String(e);
+          }
         }
         if(!runs.length){
           // v16.7: failed retries left an older clean transcript buildable and hid the failed comparison.
@@ -3589,10 +3606,13 @@ function PriorityAnalyzer(){
   },[K.knowledgeBase]);
   async function runAnalysis(){
     if(!cfg.apiKey||analysisSlot.current.active)return;
-    if(!(K.knowledgeBase.conditions||[]).length){setError('Build the LATTE Knowledge Base first.');setStep('error');return;}
+    // v16.9: the early returns left the previous run's source, harvest and truncation notices
+    // beside the new error, describing coverage the new attempt never had.
+    const clearNotices=()=>{setResultSource(null);setHarvestState(null);setMeta(null);};
+    if(!(K.knowledgeBase.conditions||[]).length){clearNotices();setError('Build the LATTE Knowledge Base first.');setStep('error');return;}
     const source=artifactSourceSnapshot(K.knowledgeBase);
     const analysisText=kbForPriority(source.kb,{tiers:kbTiers,conditionQuery:kbConditionFilter});
-    if(!analysisText.trim()){setError('The current Knowledge Base filters contain no facts. Include another tier or clear the condition filter.');setStep('error');return;}
+    if(!analysisText.trim()){clearNotices();setError('The current Knowledge Base filters contain no facts. Include another tier or clear the condition filter.');setStep('error');return;}
     const textChunks=paChunkText(analysisText,chunkSize,overlapSize);const total=textChunks.length;
     const chunkItems=[...textChunks.map((_,i)=>({id:`ext-${i}`,name:`Chunk ${i+1}/${total}`,phase:'extraction',status:'pending'})),{id:'synthesis',name:'Final Synthesis',phase:'synthesis',status:'pending'}];
     const run=analysisSlot.current.start(),controller=run.ctl;analysisSource.current=source.sourceKB;setAnalysisBusy(true);setResultSource(source);
@@ -4733,10 +4753,14 @@ function ankiSourcePointers(card,batch,current){
 function ankiExportText(cards,batch,current,tier,html,references){
   const kept=ankiSelection(cards,current,tier).kept;if(!kept.length)return '';
   const escape=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // v16.9: lint rejects pipes and newlines in a field but not quotes. A field holding a quote
+  // lost it on import, and an unmatched leading quote swallowed the following notes into one
+  // record; a leading # is an importer comment. Only those fields change; the rest are as before.
+  const field=v=>{const t=String(v??'');return /^#|"/.test(t)?'"'+t.replace(/"/g,'""')+'"':t;};
   const body=kept.map(c=>{
     let extra=html?escape(c.extra):c.extra;
     if(references){const source='Source: '+(ankiSourcePointers(c,batch,current).join('; ')||'unavailable');extra+=(extra?(html?'<br>':' — '):'')+(html?escape(source):source);}
-    return (html?escape(c.text):c.text)+'|'+extra+'|'+c.tags;
+    return [html?escape(c.text):c.text,extra,c.tags].map(field).join('|');
   }).join('\n');
   return (html?'#separator:Pipe\n#html:true\n#notetype:Cloze\n#tags column:3\n':'')+body;
 }
@@ -5355,7 +5379,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '16.8';}
+function suiteVersion(){return '16.9';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -5853,6 +5877,7 @@ function AnkiGenerator(){
   const [ledger,setLedger]=useState('');
   const [view,setView]=useState('table');
   const [notePage,setNotePage]=useState(0);
+  const [editBlocked,setEditBlocked]=useState(null);
   const [styleOnly,setStyleOnly]=useState(false); // v15.16: review filter only; export still uses kept notes in the selected tier.
   const [tierFilter,setTierFilter]=useState('all');
   const [warningFilter,setWarningFilter]=useState('all');
@@ -6030,7 +6055,22 @@ function AnkiGenerator(){
   const cancelSourceAudit=()=>{const run=auditRun.current;if(run){run.ctl.abort();auditRun.current=null;setAuditBusy(false);setSourceAudit(ankiSourceAuditState(run,'cancelled','Completed source-check groups are retained.'));}};
   const openNote=(id,index)=>{setInspectNote({id,index});};
   // v16.7: Edit in Table must mount the requested note before its existing focus effect runs.
-  const editNote=id=>{setView('table');setStyleOnly(false);setWarningFilter('all');setNotePage(ankiPageForNote(filteredCards,id));setEditFocus(id);};
+  // v16.9: a source-check FINDING may reference a note outside the selected tier (unlike
+  // receipt targets, which are filtered to the selection), so Edit set a focus request for a row
+  // that never mounted and the request stuck. The tier filter also decides what exports, so the
+  // change is offered explicitly rather than made silently.
+  const editNote=id=>{
+    const row=cards.find(c=>c.id===id);
+    if(row&&!filteredCards.some(c=>c.id===id)){setEditBlocked({id,tier:getTier(row.tags)});return;}
+    setEditBlocked(null);setView('table');setStyleOnly(false);setWarningFilter('all');setNotePage(ankiPageForNote(filteredCards,id));setEditFocus(id);
+  };
+  const acceptBlockedEdit=()=>{
+    if(!editBlocked)return;
+    const {id,tier}=editBlocked,next=tier==='?'?'all':tier;
+    const rows=next==='all'?cards:cards.filter(c=>getTier(c.tags)===next);
+    setTierFilter(next);setNotePage(ankiPageForNote(rows,id));setEditBlocked(null);
+    setView('table');setStyleOnly(false);setWarningFilter('all');setEditFocus(id);
+  };
   const saveSourceAudit=async()=>{
     if(!sourceAudit||savingEvidence)return;
     setSavingEvidence(true);setEvidenceError('');
@@ -6060,7 +6100,7 @@ function AnkiGenerator(){
     if(!cfg.apiKey){log('Enter API key first.','err');return;}
     if(!(K.knowledgeBase.conditions||[]).length){log('Build the LATTE Knowledge Base first.','err');return;}
     cancelSourceAudit();setSourceAudit(null);setInspectNote(null);
-    setBusy(true);setProg(0);setLogs([]);setCards([]);setLedger('');setBatch(null);setInterruptedRun(null);setShowUncovered(false);setNotePage(0);
+    setBusy(true);setProg(0);setLogs([]);setCards([]);setLedger('');setBatch(null);setInterruptedRun(null);setShowUncovered(false);setNotePage(0);setEditBlocked(null);
     // v15.17: capture identity before awaiting; a replaced KB or superseded run cannot publish.
     activeRun.current?.ctl.abort();
     const ctl=new AbortController();setAbortCtl(ctl);
@@ -6295,6 +6335,7 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
           </div>}
         </details>
         <AnkiReviewQueue items={reviewItems} decisions={reviewDecisions} inputs={auditInputs.current} run={sourceAudit} eligible={selected.kept} onDecision={saveReviewDecision} onOpen={openNote} onEdit={editNote} disabled={busy||!current}/>
+        {editBlocked&&<p role="status" style={{fontSize:12,color:'var(--accent-warm)'}}>Note {editBlocked.id} is Tier {editBlocked.tier} and the Tier {tierFilter} filter is selected, so its row is not shown. The tier filter also decides which notes export. <button className="btn-secondary" onClick={acceptBlockedEdit}>Select Tier {editBlocked.tier==='?'?'All':editBlocked.tier} and edit</button> <button className="btn-ghost" onClick={()=>setEditBlocked(null)}>Dismiss</button></p>}
         {inspectNote&&cards.find(c=>c.id===inspectNote.id)&&<div style={{padding:12,border:'1px solid var(--accent)',borderRadius:8,marginBottom:12}}><button className="btn-secondary" onClick={()=>setInspectNote(null)}>Close selected review</button><AnkiReviewSource conditionCheck={conditionTagIssues.get(inspectNote.id)} key={inspectNote.id} card={cards.find(c=>c.id===inspectNote.id)} batch={batch} current={current} initialIndex={inspectNote.index} expanded onSourcesChange={busy?null:updateSourceLinks}/></div>}
         {exactDuplicateCount>0&&<p><button className="btn-secondary" onClick={mergeExactDuplicates} disabled={!current||busy||auditBusy}>Merge {exactDuplicateCount} exact duplicate note(s)</button> Only identical valid Text, Extra, tags and Keep choices merge; source links and original note locations are retained.</p>}
         <p style={{fontSize:12}}>Excluded from export: {selected.invalid} structural · {selected.manualExcluded} manually unchecked. Structural repairs restore eligibility; checkboxes record your choice.</p>
@@ -6387,12 +6428,19 @@ function nclexChunkText(text,size,overlap){
 function nclexKey(q){return String(q&&q.question||'').replace(/\s+/g,' ').trim().toLowerCase();}
 // v15.14: incremental form. Callers keep one Set for the whole run instead of rebuilding it
 // per chunk over everything collected so far. Mutates and returns allQ.
+// v16.9: the model returns this optional field as a bare string often enough to matter, and
+// every consumer calls an array method on it - the expanded card render (.map), the disease
+// filter (.some) and the Markdown export (.join) all threw. Normalize once, at admission.
+function nclexConditions(value){
+  if(Array.isArray(value))return value.filter(x=>typeof x==='string'&&x.trim()).map(x=>x.trim());
+  return typeof value==='string'&&value.trim()?[value.trim()]:[];
+}
 function nclexAccumulate(seen,allQ,incoming){
   for(const q of incoming||[]){
     if(!q||!q.question)continue;
     const k=nclexKey(q);
     if(seen.has(k))continue;
-    seen.add(k);allQ.push(q);
+    seen.add(k);allQ.push({...q,diseases_conditions:nclexConditions(q.diseases_conditions)});
   }
   return allQ;
 }
@@ -6450,13 +6498,35 @@ function nclexSliceByQNum(text,positions){
   return items;
 }
 function nclexSplitByQNum(text){
-  const patterns=[/(?:^|\n)\s*(\d{1,4})\s*\.\s/g,/(?:^|\n)\s*(\d{1,4})\)\s/g,/(?:^|\n)\s*Q(?:uestion)?\s*#?\s*(\d{1,4})[.):;\s]/gi,/(?:^|\n)\s*#\s*(\d{1,4})[.):;\s]/g,/(?:^|\n)\s*\[(\d{1,4})\]/g];
-  let bestItems={},bestCount=0;
-  for(const bp of patterns){
-    const pattern=new RegExp(bp.source,bp.flags);const positions=[];let m;
+  const BARE=[/(?:^|\n)\s*(\d{1,4})\s*\.\s/g,/(?:^|\n)\s*(\d{1,4})\)\s/g];
+  const EXPLICIT=[/(?:^|\n)\s*Q(?:uestion)?\s*#?\s*(\d{1,4})[.):;\s]/gi,/(?:^|\n)\s*#\s*(\d{1,4})[.):;\s]/g,/(?:^|\n)\s*\[(\d{1,4})\]/g];
+  const scan=bp=>{const pattern=new RegExp(bp.source,bp.flags);const positions=[];let m;
     while((m=pattern.exec(text))!==null){const num=parseInt(m[1]);if(num>0&&num<5000)positions.push({num,index:m.index});}
+    return positions;};
+  let bestItems={},bestCount=0,explicitBest=null;
+  for(const bp of [...BARE,...EXPLICIT]){
+    const positions=scan(bp);
     const items=nclexSliceByQNum(text,nclexDropOptionRuns(positions));
     const count=Object.keys(items).length;if(count>bestCount){bestItems=items;bestCount=count;}
+    if(EXPLICIT.includes(bp)&&count>(explicitBest?explicitBest.count:0))explicitBest={items,count,heads:positions.slice().sort((a,b)=>a.index-b.index)};
+  }
+  // v16.9: "Question 1:" blocks whose CHOICES are numbered 1-4 produced more bare matches than
+  // headings, so the split returned the first question's choices as the questions and dropped
+  // the rest - and three plausible matches then bypassed the AI pairing fallback. An explicit
+  // marker wins only when every bare number sits inside one heading's block as a choice run,
+  // so a book that numbers most questions bare and only labels a few still uses the bare count.
+  if(explicitBest&&explicitBest.count>=2&&explicitBest.count<bestCount){
+    const heads=explicitBest.heads;
+    const containedChoices=BARE.every(bp=>{
+      const positions=scan(bp);
+      if(!positions.length)return true;
+      if(positions.some(p=>p.index<heads[0].index))return false;
+      return heads.every((h,i)=>{
+        const end=i+1<heads.length?heads[i+1].index:text.length;
+        return positions.filter(p=>p.index>h.index&&p.index<end).length<=NCLEX_OPTION_RUN_MAX;
+      });
+    });
+    if(containedChoices){bestItems=explicitBest.items;bestCount=explicitBest.count;}
   }
   // Loose fallback
   if(bestCount<3){
@@ -6483,22 +6553,31 @@ function nclexSplitStemOptions(text){
   const s=String(text||'');
   const marks=[];const re=new RegExp(NCLEX_OPTION_MARK.source,'g');let m;
   while((m=re.exec(s))!==null){
-    marks.push({label:m[1],rank:nclexOptionRank(m[1]),numeric:/[0-9]/.test(m[1]),at:m.index+m[0].length,from:m.index+(/^[\n\s]/.test(m[0])?1:0)});
+    // v16.9: line position is read from the text before the mark, not from m[0], so an
+    // indented option ("\n  B. ") still counts as starting its line.
+    const from=m.index+(/^[\n\s]/.test(m[0])?1:0),nl=s.lastIndexOf('\n',from-1);
+    marks.push({label:m[1],rank:nclexOptionRank(m[1]),numeric:/[0-9]/.test(m[1]),at:m.index+m[0].length,from,lineStart:from===0||/^[ \t]*$/.test(s.slice(nl+1,from))});
     re.lastIndex=m.index+m[0].length; // adjacent marks must not swallow one another
   }
-  let best=null;
-  for(let i=0;i<marks.length;i++){
-    if(marks[i].rank!==1)continue;
-    let j=i;
-    while(j+1<marks.length&&marks[j+1].rank===marks[j].rank+1&&marks[j+1].numeric===marks[i].numeric)j++;
-    const len=j-i+1;
-    if(len>=NCLEX_OPTION_RUN_MIN&&(!best||len>best.len||(len===best.len&&marks[i].from>best.start)))best={i,j,len,start:marks[i].from};
+  // v16.9: widening the marker to A-F made "101.2 F." inside an option body a rank-6 mark,
+  // which either broke the ascending run (losing every choice) or extended it (fabricating a
+  // sixth choice and deleting the unit). A real choice list does not change layout midway, so
+  // candidate runs are scanned inside each line-position class and the longest run still wins.
+  let best=null,bestPool=null;
+  for(const pool of [marks.filter(x=>x.lineStart),marks.filter(x=>!x.lineStart)]){
+    for(let i=0;i<pool.length;i++){
+      if(pool[i].rank!==1)continue;
+      let j=i;
+      while(j+1<pool.length&&pool[j+1].rank===pool[j].rank+1&&pool[j+1].numeric===pool[i].numeric)j++;
+      const len=j-i+1;
+      if(len>=NCLEX_OPTION_RUN_MIN&&(!best||len>best.len||(len===best.len&&pool[i].from>best.start))){best={i,j,len,start:pool[i].from};bestPool=pool;}
+    }
   }
   if(!best)return{stem:s.trim(),options:[]};
   const options=[];
   for(let k=best.i;k<=best.j;k++){
-    const end=k<best.j?marks[k+1].from:s.length;
-    options.push({label:marks[k].label,text:s.slice(marks[k].at,end).trim().replace(/\s+/g,' ')});
+    const end=k<best.j?bestPool[k+1].from:s.length;
+    options.push({label:bestPool[k].label,text:s.slice(bestPool[k].at,end).trim().replace(/\s+/g,' ')});
   }
   return{stem:s.slice(0,best.start).trim(),options};
 }
@@ -6753,6 +6832,14 @@ function NCLEXExtractor(){
         if(aiResult.length>pairs.length){
           pairs=aiResult;
           addLog(`  → AI paired ${pairs.length} questions (better than regex)`);
+        }else if(aiResult.length){
+          // v16.9: the fallback replaced the pairing only when it found MORE questions, so a run
+          // that recovered the missing ANSWERS for the same questions paid for the call and then
+          // threw the answers away. Merge them into unmatched pairs; keep every question found.
+          const recovered=new Map(aiResult.filter(r=>r.matched).map(r=>[Number(r.number),r]));
+          let filled=0;
+          pairs=pairs.map(p=>{const r=recovered.get(Number(p.number));if(p.matched||!r)return p;filled++;return {...p,answer:r.answer,matched:true};});
+          if(filled)addLog(`  → AI recovered ${filled} answer(s) for existing questions`);
         }
       }catch(e){if(e.name==='AbortError')throw e;addLog(`  ⚠ AI pairing failed: ${e.message}`);}
     }
@@ -7669,7 +7756,15 @@ function ngParseItem(block){
     const step=line.match(/^[ \t]*_{2,}[ \t]*(.*)$/);
     if(step){choices=true;steps.push({label:String(steps.length+1),text:step[1].trim()});continue;}
     if(/^[ \t]*Answer:[ \t]*_{2,}/i.test(line)){choices=true;isCalc=true;continue;}
-    if(!choices)stem.push(line);
+    // v16.9: once the choices began, a wrapped option's continuation line was dropped, so the
+    // audit reviewed a shorter option than the worksheet and the export actually show. Only an
+    // INDENTED line continues an option; a flush-left trailing line is still ignored as before.
+    if(choices){
+      const cont=/^[ \t]+\S/.test(line)?line.trim():'',last=steps.length?steps[steps.length-1]:options[options.length-1];
+      if(cont&&last&&!isCalc)last.text=(last.text?last.text+' ':'')+cont;
+      continue;
+    }
+    stem.push(line);
   }
   const stemText=stem.join(' ').replace(/\s+/g,' ').trim(),isSata=/select all that apply/i.test(stemText);
   const type=steps.length?'Ordering':isCalc?'Calculation':isSata?'SATA':options.length?'MCQ':'Unknown';
@@ -8941,7 +9036,10 @@ function caseNumericText(t){
     .replace(/\bbreaths?\s*(?:per|\/)\s*min(?:ute)?s?\b/g,'/min')
     .replace(/\bmm\s*hg\b/g,'mmhg').replace(/\bunits?\b/g,'unit')
     .replace(/\bhours?\b/g,'hr').replace(/\bminutes?\b/g,'min').replace(/\bseconds?\b/g,'sec')
-    .replace(/\bper\b/g,'/');
+    // v16.9: rewriting every "per" as "/" turned prose ("below 12 breaths per minute per
+    // shift") into an unsupported compound unit, and v16.8's tail check then refused a bound
+    // the case legitimately instantiated. "per" divides units only before a known denominator.
+    .replace(/\bper\s+(kg|ml|l|dl|hr|min|sec|day|dose|m2)\b/g,'/$1');
 }
 function caseDecimal(value){
   const raw=String(value).replace(/,/g,''),negative=raw.startsWith('-');
@@ -9370,6 +9468,9 @@ function validateCaseStudy(caseStudy,factIndex,allowedFactIds,expectedCondition)
       else if(seenQIds.has(qid))issues.push({sev:'error',msg:`Duplicate question ID: ${qid}`});
       if(qid)seenQIds.add(qid);
       if(!(q.correctAnswers||[]).length)issues.push({sev:'error',msg:`${qn}: no correct answer`});
+      // v16.9: a blank entry passed the length check, skipped the Calculation-exempt option-label
+      // match, and printed "Answer: —" in the worksheet key as though the item were complete.
+      else if(q.correctAnswers.some(ca=>!String(ca??'').trim()))issues.push({sev:'error',msg:`${qn}: a correct answer is blank`});
       // v15.17: present-but-empty/duplicated question fields were accepted as usable items.
       if(!String(q.stem||'').trim())issues.push({sev:'error',msg:qn+': question stem is empty'});
       const labels=(q.options||[]).map(o=>String(o.label||'').trim()),answers=q.correctAnswers||[];

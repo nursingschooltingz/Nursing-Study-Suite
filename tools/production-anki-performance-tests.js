@@ -3,7 +3,7 @@
 module.exports=function productionAnkiPerformanceTests(S,t){
   const span=(start,end)=>{const a=S.indexOf(start),b=S.indexOf(end,a+start.length);if(a<0||b<0||S.indexOf(start,a+1)>=0||S.indexOf(end,b+1)>=0)throw Error('Production Anki performance anchors missing or ambiguous: '+start);return S.slice(a,b);};
   const source=span('function ankiParseCards(raw','function AnkiStyleBadges');
-  const exports='ankiExactMergeKey,ankiExactDuplicateCount,ankiDedupeCards,ankiCreateStyleCache,ankiStyleWarnings,ankiReviewFilter,ankiRecallContext,ankiAuditReviewItems,ankiSelection,ankiExportText,ankiPageRows,ankiPageForNote';
+  const exports='ankiExactMergeKey,ankiExactDuplicateCount,ankiDedupeCards,ankiCreateStyleCache,ankiStyleWarnings,ankiReviewFilter,ankiRecallContext,ankiAuditReviewItems,ankiSelection,ankiExportText,ankiPageRows,ankiPageForNote,ankiTier';
   const compile=text=>new Function('uid',text+';return {'+exports+'};')(()=> 'synthetic');
   const H=compile(source);
   const note=(id,text='[Synthetic] Marker: {{c1::blue}}.',changes={})=>({id,text,extra:'',tags:'Nursing::LATTE::Look Tier::1',keep:true,pipeCount:2,factIds:['fact-1'],mappingIssues:[],...changes});
@@ -49,8 +49,21 @@ module.exports=function productionAnkiPerformanceTests(S,t){
   t('Anki paging leaves selection and source data unchanged',JSON.stringify(many)===serialized&&H.ankiSelection(many).kept.length===104);
   t('Anki export includes kept notes from every page',H.ankiExportText(many,batch,true,'all',false,false).split('\n').length===104&&H.ankiExportText(many,batch,true,'all',false,false).includes('Marker 104:'));
   const editSource=span('  const editNote=id=>{','  const saveSourceAudit=async()=>{'),events=[];
-  new Function('filteredCards','ankiPageForNote','setView','setStyleOnly','setWarningFilter','setNotePage','setEditFocus',editSource+';editNote("note-101");')(many,H.ankiPageForNote,...['view','style','warning','page','focus'].map(kind=>value=>events.push([kind,value])));
+  // v16.9: editNote refuses a focus request for a row the tier filter hides, and offers the tier
+  // change explicitly, so the extraction now binds the whole deck, the tier reader and that path.
+  const tier2=note('note-tier2','[Synthetic] Marker 2: {{c1::blue}}.',{tags:'Nursing::LATTE::Look Tier::2'});
+  const deck=[...many,tier2];
+  const bindEdit=(blocked,record)=>new Function('cards','filteredCards','getTier','ankiPageForNote','editBlocked','setEditBlocked','setTierFilter','setView','setStyleOnly','setWarningFilter','setNotePage','setEditFocus',
+    editSource+';return {editNote,acceptBlockedEdit};')(
+    deck,many,H.ankiTier,H.ankiPageForNote,blocked,value=>record.push(['blocked',value]),value=>record.push(['tier',value]),
+    ...['view','style','warning','page','focus'].map(kind=>value=>record.push([kind,value])));
+  bindEdit(null,events).editNote('note-101');
   t('Anki Edit in Table mounts the target page before requesting focus',events.find(x=>x[0]==='page')[1]===2&&events.findIndex(x=>x[0]==='page')<events.findIndex(x=>x[0]==='focus')&&events.at(-1)[1]==='note-101');
+  const outside=[];bindEdit(null,outside).editNote('note-tier2');
+  t('Anki Edit in Table asks for a hidden tier instead of a doomed focus request',outside.length===1&&outside[0][0]==='blocked'&&outside[0][1].id==='note-tier2'&&outside[0][1].tier==='2'&&!outside.some(x=>x[0]==='focus'));
+  const accepted=[];bindEdit({id:'note-tier2',tier:'2'},accepted).acceptBlockedEdit();
+  t('Anki accepted tier change selects that tier and mounts the note before focus',accepted.find(x=>x[0]==='tier')[1]==='2'&&accepted.find(x=>x[0]==='page')[1]===0&&accepted.findIndex(x=>x[0]==='page')<accepted.findIndex(x=>x[0]==='focus')&&accepted.at(-1)[1]==='note-tier2');
+  t('Anki tier prompt never changes the export selection on its own',S.includes('The tier filter also decides which notes export.')&&!/setEditBlocked\(\{id,tier:getTier\(row\.tags\)\}\);setTierFilter/.test(S));
   const focusSource=span("  useEffect(()=>{if(editFocus&&view==='table')",'  const sourceConflicts=useMemo('),focused=[];
   new Function('useEffect','editFocus','view','warningFilter','styleOnly','notePage','document','setEditFocus',focusSource)(fn=>fn(),'note-101','table','all',false,2,{getElementById:id=>id==='anki-text-note-101'?{scrollIntoView(){focused.push('scroll');},focus(){focused.push('focus');}}:null},value=>focused.push(value));
   t('Anki page-aware edit focus reaches the mounted textarea once',JSON.stringify(focused)===JSON.stringify(['scroll','focus',null]));

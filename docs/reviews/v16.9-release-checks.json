@@ -1,0 +1,118 @@
+{
+  "version": "16.9",
+  "canonicalFile": "Nursing-Study-Suite v16.9.html",
+  "asset": "Nursing-Study-Suite.v16.9.html",
+  "identity": {
+    "checkpointSha256": "6e7d93c774c11fb973b923dc79269478da2790098b6532b2b3ede6a201b37bde",
+    "releaseSha256": "f9e7bbbfb75175f84ceeb5f924dad34b395428ac68f6870f483f2e750234cd55",
+    "metadataOnlyChange": true
+  },
+  "verification": {
+    "command": "node verify-repo.js",
+    "passed": 3045,
+    "failed": 0,
+    "previousTotal": 2974,
+    "addedAssertions": 71,
+    "summary": [
+      "PASS  one canonical suite HTML; LF-only; filename and release comment agree",
+      "PASS  11 frozen prompt constants match prompt-baseline.json",
+      "PASS  Prompts.md contains live bytes for all 12 prompt constants",
+      "3045 passed · 0 failed",
+      "PASS  Babel parse with C:\\Users\\sai13\\AppData\\Local\\Temp\\nursing-study-suite-verify\\node_modules\\@babel\\standalone\\babel.js",
+      "ALL REPOSITORY GATES PASSED"
+    ]
+  },
+  "cdn": {
+    "checkedAt": "2026-09-19T18:12:22.717Z",
+    "results": [
+      {
+        "url": "https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js",
+        "expected": "sha384-tMH8h3BGESGckSAVGZ82T9n90ztNXxvdwvdM6UoR56cYcf+0iGXBliJ29D+wZ/x8",
+        "actual": "sha384-tMH8h3BGESGckSAVGZ82T9n90ztNXxvdwvdM6UoR56cYcf+0iGXBliJ29D+wZ/x8",
+        "bytes": 10737,
+        "matches": true
+      },
+      {
+        "url": "https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js",
+        "expected": "sha384-bm7MnzvK++ykSwVJ2tynSE5TRdN+xL418osEVF2DE/L/gfWHj91J2Sphe582B1Bh",
+        "actual": "sha384-bm7MnzvK++ykSwVJ2tynSE5TRdN+xL418osEVF2DE/L/gfWHj91J2Sphe582B1Bh",
+        "bytes": 131882,
+        "matches": true
+      },
+      {
+        "url": "https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js",
+        "expected": "sha384-ku9eM40vVDsFUiERorrdlHlF0LIhdfn716M7TntM72Uo98T7LWiogD3hNenPx8Q0",
+        "actual": "sha384-ku9eM40vVDsFUiERorrdlHlF0LIhdfn716M7TntM72Uo98T7LWiogD3hNenPx8Q0",
+        "bytes": 2849480,
+        "matches": true
+      },
+      {
+        "url": "https://cdnjs.cloudflare.com/ajax/libs/marked/11.1.1/marked.min.js",
+        "expected": "sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te",
+        "actual": "sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te",
+        "bytes": 35141,
+        "matches": true
+      },
+      {
+        "url": "https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.4.15/purify.min.js",
+        "expected": "sha384-uUMu9JDY09vBzRf9SPcK2VgUj+W/70J6Soc+Dded5P474ElQ63iv9j5N3DE7Kp3N",
+        "actual": "sha384-uUMu9JDY09vBzRf9SPcK2VgUj+W/70J6Soc+Dded5P474ElQ63iv9j5N3DE7Kp3N",
+        "bytes": 29369,
+        "matches": true
+      },
+      {
+        "url": "https://cdn.jsdelivr.net/npm/dompurify@3.4.15/dist/purify.min.js",
+        "expected": "sha384-uUMu9JDY09vBzRf9SPcK2VgUj+W/70J6Soc+Dded5P474ElQ63iv9j5N3DE7Kp3N",
+        "actual": "sha384-uUMu9JDY09vBzRf9SPcK2VgUj+W/70J6Soc+Dded5P474ElQ63iv9j5N3DE7Kp3N",
+        "bytes": 29369,
+        "matches": true
+      },
+      {
+        "url": "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
+        "expected": "sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e",
+        "actual": "sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e",
+        "bytes": 320004,
+        "matches": true
+      },
+      {
+        "url": "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js",
+        "expected": "sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG",
+        "actual": "sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG",
+        "bytes": 97630,
+        "matches": true
+      },
+      {
+        "url": "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js",
+        "expected": "sha384-SnzOobpRMLXZ52iJvZm/C0fYw0OQemTXzTjIsdsfMcrCtCEe9qgzxTd3RSklO5x2",
+        "actual": "sha384-SnzOobpRMLXZ52iJvZm/C0fYw0OQemTXzTjIsdsfMcrCtCEe9qgzxTd3RSklO5x2",
+        "bytes": 1087212,
+        "matches": true
+      },
+      {
+        "url": "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js",
+        "expected": "sha384-SnzOobpRMLXZ52iJvZm/C0fYw0OQemTXzTjIsdsfMcrCtCEe9qgzxTd3RSklO5x2",
+        "actual": "sha384-SnzOobpRMLXZ52iJvZm/C0fYw0OQemTXzTjIsdsfMcrCtCEe9qgzxTd3RSklO5x2",
+        "bytes": 1087212,
+        "matches": true
+      }
+    ]
+  },
+  "implementationEvidence": {
+    "defectsFixed": 12,
+    "exactMatchEdits": 17,
+    "followUpAssertions": 68,
+    "ankiPerformanceAssertions": 3,
+    "nonVacuous": "the added module fails against the pre-fix bytes",
+    "thresholdSweepCases": 22176,
+    "thresholdBoundsLost": 0,
+    "thresholdUnitsChanged": 0,
+    "record": "review-followup-fixes-2026-09-19.md"
+  },
+  "limitations": [
+    "No live Gemini calls",
+    "No private material",
+    "No native Anki import acceptance",
+    "No mounted-browser acceptance for this change",
+    "Actual-PDF prevalence unmeasured"
+  ]
+}

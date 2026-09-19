@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 2974;
+const EXPECTED_ASSERTIONS = 3045;
 
 let file;
 try {
@@ -2727,6 +2727,9 @@ section('v15.14 — clamps, backoff, storage');
   await require('./tools/production-correctness-tests').runTests(S,t);
   require('./tools/production-anki-performance-tests')(S,t);
   await require('./tools/production-resource-transport-tests').runTests(S,t);
+
+  section('post-v16.8 review follow-up fixes');
+  await require('./tools/production-review-followup-tests')(S,t);
 
   console.log('\n════════════════════════════');
   const total = pass + fail;

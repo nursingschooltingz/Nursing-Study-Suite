@@ -9,6 +9,23 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [16.9] — 2026-09-19
+
+### Fixed
+
+- Accept a supported per-minute threshold followed by ordinary prose, and reject a blank calculation answer instead of printing it as an em dash.
+- Stop a Fahrenheit reading inside an answer choice from erasing a question’s choice list or fabricating a sixth choice, and keep the unit in the export.
+- Keep explicitly labelled questions when their answer choices are numbered, and merge recovered answers when AI pairing finds the same question count.
+- Normalize scalar NCLEX condition metadata so the card view, disease filter and Markdown export cannot fail on it.
+- Quote Anki fields a CSV importer would misread, so a quote survives import and cannot merge the notes that follow it.
+- Keep a wrapped worksheet option intact for the item audit, refuse malformed card sections before they corrupt source text, and mark a cancelled transcription comparison incomplete.
+- Clear stale Priority source, harvest and truncation notices when a run never starts, and offer an explicit tier change when Edit in Table targets a hidden note.
+
+### Verification
+
+- The unified verifier passes 3,045 assertions, all eleven frozen prompt hashes and full JSX transformation. 71 added assertions extract live functions and fail against the pre-fix bytes. See the [follow-up fix record](docs/reviews/review-followup-fixes-2026-09-19.md).
+- Released as `Nursing-Study-Suite.v16.9.html`. Model settings, frozen prompts, dependency pins and warning tiers are unchanged. See the [release verification record](docs/reviews/v16.9-release.md).
+
 ## [16.8] — 2026-09-18
 
 ### Fixed

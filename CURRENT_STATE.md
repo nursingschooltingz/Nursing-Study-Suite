@@ -1,5 +1,25 @@
 # Current maintainer state
 
+## v16.9 review follow-up release (2026-09-19)
+
+Two independent reviews of the shipped v16.8 build found twelve defects; all twelve are fixed, and the
+user then explicitly requested committing, publishing and updating the releases page. The canonical
+application is `Nursing-Study-Suite v16.9.html`; the release asset is `Nursing-Study-Suite.v16.9.html`.
+One defect is in code v16.8 itself changed (a cancelled comparison left an earlier card transcript
+buildable); the other eleven are older.
+
+Highest-impact: a legitimate per-minute bound followed by prose was refused as an unsupported
+compound unit, so a correctly grounded case reported a grounding error and skipped its optional item
+audit; and the A–F option marker collided with the Fahrenheit abbreviation, which either erased a
+question's whole choice list or fabricated a sixth choice while deleting the unit from the export.
+
+Verification: **3,045 passing assertions / 0 failed**, all eleven unchanged frozen prompt hashes,
+prompt documentation, LF/version checks and full JSX transformation. The 71 added assertions extract
+live functions and fail against the pre-fix bytes. Frozen prompts, model defaults, warning tiers and
+dependency pins are unchanged. See the
+[follow-up fix record](docs/reviews/review-followup-fixes-2026-09-19.md) for the per-defect table,
+two withdrawn first attempts, the differential sweeps and remaining limits.
+
 ## v16.8 production-review release (2026-09-18)
 
 The user authorized implementing the [production review](docs/reviews/production-review-2026-09-18.md), then explicitly requested committing, publishing and updating releases. All thirteen actionable findings are addressed, plus a file-picker lifetime defect discovered during native browser acceptance. The canonical application is `Nursing-Study-Suite v16.8.html`; the release asset is `Nursing-Study-Suite.v16.8.html`. See the [release verification record](docs/reviews/production-v16.8-release.md).
