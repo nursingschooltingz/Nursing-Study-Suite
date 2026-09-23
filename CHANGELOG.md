@@ -24,6 +24,7 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 - Eligible case answer options are shuffled once with Fisher–Yates, preserving answers, rationales and citations. Ordering and Calculation remain unchanged; ambiguous label/order references preserve the original order with an advisory.
 - Unfrozen case-generation/repair guidance preserves source qualifications and prohibits inventing absent findings/history from generic descriptions. All eleven frozen prompts, model profiles, warning tiers and dependencies remain unchanged.
+- Case-generation and repair prompts now explain numeric distractors using the cited rule, distinguish rejected option values from source evidence, and prohibit assigning unsupported values to invented alternative clinical contexts.
 - Clinical source dispositions and remaining private-output/PDF evidence gaps are recorded separately from software acceptance. No live generation or publication is claimed.
 
 ## [17.0] — 2026-09-19

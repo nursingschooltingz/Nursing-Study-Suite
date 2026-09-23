@@ -9079,6 +9079,7 @@ regardless of how well it is written.
 // supportType vocabulary so combined/inference statements are labelled honestly rather
 // than passed off as direct quotes.
 // v17.1: generic disease knowledge cannot establish absent client findings/history or absolute exclusions.
+// v17.1: rejected option quantities were repeated as sourced facts or assigned invented clinical contexts.
 function caseBuildPrompt({conditionName,facts,difficulty,stages,questionsPerStage,includeTypes}){
   const typeList=[];
   if(includeTypes.mcq)typeList.push('MCQ (single best answer, 4 options A-D)');
@@ -9154,6 +9155,18 @@ Each data item and rationale carries a supportType describing how it relates to 
 Do not pretend an inference is a direct quote.
 This is checked in code: a value absent from its cited facts is an ERROR unless you declare
 it "instantiated" AND a cited fact states a bound the value actually satisfies.
+
+NUMERIC DISTRACTOR RATIONALES:
+Incorrect options may contain deliberately wrong quantities. Those option values are NOT
+source evidence for their rationales. Explain rejection using the actual cited rule;
+refer to "this option's interval/dose" instead of repeating an unsupported number.
+Never claim a rejected value belongs to another stage, condition or treatment unless
+the cited fact explicitly establishes that association. Do not relabel an unsupported
+distractor number "instantiated" merely to clear numeric validation.
+Example: source says "assess every 4 minutes" and a distractor says "every 12 minutes".
+Rationale: "This option does not match the cited assessment interval of 4 minutes."
+Before returning JSON, check the numbers and fact IDs in EVERY rationale, including
+incorrect options; each asserted value must have the same source support as a correct answer.
 
 ═══ STAGE DEPENDENCY ═══
 Generate exactly ${stages} stages that unfold in clinical order. A question in a stage may only
@@ -10306,6 +10319,7 @@ function caseGateItems(cs){
 // rewritten item still has to be grounded, and the shared question rules still apply.
 // Only the failing item is regenerated, and only for non-answer-accuracy failures.
 // v17.1: preserve source qualifications; general descriptions cannot invent client history.
+// v17.1: repairs must also explain numeric distractors from the cited rule, not invent a rationale for their values.
 function caseBuildRepairPrompt({conditionName,facts,stageNumber,q,criterion,visibleContext}){
   return `Generic disease descriptions do not establish this client's absence of findings or personal history. Preserve source qualifiers; associations do not justify absolute diagnostic exclusions.
 
@@ -10328,6 +10342,18 @@ RULES
   padding the distractors. The target is options indistinguishable on surface features.
 - If you cannot repair it without breaking grounding, return the item unchanged and say so
   in "repairNote".
+
+NUMERIC DISTRACTOR RATIONALES:
+Incorrect options may contain deliberately wrong quantities. Those option values are NOT
+source evidence for their rationales. Explain rejection using the actual cited rule;
+refer to "this option's interval/dose" instead of repeating an unsupported number.
+Never claim a rejected value belongs to another stage, condition or treatment unless
+the cited fact explicitly establishes that association. Do not relabel an unsupported
+distractor number "instantiated" merely to clear numeric validation.
+Example: source says "assess every 4 minutes" and a distractor says "every 12 minutes".
+Rationale: "This option does not match the cited assessment interval of 4 minutes."
+Before returning JSON, check the numbers and fact IDs in EVERY rationale, including
+incorrect options; each asserted value must have the same source support as a correct answer.
 
 ${CASE_QUESTION_RULES}
 

@@ -1529,7 +1529,7 @@ Either way, the ANCHOR RULE is unchanged: every option must trace to verbatim so
 
 ---
 
-## 5 · Clinical Case Study Generator (`caseBuildPrompt`, 7,373 chars)
+## 5 · Clinical Case Study Generator (`caseBuildPrompt`, 9,274 chars)
 
 Returns JSON, not markdown — every field is re-validated in code against the real Knowledge Base after generation. The fact packet is appended by `caseRenderFactPacket`; the shared question rules come from `CASE_QUESTION_RULES` (see the Appendix).
 
@@ -1609,6 +1609,18 @@ Each data item and rationale carries a supportType describing how it relates to 
 Do not pretend an inference is a direct quote.
 This is checked in code: a value absent from its cited facts is an ERROR unless you declare
 it "instantiated" AND a cited fact states a bound the value actually satisfies.
+
+NUMERIC DISTRACTOR RATIONALES:
+Incorrect options may contain deliberately wrong quantities. Those option values are NOT
+source evidence for their rationales. Explain rejection using the actual cited rule;
+refer to "this option's interval/dose" instead of repeating an unsupported number.
+Never claim a rejected value belongs to another stage, condition or treatment unless
+the cited fact explicitly establishes that association. Do not relabel an unsupported
+distractor number "instantiated" merely to clear numeric validation.
+Example: source says "assess every 4 minutes" and a distractor says "every 12 minutes".
+Rationale: "This option does not match the cited assessment interval of 4 minutes."
+Before returning JSON, check the numbers and fact IDs in EVERY rationale, including
+incorrect options; each asserted value must have the same source support as a correct answer.
 
 ═══ STAGE DEPENDENCY ═══
 Generate exactly ${stages} stages that unfold in clinical order. A question in a stage may only
@@ -1951,6 +1963,18 @@ RULES
   padding the distractors. The target is options indistinguishable on surface features.
 - If you cannot repair it without breaking grounding, return the item unchanged and say so
   in "repairNote".
+
+NUMERIC DISTRACTOR RATIONALES:
+Incorrect options may contain deliberately wrong quantities. Those option values are NOT
+source evidence for their rationales. Explain rejection using the actual cited rule;
+refer to "this option's interval/dose" instead of repeating an unsupported number.
+Never claim a rejected value belongs to another stage, condition or treatment unless
+the cited fact explicitly establishes that association. Do not relabel an unsupported
+distractor number "instantiated" merely to clear numeric validation.
+Example: source says "assess every 4 minutes" and a distractor says "every 12 minutes".
+Rationale: "This option does not match the cited assessment interval of 4 minutes."
+Before returning JSON, check the numbers and fact IDs in EVERY rationale, including
+incorrect options; each asserted value must have the same source support as a correct answer.
 
 ${CASE_QUESTION_RULES}
 
