@@ -1,12 +1,16 @@
 # Current maintainer state
 
-## v17.1 case remediation (2026-09-23, unreleased)
+## v17.2 release (2026-09-23)
 
-The canonical application is `Nursing-Study-Suite v17.1.html`. The approved consolidated plan's software packages A–E are implemented: honest repair acceptance/publication, complete range and unit parsing, stem/title grounding, bounded exact calculations, stable option randomization, and consistent review/assumption exports. The generation and repair builders gain source-qualification guidance; all eleven frozen constants remain byte-identical.
+The canonical application is `Nursing-Study-Suite v17.2.html`. This release publishes the case-generator remediation and follow-up fixes developed as v17.1. The user confirmed the generator is working and requested publication as v17.2. Release preparation changes version labels, canonical filename, documentation and download links; it adds no generation behavior or model calls. The [release verification record](docs/reviews/v17.2-release.md) records the gates and asset identity. Source-grounding and clinical-review limitations from the implementation record remain applicable.
+
+## v17.1 case remediation development (2026-09-23; shipped as v17.2)
+
+The development application was `Nursing-Study-Suite v17.1.html`; its release filename is now `Nursing-Study-Suite v17.2.html`. The approved consolidated plan's software packages A–E are implemented: honest repair acceptance/publication, complete range and unit parsing, stem/title grounding, bounded exact calculations, stable option randomization, and consistent review/assumption exports. The generation and repair builders gain source-qualification guidance; all eleven frozen constants remain byte-identical.
 
 The [implementation record](docs/reviews/case-remediation-v17.1.md) distinguishes deterministic and synthetic browser evidence from clinical source review. The user authorized the `Testing/v16.2 tests` folder; it contains KB JSON files and captured quotes, but no original PDFs or generated case exports. The TCA treatment concern is already present in its captured quote, while the Dermatitis quote contains a qualified childhood association. Original-page verification, correction of the absent case files, classification of their 44 timing warnings and any live regenerated-output measurement remain open. No private KB or generated course output belongs in Git.
 
-This entry supersedes the canonical filename in the historical release sections below. The release has not been committed or published.
+The v17.1 development label was not published as a GitHub release; these changes ship in v17.2.
 
 Follow-up: a newly supplied case reproduced two false validation errors: a supported pound value and numbered prose misread as liters. Pound aliases now normalize explicitly and bare g/L require a letter boundary. Private replay against the app-normalized authorized KB changes 2 errors / 21 warnings to 0 errors / the identical 21 warnings; this does not certify clinical content. The original export remains unchanged. The focused regression additions cover aliases, thresholds, ordinary prose, real units, unsupported tails and evidence mismatches. See the implementation record for verification and remaining content review.
 

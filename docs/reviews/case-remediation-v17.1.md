@@ -1,6 +1,6 @@
 # Case remediation v17.1 — implementation and verification
 
-Date: 2026-09-23. Status: software implemented; clinical content closure remains partial; unreleased.
+Date: 2026-09-23. Status: software implemented and released as v17.2; clinical content closure remains partial. The v17.1 references below record the development and verification history. See [v17.2 release verification](v17.2-release.md).
 
 The canonical application is `Nursing-Study-Suite v17.1.html`. This implements packages A–E of the user-supplied consolidated plan and the generic source-qualification clarification from F. It preserves the eleven frozen constants, source-only generation, model profiles, one-round repair policy, source replacement cancellation, warning tiers and single-file architecture.
 

@@ -8,8 +8,8 @@
      Babel, so this adds narrow resource directives without a default-src/script-src migration. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net">
 <title>LATTE Study Suite</title>
-<!-- v17.1 (2026-09-23): case remediation: complete numeric grounding, bounded arithmetic, honest repair acceptance,
-     stable answer permutations, and consistent review metadata across screen and exports.
+<!-- v17.2 (2026-09-23): publish the case remediation developed as v17.1: measurement/range grounding,
+     bounded arithmetic, honest repairs, stable answer permutations, complete review exports, and sourced distractor rationales.
      v17.0 (2026-09-19): interface overhaul. The shell is a workflow rail (source → plan → practice) beside a
      compact workspace header and a setup-beside-results workbench, replacing the nav + permanent settings column +
      single scrolling stack. Settings became a dismissable right-hand drawer, every tool gained an empty state, a
@@ -5694,7 +5694,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '17.1';}
+function suiteVersion(){return '17.2';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -10449,7 +10449,7 @@ function CaseStudyGenerator(){
     // v15.17: a quota-stopped case audit remains interrupted after the generated case finishes.
     let auditInterrupted=false;
     const _aud=cfg.forTool('itemAudit');
-    owned_setProvenance({genModel:model,genLevel:level,promptLabel:'case builder v17.1',
+    owned_setProvenance({genModel:model,genLevel:level,promptLabel:'case builder v17.2',
       auditModel:runAudit?_aud.model:'',auditLevel:runAudit?_aud.level:''});
     try{
       owned_log('Selected '+selectedFacts.length+' grounded fact(s) for '+activeCondition.name+'.','ok');
