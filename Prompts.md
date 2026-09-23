@@ -1,6 +1,6 @@
 # Nursing Study Suite — Prompt Library
 
-The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, and the item-quality auditor, **extracted verbatim from the shipped v17.0 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
+The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, and the item-quality auditor, **extracted verbatim from the shipped v17.1 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
 
 > **Coverage.** All 12 named prompt constants are represented from live HTML bytes. Eleven are byte-frozen; `CARD_TRANSCRIBE_PROMPT` is deliberately tunable but requires two transcription runs per card after an edit. The generated appendix is maintained by `node tools/render-prompts.js --write` and checked by `node verify-repo.js`.
 
@@ -1661,6 +1661,8 @@ ${CASE_QUESTION_RULES}
   "debrief": { "priorityProblem": "string", "keyDecisions": ["string"], "notes": "any shortfalls or facts you could not cover", "factIds": ["fact-104"] }
 }
 
+Generic disease descriptions do not establish this client's absence of findings or personal history.
+Preserve source qualifiers: an association does not justify an absolute diagnostic exclusion.
 Every question needs a rationale entry for EVERY option (correct and incorrect). Ordering-question
 correctAnswers list the step labels in correct sequence. Return ONLY the JSON object.
 
@@ -1921,3 +1923,55 @@ Return ONLY this JSON object, with no commentary:
 "numerics" must list EVERY number carrying clinical meaning — thresholds, doses, sizes, times, lab values — even though those numbers also appear inside the bullets. The duplication is deliberate: it is the list a human checks against the card by eye, and it is what the safety gate keys on.`;
 ````
 <!-- END GENERATED: EXTRACTOR_AND_TRANSCRIBER_PROMPTS -->
+
+## Case item repair builder (v17.1)
+
+The one-round repair preserves the source-only contract and source qualifiers. Unchanged items retain FAIL; accepted rewrites are not re-audited.
+
+````js
+function caseBuildRepairPrompt({conditionName,facts,stageNumber,q,criterion,visibleContext}){
+  return `Generic disease descriptions do not establish this client's absence of findings or personal history. Preserve source qualifiers; associations do not justify absolute diagnostic exclusions.
+
+═══ REPAIR ONE CASE-STUDY ITEM ═══
+
+An independent reviewer failed the item below on this criterion:
+
+  FAILED: ${criterion}
+
+Rewrite ONLY this item so it no longer meets that disqualifying condition. Everything else
+about the case stays as it is.
+
+RULES
+- Keep the same question id ("${q.id||''}"), the same type (MCQ), and the same option
+  labels. Return the same number of options.
+- The item must still be answerable from the case data already shown to the student in the
+  stage context below. Do not depend on data the student has not seen.
+- Every option and every rationale must still cite supplied fact IDs, exactly as before.
+- Do not "fix" a length or integration problem by making the key the shortest option or by
+  padding the distractors. The target is options indistinguishable on surface features.
+- If you cannot repair it without breaking grounding, return the item unchanged and say so
+  in "repairNote".
+
+${CASE_QUESTION_RULES}
+
+═══ STAGE CONTEXT ALREADY SHOWN TO THE STUDENT ═══
+${visibleContext}
+
+═══ THE FAILING ITEM (current JSON) ═══
+${JSON.stringify(q,null,2)}
+
+═══ RETURN EXACTLY THIS JSON, NOTHING ELSE ═══
+{
+  "id": "${q.id||''}",
+  "type": "MCQ",
+  "stem": "string",
+  "options": [ { "label": "A", "text": "string" } ],
+  "correctAnswers": ["B"],
+  "rationales": [ { "option": "B", "text": "string", "supportType": "direct", "factIds": ["fact-1"] } ],
+  "cjmmSkill": "${q.cjmmSkill||'Take Action'}",
+  "repairNote": "one sentence on what you changed, or why you could not"
+}
+
+${caseRenderFactPacket(conditionName,facts)}`;
+}
+````

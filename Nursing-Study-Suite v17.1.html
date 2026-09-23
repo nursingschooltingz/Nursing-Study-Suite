@@ -8,7 +8,9 @@
      Babel, so this adds narrow resource directives without a default-src/script-src migration. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net">
 <title>LATTE Study Suite</title>
-<!-- v17.0 (2026-09-19): interface overhaul. The shell is a workflow rail (source → plan → practice) beside a
+<!-- v17.1 (2026-09-23): case remediation: complete numeric grounding, bounded arithmetic, honest repair acceptance,
+     stable answer permutations, and consistent review metadata across screen and exports.
+     v17.0 (2026-09-19): interface overhaul. The shell is a workflow rail (source → plan → practice) beside a
      compact workspace header and a setup-beside-results workbench, replacing the nav + permanent settings column +
      single scrolling stack. Settings became a dismissable right-hand drawer, every tool gained an empty state, a
      results headline and collapsible secondary configuration, and one stylesheet now defines the tokens, type
@@ -1583,7 +1585,8 @@ function artifactExportNotice({source,activeKB,requested,actual,auditRequested,a
   if(!auditRequested)lines.push('Item quality audit: disabled.');
   else{
     const counts=['PASS','FAIL','ERROR','REVIEW','N/A','REPAIRED'].map(status=>[status,rows.filter(r=>r.status===status).length]);
-    const incomplete=auditState!=='complete'||rows.length<actual;
+    // v17.1: explicit pending/unscored rows are evidence of incomplete review too.
+    const incomplete=auditState!=='complete'||rows.length<actual||rows.some(r=>['PENDING','UNSCORED'].includes(r.status));
     lines.push('Item quality audit: '+(incomplete?(auditState==='complete'?'incomplete':auditState||'not completed'):'complete')+'. '+counts.filter(([,n])=>n).map(([status,n])=>status+' '+n).join(', ')+'.');
     if(counts.some(([status,n])=>n&&['FAIL','ERROR','REVIEW'].includes(status)))lines.push('Unresolved item findings remain; review before studying.');
     if(counts.some(([status,n])=>status==='REPAIRED'&&n))lines.push('REPAIRED means rewritten, not re-audited. N/A is not a pass.');
@@ -1591,8 +1594,9 @@ function artifactExportNotice({source,activeKB,requested,actual,auditRequested,a
   return '> '+lines.join('\n> ')+'\n\n';
 }
 // v15.17: JSON-view Copy must retain the same review limitations as Markdown and print.
+// v17.1: case rows retain detailed findings and display numbers; legacy worksheet metadata stays unchanged.
 function artifactJsonExport(artifact,notice,validation=[],auditRows=[]){
-  return JSON.stringify({...artifact,_suiteReview:{notice:String(notice||'').trim(),validation:validation.map(i=>({severity:i.sev,message:i.msg})),itemAudit:auditRows.map(r=>({id:r.key||r.num||r.q?.id||'',status:r.status,criterion:r.criterion||''}))}},null,2);
+  return JSON.stringify({...artifact,_suiteReview:{notice:String(notice||'').trim(),validation:validation.map(i=>({severity:i.sev,message:i.msg})),itemAudit:auditRows.map(r=>({id:r.key||r.num||r.q?.id||'',status:r.status,criterion:r.criterion||'',...(r.questionId?{questionId:r.questionId,number:r.number||'',detail:r.detail||'',warns:r.warns||[],repairAttempt:r.repairAttempt||''}:{})}))}},null,2);
 }
 function FactTag({factId,children}){
   const K=useKnowledge();const FI=useFactInspector();
@@ -5690,7 +5694,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '17.0';}
+function suiteVersion(){return '17.1';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -9074,6 +9078,7 @@ regardless of how well it is written.
 // a hard SOURCE BOUNDARY that lists exactly what may and may not be invented, plus the
 // supportType vocabulary so combined/inference statements are labelled honestly rather
 // than passed off as direct quotes.
+// v17.1: generic disease knowledge cannot establish absent client findings/history or absolute exclusions.
 function caseBuildPrompt({conditionName,facts,difficulty,stages,questionsPerStage,includeTypes}){
   const typeList=[];
   if(includeTypes.mcq)typeList.push('MCQ (single best answer, 4 options A-D)');
@@ -9201,6 +9206,8 @@ ${CASE_QUESTION_RULES}
   "debrief": { "priorityProblem": "string", "keyDecisions": ["string"], "notes": "any shortfalls or facts you could not cover", "factIds": ["fact-104"] }
 }
 
+Generic disease descriptions do not establish this client's absence of findings or personal history.
+Preserve source qualifiers: an association does not justify an absolute diagnostic exclusion.
 Every question needs a rationale entry for EVERY option (correct and incorrect). Ordering-question
 correctAnswers list the step labels in correct sequence. Return ONLY the JSON object.
 
@@ -9218,7 +9225,8 @@ ${caseRenderFactPacket(conditionName,facts)}`;
 // text, so a correctly grounded value was reported as fabricated every time. The comma is
 // already stripped by caseNormalizeClinical on both sides, so matching is unaffected.
 // v15.17: retain signs and complete denominators. A partial unit can never establish numeric support.
-const CASE_CLINICAL_TOKEN_RE=/(?<![\w.,])(?:[+−-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|[+−-]?\.\d+)\s*(?:(?:micrograms?|milligrams?|kilograms?|grams?|millilit(?:er|re)s?|lit(?:er|re)s?|milliequivalents?|millimoles?|[µμ]g|mcg|mg|kg|mL|mEq|mmol|mm\s*Hg|bpm|beats?\s*(?:per|\/)\s*min(?:ute)?s?|breaths?\s*(?:per|\/)\s*min(?:ute)?s?|units?|g|L)(?:[\p{L}0-9²^]*)(?:\s*(?:\/|per\s+)\s*[\p{L}0-9²^]+)*|%|\/\s*min)\b|(?<![\w.,])(?:[+−-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|[+−-]?\.\d+)\s*%|(?<![\w/])\d{2,3}\s*\/\s*\d{2,3}(?:\s*mm\s*Hg)?(?![\w/])/giu;
+// v17.1: protocol/shift prose is not a denominator; unknown explicit denominators stay unsupported.
+const CASE_CLINICAL_TOKEN_RE=/(?<![\w.,])(?:[+−-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|[+−-]?\.\d+)\s*(?:(?:micrograms?|milligrams?|kilograms?|grams?|millilit(?:er|re)s?|lit(?:er|re)s?|milliequivalents?|millimoles?|[µμ]g|mcg|mg|kg|mL|mEq|mmol|mm\s*Hg|bpm|beats?\s*(?:per|\/)\s*min(?:ute)?s?|breaths?\s*(?:per|\/)\s*min(?:ute)?s?|units?|g|L)(?:[\p{L}0-9²^]*)(?:\s*(?:\/|per\s+(?!(?:protocol|shift)\b))\s*[\p{L}0-9²^]+)*|%|\/\s*min)\b|(?<![\w.,])(?:[+−-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|[+−-]?\.\d+)\s*%|(?<![\w/])\d{2,3}\s*\/\s*\d{2,3}(?:\s*mm\s*Hg)?(?![\w/])/giu;
 // v15.1: qualitative findings ("becomes hypotensive", "appears confused") carry no numeric
 // token and sailed past the value scan. Term matches are WARN-tier because a stem scan will
 // false-positive on genuinely neutral phrasing; the numeric scan above stays error-tier.
@@ -9323,6 +9331,25 @@ function caseNormalizeClinical(t){
 const CASE_SUPPORTED_UNIT=/^(?:mcg|mg|g|kg|ml|l|meq|mmol|unit|bpm|mmhg|%|\/min)(?:\/(?:kg|ml|l|dl|hr|min|sec|day|dose|m2))*$/;
 function caseNumericTokens(text){
   const tokens=[],unsupported=[],blocked=[],input=String(text||'');
+  // v17.1: consume shared-unit ranges once; the old token scan lost the lower endpoint.
+  const number='[+−-]?(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d+)?|[+−-]?\\.\\d+';
+  const range=new RegExp('(?<![\\w.,])('+number+')\\s*(?:[-–—]|to)\\s*('+number+')\\s*','giu');
+  for(const m of input.matchAll(range)){
+    const at=m.index+m[0].lastIndexOf(m[2]),rest=input.slice(at);
+    const unitToken=[...rest.matchAll(CASE_CLINICAL_TOKEN_RE)][0];
+    if(!unitToken||unitToken.index!==0)continue;
+    const end=at+unitToken[0].length;
+    const tail=input.slice(end).match(/^(?:\s*\/\s*(?:\([^\r\n)]*\)?|[^\s,;!?]+)|[·⋅⁄^%°⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻][^\s,;!?]*|[ \t]*[·⋅*×][ \t]*[\p{L}µμ][^\s,;!?]*|[+−-][\p{L}µμ][^\s,;!?]*)/u);
+    const upper=caseNumericTokens(unitToken[0]+(tail?tail[0]:''));
+    // Parse just the unit-bearing span plus its immediate unsupported tail, never later values.
+    const first=upper.tokens[0],bad=upper.unsupported[0];
+    if(!first||bad){unsupported.push(input.slice(m.index,end)+(bad?' ('+bad+')':''));blocked.push([m.index,end]);continue;}
+    const unit=first.unit;
+    if(unit==='bp')continue;
+    tokens.push({raw:m[1]+' '+unit,key:caseDecimal(m[1].replace(/−/g,'-'))+unit,unit},
+      {raw:m[2]+' '+unit,key:caseDecimal(m[2].replace(/−/g,'-'))+unit,unit});
+    blocked.push([m.index,end]);
+  }
   // A fraction, scientific expression or broken digit grouping must not donate its numeric suffix.
   const unusual=/(?<![\w.])(?:\d+(?:\.\d+)?\s*(?:e[+-]?\d+|[x×]\s*10\s*\^?\s*[+-]?\d+)|\d+(?:\s+\d+)?\s*\/\s*\d+|\d[\d,]*,\d[\d,]*)(?:\s*(?:mm\s*Hg|[\p{L}%°]+)(?:\/[\p{L}0-9]+)*)?/giu;
   for(const m of input.matchAll(unusual)){
@@ -9381,7 +9408,7 @@ function caseParseThreshold(factText){
   const validUnit=(u,match)=>{
     if(u&&!CASE_SUPPORTED_UNIT.test(u))return false;
     const tail=t.slice(match.index+match[0].length);
-    return !/^(?:[\p{L}0-9]|\.\d|\s*\/\s*(?:\([^\r\n)]*\)?|[^\s,;!?]+)|[·⋅⁄^%°⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻][^\s,;!?]*|[ \t]*[·⋅*×][ \t]*[\p{L}µμ][^\s,;!?]*|[+−-][\p{L}µμ][^\s,;!?]*)/u.test(tail);
+    return !/^(?:\s+per\s+(?!(?:protocol|shift)\b)|[\p{L}0-9]|\.\d|\s*\/\s*(?:\([^\r\n)]*\)?|[^\s,;!?]+)|[·⋅⁄^%°⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻][^\s,;!?]*|[ \t]*[·⋅*×][ \t]*[\p{L}µμ][^\s,;!?]*|[+−-][\p{L}µμ][^\s,;!?]*)/u.test(tail);
   };
   const rng=t.match(new RegExp(NUM+'\\s*(?:[-–—]|to)\\s*'+NUM+UNIT));
   if(rng){
@@ -9439,7 +9466,7 @@ function caseAuditTextValues(text,factIds,factIndex,where,issues,supportType,pre
         :{sev:'error',msg:where+': instantiated value "'+v+'" has no parseable threshold in its cited fact(s) — "instantiated" requires a cited fact that states the bound'});
       continue;
     }
-    issues.push({sev:'error',msg:where+': value "'+v+'" does not appear in its cited facts\' text or source quotes — if it is derived from a stated threshold, declare supportType "instantiated"'});
+    issues.push({sev:'error',msg:where+': value "'+v+'" does not appear in its cited facts\' text or source quotes'+(st==='calculation'?' or a verified multiplication/division calculation — requires source review':' — if it is derived from a stated threshold, declare supportType "instantiated"')});
   }
 }
 function caseAuditDatumValues(d,factIndex,where,issues,neutralValues){
@@ -9453,6 +9480,37 @@ function caseAuditDatumValues(d,factIndex,where,issues,neutralValues){
 }
 // v15.17: the prompt permits an assumed body weight only for a packet-supported weight-based calculation.
 // It remains visibly neutral framing; no clinical weight cutoff or numerical conversion is invented here.
+// v17.1: bounded quantity multiplication/division, with exact decimal cross-products.
+// Decimal scales use BigInt strings: in-browser Babel lowers exponentiation to Math.pow, which rejects BigInt.
+// No unit conversions, chained formulas, implicit operands or rounding inference. Results
+// belong only to this question; neither another rationale nor the proposed result supplies operands.
+function caseCalculationEvidence(q,factIndex,ids,presentedValues){
+  const support=new Set(presentedValues||[]);
+  for(const id of ids){const f=factIndex.get(String(id).toLowerCase())?.fact;if(f)for(const text of [f.text,f.sourceQuote])for(const t of caseNumericTokens(text).tokens)support.add(t.key);}
+  const derived=new Set(),num='[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)',unit='(?:mcg|mg|g|kg|ml|l|meq|mmol|unit)(?:\\s*/\\s*(?:kg|ml|l|dl|hr|min|sec|day|dose|m2))*';
+  const quantity='('+num+')\\s*('+unit+')';
+  const expression=new RegExp('(?<![\\w.,/])'+quantity+'\\s*(×|\\*|multiplied by|divided by|÷)\\s*'+quantity+'\\s*(?:=|gives|equals)\\s*'+quantity+'(?![\\w/²³^])','g');
+  const decimal=x=>{const v=caseDecimal(x),places=(v.split('.')[1]||'').length;return [BigInt(v.replace('.','')),BigInt('1'+'0'.repeat(places))];};
+  const dimensions=u=>{const parts=u.split('/'),out=new Map();parts.forEach((p,i)=>out.set(p,(out.get(p)||0)+(i?-1:1)));return out;};
+  for(const r of q.rationales||[]){
+    const text=caseNumericText(r.text);
+    // Unrecognized rounding instructions cannot accidentally create exact-result evidence.
+    if(/\bround(?:ed|ing)?\b/.test(text)||text.length>20000)continue;
+    for(const m of text.matchAll(expression)){
+      const units=[m[2],m[5],m[7]].map(u=>u.replace(/\s+/g,'')),values=[m[1],m[4],m[6]];
+      if(values.some(v=>v.length>40)||units.some(u=>!CASE_SUPPORTED_UNIT.test(u)))continue;
+      if(!support.has(caseDecimal(values[0])+units[0])||!support.has(caseDecimal(values[1])+units[1]))continue;
+      const divided=/divided|÷/.test(m[3]),dims=dimensions(units[0]);
+      for(const [u,n] of dimensions(units[1]))dims.set(u,(dims.get(u)||0)+(divided?-n:n));
+      for(const [u,n] of dimensions(units[2]))dims.set(u,(dims.get(u)||0)-n);
+      if([...dims.values()].some(n=>n!==0))continue;
+      const [a,ad]=decimal(values[0]),[b,bd]=decimal(values[1]),[c,cd]=decimal(values[2]);
+      if(divided?b!==0n&&a*bd*cd===c*ad*b:a*b*cd===c*ad*bd)derived.add(caseDecimal(values[2])+units[2]);
+    }
+  }
+  return derived;
+}
+
 function caseNeutralCalculationValues(cs,factIndex,allowedFactIds){
   const packet=[...factIndex].filter(([id])=>!allowedFactIds||allowedFactIds.has(id)).flatMap(([,e])=>[e.fact.text||'',e.fact.sourceQuote||'']);
   const weightBased=packet.some(s=>/(?:\/\s*kg\b|per\s+kilogram|weight[- ]based|body\s*weight)/i.test(s));
@@ -9710,6 +9768,8 @@ function validateCaseStudy(caseStudy,factIndex,allowedFactIds,expectedCondition)
     const sn='Stage '+(stage.stageNumber||'?');
     if(seenStageNums.has(stage.stageNumber))issues.push({sev:'error',msg:`Duplicate stage number ${stage.stageNumber}`});
     seenStageNums.add(stage.stageNumber);
+    // v17.1: titles could previously smuggle uncited clinical values.
+    scanUncitedProse(stage.title,`${sn} title`,issues);
     scanUncitedProse(stage.narrative,`${sn} narrative`,issues);
     neiaTerminologyScan(stage.narrative,`${sn} narrative`,issues);
     for(const d of stage.data||[]){
@@ -9754,6 +9814,20 @@ function validateCaseStudy(caseStudy,factIndex,allowedFactIds,expectedCondition)
       const rationaleLabels=(q.rationales||[]).map(r=>r.option);
       if(new Set(rationaleLabels).size!==rationaleLabels.length)issues.push({sev:'error',msg:qn+': duplicate rationale labels'});
       for(const r of q.rationales||[]){if(!String(r.text||'').trim())issues.push({sev:'error',msg:qn+': rationale text is empty'});if(labels.length&&!labels.includes(r.option))issues.push({sev:'error',msg:qn+': rationale label is not among the options'});}
+      // v17.1: stems use only supplied rationale facts and independently validated case data.
+      // A nonempty sentinel avoids changing the helper's legacy missing-citation behavior.
+      const questionIds=[...new Set((q.rationales||[]).flatMap(r=>r.factIds||[]))].filter(id=>factIndex.has(String(id).toLowerCase())&&(!inPacket||allowedFactIds.has(String(id).toLowerCase())));
+      caseAuditTextValues(q.stem,questionIds.length?questionIds:[''],factIndex,qn+' stem',issues,'direct',presentedValues,neutralValues);
+      const derived=q.type==='Calculation'?caseCalculationEvidence(q,factIndex,questionIds,presentedValues):new Set();
+      const explanationValues=derived.size?new Set([...presentedValues,...derived]):presentedValues;
+      if(q.type==='Calculation'&&derived.size){
+        const answer=(q.correctAnswers||[])[0]||'';
+        caseAuditTextValues(answer,questionIds.length?questionIds:[''],factIndex,qn+' answer',issues,'calculation',explanationValues,neutralValues);
+        const answerTokens=caseNumericTokens(answer);
+        const answerMatches=/^[+−-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(answer)?[...derived].some(key=>key.match(/^[+-]?[\d.]+/)[0]===caseDecimal(answer)):answerTokens.tokens.length===1&&!answerTokens.unsupported.length&&derived.has(answerTokens.tokens[0].key);
+        if(!answerMatches)
+          issues.push({sev:'error',msg:qn+': numeric answer disagrees with the verified calculation result'});
+      }
       neiaTerminologyScan(q.stem,`${qn} stem`,issues);
       for(const o of q.options||[])neiaTerminologyScan(o.text,`${qn} option ${o.label||'?'}`,issues);
       itemHeuristics(q,issues,qn); // v15.6: MCQ-only telemetry, self-guarded on q.type
@@ -9796,7 +9870,7 @@ function validateCaseStudy(caseStudy,factIndex,allowedFactIds,expectedCondition)
         checkIds(r.factIds,qn+' rationale');
         // v15.3: the entailment audit runs where fabricated numbers actually live — the
         // rationale text arguing the answer ("...because potassium is 2.4 mEq/L").
-        caseAuditTextValues(r.text,r.factIds,factIndex,`${qn} rationale ${r.option||'?'}`,issues,r.supportType,presentedValues,neutralValues);
+        caseAuditTextValues(r.text,r.factIds,factIndex,`${qn} rationale ${r.option||'?'}`,issues,q.type==='Calculation'&&r.supportType!=='neutral-framing'?'calculation':r.supportType,explanationValues,neutralValues);
         neiaTerminologyScan(r.text,`${qn} rationale ${r.option||'?'}`,issues);
       }
     }
@@ -9884,7 +9958,7 @@ function caseToMarkdown(cs,{worksheetFactIds=true}={}){
     if(stage.narrative)L.push('\n'+stage.narrative+'\n');
     if((stage.data||[]).length){
       L.push('**Clinical data**\n');
-      for(const d of stage.data)L.push('- '+(d.label?d.label+': ':'')+(d.value||'')+(worksheetFactIds&&d.factIds&&d.factIds.length?'  ['+d.factIds.join(', ')+']':''));
+      for(const d of stage.data)L.push('- '+(d.label?d.label+': ':'')+(d.value||'')+(d.supportType==='neutral-framing'&&/^(?:body\s+)?weight$/i.test(String(d.label||'').trim())?' (assumed for calculation; subject to validation)':'')+(worksheetFactIds&&d.factIds&&d.factIds.length?'  ['+d.factIds.join(', ')+']':''));
       L.push('');
     }
     (stage.questions||[]).forEach((q,i)=>{
@@ -9957,6 +10031,69 @@ function caseValidationStamp(issues,what){
 // The rubric was validated for one key and three plausible distractors; the May paper puts
 // SATA, ordered response, and NGN formats outside it. Everything else is gate=N/A, and an
 // N/A is NOT a pass — it means the instrument does not apply.
+// v17.1: compare substantive fields in canonical order. A changed note/property order
+// cannot turn an unchanged FAIL into REPAIRED; distractors are part of the captured contract.
+function caseRepairContract(original,fixed){
+  const labels=q=>(q.options||[]).map(o=>o?.label).sort();
+  if(!fixed||fixed.id!==original.id||fixed.type!==original.type||!Array.isArray(fixed.options)||JSON.stringify(labels(original))!==JSON.stringify(labels(fixed)))return 'repair changed identity or option labels/count; original kept';
+  const substantive=q=>JSON.stringify([q.id,q.type,q.stem,q.cjmmSkill,
+    (q.options||[]).map(o=>[o.label,o.text]).sort((a,b)=>String(a[0]).localeCompare(String(b[0]))),
+    [...(q.correctAnswers||[])].sort(),
+    (q.rationales||[]).map(r=>[r.option,r.text,r.supportType,[...(r.factIds||[])].sort()]).sort((a,b)=>String(a[0]).localeCompare(String(b[0])))]);
+  return substantive(original)===substantive(fixed)?'repair made no substantive change; original FAIL retained':'';
+}
+// v17.1: one immutable Fisher–Yates transformation at publication, never at render/export.
+function caseShuffleQuestion(q,random=Math.random){
+  if(!['MCQ','SATA','Prioritization','Education'].includes(q.type))return q;
+  const opts=q.options||[],rats=q.rationales||[],answers=q.correctAnswers||[],labels=opts.map(o=>o?.label);
+  if(opts.length<2||opts.length>26||labels.some(l=>!/^\w$/.test(l))||new Set(labels).size!==labels.length||!answers.length||answers.some(a=>!labels.includes(a))||new Set(answers).size!==answers.length||rats.length!==opts.length||new Set(rats.map(r=>r.option)).size!==opts.length||rats.some(r=>!labels.includes(r.option)||!r.text)||opts.some(o=>!o.text))return q;
+  if(q.type==='SATA'?(answers.length<2||answers.length>4||answers.length>=opts.length):answers.length!==1)return q;
+  // v17.1: numeric/lowercase labels have ambiguous prose references; preserve them explicitly.
+  if(labels.some(l=>!/^[A-Z]$/.test(l)))return {...q,shuffleNotice:'Answer options retained in original order: nonstandard labels require review.'};
+  const strings=[q.stem,...opts.map(o=>o.text),...rats.map(r=>r.text)].map(String);
+  // Only singular "option/choice/answer A" is unambiguous. Lists, bare labels and
+  // ordinal/location references stay intact with an advisory rather than guessing.
+  const ref=/\b([Oo]ption|[Cc]hoice|[Aa]nswer)\s+([A-Z])\b/g;
+  const unsafe=strings.some(text=>{
+    if(/\b(?:above|below|former|latter|first option|last option|second option|third option|fourth option)\b/i.test(text))return true;
+    const rest=text.replace(ref,(whole,kind,label)=>labels.includes(label)?'':whole);
+    if((rest.match(/\b[A-Z]\b/g)||[]).some(label=>labels.includes(label)))return true;
+    return /\b(?:options|choices|answers)\s+[A-Z]\b|\b[A-Z]\s*(?:,|\/|&|and|or)\s*[A-Z]\b|\([A-Z]\)|\b[A-Z][.)](?:\s|$)|\b(?:option|choice|answer)\s+[A-Z]\b/.test(rest);
+  });
+  if(unsafe)return {...q,shuffleNotice:'Answer options retained in original order: label/order-dependent wording requires review.'};
+  const shuffled=opts.map(o=>({...o}));
+  for(let i=shuffled.length-1;i>0;i--){const value=random();if(!Number.isFinite(value)||value<0||value>=1)throw Error('Invalid shuffle random value');const j=Math.floor(value*(i+1));[shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]];}
+  const mapping=new Map(shuffled.map((o,i)=>[o.label,String.fromCharCode(65+i)]));
+  const remap=text=>String(text).replace(ref,(whole,kind,label)=>kind+' '+mapping.get(label));
+  const result={...q,stem:remap(q.stem),options:shuffled.map(o=>({...o,label:mapping.get(o.label),text:remap(o.text)})),correctAnswers:answers.map(a=>mapping.get(a)),rationales:rats.map(r=>({...r,option:mapping.get(r.option),text:remap(r.text),factIds:[...(r.factIds||[])]})).sort((a,b)=>a.option.localeCompare(b.option))};
+  delete result.shuffleNotice;return result;
+}
+function caseShuffleIssues(cs){return (cs.stages||[]).flatMap(s=>(s.questions||[]).filter(q=>q.shuffleNotice).map(q=>({sev:'warn',msg:'Stage '+s.stageNumber+' '+q.id+': '+q.shuffleNotice})));}
+function caseReviewRows(cs,audit,state){
+  if(state==='disabled')return [];
+  return caseGateItems(cs).map(it=>{
+    const v=audit?.[it.key]||{status:it.eligible?(state==='running'?'PENDING':'UNSCORED'):'N/A'};
+    const stage=cs.stages.find(s=>s.stageNumber===it.stageNumber),number='Q'+it.stageNumber+'.'+(stage.questions.indexOf(it.q)+1);
+    return{key:it.key,questionId:it.q.id,number,label:number+' (Stage '+it.stageNumber+' '+it.q.id+')',status:v.status,criterion:v.criterion||'',detail:v.detail||'',warns:v.warns||[],repairAttempt:v.repairAttempt||''};
+  });
+}
+function caseReviewAppendix(cs,issues,rows){
+  const lines=['\n---\n\n## Review appendix\n'];
+  if(!issues.length)lines.push('Validation: no findings.');
+  for(const i of issues)lines.push('- '+i.sev.toUpperCase()+': '+i.msg);
+  if(!rows.length)lines.push('Item review: disabled.');
+  for(const r of rows){
+    lines.push('- '+r.number+' ('+r.questionId+'): **'+r.status+'**'+(r.criterion?' — '+r.criterion:'')+(r.detail?': '+r.detail:'')+(r.status==='REPAIRED'?' — not re-audited':'')+(r.repairAttempt?' · Repair attempt: '+r.repairAttempt:''));
+    for(const w of r.warns||[])lines.push('  - WARN '+w.criterion+': '+w.detail);
+  }
+  return lines.join('\n')+'\n';
+}
+function caseAuditProgress(cs,rows,state,phase){
+  const eligible=caseGateItems(cs).filter(i=>i.eligible).length,completed=rows.filter(r=>['PASS','FAIL','REVIEW','REPAIRED'].includes(r.status)).length,pending=rows.filter(r=>r.status==='PENDING').length;
+  const displayState=state==='complete'&&rows.some(r=>r.status==='UNSCORED')?'incomplete':state;
+  return 'Audit '+(state==='running'&&phase==='repair'?'repairing':displayState)+': '+completed+' of '+eligible+' eligible MCQs reviewed'+(pending?' · '+pending+' pending':'')+'. '+(rows.some(r=>r.status==='REPAIRED')?'Rewritten items were not re-audited. ':'');
+}
+
 function caseIsGateEligible(q){
   return !!q&&String(q.type||'')==='MCQ'
     &&(q.correctAnswers||[]).length===1
@@ -10156,8 +10293,11 @@ function caseGateItems(cs){
 // Repair is a GENERATION call, so unlike the audit it DOES receive the fact packet — a
 // rewritten item still has to be grounded, and the shared question rules still apply.
 // Only the failing item is regenerated, and only for non-answer-accuracy failures.
+// v17.1: preserve source qualifications; general descriptions cannot invent client history.
 function caseBuildRepairPrompt({conditionName,facts,stageNumber,q,criterion,visibleContext}){
-  return `═══ REPAIR ONE CASE-STUDY ITEM ═══
+  return `Generic disease descriptions do not establish this client's absence of findings or personal history. Preserve source qualifiers; associations do not justify absolute diagnostic exclusions.
+
+═══ REPAIR ONE CASE-STUDY ITEM ═══
 
 An independent reviewer failed the item below on this criterion:
 
@@ -10271,7 +10411,7 @@ function CaseStudyGenerator(){
     // v15.17: a quota-stopped case audit remains interrupted after the generated case finishes.
     let auditInterrupted=false;
     const _aud=cfg.forTool('itemAudit');
-    owned_setProvenance({genModel:model,genLevel:level,promptLabel:'case builder v15.7',
+    owned_setProvenance({genModel:model,genLevel:level,promptLabel:'case builder v17.1',
       auditModel:runAudit?_aud.model:'',auditLevel:runAudit?_aud.level:''});
     try{
       owned_log('Selected '+selectedFacts.length+' grounded fact(s) for '+activeCondition.name+'.','ok');
@@ -10298,9 +10438,14 @@ function CaseStudyGenerator(){
       const allowedFactIds=new Set(selectedFacts.map(f=>String(f.id).toLowerCase()));
       const revalidate=cs=>{
         const s=validateCaseStudy(cs,source.factIndex,allowedFactIds,activeCondition.name);
-        return[...s,...validateStageTiming(cs),...caseCompletenessIssues(cs,caseContract)];
+        return[...s,...validateStageTiming(cs),...caseCompletenessIssues(cs,caseContract),...caseShuffleIssues(cs)];
       };
       let allIssues=revalidate(parsed);
+      // v17.1: shuffle once before publication/audit; malformed cases keep their original evidence.
+      if(!allIssues.some(i=>i.sev==='error')){
+        parsed={...parsed,stages:parsed.stages.map(s=>({...s,questions:(s.questions||[]).map(q=>caseShuffleQuestion(q))}))};
+        allIssues=revalidate(parsed);
+      }
       owned_setIssues(allIssues);
       let errCount=allIssues.filter(x=>x.sev==='error').length;
       // v15.8: published BEFORE the audit. auditRows short-circuits on !caseStudy, so while
@@ -10378,7 +10523,7 @@ function CaseStudyGenerator(){
                   conditionName:activeCondition.name,facts:selectedFacts,stageNumber:r.stageNumber,
                   q:r.q,criterion:r.criterion,visibleContext:visible})}],
                   {thinkingLevel:level,signal:ctl.signal,retries:1,generationConfig:{responseMimeType:'application/json'}});
-                const fixed=extractJSON(out);
+                let fixed=extractJSON(out);
                 if(!fixed||!fixed.stem||!Array.isArray(fixed.options))throw new Error('repair returned no usable item');
                 // v15.14: rebuild rather than mutate. `parsed` is the SAME object already
                 // handed to owned_setCaseStudy above, so st.questions[ix]=fixed wrote straight into
@@ -10394,10 +10539,17 @@ function CaseStudyGenerator(){
                 if(!st||ix<0)throw new Error('could not locate the item to replace');
                 const note=fixed.repairNote||'';
                 delete fixed.repairNote;
+                // v17.1: identity, option count/labels and substantive change are checked BEFORE shuffling.
+                const contractFailure=caseRepairContract(st.questions[ix],fixed);
+                if(contractFailure)throw new Error(contractFailure);
+                fixed=caseShuffleQuestion(fixed);
                 // v15.17: malformed or ungrounded repairs cannot replace the prior usable case.
                 const candidate={...parsed,stages:parsed.stages.map((s,si)=>si!==stIx?s:{...s,questions:s.questions.map((q,qi)=>qi!==ix?q:fixed)})};
                 if(fixed.id!==r.q.id||fixed.type!==r.q.type||revalidate(candidate).some(i=>i.sev==='error'))throw new Error('repair failed the captured case contract; original kept');
+                // v17.1: findings and content publish together before another repair can yield or cancel.
+                allIssues=revalidate(candidate);
                 parsed=candidate;
+                owned_setIssues(allIssues);
                 owned_setCaseStudy(parsed);
                 repaired++;
                 // Keep the panel honest: the old FAIL described text that no longer exists.
@@ -10406,6 +10558,7 @@ function CaseStudyGenerator(){
                 owned_log('  ✓ Stage '+r.stageNumber+' '+(r.q.id||'')+' repaired'+(note?' — '+note:''),'ok');
               }catch(e){
                 if(e.name==='AbortError')throw e;
+                owned_setAudit(p=>({...(p||{}),[r.key]:{...(p||{})[r.key],repairAttempt:String(e.message||e)}}));
                 owned_log('  ✗ Stage '+r.stageNumber+' '+(r.q.id||'')+' repair failed: '+(e.message||e),'err');
               }
             },ctl.signal);
@@ -10483,15 +10636,9 @@ function CaseStudyGenerator(){
   // once during the audit, so a repair must explicitly restamp its entry as REPAIRED. An
   // earlier comment here claimed staleness was impossible; it was not, and that claim is
   // what masked the stale-verdict bug fixed in v15.8.
-  const auditRows=useMemo(()=>{
-    if(!caseStudy||!audit)return[];
-    return caseGateItems(caseStudy).map(it=>{
-      const v=audit[it.key];
-      if(!v)return null;
-      return{key:it.key,label:'Stage '+it.stageNumber+' '+(it.q.id||''),
-        status:v.status,criterion:v.criterion||'',detail:v.detail||'',warns:v.warns||[]};
-    }).filter(Boolean);
-  },[caseStudy,audit]);
+  // v17.1: include pending/unscored items and captured status, even before the first verdict.
+  const auditRows=useMemo(()=>caseStudy?caseReviewRows(caseStudy,audit,auditState):[],[caseStudy,audit,auditState]);
+  const auditUnresolved=auditState!=='complete'||auditRows.some(r=>['PENDING','UNSCORED','ERROR','REVIEW','REPAIRED'].includes(r.status));
   const auditTotals=useMemo(()=>{
     const n=s=>auditRows.filter(r=>r.status===s).length;
     return{pass:n('PASS'),fail:n('FAIL'),repaired:n('REPAIRED'),review:n('REVIEW'),na:n('N/A'),error:n('ERROR'),
@@ -10500,8 +10647,8 @@ function CaseStudyGenerator(){
 
   // The audit-trail view carries the provenance stamp; the printable student view does not.
   const exportNotice=useMemo(()=>artifactExportNotice({source:artifactSource,activeKB:K.knowledgeBase,requested:artifactSource?.requested,actual:(caseStudy?.stages||[]).reduce((n,s)=>n+(s.questions||[]).length,0),auditRequested:artifactSource?.auditRequested,auditState,rows:auditRows}),[artifactSource,K.knowledgeBase,caseStudy,auditState,auditRows]);
-  const caseMd=useMemo(()=>caseStudy?exportNotice+caseValidationStamp(issues)+(provenance?latteProvenanceStamp(provenance):'')+caseToMarkdown(caseStudy):'',[caseStudy,issues,provenance,exportNotice]);
-  const casePrintMd=useMemo(()=>caseStudy?exportNotice+caseValidationStamp(issues)+caseToMarkdown(caseStudy,{worksheetFactIds:false}):'',[caseStudy,issues,exportNotice]);
+  const caseMd=useMemo(()=>caseStudy?exportNotice+caseValidationStamp(issues)+(provenance?latteProvenanceStamp(provenance):'')+caseToMarkdown(caseStudy)+caseReviewAppendix(caseStudy,issues,auditRows):'',[caseStudy,issues,provenance,exportNotice,auditRows]);
+  const casePrintMd=useMemo(()=>caseStudy?exportNotice+caseValidationStamp(issues)+caseToMarkdown(caseStudy,{worksheetFactIds:false})+caseReviewAppendix(caseStudy,issues,auditRows):'',[caseStudy,issues,exportNotice,auditRows]);
   // Every checkbox can be unchecked, which would send the model an empty type list.
   const enabledTypeCount=Object.values(types).filter(Boolean).length;
   const canRun=cfg.apiKey&&conditions.length&&enabledTypeCount>0&&!busy;
@@ -10608,20 +10755,20 @@ function CaseStudyGenerator(){
       {/* v15.6: item-quality audit panel. Reports per-item verdicts only — deliberately no
           total score, percentage, or quality band, because those bands were set a priori and
           have never had criterion-validity testing. */}
-      {auditRows.length>0&&<div style={{marginTop:12,padding:'11px 13px',borderRadius:8,border:'1px solid '+(auditTotals.fail?'var(--error-border)':auditTotals.review?'var(--warning-border)':'var(--success-border)'),background:auditTotals.fail?'var(--error-bg)':auditTotals.review?'var(--warning-bg)':'var(--success-bg)'}}>
-        <span style={{fontSize:12,fontWeight:600,color:auditTotals.fail?'var(--accent-red)':auditTotals.review?'var(--accent-warm)':'var(--accent-green)'}}>
-          {auditTotals.fail?'⚠':auditTotals.review||auditTotals.repaired?'⚑':'✓'} Item quality: {auditTotals.pass} pass · {auditTotals.fail} fail · {auditTotals.review} review
+      {auditRows.length>0&&<div style={{marginTop:12,padding:'11px 13px',borderRadius:8,border:'1px solid '+(auditTotals.fail?'var(--error-border)':auditUnresolved?'var(--warning-border)':'var(--success-border)'),background:auditTotals.fail?'var(--error-bg)':auditUnresolved?'var(--warning-bg)':'var(--success-bg)'}}>
+        <span style={{fontSize:12,fontWeight:600,color:auditTotals.fail?'var(--accent-red)':auditUnresolved?'var(--accent-warm)':'var(--accent-green)'}}>
+          {auditTotals.fail?'⚠':auditState!=='complete'||auditTotals.review||auditTotals.repaired||auditTotals.error?'⚑':'✓'} Item quality: {auditTotals.pass} pass · {auditTotals.fail} fail · {auditTotals.review} review
           {auditTotals.repaired>0&&<span style={{color:'var(--accent-warm)',fontWeight:400}}> · {auditTotals.repaired} repaired</span>}
           {auditTotals.na>0&&<span style={{color:'var(--text-dim)',fontWeight:400}}> · {auditTotals.na} N/A</span>}
           {auditTotals.error>0&&<span style={{color:'var(--text-dim)',fontWeight:400}}> · {auditTotals.error} not scored</span>}
         </span>
-        <div style={{fontSize:12,color:'var(--text-dim)',marginTop:5,lineHeight:1.5}}>Each MCQ was reviewed against 11 stop criteria adapted from the NEIA scoring tool (Simms, Hensel &amp; Kumar 2026), seeing only what the student sees. <b>N/A means the rubric does not apply</b> to that format — it is not a pass. No total score is computed: the published quality bands have never been criterion-validated.</div>
+        <div style={{fontSize:12,color:'var(--text-dim)',marginTop:5,lineHeight:1.5}}>{caseAuditProgress(caseStudy,auditRows,auditState,auditPhase)} Reviews use 11 stop criteria adapted from the NEIA scoring tool (Simms, Hensel &amp; Kumar 2026), seeing only what the student sees. <b>N/A means the rubric does not apply</b> to that format — it is not a pass. No total score is computed: the published quality bands have never been criterion-validated.</div>
         <div style={{marginTop:8,maxHeight:190,overflowY:'auto',background:'var(--bg-deep)',border:'1px solid var(--border)',borderRadius:6,padding:8}}>
           {auditRows.map(r=>{
             const c=r.status==='FAIL'?'var(--accent-red)':r.status==='REVIEW'||r.status==='REPAIRED'?'var(--accent-warm)':r.status==='PASS'?'var(--accent-green)':'var(--text-dim)';
             const mark=r.status==='FAIL'?'✕':r.status==='REPAIRED'?'⟳':r.status==='REVIEW'?'?':r.status==='PASS'?'✓':'–';
             return(<div key={r.key} style={{fontSize:12,fontFamily:'JetBrains Mono',lineHeight:1.6}}>
-              <span style={{color:c}}>{mark} {r.label} — {r.status}{r.criterion?': '+r.criterion:''}{r.detail&&r.status!=='PASS'?': '+r.detail:''}</span>
+              <span style={{color:c}}>{mark} {r.label} — {r.status}{r.criterion?': '+r.criterion:''}{r.detail&&r.status!=='PASS'?': '+r.detail:''}{r.repairAttempt?' · Repair attempt: '+r.repairAttempt:''}</span>
               {(r.warns||[]).map((w,i)=><div key={i} style={{color:'var(--text-dim)',paddingLeft:14}}>⚠ {w.criterion}: {w.detail}</div>)}
             </div>);
           })}
@@ -10664,7 +10811,8 @@ function CaseRenderer({caseStudy:cs}){
       {(stage.data||[]).length>0&&<div style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:8,padding:'10px 12px',marginBottom:12}}>
         <div style={{fontSize:12,fontWeight:600,textTransform:'uppercase',letterSpacing:1,color:'var(--text-dim)',marginBottom:6}}>Clinical data</div>
         {stage.data.map((d,i)=><div key={i} style={{fontSize:14,marginBottom:4,display:'flex',flexWrap:'wrap',gap:6,alignItems:'baseline'}}>
-          <span><b style={{color:'var(--text-bright)'}}>{d.label}:</b> {d.value}</span>
+          {/* v17.1: keep assumed calculation weights visibly qualified, including failed cases. */}
+          <span><b style={{color:'var(--text-bright)'}}>{d.label}:</b> {d.value}{d.supportType==='neutral-framing'&&/^(?:body\s+)?weight$/i.test(String(d.label||'').trim())?' (assumed for calculation; subject to validation)':''}</span>
           {(d.factIds||[]).map(id=><FactTag key={id} factId={id}/>)}
           {d.supportType&&d.supportType!=='direct'&&d.supportType!=='neutral-framing'&&<span style={{fontSize:12,color:'var(--text-dim)',fontStyle:'italic'}}>({d.supportType})</span>}
         </div>)}

@@ -81,7 +81,7 @@ module.exports=function worksheetRemediationTests(S,t){
   const caseQuestion={id:'q1',type:'MCQ',stem:'Choose an action.',options:[{label:'A',text:'First action'},{label:'B',text:'Second action'}],correctAnswers:['A'],rationales:[{option:'A',text:'Reasoning.',supportType:'direct',factIds:['fact-1']},{option:'B',text:'Reasoning.',supportType:'direct',factIds:['fact-1']}]};
   const originalCase={condition:'X',stages:[{stageNumber:1,data:[],questions:[caseQuestion]}]},factIndex=new Map([['fact-1',{fact:{text:'Monitor the client.',sourceQuote:''}}]]);
   const caseRepairCode=span('const candidate={...parsed,stages:','                owned_setCaseStudy(parsed);');
-  const repairCase=new Function('initial','fixed','r','stIx','ix','revalidate','let parsed=initial;try{'+caseRepairCode+'return {parsed};}catch(e){return{parsed,error:e.message};}');
+  const repairCase=new Function('initial','fixed','r','stIx','ix','revalidate','let parsed=initial,allIssues=[];const owned_setIssues=()=>{};try{'+caseRepairCode+'return {parsed};}catch(e){return{parsed,error:e.message};}');
   const fixCase=fixed=>repairCase(originalCase,fixed,{q:caseQuestion},0,0,cs=>C.validateCaseStudy(cs,factIndex,new Set(['fact-1']),'X'));
   const changed=fixCase({...caseQuestion,stem:'Choose the next action.'});
   t('valid case repair publishes a new immutable candidate',!changed.error&&changed.parsed!==originalCase&&originalCase.stages[0].questions[0].stem==='Choose an action.');

@@ -4,7 +4,7 @@ This is the task map for maintainers and coding agents. `AGENTS.md` remains the 
 
 ## Repository shape
 
-- `Nursing-Study-Suite v17.0.html` is the complete application.
+- `Nursing-Study-Suite v17.1.html` is the complete application.
 - `latte-tests.js` is the deterministic regression harness and extracts live functions by anchor.
 - `verify-repo.js` is the only ordinary repository verification entry point.
 - `prompt-baseline.json` stores the 11 frozen prompt hashes.
@@ -83,6 +83,8 @@ Examples: `node davis-transcribe-test.js --dry-run --app-profile --runs 2 synthe
 `node tools/remediation-worksheet-browser-tests.js` covers interrupted/quota-stopped audits, immediate verdict updates, non-MCQ N/A outcomes, and malformed/ungrounded repair rejection using the same isolated App fixture and mocked responses.
 
 ## Release checklist
+
+`node tools/case-remediation-browser-tests.js` checks the real case UI with synthetic facts and mocked generation/repairs, including stable option mappings, pending/interrupted review, JSON/Markdown/print output, print CSS page breaks and all six question types. It uses the same external Playwright runtime as the worksheet runner. The mandatory harness includes `tools/case-remediation-tests.js`, with extracted handler tests for concurrent repair completion and source cancellation.
 
 `node tools/visual-browser-tests.js --screenshots scratch/visual-v17` checks the v17 interface on isolated real-App fixtures at 360, 768, 1024 and 1440 pixels. It uses the existing external Playwright runtime, synthetic sources and mocked generation; it never calls Gemini or serves the repository directory. The optional screenshot directory stays under ignored `scratch/`; the check report goes to standard output. This is optional browser acceptance, separate from the mandatory deterministic verifier.
 

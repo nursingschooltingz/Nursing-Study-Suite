@@ -1,5 +1,13 @@
 # Current maintainer state
 
+## v17.1 case remediation (2026-09-23, unreleased)
+
+The canonical application is `Nursing-Study-Suite v17.1.html`. The approved consolidated plan's software packages A–E are implemented: honest repair acceptance/publication, complete range and unit parsing, stem/title grounding, bounded exact calculations, stable option randomization, and consistent review/assumption exports. The generation and repair builders gain source-qualification guidance; all eleven frozen constants remain byte-identical.
+
+The [implementation record](docs/reviews/case-remediation-v17.1.md) distinguishes deterministic and synthetic browser evidence from clinical source review. The user authorized the `Testing/v16.2 tests` folder; it contains KB JSON files and captured quotes, but no original PDFs or generated case exports. The TCA treatment concern is already present in its captured quote, while the Dermatitis quote contains a qualified childhood association. Original-page verification, correction of the absent case files, classification of their 44 timing warnings and any live regenerated-output measurement remain open. No private KB or generated course output belongs in Git.
+
+This entry supersedes the canonical filename in the historical release sections below. The release has not been committed or published.
+
 ## v17.0 interface overhaul (2026-09-19)
 
 The user asked for a complete interface overhaul rather than another palette pass, and explicitly

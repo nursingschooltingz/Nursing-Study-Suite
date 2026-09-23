@@ -65,10 +65,11 @@ function preflightSuite(suiteFile) {
   return source;
 }
 
-function runHarness(suiteFile) {
+function runHarness(suiteFile, babelFile) {
   const result = spawnSync(process.execPath, [path.join(REPO_ROOT, 'latte-tests.js'), suiteFile], {
     cwd: REPO_ROOT,
     stdio: 'inherit',
+    env: { ...process.env, NSS_BABEL_STANDALONE: babelFile },
   });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error('latte-tests.js exited with ' + result.status);
@@ -87,7 +88,7 @@ function main() {
   const documentedCount = checkPromptDoc({ suiteFile });
   console.log('PASS  Prompts.md contains live bytes for all ' + documentedCount + ' prompt constants');
 
-  runHarness(suiteFile);
+  runHarness(suiteFile, babel.file);
 
   babel.Babel.transform(extractBabelScript(source), { presets: ['react'] });
   console.log('PASS  Babel parse with ' + babel.file);

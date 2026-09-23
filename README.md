@@ -8,7 +8,7 @@ Turn your lecture PDFs and PowerPoints into a complete, source-cited study syste
 
 The whole suite is **one HTML file**. There is nothing to install, no account to create, and no website collecting your data. You open the file in your web browser, paste in a free Google Gemini API key, upload your study materials, and go.
 
-**Latest release: v17.0.** [Download the single HTML file](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v17.0/Nursing-Study-Suite.v17.0.html), save it, then open it in your browser. The [repository HTML](Nursing-Study-Suite%20v17.0.html) is a rebuilt interface — same six tools, same generated study material, same saved data. Your existing Knowledge Base, saved model profiles and exported files all carry over untouched. Flash / Medium remains the Anki default. See the [interface verification record](docs/reviews/v17.0-interface.md) for checks and remaining limits.
+**Published release: v17.0.** [Download the published HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v17.0/Nursing-Study-Suite.v17.0.html). The [repository HTML](Nursing-Study-Suite%20v17.1.html) contains the unreleased v17.1 case-generator fixes. See the [verification record](docs/reviews/case-remediation-v17.1.md).
 
 The left rail lists the six tools in the order you use them, grouped by stage. **Source:** *Knowledge Base* builds or imports the cited facts everything else reads from. **Plan:** *Priority* sorts those facts into Tier 1/2/3. **Practice:** *Anki* for recall, *NCLEX Extract* for questions out of a review book you already own, *NCLEX Generate* for new ones written from your facts, and *Case Studies* for unfolding cases.
 
@@ -284,6 +284,12 @@ Builds an unfolding case — a patient whose situation evolves across stages, wi
 - Every clinical value and every rationale must **cite fact IDs from your KB packet** — citations to facts that weren't supplied are hard errors.
 - Numeric values are **audited against complete values and units in cited facts or source quotes**: a made-up "K⁺ 2.4 mEq/L" pinned to a fact that only says "monitor potassium" is an error. The established threshold-instantiation exceptions remain; values outside a cited threshold can describe deterioration and warn. An assumed calculation weight stays separately identified and must be used consistently.
 - Narrative prose is scanned for smuggled clinical findings; question formats are checked structurally (a SATA must have 2–4 correct answers, an Ordering answer must use every step exactly once, and so on).
+
+Case answer options are shuffled once when generated, with the answer and rationale mappings kept together. Their order stays stable during study and export. Ordering and Calculation items retain their original form. Items whose wording depends on labels or position may retain their order with an advisory.
+
+Calculation checking supports explicit quantity multiplication and division with exact decimal arithmetic and matching units, including a consistent permitted assumed weight. It does not verify arbitrary clinical formulas, conversions or inferred rounding. Assumed weights stay labeled **assumed for calculation** on screen and in exports.
+
+The **Review appendix** follows the answer key and retains every validation finding and each item’s review status, criterion, detail and warnings. JSON Copy carries equivalent `_suiteReview` metadata. Pending, interrupted, unscored and N/A items are distinct from PASS. An unchanged attempted repair retains FAIL; an accepted rewrite remains **REPAIRED — not re-audited**. Source references, numeric checks and item-quality review do not establish clinical accuracy.
 
 A validation panel reports the results: **errors** mean the case broke the rules (it's still viewable/exportable, but it's excluded from the trusted fact-link registry and stamped as failed); **amber warnings** are advisories worth a glance — sometimes they flag a real fabrication, sometimes just a legitimately derived value. Either way, you can see exactly why.
 

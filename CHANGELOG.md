@@ -9,6 +9,21 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [17.1] — 2026-09-23 (unreleased)
+
+### Fixed
+
+- Case numeric grounding checks stage titles and question stems, preserves both shared-range endpoints, and distinguishes supported units from trailing protocol/shift prose.
+- Exact, bounded multiplication/division evidence supports verified calculation explanations and answers without exempting other questions or data.
+- Repairs preserve item identity and the original option label set/count. A note-only or unchanged repair retains FAIL; accepted revisions publish their own findings immediately and remain explicitly not re-audited.
+- Assumed calculation weights stay visibly qualified. Case exports retain all validation findings and detailed item verdicts after the answer key; JSON includes equivalent review metadata. Pending/unscored items and interrupted audits remain explicit.
+
+### Changed
+
+- Eligible case answer options are shuffled once with Fisher–Yates, preserving answers, rationales and citations. Ordering and Calculation remain unchanged; ambiguous label/order references preserve the original order with an advisory.
+- Unfrozen case-generation/repair guidance preserves source qualifications and prohibits inventing absent findings/history from generic descriptions. All eleven frozen prompts, model profiles, warning tiers and dependencies remain unchanged.
+- Clinical source dispositions and remaining private-output/PDF evidence gaps are recorded separately from software acceptance. No live generation or publication is claimed.
+
 ## [17.0] — 2026-09-19
 
 Interface overhaul. Presentation only: no study logic, prompt, validation tier, storage key or
