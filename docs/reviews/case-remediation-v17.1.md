@@ -51,3 +51,15 @@ Private replay uses the shipped KB import normalizer to reproduce the imported f
 The mandatory regression module adds 28 synthetic assertions covering pound aliases, threshold instantiation, numbered prose, actual liter/gram values, unknown unit tails and unsupported source values. All **3,191 assertions** and repository gates pass; all eleven frozen hashes remain unchanged. The private replay is local and consumes no model quota.
 
 All **10 synthetic browser scenarios** pass, including a new supported-pound/numbered-prose fixture that reaches the mocked item audit and registers both stage data and question citations in the Fact Inspector. The existing unsupported-value fixture still skips audit and registration. Browser CDN loading required execution outside the network sandbox; Gemini remained mocked throughout.
+
+## Follow-up: length, duration and multiple source bounds
+
+Another supplied export reproduced two different failures. The clinical-unit vocabulary omitted length and standalone duration units: a bare measurement triggered the unknown-unit fallback, while the same measurement inside a sentence could escape numeric checking. The threshold parser also returned only the first range in each fact, losing later ranges with different units. These are shared parser limitations, not an OB-specific condition branch or provider rejection.
+
+The validator now recognizes cm/mm and seconds/minutes/hours/days/weeks with explicit spelling aliases. Numeric scans use that coverage consistently across source text, data, stems and rationales. Threshold collection retains all explicit ranges/comparators, supports repeated identical units, and compares matching units only. Unknown compound tails, mixed-unit ranges, unsourced direct values and implicit conversions remain unsupported. Existing out-of-threshold instantiation remains WARN.
+
+The latest private replay moves from two errors / 14 warnings to zero errors / the identical 14 warnings. Replaying the earlier export now exposes one previously unchecked duration claim labeled as directly sourced. This supersedes that export's earlier zero-error result; its original content and metadata remain untouched. Private evidence is in `scratch/labor-case-measurement-replay.json` and `scratch/labor-case-measurement-review.md`.
+
+`tools/case-measurement-tests.js` adds **82 mandatory synthetic assertions**. Running it against the previous shipped bytes produces 58 failures; all 82 pass on the corrected parser. The unified verifier passes **3,273 assertions**, all eleven frozen hashes, prompt documentation and JSX compilation. No live model generation or clinical approval is claimed.
+
+All **12 synthetic browser scenarios** pass. New cases verify that supported length plus a later duration bound reaches the mocked audit and registers citations, while an interior duration mislabeled as directly sourced still skips audit/registration and exports its error. Existing cancellation, source-change, repair, calculation and export checks continue to pass.

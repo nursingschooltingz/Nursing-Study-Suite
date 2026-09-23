@@ -22,6 +22,20 @@ async function main(){
  const {chromium}=require('playwright');const browser=await chromium.launch({channel:'chrome',headless:true});let checks=0;
  const report=s=>{checks++;console.log('PASS '+s);};
  try{
+  for(const unsupported of [false,true]){
+    const measureKB=syntheticKB('A');measureKB.conditions[0].facts[0].text='Synthetic size 2 cm to 6 cm; interval 4–6 minutes; duration 70–80 seconds.';
+    await withFixture(browser,{indexed:measureKB},async({page})=>{
+      const cs=caseFixture();cs.stages[0].data=[{label:'Size',value:'4 cm',supportType:'instantiated',availability:'revealed',factIds:['fact-1']},{label:'Duration',value:'72 seconds',supportType:unsupported?'direct':'instantiated',availability:'revealed',factIds:['fact-1']}];
+      await prepare(page,cs,{responses:unsupported?[]:[{text:'PASS'}]});await idle(page);
+      const out=JSON.parse(await copy(page)),errors=out._suiteReview.validation.filter(i=>i.severity==='error');
+      assert.equal(errors.length,unsupported?1:0);if(unsupported)assert(errors[0].message.includes('does not appear'));
+      assert.equal(await page.evaluate(()=>window.__remediation.geminiCalls.length),unsupported?1:2);
+      assert.equal(await page.evaluate(()=>window.__remediation.state.artifactRegistry.caseStudies.length),unsupported?0:2);
+      assert.equal(out._suiteReview.itemAudit[0].status,unsupported?'UNSCORED':'PASS');
+      const md=await copy(page,false);assert.equal(md.includes('FAILED VALIDATION'),unsupported);
+      report(unsupported?'unsupported direct duration remains blocked and exported with its error':'length and later duration range reach audit and Fact Inspector registration');
+    });
+  }
   const weightKB=syntheticKB('A');weightKB.conditions[0].facts[0].text='Synthetic weight change is 3–5 pounds.';
   await withFixture(browser,{indexed:weightKB},async({page})=>{
     const cs=caseFixture();cs.stages[0].data=[{label:'Weight change',value:'4 lb',supportType:'instantiated',availability:'revealed',factIds:['fact-1']}];

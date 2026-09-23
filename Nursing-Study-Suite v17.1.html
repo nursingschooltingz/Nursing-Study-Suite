@@ -9227,7 +9227,8 @@ ${caseRenderFactPacket(conditionName,facts)}`;
 // v15.17: retain signs and complete denominators. A partial unit can never establish numeric support.
 // v17.1: protocol/shift prose is not a denominator; unknown explicit denominators stay unsupported.
 // v17.1: support pound aliases and keep bare g/L from consuming words such as groups/labor.
-const CASE_CLINICAL_TOKEN_RE=/(?<![\w.,])(?:[+−-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|[+−-]?\.\d+)\s*(?:(?:micrograms?|milligrams?|kilograms?|grams?|millilit(?:er|re)s?|lit(?:er|re)s?|milliequivalents?|millimoles?|[µμ]g|mcg|mg|kg|mL|mEq|mmol|mm\s*Hg|bpm|beats?\s*(?:per|\/)\s*min(?:ute)?s?|breaths?\s*(?:per|\/)\s*min(?:ute)?s?|units?|pounds?|lbs?|(?:g|L)(?![\p{L}]))(?:[\p{L}0-9²^]*)(?:\s*(?:\/|per\s+(?!(?:protocol|shift)\b))\s*[\p{L}0-9²^]+)*|%|\/\s*min)\b|(?<![\w.,])(?:[+−-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|[+−-]?\.\d+)\s*%|(?<![\w/])\d{2,3}\s*\/\s*\d{2,3}(?:\s*mm\s*Hg)?(?![\w/])/giu;
+// v17.1: length/duration units were missing, so bare values failed while the same values in prose escaped checks.
+const CASE_CLINICAL_TOKEN_RE=/(?<![\w.,])(?:[+−-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|[+−-]?\.\d+)\s*(?:(?:micrograms?|milligrams?|kilograms?|grams?|millilit(?:er|re)s?|lit(?:er|re)s?|milliequivalents?|millimoles?|[µμ]g|mcg|mg|kg|mL|mEq|mmol|mm\s*Hg|bpm|beats?\s*(?:per|\/)\s*min(?:ute)?s?|breaths?\s*(?:per|\/)\s*min(?:ute)?s?|units?|(?:centimet(?:er|re)s?|millimet(?:er|re)s?|cm|mm|seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?|wks?)(?![\p{L}])|pounds?|lbs?|(?:g|L)(?![\p{L}]))(?:[\p{L}0-9²^]*)(?:\s*(?:\/|per\s+(?!(?:protocol|shift)\b))\s*[\p{L}0-9²^]+)*|%|\/\s*min)\b|(?<![\w.,])(?:[+−-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|[+−-]?\.\d+)\s*%|(?<![\w/])\d{2,3}\s*\/\s*\d{2,3}(?:\s*mm\s*Hg)?(?![\w/])/giu;
 // v15.1: qualitative findings ("becomes hypotensive", "appears confused") carry no numeric
 // token and sailed past the value scan. Term matches are WARN-tier because a stem scan will
 // false-positive on genuinely neutral phrasing; the numeric scan above stays error-tier.
@@ -9315,7 +9316,9 @@ function caseNumericText(t){
     .replace(/\bbeats?\s*(?:per|\/)\s*min(?:ute)?s?\b/g,'bpm')
     .replace(/\bbreaths?\s*(?:per|\/)\s*min(?:ute)?s?\b/g,'/min')
     .replace(/\bmm\s*hg\b/g,'mmhg').replace(/\bunits?\b/g,'unit')
-    .replace(/\bhours?\b/g,'hr').replace(/\bminutes?\b/g,'min').replace(/\bseconds?\b/g,'sec')
+    .replace(/(?<![\p{L}_])centimet(?:er|re)s?\b/gu,'cm').replace(/(?<![\p{L}_])millimet(?:er|re)s?\b/gu,'mm')
+    .replace(/(?<![\p{L}_])(?:hours?|hrs?)\b/gu,'hr').replace(/(?<![\p{L}_])(?:minutes?|mins?)\b/gu,'min').replace(/(?<![\p{L}_])(?:seconds?|secs?)\b/gu,'sec')
+    .replace(/(?<![\p{L}_])days?\b/gu,'day').replace(/(?<![\p{L}_])(?:weeks?|wks?)\b/gu,'week')
     // v16.9: rewriting every "per" as "/" turned prose ("below 12 breaths per minute per
     // shift") into an unsupported compound unit, and v16.8's tail check then refused a bound
     // the case legitimately instantiated. "per" divides units only before a known denominator.
@@ -9330,7 +9333,7 @@ function caseDecimal(value){
 function caseNormalizeClinical(t){
   return caseNumericText(t).replace(/[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|[+-]?\.\d+/g,caseDecimal).replace(/\s+/g,'');
 }
-const CASE_SUPPORTED_UNIT=/^(?:mcg|mg|g|kg|lb|ml|l|meq|mmol|unit|bpm|mmhg|%|\/min)(?:\/(?:kg|ml|l|dl|hr|min|sec|day|dose|m2))*$/;
+const CASE_SUPPORTED_UNIT=/^(?:mcg|mg|g|kg|lb|ml|l|meq|mmol|unit|bpm|mmhg|cm|mm|sec|min|hr|day|week|%|\/min)(?:\/(?:kg|ml|l|dl|hr|min|sec|day|dose|m2))*$/;
 function caseNumericTokens(text){
   const tokens=[],unsupported=[],blocked=[],input=String(text||'');
   // v17.1: consume shared-unit ranges once; the old token scan lost the lower endpoint.
@@ -9400,29 +9403,36 @@ function caseUnitsCompatible(a,b){return !!a&&a===b||a==='unit'&&b==='';}
 // thresholds. Deliberately conservative: the number must follow the comparator immediately
 // (after whitespace stripping), and an unparseable fact yields null so the caller errors
 // rather than silently passing the value.
-function caseParseThreshold(factText){
-  const t=caseNumericText(factText);
-  if(!t)return null;
+// v17.1: facts can contain several ranges with different units; the first range alone
+// discarded later duration bounds. Keep every explicit bound and compare only identical units.
+function caseParseThreshold(factText){return caseParseThresholds(factText)[0]||null;}
+function caseParseThresholds(factText){
+  const t=caseNumericText(factText),out=[],ranges=[];
+  if(!t)return out;
   const NUM='([+-]?(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d+)?|[+-]?\\.\\d+)';
-  const UNIT='\\s*([a-z%]+(?:\\s*\\/\\s*[a-z0-9]+)*|\\/\\s*min)?';
-  // v16.7: threshold parsing must reject the same unsupported unit tails as direct numeric evidence.
-  // A source bound in mg/(kg min), mg² or mg·kg cannot donate a plain mg threshold.
+  const UNIT='\\s*((?!to\\b)[a-z%]+(?:\\s*\\/\\s*[a-z0-9]+)*|\\/\\s*min)?';
+  // Unsupported unit tails cannot donate a threshold any more than direct numeric evidence.
   const validUnit=(u,match)=>{
     if(u&&!CASE_SUPPORTED_UNIT.test(u))return false;
     const tail=t.slice(match.index+match[0].length);
     return !/^(?:\s+per\s+(?!(?:protocol|shift)\b)|[\p{L}0-9]|\.\d|\s*\/\s*(?:\([^\r\n)]*\)?|[^\s,;!?]+)|[·⋅⁄^%°⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻][^\s,;!?]*|[ \t]*[·⋅*×][ \t]*[\p{L}µμ][^\s,;!?]*|[+−-][\p{L}µμ][^\s,;!?]*)/u.test(tail);
   };
-  const rng=t.match(new RegExp(NUM+'\\s*(?:[-–—]|to)\\s*'+NUM+UNIT));
-  if(rng){
-    const lo=Number(caseDecimal(rng[1])),hi=Number(caseDecimal(rng[2])),unit=(rng[3]||'').replace(/\s+/g,'');
-    if(isFinite(lo)&&isFinite(hi)&&hi>lo&&validUnit(unit,rng))return{op:'range',lo,hi,unit};
+  // Accept shared or repeated identical units, never a mixed-unit range or conversion.
+  for(const m of t.matchAll(new RegExp('(?<![\\w.,/])'+NUM+UNIT+'\\s*(?:[-–—]|to)\\s*'+NUM+UNIT,'g'))){
+    ranges.push([m.index,m.index+m[0].length]);
+    const lo=Number(caseDecimal(m[1])),hi=Number(caseDecimal(m[3])),first=(m[2]||'').replace(/\s+/g,''),unit=(m[4]||'').replace(/\s+/g,'');
+    if(isFinite(lo)&&isFinite(hi)&&hi>lo&&(!first||first===unit)&&validUnit(unit,m))out.push({op:'range',lo,hi,unit});
   }
   for(const[src,op]of[['(?:<=|≤|no\\s+more\\s+than|at\\s+most)','<='],['(?:>=|≥|at\\s+least)','>='],
                       ['(?:<|less\\s+than|below|under)','<'],['(?:>|greater\\s+than|above|over)','>']]){
-    const m=t.match(new RegExp(src+'\\s*'+NUM+UNIT));
-    if(m){const unit=(m[2]||'').replace(/\s+/g,'');if(validUnit(unit,m))return{op,value:Number(caseDecimal(m[1])),unit};}
+    for(const m of t.matchAll(new RegExp(src+'\\s*'+NUM+UNIT,'g'))){
+      // A comparator preceding a range must not establish a second, partial bound.
+      if(ranges.some(([a,b])=>m.index<b&&m.index+m[0].length>a))continue;
+      const unit=(m[2]||'').replace(/\s+/g,'');
+      if(validUnit(unit,m))out.push({op,value:Number(caseDecimal(m[1])),unit});
+    }
   }
-  return null;
+  return out;
 }
 function caseThresholdSatisfied(num,th){
   if(!th||!isFinite(num))return false;
@@ -9461,7 +9471,7 @@ function caseAuditTextValues(text,factIds,factIndex,where,issues,supportType,pre
     if(support.has(key)||presentedValues&&presentedValues.has(key))continue;
     if(st==='instantiated'){
       const parsed=caseSplitValue(v);let applicable=false,ok=false;
-      if(parsed)for(const c of cited){const th=caseParseThreshold(c);if(!th||!caseUnitsCompatible(parsed.unit,th.unit))continue;applicable=true;if(caseThresholdSatisfied(parsed.num,th)){ok=true;break;}}
+      if(parsed)for(const c of cited){for(const th of caseParseThresholds(c)){if(!caseUnitsCompatible(parsed.unit,th.unit))continue;applicable=true;if(caseThresholdSatisfied(parsed.num,th)){ok=true;break;}}if(ok)break;}
       if(ok)continue;
       issues.push(applicable
         ?{sev:'warn',msg:where+': instantiated value "'+v+'" falls outside the threshold in its cited fact(s) — expected if the case is showing deterioration, wrong if it was meant to be a normal finding'}

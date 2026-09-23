@@ -15,6 +15,7 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 - Case numeric grounding checks stage titles and question stems, preserves both shared-range endpoints, and distinguishes supported units from trailing protocol/shift prose.
 - Case numeric validation recognizes pound aliases and prevents bare g/L units from consuming ordinary words after numbers, which had incorrectly blocked supported cases before shuffling, audit and Fact Inspector registration.
+- Case numeric validation now checks cm/mm and seconds/minutes/hours/days/weeks consistently in standalone data and prose. Threshold instantiation reads later bounds in multi-range facts and repeated identical-unit ranges; unsupported units, direct-value mismatches and conversions retain their existing gate.
 - Exact, bounded multiplication/division evidence supports verified calculation explanations and answers without exempting other questions or data.
 - Repairs preserve item identity and the original option label set/count. A note-only or unchanged repair retains FAIL; accepted revisions publish their own findings immediately and remain explicitly not re-audited.
 - Assumed calculation weights stay visibly qualified. Case exports retain all validation findings and detailed item verdicts after the answer key; JSON includes equivalent review metadata. Pending/unscored items and interrupted audits remain explicit.

@@ -10,6 +10,8 @@ This entry supersedes the canonical filename in the historical release sections 
 
 Follow-up: a newly supplied case reproduced two false validation errors: a supported pound value and numbered prose misread as liters. Pound aliases now normalize explicitly and bare g/L require a letter boundary. Private replay against the app-normalized authorized KB changes 2 errors / 21 warnings to 0 errors / the identical 21 warnings; this does not certify clinical content. The original export remains unchanged. The focused regression additions cover aliases, thresholds, ordinary prose, real units, unsupported tails and evidence mismatches. See the implementation record for verification and remaining content review.
 
+Second follow-up: another export exposed missing length/time units and the first-range-only threshold parser. The shared validator now recognizes cm/mm and seconds/minutes/hours/days/weeks with explicit aliases, in data and prose alike, and inspects all explicit bounds without unit conversion. Latest private replay changes 2 errors / 14 warnings to 0 errors / the identical 14 warnings. The broader coverage supersedes the earlier export's zero-error result: it now flags one rationale whose time value is labeled directly sourced but is absent from its cited fact. That original output remains unchanged and requires source-based revision. There is no OB-specific validation path; these examples exercise gaps in shared measurement coverage. All 3,273 assertions and repository gates pass; frozen prompts and severity rules remain unchanged.
+
 ## v17.0 interface overhaul (2026-09-19)
 
 The user asked for a complete interface overhaul rather than another palette pass, and explicitly
