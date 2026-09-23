@@ -22,6 +22,18 @@ async function main(){
  const {chromium}=require('playwright');const browser=await chromium.launch({channel:'chrome',headless:true});let checks=0;
  const report=s=>{checks++;console.log('PASS '+s);};
  try{
+  const weightKB=syntheticKB('A');weightKB.conditions[0].facts[0].text='Synthetic weight change is 3–5 pounds.';
+  await withFixture(browser,{indexed:weightKB},async({page})=>{
+    const cs=caseFixture();cs.stages[0].data=[{label:'Weight change',value:'4 lb',supportType:'instantiated',availability:'revealed',factIds:['fact-1']}];
+    cs.stages[0].questions[0].rationales[0].text='This assessment occurs during stage 2 labor.';
+    await prepare(page,cs,{responses:[{text:'PASS'}]});await idle(page);
+    const out=JSON.parse(await copy(page));assert.equal(out._suiteReview.validation.filter(i=>i.severity==='error').length,0);assert.equal(out._suiteReview.itemAudit[0].status,'PASS');
+    assert.equal(await page.evaluate(()=>window.__remediation.geminiCalls.length),2);
+    const linked=await page.evaluate(()=>window.__remediation.state.artifactRegistry.caseStudies);assert.equal(linked.length,2);assert(linked.some(e=>e.id.endsWith(':1:data')));assert(linked.some(e=>e.id.endsWith(':1:q1')));assert(linked.every(e=>e.factIds.includes('fact-1')));
+    assert.equal(out.stages[0].questions[0].options.find(o=>out.stages[0].questions[0].correctAnswers.includes(o.label)).text,'Assess');
+    assert(!(await page.locator('body').innerText()).includes('Case failed validation'));
+    report('pound threshold and numbered labor prose permit audit and Fact Inspector registration with intact answer mapping');
+  });
   await withFixture(browser,{indexed:syntheticKB('A')},async({page})=>{
     const cs=caseFixture();cs.stages[0].questions.push({...clone(cs.stages[0].questions[0]),id:'q2',type:'Ordering',correctAnswers:['B','A','C','D']});
     await prepare(page,cs,{responses:[{defer:true,abortOnSignal:true}]});

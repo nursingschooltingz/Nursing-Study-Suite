@@ -8,6 +8,8 @@ The [implementation record](docs/reviews/case-remediation-v17.1.md) distinguishe
 
 This entry supersedes the canonical filename in the historical release sections below. The release has not been committed or published.
 
+Follow-up: a newly supplied case reproduced two false validation errors: a supported pound value and numbered prose misread as liters. Pound aliases now normalize explicitly and bare g/L require a letter boundary. Private replay against the app-normalized authorized KB changes 2 errors / 21 warnings to 0 errors / the identical 21 warnings; this does not certify clinical content. The original export remains unchanged. The focused regression additions cover aliases, thresholds, ordinary prose, real units, unsupported tails and evidence mismatches. See the implementation record for verification and remaining content review.
+
 ## v17.0 interface overhaul (2026-09-19)
 
 The user asked for a complete interface overhaul rather than another palette pass, and explicitly

@@ -41,3 +41,13 @@ The treatment concern is already present in the TCA captured quote, so it cannot
 **C11/C12 are not marked closed.** Applying corrections to the affected case files, replaying their reported 56 validation warnings, classifying the 44 timing warnings, resolving the original teaching-source conflict and any separately authorized live regenerated-output acceptance require the missing material. The supplied plan's reported outputs were not recreated from memory or copied into Git.
 
 Existing untracked `docs/reviews/case-study-remediation-plan-2026-09-23.md` was preserved untouched.
+
+## Follow-up: false numeric validation blockers
+
+A subsequently supplied case export exposed two additional parser defects: pounds were unsupported, and the single-letter liter alternative consumed a following word in numbered prose. Explicit `lb`/`lbs`/`pound`/`pounds` normalization and a letter boundary on bare g/L remove those false errors. No unit conversion, prompt change, warning suppression or validation-gate bypass is introduced.
+
+Private replay uses the shipped KB import normalizer to reproduce the imported fact IDs before validating the supplied export. The exact same case moves from two errors and 21 warnings to zero errors and the identical 21 warnings. Original files and historical export metadata are preserved. Passing this numeric check does not resolve clinical terminology, overlapping answer options or inconsistent stage context in the supplied content; private findings are recorded in `scratch/labor-case-content-review.md`.
+
+The mandatory regression module adds 28 synthetic assertions covering pound aliases, threshold instantiation, numbered prose, actual liter/gram values, unknown unit tails and unsupported source values. All **3,191 assertions** and repository gates pass; all eleven frozen hashes remain unchanged. The private replay is local and consumes no model quota.
+
+All **10 synthetic browser scenarios** pass, including a new supported-pound/numbered-prose fixture that reaches the mocked item audit and registers both stage data and question citations in the Fact Inspector. The existing unsupported-value fixture still skips audit and registration. Browser CDN loading required execution outside the network sandbox; Gemini remained mocked throughout.

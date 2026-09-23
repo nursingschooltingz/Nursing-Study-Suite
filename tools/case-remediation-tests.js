@@ -16,6 +16,20 @@ async function run(S,t){
   for(const [value,source,ok] of [['3.5 mEq/L','3.5–5 mEq/L',true],['5 mEq/L','3.5–5 mEq/L',true],['3.5–5 mEq/L','3.5–5 mEq/L',true],['2–5 mEq/L','3.5–5 mEq/L',false],['4 mEq/L','3.5–5 mEq/L',false],['5 mg','5 mg per protocol',true],['12 breaths/min','12 breaths per minute per shift',true],['5 mg','5 mg per banana',false],['5 mg/dose','5 mg per dose',true],['5 mcg/kg/min','5 mcg/kg/min',true],['5 mg','5 mg/(kg min)',false],['5 mg','5 mg²',false]]){
     const found=[];C.caseAuditTextValues(value,['f1'],index(source),'Synthetic',found,'direct');t('numeric pair '+value+' from '+source,found.every(i=>i.sev!=='error')===ok);
   }
+  // Pounds use explicit aliases; ordinary words after stage/group numbers are not units.
+  for(const alias of ['lb','lbs','pound','pounds','LB']){
+    t('pound alias '+alias,C.caseNumericTokens('4 '+alias).tokens.map(x=>x.key).join()==='4lb');
+    const found=[];C.caseAuditTextValues('4 '+alias,['f1'],index('Weight change 3–5 pounds.'),'Synthetic',found,'instantiated');
+    t('pound threshold '+alias,found.length===0);
+  }
+  for(const prose of ['stage 2 labor','stage 2 Labor','3 groups','4 goals']){
+    const parsed=C.caseNumericTokens(prose);t('ordinary numbered prose '+prose,parsed.tokens.length===0&&parsed.unsupported.length===0);
+  }
+  for(const value of ['4 L','4 g','4L','4g'])t('standalone single-letter unit '+value,C.caseNumericTokens(value).tokens.length===1);
+  for(const tail of ['/banana','/(kg min)','²','·kg'])t('pound unsupported tail '+tail,C.caseNumericTokens('4 lb'+tail).unsupported.length===1);
+  for(const [value,source,ok] of [['4 lb','4 pounds',true],['4 lb','5 lb',false],['4 lb','1.814 kg',false],['4 L','4 labor',false],['4 g','4 groups',false],['4 mg','4 mgfoo',false]]){
+    const found=[];C.caseAuditTextValues(value,['f1'],index(source),'Synthetic',found,'direct');t('pound and word boundary grounding '+value+' from '+source,found.every(i=>i.sev!=='error')===ok);
+  }
   for(const sep of ['-','–',' to '])t('signed shared range '+sep,C.caseNumericTokens('-3.5'+sep+'-2.5 mEq/L').tokens.map(x=>x.key).join(',')==='-3.5meq/l,-2.5meq/l');
   for(const tail of ['/banana','/(kg min)','²','·kg',' × kg'])t('shared range rejects unsupported tail '+tail,C.caseNumericTokens('3–5 mg'+tail).tokens.length===0);
   t('shared compound range retains both complete values once',C.caseNumericTokens('0.1–0.5 mcg/kg/min').tokens.map(t=>t.key).join(',')==='0.1mcg/kg/min,0.5mcg/kg/min');

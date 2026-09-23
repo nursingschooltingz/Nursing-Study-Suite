@@ -9226,7 +9226,8 @@ ${caseRenderFactPacket(conditionName,facts)}`;
 // already stripped by caseNormalizeClinical on both sides, so matching is unaffected.
 // v15.17: retain signs and complete denominators. A partial unit can never establish numeric support.
 // v17.1: protocol/shift prose is not a denominator; unknown explicit denominators stay unsupported.
-const CASE_CLINICAL_TOKEN_RE=/(?<![\w.,])(?:[+−-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|[+−-]?\.\d+)\s*(?:(?:micrograms?|milligrams?|kilograms?|grams?|millilit(?:er|re)s?|lit(?:er|re)s?|milliequivalents?|millimoles?|[µμ]g|mcg|mg|kg|mL|mEq|mmol|mm\s*Hg|bpm|beats?\s*(?:per|\/)\s*min(?:ute)?s?|breaths?\s*(?:per|\/)\s*min(?:ute)?s?|units?|g|L)(?:[\p{L}0-9²^]*)(?:\s*(?:\/|per\s+(?!(?:protocol|shift)\b))\s*[\p{L}0-9²^]+)*|%|\/\s*min)\b|(?<![\w.,])(?:[+−-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|[+−-]?\.\d+)\s*%|(?<![\w/])\d{2,3}\s*\/\s*\d{2,3}(?:\s*mm\s*Hg)?(?![\w/])/giu;
+// v17.1: support pound aliases and keep bare g/L from consuming words such as groups/labor.
+const CASE_CLINICAL_TOKEN_RE=/(?<![\w.,])(?:[+−-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|[+−-]?\.\d+)\s*(?:(?:micrograms?|milligrams?|kilograms?|grams?|millilit(?:er|re)s?|lit(?:er|re)s?|milliequivalents?|millimoles?|[µμ]g|mcg|mg|kg|mL|mEq|mmol|mm\s*Hg|bpm|beats?\s*(?:per|\/)\s*min(?:ute)?s?|breaths?\s*(?:per|\/)\s*min(?:ute)?s?|units?|pounds?|lbs?|(?:g|L)(?![\p{L}]))(?:[\p{L}0-9²^]*)(?:\s*(?:\/|per\s+(?!(?:protocol|shift)\b))\s*[\p{L}0-9²^]+)*|%|\/\s*min)\b|(?<![\w.,])(?:[+−-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|[+−-]?\.\d+)\s*%|(?<![\w/])\d{2,3}\s*\/\s*\d{2,3}(?:\s*mm\s*Hg)?(?![\w/])/giu;
 // v15.1: qualitative findings ("becomes hypotensive", "appears confused") carry no numeric
 // token and sailed past the value scan. Term matches are WARN-tier because a stem scan will
 // false-positive on genuinely neutral phrasing; the numeric scan above stays error-tier.
@@ -9306,6 +9307,7 @@ function ankiUnsafeAbbrevScan(text,where,issues){
 // v15.17: aliases are explicit; numeric equality is decimal-string equality, without floating-point rounding.
 function caseNumericText(t){
   return String(t||'').replace(/−/g,'-').replace(/\u00a0/g,' ').toLowerCase()
+    .replace(/\b(?:pounds?|lbs?)\b/g,'lb')
     .replace(/[µμ]g/g,'mcg').replace(/\bmicrograms?\b/g,'mcg').replace(/\bmilligrams?\b/g,'mg')
     .replace(/\bkilograms?\b/g,'kg').replace(/\bgrams?\b/g,'g')
     .replace(/\bmillilit(?:er|re)s?\b/g,'ml').replace(/\blit(?:er|re)s?\b/g,'l')
@@ -9328,7 +9330,7 @@ function caseDecimal(value){
 function caseNormalizeClinical(t){
   return caseNumericText(t).replace(/[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|[+-]?\.\d+/g,caseDecimal).replace(/\s+/g,'');
 }
-const CASE_SUPPORTED_UNIT=/^(?:mcg|mg|g|kg|ml|l|meq|mmol|unit|bpm|mmhg|%|\/min)(?:\/(?:kg|ml|l|dl|hr|min|sec|day|dose|m2))*$/;
+const CASE_SUPPORTED_UNIT=/^(?:mcg|mg|g|kg|lb|ml|l|meq|mmol|unit|bpm|mmhg|%|\/min)(?:\/(?:kg|ml|l|dl|hr|min|sec|day|dose|m2))*$/;
 function caseNumericTokens(text){
   const tokens=[],unsupported=[],blocked=[],input=String(text||'');
   // v17.1: consume shared-unit ranges once; the old token scan lost the lower endpoint.
