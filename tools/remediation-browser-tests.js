@@ -230,6 +230,9 @@ async function sourceTests(browser,report){
   const response={title:'Synthetic source case',condition:'Synthetic condition A',stages:[{stageNumber:1,title:'Synthetic stage',narrative:'A fictional observation.',
     data:[{label:'Marker',value:'Fictional marker A is present.',supportType:'direct',availability:'revealed',factIds:['fact-1']}],
     questions:[{id:'q1',type:'MCQ',stem:'Choose the fictional marker.',options:[{label:'A',text:'Marker A'},{label:'B',text:'Marker B'}],correctAnswers:['A'],rationales:[{option:'A',text:'Fictional marker A is present.',supportType:'direct',factIds:['fact-1']},{option:'B',text:'Fictional marker A is present.',supportType:'direct',factIds:['fact-1']}]}]}],debrief:{notes:'Synthetic source has fewer facts than the requested case size.'}};
+  // v17.3: "Marker A"/"Marker B" is label-dependent option wording, so the v17.1 shuffle guard keeps the original
+  // order and records this advisory on the question, in the review block and in the Markdown appendix.
+  const retained='Answer options retained in original order: label/order-dependent wording requires review.';
   await withFixture(browser,{indexed:A},async({page})=>{
     await waitCourse(page,'A');await page.getByTitle('Clinical Case Study Generator',{exact:true}).click();
     await page.getByRole('checkbox',{name:/Run the item-quality audit/}).uncheck();
@@ -248,9 +251,12 @@ async function sourceTests(browser,report){
     const exported=await page.evaluate(()=>window.__remediation.exports.at(-1).text);
     assert(exported.includes('Source: earlier Knowledge Base.'));assert(exported.includes('Item quality audit: disabled.'));
     assert(exported.includes('Fictional marker A is present.'));assert(!exported.includes('Fictional marker B is present.'));
+    assert(exported.includes('- WARN: Stage 1 q1: '+retained),'the retained-order advisory reaches the Markdown review appendix');
     await page.getByRole('button',{name:'{ } JSON',exact:true}).click();await page.getByRole('button',{name:'📋 Copy',exact:true}).click();
     const copied=await page.evaluate(()=>JSON.parse(window.__remediation.copies.at(-1)));
-    assert.equal(copied.title,response.title);assert.deepEqual(copied.stages,response.stages);
+    assert.equal(copied.title,response.title);
+    assert.deepEqual(copied.stages,response.stages.map(s=>({...s,questions:s.questions.map(q=>({...q,shuffleNotice:retained}))})),'stages keep the original order, evidence and the advisory');
+    assert(copied._suiteReview.validation.some(v=>v.severity==='warn'&&v.message==='Stage 1 q1: '+retained),'the retained-order advisory reaches the JSON review block');
     assert(copied._suiteReview.notice.includes('Source: earlier Knowledge Base.'));assert(copied._suiteReview.notice.includes('Item quality audit: disabled.'));
     assert(Array.isArray(copied._suiteReview.validation));assert.deepEqual(copied._suiteReview.itemAudit,[]);
   });report('case generated from A retains original evidence when B reuses fact IDs; links and export notices stay honest');

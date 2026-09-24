@@ -148,7 +148,7 @@ async function runTests({ source, test = (name, value) => assert.ok(value, name)
   const profileD = checks.resolveMeasurementProfile(parseD(['--app-profile']), source, 'cardTranscribe');
   const profileN = checks.resolveMeasurementProfile(neia.parseArgs(['--app-profile']), source, 'itemAudit');
   t('App-matching profiles use live Flash default and correct tool levels', profileD.model === profileN.model &&
-    source.includes("useState('" + profileD.model + "')") && profileD.level === 'low' && profileN.level === 'high');
+    source.includes("flashModel:'" + profileD.model + "'") && profileD.level === 'low' && profileN.level === 'high');
   t('Missing app registry fails explicitly', throws(() => checks.resolveMeasurementProfile(parseD(['--app-profile']), '', 'cardTranscribe'), /App profile registry anchor missing/));
   const liveAudit = neia.extractAudit(source);
   t('Audit extraction includes non-vacuous tail behavior', liveAudit.itemAuditSummary([{ status: 'PASS', warns: [] }]).pass === 1);

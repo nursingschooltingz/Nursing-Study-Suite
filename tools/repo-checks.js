@@ -196,7 +196,8 @@ function resolveMeasurementProfile(config, source, tool) {
   const row = profiles[1].match(new RegExp('\\b' + tool + ":\\{m:'(flash|pro)',lv:'([^']+)'\\}"));
   if (!row) throw new Error('App profile row missing: ' + tool);
   const family = row[1];
-  const model = source.match(new RegExp('const \\[' + family + "Model,set[A-Za-z]+Model\\]=useState\\('([^']+)'\\)"));
+  // v17.3: the shipped defaults live in MODEL_SETTINGS_DEFAULTS; the App hydrates its state from saved settings.
+  const model = source.match(new RegExp("const MODEL_SETTINGS_DEFAULTS=Object\\.freeze\\(\\{[^}]*\\b" + family + "Model:'([^']+)'"));
   if (!model) throw new Error('App model default anchor missing: ' + family);
   return { model: model[1], level: row[2], family, profile: 'shipped-default:' + tool,
     profileCaveat: 'Shipped defaults only; saved browser profile overrides are not read.' };

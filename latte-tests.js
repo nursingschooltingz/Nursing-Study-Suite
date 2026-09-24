@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 3281;
+const EXPECTED_ASSERTIONS = 3360;
 
 let file;
 try {
@@ -414,7 +414,7 @@ t('all three former walkers go through it',
   S.includes('await pdfWalkPages(file,{signal,onPage:async(text,i,pg,total)=>{'));
 t('the inline NCLEX read is cancellable, not just the chunk loop',
   S.includes('await extractPdfTextSpaced(file,signal)'));
-t('default Flash model is gemini-3.8-flash', /useState\('gemini-3\.8-flash'\)/.test(S));
+t('default Flash model is gemini-3.8-flash', /const MODEL_SETTINGS_DEFAULTS=Object\.freeze\(\{flashModel:'gemini-3\.8-flash'/.test(S)); // v17.3: the shipped default moved into MODEL_SETTINGS_DEFAULTS
 
 /* ── 10d. v15.10: quote-miss classification + benchmark instrumentation ── */
 section('v15.10 — quote-miss classification');
@@ -2434,7 +2434,8 @@ section('v15.14 — tier 3');
 {
   // T3.6 — the KB builder capped its log at 200; the other four grew without bound and
   // rendered every entry as an index-keyed div.
-  t('all five tool logs and the KB-replacement notice are capped', S.split('p.slice(-200)').length - 1 === 6);
+  // v17.3: one useCappedLog hook (definition plus five tools) replaced the six copies.
+  t('all five tool logs and the KB-replacement notice are capped', S.split('useCappedLog(').length - 1 === 6 && S.split('p.slice(-cap)').length - 1 === 1 && !S.includes('p.slice(-200)'));
   // T3.13i — ten positional parameters, one of them inert since v15.
   t('callGemini takes an options object', S.includes('async function callGemini(apiKey,model,parts,opts={}){'));
   t('no positional call site survives the migration, including source-owned wrappers', !S.includes('],true,') && [...S.matchAll(/\b(?:ownedCallGemini|callGemini)\(/g)].length === 13);
@@ -2734,6 +2735,18 @@ section('v15.14 — clamps, backoff, storage');
 
   section('post-v16.8 review follow-up fixes');
   await require('./tools/production-review-followup-tests')(S,t);
+
+  section('v17.3 settings drawer focus regression');
+  require('./tools/settings-focus-tests')(S,t);
+
+  section('v17.3 render work, persistence witness and build lanes');
+  require('./tools/render-memo-tests')(S,t);
+  await require('./tools/persistence-digest-tests')(S,t);
+  await require('./tools/kb-lanes-tests')(S,t);
+
+  section('v17.3 settings persistence and remaining review findings');
+  require('./tools/settings-persistence-tests')(S,t);
+  await require('./tools/review-low-findings-tests')(S,t);
 
   console.log('\n════════════════════════════');
   const total = pass + fail;

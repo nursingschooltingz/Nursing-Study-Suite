@@ -22,7 +22,8 @@ async function runTests(source,test=(name,ok)=>assert.ok(ok,name)){
     setAttribute(k,v){this.value=v;},removeAttribute(){this.value=null;}},
     {tagName:'SPAN',value:'untrusted',classList:{contains:()=>true},setAttribute(k,v){this.value=v;},removeAttribute(){this.value=null;}}];
   let seenPolicy,seenMarkdown;
-  const fragment={querySelectorAll:()=>nodes};
+  const anchors=[{tagName:'A',attrs:{href:'https://synthetic.invalid/reference'},setAttribute(k,v){this.attrs[k]=v;}}];
+  const fragment={querySelectorAll:selector=>selector==='a[href]'?anchors:nodes};
   const output=new Function('DOMPurify','marked','document',policySource+';return {mdToSafeHtml,STUDY_OUTPUT_POLICY};')(
     {isSupported:true,sanitize:(html,policy)=>{seenPolicy=policy;return fragment;}},
     {parse:md=>{seenMarkdown=md;return md;}},
@@ -33,6 +34,7 @@ async function runTests(source,test=(name,ok)=>assert.ok(ok,name)){
   t('untrusted resource and style elements are excluded',['img','picture','source','audio','video','svg','math','iframe','object','embed','style','link','script','input','form'].every(tag=>!seenPolicy.ALLOWED_TAGS.includes(tag)));
   t('resource/style/event attributes are excluded',['src','srcset','poster','style','background','ping','onerror','onload','srcdoc'].every(attr=>!seenPolicy.ALLOWED_ATTR.includes(attr)));
   t('only the answer-key pagebreak class survives',nodes[0].value==='pagebreak'&&nodes[1].value===null);
+  t('rendered links open in a new tab without an opener',anchors[0].attrs.target==='_blank'&&anchors[0].attrs.rel==='noopener noreferrer');
   let failedClosed=false;
   try{new Function('DOMPurify',policySource+';return mdToSafeHtml("x");')({isSupported:false});}catch(error){failedClosed=/sanitizer is unavailable/.test(error.message);}
   t('unsupported sanitizer fails closed',failedClosed);

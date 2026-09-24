@@ -31,7 +31,7 @@ module.exports=function visualRegressionTests(S,t){
   t('v17 keeps settings reachable from the rail and the workspace header at every width',
     S.includes('className="rail-settings" aria-label="Study settings"')&&S.includes('onClick={openSettings}>{apiKey?\'API key added\':\'Add API key\'}</button>'));
   t('v17 settings drawer is dismissable and leaves the workspace underneath usable',
-    S.includes("const onKey=e=>{if(e.key==='Escape'){e.preventDefault();onClose();}};")
+    S.includes("const onKey=e=>{if(e.key==='Escape'){e.preventDefault();onCloseRef.current();}};")
     &&!S.includes('settings-scrim')
     &&S.includes('<aside ref={panelRef} className="drawer config-drawer" id="suite-settings" aria-label="Study settings">'));
   t('v17 settings close restores the trigger and opening focuses the named API field',S.includes('settingsTrigger.current?.focus()')&&S.includes("document.getElementById('suite-api-key')?.focus()"));

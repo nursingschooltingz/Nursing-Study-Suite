@@ -17,7 +17,7 @@ module.exports=async function ankiIntegritySourceRegression(S,t){
   const {kbTextQuality}=load(span('function kbTextQuality(units)', '// v15.14: ONE page walk.', 'perPage};'),['kbTextQuality']);
   const {createOperationSlot}=load(span('function createOperationSlot()', 'function cardCurrentEntries(', 'cancel(){active?.ctl.abort();active=null;}'),['createOperationSlot']);
   const sourceCode=span('function kbUnitLabel(units)', '// ── v15.12: flashcard ingestion', 'excessRaster:u.composition.raster-medianRaster');
-  const helperNames=['kbSourceUnits','kbGroupUnits','kbSplitChunk','kbBuildSourceChunks','kbNormForMatch','kbDehyphNormForMatch','kbQuoteInSource','kbQuoteNumericBoundedMatch','kbQuoteOperatorsAgree','kbCanonOperators','kbClassifyQuoteMiss','kbValidateExtractionEnvelope','kbQuoteCheckSummary'];
+  const helperNames=['kbRunLanes','kbCompareOrder','kbSourceUnits','kbGroupUnits','kbSplitChunk','kbBuildSourceChunks','kbNormForMatch','kbDehyphNormForMatch','kbQuoteInSource','kbQuoteNumericBoundedMatch','kbQuoteOperatorsAgree','kbCanonOperators','kbClassifyQuoteMiss','kbValidateExtractionEnvelope','kbQuoteCheckSummary'];
   function helpers({quality=kbTextQuality,compositionError=false}={}){
     return load(sourceCode,helperNames,{kbTextQuality:quality,caseContentWords,pdfjsLib:{OPS:{}},extractPptxText:async f=>f.syntheticText,
       pdfWalkPages:async(file,options)=>{for(let i=0;i<file.pages.length;i++)await options.onPage(file.pages[i],i+1,{getOperatorList:async()=>{if(compositionError)throw Error('synthetic composition failure');return{fnArray:[]};}},file.pages.length);}});
@@ -27,13 +27,13 @@ module.exports=async function ankiIntegritySourceRegression(S,t){
   const fact=(patch={})=>({text:source,sourceQuote:source,sourcePointer:{filename:'synthetic.pdf',location:'page 1'},latteBucket:'Look',tier:1,factType:'other',safetyCritical:false,...patch});
   const primary=(facts=[fact()])=>({conditions:[{name:'Signal',aliases:[],facts}]});
   const copy=v=>JSON.parse(JSON.stringify(v));
-  async function build({responses=[primary()],pages=[source],verifyPass=false,chunks=H,probeComposition=false,chunkChars=45000}={}){
+  async function build({responses=[primary()],pages=[source],verifyPass=false,chunks=H,probeComposition=false,chunkChars=45000,laneCount=1,respond=null}={}){
     const state={published:[],logs:[],warnings:[],error:'',requests:0,diag:null},files=[{name:'synthetic.pdf',pages}],slot=createOperationSlot();
     const env={...core,...prompts,...chunks,extractJSON,files,currentFiles:{current:files},replacementSlot:{current:slot},abortRef:{current:null},
-      K:{setKnowledgeBase:v=>state.published.push(copy(v))},cfg:{apiKey:'synthetic-never-sent',autoProfile:false,forTool:()=>({model:'synthetic',level:'low'})},kbConfirmReplace:()=>true,cardGate:{buildable:[],blocked:[]},cardIsImage:()=>false,chunkChars,overlapUnits:0,probeComposition,
+      K:{setKnowledgeBase:v=>state.published.push(copy(v))},cfg:{apiKey:'synthetic-never-sent',autoProfile:false,forTool:()=>({model:'synthetic',level:'low'})},kbConfirmReplace:()=>true,cardGate:{buildable:[],blocked:[]},cardIsImage:()=>false,chunkChars,overlapUnits:0,probeComposition,laneCount,
       kbOutcomes:'',kbPoints:'',kbExtra:'',focusMode:'prioritize',course:'Synthetic',exam:'Synthetic',verifyPass,
       addLog:(m,type)=>state.logs.push({m,type}),setBusy:v=>state.busy=v,setError:v=>state.error=v,setWarnings:v=>state.warnings=v,setProg:v=>state.progress=v,setDiag:v=>state.diag=copy(v),setLogs:v=>state.logs=v,setSelected:()=>{},
-      geminiRequest:async(_key,_model,_body,opts)=>{const response=responses[state.requests++];if(response instanceof Error)throw response;if(response===undefined)throw Error('Missing synthetic response');opts.onMeta?.(response.meta||{truncated:false});return JSON.stringify(response.json||response);}};
+      geminiRequest:async(_key,_model,body,opts)=>{const response=respond?await respond(body,state.requests++):responses[state.requests++];if(response instanceof Error)throw response;if(response===undefined)throw Error('Missing synthetic response');opts.onMeta?.(response.meta||{truncated:false});return JSON.stringify(response.json||response);}};
     await load(buildCode,['build'],env).build();return state;
   }
   const throws=fn=>{try{fn();return false;}catch{return true;}};
@@ -96,6 +96,17 @@ module.exports=async function ankiIntegritySourceRegression(S,t){
   t('page composition failure is visible without suppressing usable source text',state.published.length===1&&state.diag.diagnosticsUnavailable.some(x=>x.kind==='page 1 composition')&&state.warnings.some(x=>x.includes('synthetic composition failure')));
   t('diagnostics download persists quote denominators and unavailable evidence',S.includes('quoteChecked:diag.quoteChecked,quoteMissing:diag.quoteMissing,quoteMatched:diag.quoteMatched')&&S.includes('diagnosticsUnavailable:diag.diagnosticsUnavailable'));
   t('diagnostics UI uses the tested denominator summary and its bounded complete predicate',S.includes("color:kbQuoteCheckSummary(diag).complete?'var(--accent-green)':'var(--text-dim)'")&&S.includes('{kbQuoteCheckSummary(diag).text}'));
+  // v17.3: an opt-in second lane must publish exactly what the sequential build publishes.
+  const pageA='The synthetic alpha lamp remains green during readiness checks in the morning.',pageB='The synthetic beta gauge remains steady during readiness checks in the evening.';
+  const byPage=body=>body.contents[0].parts[0].text.includes(pageB)?'B':'A';
+  const laneFact=page=>page==='A'?primary([fact({text:pageA,sourceQuote:pageA})]):primary([fact({text:pageB,sourceQuote:pageB})]);
+  const sequential=await build({pages:[pageA,pageB],chunkChars:pageA.length+20,respond:async body=>laneFact(byPage(body))});
+  const order=[];
+  const parallel=await build({pages:[pageA,pageB],chunkChars:pageA.length+20,laneCount:2,respond:async body=>{const page=byPage(body);await new Promise(resolve=>setTimeout(resolve,page==='A'?40:1));order.push(page);return laneFact(page);}});
+  const strip=state=>JSON.stringify(state.published.map(kb=>({...kb,metadata:{...kb.metadata,createdAt:''}})));
+  t('two lanes run chunks concurrently and the later chunk can finish first',order.join('')==='BA'&&parallel.requests===2&&sequential.requests===2);
+  t('two lanes publish the same Knowledge Base as one lane, with facts numbered in chunk order',strip(parallel)===strip(sequential)&&parallel.published[0].conditions[0].facts.map(f=>f.text).join('|')===pageA+'|'+pageB);
+  t('diagnostics keep chunk order and record the lane count',parallel.diag.chunks.map(c=>c.label).join('|')==='page 1|page 2'&&parallel.diag.lanes===2&&sequential.diag.lanes===1);
 };
 
 if(require.main===module){

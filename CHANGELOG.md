@@ -9,6 +9,37 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [17.3] — 2026-09-23
+
+Production-review fixes from the [2026-09-23 review](docs/reviews/production-review-2026-09-23.md). No prompt, model profile, warning tier, storage key, export format or dependency pin changed; the pinned resources were re-hashed against both CDNs without edits.
+
+### Fixed
+
+- While the settings drawer was open, every `App` re-render re-ran the drawer's entry-focus effect, so typing a Flash or Pro model name moved the caret into the API key field after each character and stray characters landed there (v17.0 regression). The effect is mount-only, reads the latest close callback through a ref, and `closeSettings` is memoized.
+- A model-written link in rendered study output was a live same-tab anchor: one click replaced the app and every unsaved artifact. Sanitized links now open in a new tab with `rel="noopener noreferrer"`.
+
+### Changed
+
+- The Knowledge Base study view and the four Priority tier sections memoize their sanitized HTML, `activeTool` left the config context, and the six tools are `React.memo` components. With a 2,400-fact Knowledge Base an API-key keystroke previously re-ran marked and DOMPurify for unchanged views (about 10 ms of a 16 ms keystroke); it now runs neither, and tab switches no longer re-render the tools.
+- Persistence metadata carries a short digest of the serialized Knowledge Base instead of a second full copy (`meta.digest` replaces `meta.bytes`). IndexedDB and the localStorage fallback store the KB once; a 933 KB KB previously produced a 1.96 MB fallback record. Records saved by earlier versions still verify by their `bytes` field and are rewritten in digest form on their next save. Older builds cannot read digest-only records, as with the v15.18 metadata.
+- The Knowledge Base build gains an opt-in **Two parallel lanes** setting under Extraction settings. Two chunks run at once through a bounded lane runner; halves from a truncated chunk are picked up by an idle lane; results are assembled in chunk order, so fact numbering and diagnostics order are identical to a sequential build. Default off, because it uses more per-minute quota. Priority, NCLEX and Anki pipelines remain sequential (Priority feeds each chunk the previous harvest).
+- The Flash and Pro model names, the manual Flash/Pro switch and both manual thinking levels now persist across reloads (`latte_model_settings_v1`), validated field by field on read; a saved per-tool profile row is used only when it is a complete, recognized row. The shipped defaults moved into `MODEL_SETTINGS_DEFAULTS`, which the measurement tools read.
+- Model-response JSON extraction tries every fenced block and retries a brace scan from the first line that begins with a brace, but only after the previous order fails, so every previously accepted response yields the same value.
+- Recovery archives are pruned to the newest five in IndexedDB and in the browser fallback; the fresh archive is written first and pruning can never remove it.
+- React 18.2.0 → 18.3.1 (the last 18.x line; 19 dropped the UMD builds this single file depends on), with both SRI pins re-hashed. Babel standalone 7.29.9 was measured and not adopted: it compiles the suite in the same time as 7.23.9. A PDF.js ESM migration is written up as its own plan in `docs/reviews/pdfjs-esm-migration-plan-2026-09-23.md`; nothing there is implemented.
+- Maintainability: one `useCappedLog` hook replaces six copies of the capped log setter; the NCLEX grounding-adapter text exists once and feeds both packet forms byte-identically; eleven unused stylesheet rules (1,747 bytes) are removed; the Anki numeric tokenizer's two regexes are module-level and a fact's tokens are cached per snapshot fact instead of being recomputed for every note that links it; card identity conflicts are keyed by file identity rather than basename; the Anki batch-diagnostics JSON is built only while its details element is open; `AnkiGenerator` no longer writes refs during render (a memoized value serves render-time readers and an effect syncs the refs for handlers and in-flight checks). The Anki and case decimal normalizers stay separate because the harness extracts those sections independently; an assertion now keeps them byte-identical, and both unit vocabularies share one denominator grammar under assertion.
+
+### Added
+
+- Harness modules `tools/settings-focus-tests.js` (the shipped drawer compiled and driven under a minimal hook runtime), `tools/render-memo-tests.js`, `tools/persistence-digest-tests.js` (legacy and digest witnesses, fallback reads, once-only storage, tombstones) and `tools/kb-lanes-tests.js` (ordering, bounded concurrency, split pickup, cancellation, error propagation), plus lane assertions in `tools/anki-integrity-source-regression.js` comparing a two-lane build with a sequential one. `tools/visual-browser-tests.js` types into the Flash model field at every width, counts real `marked.parse` calls while typing the API key and switching tools, and checks rendered links.
+- `tools/remediation-browser-tests.js` (optional Playwright acceptance, unchanged since v17.0) expected a copied case JSON to equal the mocked response byte for byte; since v17.1 the shuffle guard keeps the fixture's label-dependent options ("Marker A"/"Marker B") in their original order and records an advisory, so the scenario had failed on v17.2 as well. It now pins that advisory on the question, in the JSON review block and in the Markdown appendix.
+
+### Withdrawn
+
+- Review finding 5 (a boot timeout firing during a slow compile) did not reproduce: with the timer cut to 1 second and a 2.9 s compile the app mounted with no error, because the Babel compile runs synchronously inside DOMContentLoaded and a pending timer cannot interrupt it. No change was made.
+- Review finding 16 (skip a nested PPTX text run instead of rejecting the deck) is withdrawn: the rejection is the v16.7 amplification guard, nested `a:t` never occurs in well-formed DrawingML, and a real-DOM browser test pins it. No change was made.
+- Review finding 7's raw-response retention is intentional exportable evidence; moving the strings out of React state would retain the same memory. Only the per-render diagnostics stringify was removed.
+
 ## [17.2] — 2026-09-23
 
 Publishes the case-generator fixes developed under the unreleased v17.1 version.

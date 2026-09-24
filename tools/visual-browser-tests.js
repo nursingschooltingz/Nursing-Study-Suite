@@ -92,6 +92,15 @@ async function settings(page,directory,width){
   const auto=page.getByRole('switch',{name:'Auto profile — per-tool model and thinking level',exact:true});
   const before=await auto.getAttribute('aria-checked');await auto.focus();await page.keyboard.press('Space');
   assert.notEqual(await auto.getAttribute('aria-checked'),before,'profile switch works from keyboard');await page.keyboard.press('Space');
+  // v17.3: typing a model name used to re-run the drawer's entry-focus effect on every App
+  // re-render and move the caret into the API key field after each character. Use the real
+  // keyboard path, then restore the field so later scenarios see the fixture's model name.
+  const flash=page.getByLabel('Flash model',{exact:true}),originalModel=await flash.inputValue(),originalKey=await page.getByLabel('Gemini API key',{exact:true}).inputValue();
+  await flash.click();await page.keyboard.type('xyz');
+  assert(await flash.evaluate(node=>node===document.activeElement),'typing a model name keeps focus in the model field');
+  assert.equal(await flash.inputValue(),originalModel+'xyz','every typed character reaches the model field');
+  assert.equal(await page.getByLabel('Gemini API key',{exact:true}).inputValue(),originalKey,'no typed character leaks into the API key field');
+  await flash.fill(originalModel);
   await layout(page,width+'px settings');await capture(page,directory,width+'-settings');
   await page.getByRole('button',{name:'Close study settings',exact:true}).click();
   assert.equal(await trigger.getAttribute('aria-expanded'),'false','settings close state is announced');
@@ -124,9 +133,12 @@ async function createOutputs(page){
   await page.waitForFunction(()=>window.__remediation.exports.some(x=>x.text.includes('Edited fictional explanation')));
 
   await choose(page,'priority');
-  await page.evaluate(()=>{window.__remediation.queueGemini('Synthetic harvest');window.__remediation.queueGemini('# Synthetic priority review\n\n## Tier 1\n\nFictional marker A is present.\n\n| Evidence | Source |\n| --- | --- |\n| Fictional marker | Synthetic A source |');});
+  await page.evaluate(()=>{window.__remediation.queueGemini('Synthetic harvest');window.__remediation.queueGemini('# Synthetic priority review\n\n## Tier 1\n\nFictional marker A is present. [Synthetic reference](https://synthetic.invalid/reference)\n\n| Evidence | Source |\n| --- | --- |\n| Fictional marker | Synthetic A source |');});
   await page.getByRole('button',{name:'△ Analyze Knowledge Base',exact:true}).click();
   await page.getByRole('heading',{name:'Priority Analysis',exact:true}).waitFor();
+  // v17.3: a model-written link must not be able to navigate the study tab away.
+  const links=await page.locator('.workbench:visible .tier-body a[href]').evaluateAll(nodes=>nodes.map(node=>[node.getAttribute('target'),node.getAttribute('rel')]));
+  assert(links.length>0&&links.every(([target,rel])=>target==='_blank'&&rel==='noopener noreferrer'),'rendered study links open in a new tab without an opener');
 
   await choose(page,'nclexgen');
   const panel=page.locator('.workbench:visible');
@@ -148,6 +160,23 @@ async function createOutputs(page){
   await page.getByRole('button',{name:'Show answer & rationale',exact:true}).click();
   await page.getByRole('button',{name:'⬇ .md',exact:true}).click();
   await page.waitForFunction(()=>window.__remediation.exports.some(x=>x.name==='LATTE-Case-Study.md'));
+}
+
+// v17.3: with a Knowledge Base loaded and outputs on screen, typing the API key and switching tabs
+// used to re-run marked/DOMPurify for the KB study view and the four Priority tiers on every
+// keystroke. Count real parser calls through the page's own marked global.
+async function renderWork(page){
+  await choose(page,'knowledge');
+  const trigger=page.getByRole('button',{name:'Study settings',exact:true});
+  if(await trigger.getAttribute('aria-expanded')!=='true')await trigger.click();
+  const key=page.getByLabel('Gemini API key',{exact:true}),original=await key.inputValue();
+  await page.evaluate(()=>{window.__parseCalls=0;const parse=marked.parse.bind(marked);marked.parse=(...args)=>{window.__parseCalls++;return parse(...args);};});
+  await key.click();await page.keyboard.type('abc');await settle(page);
+  assert.equal(await page.evaluate(()=>window.__parseCalls),0,'typing the API key re-renders no study markdown');
+  await key.fill(original);
+  await page.getByRole('button',{name:'Close study settings',exact:true}).click();
+  await choose(page,'priority');await choose(page,'knowledge');
+  assert.equal(await page.evaluate(()=>window.__parseCalls),0,'switching tools re-renders no study markdown');
 }
 
 async function visualTests(browser,{screenshots,report=console.log}={}){
@@ -182,6 +211,7 @@ async function visualTests(browser,{screenshots,report=console.log}={}){
     await page.waitForFunction(()=>window.__remediation.state.knowledgeBase.conditions.length===1);
     await page.setViewportSize({width:1440,height:900});
     await createOutputs(page);report('PASS synthetic JSON import, four generated outputs, Anki edit/export and case export');
+    await check('1440px render work',()=>renderWork(page));
     for(const width of widths){
       await page.setViewportSize({width,height:900});
       for(const [id] of tabs){await choose(page,id);await check(width+'px populated '+id,()=>layout(page,width+'px '+id));await capture(page,screenshots,width+'-populated-'+id);}
