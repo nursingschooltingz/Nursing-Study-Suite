@@ -12,6 +12,7 @@ module.exports=async function ankiIntegritySourceRegression(S,t){
   const load=(code,names,env={})=>new Function(...Object.keys(env),code+'\nreturn {'+names.join(',')+'};')(...Object.values(env));
   const core=load(span('function kbBuildFocusBlock(', '// ── Imported-KB sanitizer', 'contradictions:parts.flatMap'),['kbBuildFocusBlock','kbFlagUnderextraction','kbBucketGaps','mergeLatteParts']);
   const {extractJSON}=load(span('function extractJSON(text)', '// PDF text extraction (shared)', "throw new Error('JSON truncated.')"),['extractJSON']);
+  const {geminiHaltsBatch}=load(span('function geminiHaltsBatch(', '\nasync function callGemini(', 'e.retryDeferred===true'),['geminiHaltsBatch']); // v17.4: the build catch consults the shared halting rule
   const prompts=load(span('const KB_EXTRACTION_PROMPT=', '// Focus context for the Knowledge Base.', 'Assign latteBucket, subtype, factType, safetyCritical, and tier'),['KB_EXTRACTION_PROMPT','KB_VERIFY_PROMPT']);
   const {caseContentWords}=load(span('const CASE_STOPWORDS=', 'function itemHeuristics(', '!CASE_STOPWORDS.has(w)'),['caseContentWords']);
   const {kbTextQuality}=load(span('function kbTextQuality(units)', '// v15.14: ONE page walk.', 'perPage};'),['kbTextQuality']);
@@ -29,7 +30,7 @@ module.exports=async function ankiIntegritySourceRegression(S,t){
   const copy=v=>JSON.parse(JSON.stringify(v));
   async function build({responses=[primary()],pages=[source],verifyPass=false,chunks=H,probeComposition=false,chunkChars=45000,laneCount=1,respond=null}={}){
     const state={published:[],logs:[],warnings:[],error:'',requests:0,diag:null},files=[{name:'synthetic.pdf',pages}],slot=createOperationSlot();
-    const env={...core,...prompts,...chunks,extractJSON,files,currentFiles:{current:files},replacementSlot:{current:slot},abortRef:{current:null},
+    const env={...core,...prompts,...chunks,extractJSON,geminiHaltsBatch,files,currentFiles:{current:files},replacementSlot:{current:slot},abortRef:{current:null},
       K:{setKnowledgeBase:v=>state.published.push(copy(v))},cfg:{apiKey:'synthetic-never-sent',autoProfile:false,forTool:()=>({model:'synthetic',level:'low'})},kbConfirmReplace:()=>true,cardGate:{buildable:[],blocked:[]},cardIsImage:()=>false,chunkChars,overlapUnits:0,probeComposition,laneCount,
       kbOutcomes:'',kbPoints:'',kbExtra:'',focusMode:'prioritize',course:'Synthetic',exam:'Synthetic',verifyPass,
       addLog:(m,type)=>state.logs.push({m,type}),setBusy:v=>state.busy=v,setError:v=>state.error=v,setWarnings:v=>state.warnings=v,setProg:v=>state.progress=v,setDiag:v=>state.diag=copy(v),setLogs:v=>state.logs=v,setSelected:()=>{},
@@ -107,6 +108,15 @@ module.exports=async function ankiIntegritySourceRegression(S,t){
   t('two lanes run chunks concurrently and the later chunk can finish first',order.join('')==='BA'&&parallel.requests===2&&sequential.requests===2);
   t('two lanes publish the same Knowledge Base as one lane, with facts numbered in chunk order',strip(parallel)===strip(sequential)&&parallel.published[0].conditions[0].facts.map(f=>f.text).join('|')===pageA+'|'+pageB);
   t('diagnostics keep chunk order and record the lane count',parallel.diag.chunks.map(c=>c.label).join('|')==='page 1|page 2'&&parallel.diag.lanes===2&&sequential.diag.lanes===1);
+  // v17.4: a deferred retry (provider wait over a minute) or an exhausted quota window stops the build instead
+  // of sending the remaining chunks; an ordinary request failure still lets the other chunks run (asserted above).
+  const deferred=()=>Object.assign(Error('The provider requested a wait of 120 seconds. No automatic retry was sent; wait before trying again.'),{name:'RetryDeferredError',retryDeferred:true,status:429,retryAfterMs:120000});
+  const stopped=await build({pages:[pageA,pageB,pageA],chunkChars:pageA.length+20,respond:async(body,index)=>index===1?deferred():laneFact(byPage(body))});
+  t('a deferred retry stops a sequential build after the failing chunk',stopped.requests===2&&stopped.published.length===0&&stopped.error.includes('stopped after 2 attempted chunk(s); 1 chunk(s) were not sent')&&stopped.error.includes('wait of 120 seconds'));
+  const stoppedLanes=await build({pages:[pageA,pageB,pageA,pageB],chunkChars:pageA.length+20,laneCount:2,respond:async(body,index)=>{if(index===1)return deferred();await new Promise(resolve=>setTimeout(resolve,15));return laneFact(byPage(body));}});
+  t('a deferred retry stops both lanes: the in-flight chunk settles and the rest are never sent',stoppedLanes.requests===2&&stoppedLanes.published.length===0&&stoppedLanes.error.includes('2 chunk(s) were not sent'));
+  const exhausted=await build({pages:[pageA,pageB],chunkChars:pageA.length+20,respond:async(body,index)=>index===0?Object.assign(Error('quota exceeded'),{status:429,retryable:true}):laneFact(byPage(body))});
+  t('an exhausted quota window on the first chunk stops the build before the second is sent',exhausted.requests===1&&exhausted.published.length===0&&exhausted.error.includes('stopped after 1 attempted chunk(s); 1 chunk(s) were not sent'));
 };
 
 if(require.main===module){

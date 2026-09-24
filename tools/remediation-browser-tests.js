@@ -51,10 +51,12 @@ async function selfTest(){
 
 async function withFixture(browser,config,run){
   const {server,url}=await createServer({config});
-  const context=await browser.newContext({serviceWorkers:'block',acceptDownloads:false});
-  let view;
+  // v17.4: the context was created outside the protected region, so a failed newContext leaked the loopback
+  // server, and a rejected context.close() skipped server.close(). Both are cleaned up now.
+  let context=null,view;
   const errors=[];
   try{
+    context=await browser.newContext({serviceWorkers:'block',acceptDownloads:false});
     const network=await interceptContext(context,url,fixturePage(config));
     await context.addInitScript(()=>{window.confirm=()=>true;window.print=()=>{window.__remediationPrints=(window.__remediationPrints||0)+1;};});
     context.on('page',p=>p.on('pageerror',e=>errors.push(e.message)));
@@ -68,7 +70,7 @@ async function withFixture(browser,config,run){
   }catch(e){
     if(view){let timer;const diagnostic=await Promise.race([view.evaluate(()=>({fixture:window.__remediation?.snapshot(),body:document.body.innerText.slice(-1400)})).catch(()=>null),new Promise(resolve=>{timer=setTimeout(()=>resolve('unresponsive'),1500);})]).finally(()=>clearTimeout(timer));throw new Error(e.message+'\nFixture diagnostics: '+JSON.stringify(diagnostic),{cause:e});}
     throw e;
-  }finally{await context.close();await new Promise(resolve=>server.close(resolve));}
+  }finally{try{if(context)await context.close();}catch{}await new Promise(resolve=>server.close(resolve));}
 }
 
 async function waitStatus(page,status){await page.waitForFunction(expected=>window.__remediation?.state?.persistenceStatus===expected,status);}

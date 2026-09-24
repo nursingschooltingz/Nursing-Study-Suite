@@ -85,6 +85,6 @@ module.exports=async function transportRegressionTests(S,t){
   h=make([response([ev('partial','RECITATION')])]);e=await rejected(h.call({retries:2}));
   t('known provider blocking reasons retain partial diagnostics without retries',e?.isFatal===true&&e.finishReason==='RECITATION'&&e.partialText==='partial'&&h.calls()===1);
   t('the worksheet pacing uses abortable sleep',S.includes('await _sleep(900,ctl.signal)'));
-  t('the worksheet stops only classified permanent HTTP errors',S.includes('if(e.isFatal&&e.status)throw e;'));
+  t('the worksheet stops on a permanent HTTP failure or a deferred retry through the shared rule',S.includes('if(geminiHaltsBatch(e))throw e;')&&!S.includes('if(e.isFatal&&e.status)throw e;')); // v17.4: geminiHaltsBatch
   t('transport extraction reaches finally and post-cleanup backoff',code.includes('reader.releaseLock()')&&code.includes('await _sleep(retryDelay,signal);'));
 };

@@ -8,7 +8,15 @@
      Babel, so this adds narrow resource directives without a default-src/script-src migration. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net">
 <title>LATTE Study Suite</title>
-<!-- v17.3 (2026-09-23): production-review fixes. The settings drawer stole focus into the API key field on every
+<!-- v17.4 (2026-09-24): second production-review fixes. A calculation answer with no verified equation now carries a
+     warning in every export; hydration reads each fallback key once for both the restored copy and the save baseline;
+     split-mode NCLEX pairing keeps the union of the regex and model results; every NCLEX record is rebuilt from typed
+     fields at admission; a deferred retry, an exhausted quota or a permanent HTTP failure stops every batch scheduler
+     instead of sending the next chunk; NCLEX extraction reports complete, incomplete, failed, cancelled or stopped in
+     the results view and every export; Anki refuses a factless Knowledge Base before clearing the deck; Priority keeps
+     streamed text after a failure and accepts a zero overlap; DOMPurify 3.4.16. Prompts, model profiles and warning
+     tiers are unchanged. Verification: docs/reviews/v17.4-release.md.
+     v17.3 (2026-09-23): production-review fixes. The settings drawer stole focus into the API key field on every
      App re-render (v17.0 regression): its entry-focus effect is mount-only, reads its close callback through a ref,
      and closeSettings is memoized. Study markdown for the Knowledge Base view and the Priority tiers is memoized,
      activeTool left the config context, and the six tools are React.memo components, so App re-renders no longer
@@ -62,15 +70,15 @@
      Release history: CHANGELOG.md · decisions: DECISIONS.md · regression harness: latte-tests.js (1,372 assertions) · test-retest: neia-retest.js -->
 <!-- v15.3: crossorigin added (SRI-ready — paste the verified sha384 integrity attrs from
      the changelog after a local hash check; applying unverified hashes would hard-block
-     every script). DOMPurify 3.4.15 loads through a no-downgrade chain: cdnjs, then the
+     every script). DOMPurify 3.4.16 loads through a no-downgrade chain: cdnjs, then the
      SAME version from jsDelivr (which serves npm dist bytes verbatim, so one sha384 covers
      both tags), and if both fail the page halts with a visible error via window.stop()
      BEFORE the app can render anything unsanitized. v15's fallback-to-3.0.8 is gone: a
      failed secure pin must never silently downgrade the XSS boundary.
      v15.14: the "one sha384 covers both tags" claim was an ASSUMPTION and the fallback is
      dead code if it is wrong — a failed cdnjs would then hit an SRI-blocked jsDelivr tag and
-     halt the app, in exactly the outage the fallback exists for. Measured 2026-09-11: both
-     URLs serve 29,369 identical bytes, sha384-uUMu9JDY09vBzRf9SPcK2VgUj+W/70J6Soc+Dded5P474ElQ63iv9j5N3DE7Kp3N.
+     halt the app, in exactly the outage the fallback exists for. Measured 2026-09-11 and again
+     for 3.4.16 on 2026-09-24: both URLs serve 28,885 identical bytes, sha384-a7SzOxErzJ3ZpQz0zJ32d67dSitNzPcbfybc/ykU9KJhMgZkwqfSxlhhdJRS+XGL.
      All eight pins on this page were re-hashed against their CDNs in the same pass and all
      eight match. Re-run that check on any version bump; a wrong pin hard-blocks the script. -->
 <!-- v17.3: React 18.3.1 is the last 18.x line and still ships UMD builds; 19 dropped them, which this single-file
@@ -80,11 +88,11 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js" integrity="sha384-ku9eM40vVDsFUiERorrdlHlF0LIhdfn716M7TntM72Uo98T7LWiogD3hNenPx8Q0" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.4.15/purify.min.js" integrity="sha384-uUMu9JDY09vBzRf9SPcK2VgUj+W/70J6Soc+Dded5P474ElQ63iv9j5N3DE7Kp3N" crossorigin="anonymous"></script>
-<script>if(!window.DOMPurify)document.write('<script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.15/dist/purify.min.js" integrity="sha384-uUMu9JDY09vBzRf9SPcK2VgUj+W/70J6Soc+Dded5P474ElQ63iv9j5N3DE7Kp3N" crossorigin="anonymous"><\/script>');</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.4.16/purify.min.js" integrity="sha384-a7SzOxErzJ3ZpQz0zJ32d67dSitNzPcbfybc/ykU9KJhMgZkwqfSxlhhdJRS+XGL" crossorigin="anonymous"></script>
+<script>if(!window.DOMPurify)document.write('<script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.16/dist/purify.min.js" integrity="sha384-a7SzOxErzJ3ZpQz0zJ32d67dSitNzPcbfybc/ykU9KJhMgZkwqfSxlhhdJRS+XGL" crossorigin="anonymous"><\/script>');</script>
 <script>
 if(!window.DOMPurify){
-  document.write('<div style="font-family:system-ui,sans-serif;max-width:560px;margin:80px auto;padding:26px 30px;background:#fff8e5;color:#694d0a;border:1px solid #d5b667;border-radius:12px;line-height:1.65"><div style="font-size:17px;font-weight:700;margin-bottom:10px">&#9888; LATTE stopped before loading</div>The HTML sanitizer (DOMPurify 3.4.15) failed to load from both CDNs (cdnjs and jsDelivr). The app will not run without its XSS boundary, so it halted instead of rendering model output unsanitized. Check your connection and reload &#8212; nothing was lost.</div>');
+  document.write('<div style="font-family:system-ui,sans-serif;max-width:560px;margin:80px auto;padding:26px 30px;background:#fff8e5;color:#694d0a;border:1px solid #d5b667;border-radius:12px;line-height:1.65"><div style="font-size:17px;font-weight:700;margin-bottom:10px">&#9888; LATTE stopped before loading</div>The HTML sanitizer (DOMPurify 3.4.16) failed to load from both CDNs (cdnjs and jsDelivr). The app will not run without its XSS boundary, so it halted instead of rendering model output unsanitized. Check your connection and reload &#8212; nothing was lost.</div>');
   window.stop();
 }
 </script>
@@ -1183,6 +1191,14 @@ async function geminiRequest(apiKey,model,body,{signal,retries=2,onUpdate,onMeta
   }
 }
 
+// v17.4: geminiRequest gives up on a provider wait longer than a minute (RetryDeferredError) and on a
+// permanent HTTP failure, but every batch loop caught those as ordinary chunk failures and sent the next
+// request half a second later: a 429 carrying a two-minute wait produced one failed request per remaining
+// chunk, and the run then reported itself finished. One rule for every scheduler: cancellation, a deferred
+// retry, an exhausted quota window (429 after the transport's own retries) and a permanent HTTP failure stop
+// the run and keep what was already extracted; content failures without an HTTP status (malformed JSON, a
+// safety block, an empty MAX_TOKENS answer) stay per-chunk, exactly as before.
+function geminiHaltsBatch(e){return !!e&&(e.name==='AbortError'||e.retryDeferred===true||e.status===429||(e.isFatal===true&&!!e.status));}
 async function callGemini(apiKey,model,parts,opts={}){
   // v15.14: options object. The old signature was TEN positional parameters, one of them
   // (useThinking) inert since v15 and kept only so existing call sites stayed valid — so
@@ -2309,14 +2325,20 @@ function kbReconcileStored(records){
   const newest=choices.find(x=>x.meta&&choices.every(y=>y===x||y.meta&&y.meta.writer===x.meta.writer&&y.meta.sequence<x.meta.sequence||x.meta.parent===kbStoredKey(y)));
   return newest?{record:newest,choices:[]}:{record:null,choices};
 }
-function kbReadFallbacks(){
-  const records=[];
+// v17.4: hydration parsed the fallback keys here and then read them a second time for the save queue's
+// conflict baseline. The two reads are synchronous and back to back, so a browser cannot interleave another
+// tab's write between them, but the shape was still a hazard: the restored copy and the accepted baseline
+// could in principle differ, and a later save would then clear a copy that was never restored. One read now
+// feeds both: the parsed records and the exact bytes the queue compares against.
+function kbReadFallbackSnapshot(){
+  const records=[],captured={};let complete=true;
   // v16.7: one malformed fallback previously hid healthy durable data and prevented every later save.
   // Preserve its exact bytes alongside readable copies for explicit archive-and-replace recovery.
   for(const key of [KB_FALLBACK_KEY,KB_LEGACY_KEY]){
     let raw;
     try{raw=localStorage.getItem(key);}
-    catch(e){records.push({kb:null,storageKey:key,raw:null,unavailable:true,recoveryError:'Browser fallback access failed: '+String(e.message||e)+'. Restore browser storage access, then reload before choosing a recovery copy.'});continue;}
+    catch(e){complete=false;records.push({kb:null,storageKey:key,raw:null,unavailable:true,recoveryError:'Browser fallback access failed: '+String(e.message||e)+'. Restore browser storage access, then reload before choosing a recovery copy.'});continue;}
+    captured[key]=raw;
     if(!raw)continue;
     try{
       const parsed=JSON.parse(raw);
@@ -2324,8 +2346,9 @@ function kbReadFallbacks(){
       records.push(key===KB_FALLBACK_KEY?kbStoredRecord(parsed.kb,parsed.meta):kbStoredRecord(parsed));
     }catch(e){records.push({kb:null,storageKey:key,raw,recoveryError:String(e.message||e)+' Existing raw browser data was preserved.'});}
   }
-  return records;
+  return {records,captured:complete?captured:undefined};
 }
+function kbReadFallbacks(){return kbReadFallbackSnapshot().records;}
 function kbClearFallbacks(captured){
   for(const key of [KB_FALLBACK_KEY,KB_LEGACY_KEY])if(localStorage.getItem(key)===captured[key])localStorage.removeItem(key);
 }
@@ -2417,6 +2440,8 @@ function kbForNCLEX(kb,{tiers=[1,2,3],buckets=null,conditionQuery=''}={}){
   return rows.join('\n');
 }
 
+// v17.4: facts with text, across every condition; the Anki run refuses to start without any (see AnkiGenerator.run).
+function kbUsableFactCount(kb){return ((kb&&kb.conditions)||[]).reduce((n,c)=>n+((c&&c.facts)||[]).filter(f=>f&&String(f.text||'').trim()).length,0);}
 function kbForAnki(kb){
   // v16.6: raw names and aliases invited shortened tags; supply the same safe canonical token used by review.
   const conditionIndex=ankiConditionTagIndex({facts:(kb.conditions||[]).flatMap(c=>(c.facts||[]).map(f=>({id:f.id,condition:c.name,aliases:c.aliases})))});
@@ -3356,7 +3381,7 @@ function KnowledgeBaseBuilder(){
           }
           parsed=kbValidateExtractionEnvelope(extractJSON(raw));
         }catch(e){
-          if(e.name==='AbortError')throw e;
+          if(geminiHaltsBatch(e))throw e; // v17.4: a deferred retry, an exhausted quota or a permanent HTTP failure stops the build; kbRunLanes settles the other lane first
           problems.push(tag+': '+(e.message||String(e)));
           result.stat={tag,file:file.name,label:chunk.label,chars:chunk.text.length,facts:0,recovered:0,discarded:0,quoteMiss:0,quoteMissDetail:[],quoteMissByReason:{},discardByReason:{},dehyphSaved:0,opMismatch:0,opDetail:[],primaryResponse,failed:true};finished.push(result);
           owned_addLog(`✕ ${tag}: ${e.message||e}`,'err');bump(verifyPass?2:1);return;
@@ -3428,7 +3453,14 @@ function KnowledgeBaseBuilder(){
         if(opMismatch)owned_addLog(`  ⚠ ${tag}: ${opMismatch} verified quote(s) disagree with the source on a comparator or arrow — check these by eye`,'err');
         result.stat={tag,file:file.name,label:chunk.label,chars:chunk.text.length,facts:nFacts,recovered,discarded,auditStatus,quoteChecked,quoteMissing,quoteMatched:quoteChecked-quoteMiss,sourcePointerEvidence,primaryResponse,auditResponse,quoteMiss,quoteMissDetail:missDetail,quoteMissByReason:missByReason,discardByReason,dehyphSaved,opMismatch,opDetail,failed:false};finished.push(result);
       };
-      await kbRunLanes(queue,laneCount,processJob,controller.signal);
+      // v17.4: a halting transport error stops scheduling. Completed chunks are never committed by a stopped
+      // build, exactly as for a cancelled one, so the message says what was attempted and what was never sent.
+      try{await kbRunLanes(queue,laneCount,processJob,controller.signal);}
+      catch(e){
+        if(e.name==='AbortError')throw e;
+        owned_addLog(`■ Extraction stopped: ${finished.length+1} chunk(s) attempted, ${queue.length} never sent. Nothing was committed.`,'err');
+        throw new Error(`Extraction stopped after ${finished.length+1} attempted chunk(s); ${queue.length} chunk(s) were not sent. `+(e.message||String(e)));
+      }
       // v17.3: chunk order, not completion order, decides fact numbering and diagnostics order.
       for(const entry of finished.sort((a,b)=>kbCompareOrder(a.order,b.order))){parts.push(...entry.parts);stats.push(entry.stat);}
       // v16.7: publish diagnostics even when every chunk failed; a failed build never replaces the KB.
@@ -3717,6 +3749,9 @@ function KnowledgeBaseBuilder(){
 }
 
 // ──── TOOL: Priority Analyzer ────
+// v17.4: parseInt(value)||1500 treated a typed 0 as missing and restored 1500, so overlap could never be
+// turned off. Blank or non-numeric input still restores the default; 0 is a valid choice.
+function paParseOverlap(value,fallback=1500){const n=Number.parseInt(String(value),10);return Math.max(0,Math.min(5000,Number.isNaN(n)?fallback:n));}
 function paChunkText(text,chunkSize=12000,overlapSize=1500){
   let paragraphs=text.split(/\n{2,}/);if(paragraphs.length===1&&paragraphs[0].length>chunkSize)paragraphs=text.split(/\n/);
   const segments=[];
@@ -4087,7 +4122,7 @@ function PriorityAnalyzer(){
           if(!String(result||'').trim())throw new Error('No usable text was returned for this source chunk.');
           extractions.push(result);harvest.successful++;if(harvestMeta?.truncated)harvest.truncated.push(i+1);
           owned_setChunks(p=>p.map(c=>c.id===`ext-${i}`?{...c,status:'done'}:c));
-        }catch(err){if(err.name==='AbortError'||!current())throw new DOMException('Aborted','AbortError');owned_setChunks(p=>p.map(c=>c.id===`ext-${i}`?{...c,status:'error'}:c));harvest.failed.push({chunk:i+1,message:err.message||String(err)});}
+        }catch(err){if(err.name==='AbortError'||!current())throw new DOMException('Aborted','AbortError');owned_setChunks(p=>p.map(c=>c.id===`ext-${i}`?{...c,status:'error'}:c));harvest.failed.push({chunk:i+1,message:err.message||String(err)});if(geminiHaltsBatch(err)){publishHarvest();throw new Error(`Harvest stopped at chunk ${i+1} of ${total}; the remaining chunks were not sent. `+(err.message||String(err)));}} // v17.4: stop instead of harvesting into a closed quota window
         publishHarvest();
         completed++;owned_setProgress(Math.floor(completed/totalSteps*90));
       }
@@ -4107,7 +4142,9 @@ function PriorityAnalyzer(){
       const cancelled=e.name==='AbortError';
       owned_setError(cancelled?'Cancelled.':e.message);
       // Keep whatever streamed in before the cancel — the error view would discard it.
-      owned_setStep(cancelled&&gotOutput?'results':'error');
+      // v17.4: the same for a timeout, an incomplete stream or an exhausted retry; the results view labels
+      // the text as incomplete and the export notice carries the failure.
+      owned_setStep(gotOutput?'results':'error');
       owned_setChunks(p=>p.map(c=>c.status==='running'?{...c,status:'error'}:c));
     }finally{if(analysisSlot.current.finish(run)){
       // v16.7: a late continuation can finish before the source-change effect; retain an explicit stopped state.
@@ -4148,7 +4185,7 @@ function PriorityAnalyzer(){
       </Disclose>
       <Disclose summary="Chunking" note={Math.round(chunkSize/1000)+'k · '+overlapSize+' overlap'}>
             <div className="sb-field"><label htmlFor="priority-chunk-size">Chunk size</label><input id="priority-chunk-size" type="number" value={chunkSize} onChange={e=>setChunkSize(Math.max(2000,parseInt(e.target.value)||12000))}/></div>
-            <div className="sb-field"><label htmlFor="priority-overlap">Overlap</label><input id="priority-overlap" type="number" value={overlapSize} onChange={e=>setOverlapSize(Math.max(0,Math.min(5000,parseInt(e.target.value)||1500)))}/></div>
+            <div className="sb-field"><label htmlFor="priority-overlap">Overlap</label><input id="priority-overlap" type="number" value={overlapSize} onChange={e=>setOverlapSize(paParseOverlap(e.target.value))}/></div>
       </Disclose>
     </>}
     action={<>
@@ -4169,6 +4206,7 @@ function PriorityAnalyzer(){
     {step==='results'&&<>
             {isStreaming&&abortController&&<div className="meta-row"><span className="spinner" aria-hidden="true"/><span>Streaming the analysis…</span><button className="btn-danger" onClick={()=>abortController.abort()}>■ Stop</button></div>}
             {!isStreaming&&<TruncationNotice meta={meta}/>}
+            {!isStreaming&&error&&<div className="tip-banner"><span>⚠</span><div><strong>Incomplete analysis:</strong> {error} The text below is what arrived before that; copies and exports carry the same notice.</div></div>}
       <ResultsHead title="Priority Analysis">
         <button className="btn-secondary" onClick={copyOutput}>📋 Copy</button><button className="btn-secondary" onClick={downloadMd}>⬇ .md</button><button className="btn-secondary" onClick={()=>exportAsTxt(exportOutput,'priority-analysis.txt')}>⬇ .txt</button><button className="btn-secondary" onClick={()=>exportAsPdf(exportOutput,'Pyramid Priority Analysis','LATTE Knowledge Base')}>🖨 PDF</button><button className="btn-secondary" onClick={resetAll}>↺ New</button>
       </ResultsHead>
@@ -5830,7 +5868,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '17.3';}
+function suiteVersion(){return '17.4';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -6553,6 +6591,9 @@ function AnkiGenerator(){
   const run=useCallback(async()=>{
     if(!cfg.apiKey){log('Enter API key first.','err');return;}
     if(!(K.knowledgeBase.conditions||[]).length){log('Build the LATTE Knowledge Base first.','err');return;}
+    // v17.4: the guard counted conditions, not facts, so a Knowledge Base whose conditions carry no facts cleared
+    // the current deck and sent a header-only packet to the model. Nothing is cleared or sent now.
+    if(!kbUsableFactCount(K.knowledgeBase)){log('The Knowledge Base has no facts to convert; the current cards were kept and nothing was sent to the model. Build or import a Knowledge Base with facts first.','err');return;}
     cancelSourceAudit();setSourceAudit(null);setInspectNote(null);
     setBusy(true);setProg(0);setLogs([]);setCards([]);setLedger('');setBatch(null);setInterruptedRun(null);setShowUncovered(false);setNotePage(0);setEditBlocked(null);
     // v15.17: capture identity before awaiting; a replaced KB or superseded run cannot publish.
@@ -6874,15 +6915,54 @@ function nclexConditions(value){
   if(Array.isArray(value))return value.filter(x=>typeof x==='string'&&x.trim()).map(x=>x.trim());
   return typeof value==='string'&&value.trim()?[value.trim()]:[];
 }
-function nclexAccumulate(seen,allQ,incoming){
+// v17.4: admission checked only that q.question was truthy, so an object-valued question or answer from a
+// malformed provider item reached the disease filter and the card renderer and crashed the tool, which
+// remounts and loses every question already extracted. Each record is rebuilt from the fields the tool
+// reads: the question must be nonempty text; the other text fields keep strings (numbers and booleans are
+// spelled out) and drop anything else; every field is bounded. Malformed records are counted on the run
+// tracker with a short raw sample, never rendered.
+const NCLEX_RECORD_TEXT_FIELDS=Object.freeze(['correct_answer','rationale','priority_nursing_tip','test_taking_strategy','clinical_judgment_skill']);
+const NCLEX_RECORD_FIELD_MAX=20000;
+function nclexAdmitRecord(q){
+  if(!q||typeof q!=='object'||Array.isArray(q)||typeof q.question!=='string'||!q.question.trim())return null;
+  const text=v=>typeof v==='string'?v.slice(0,NCLEX_RECORD_FIELD_MAX):(typeof v==='number'&&Number.isFinite(v))||typeof v==='boolean'?String(v):'';
+  const out={question:q.question.slice(0,NCLEX_RECORD_FIELD_MAX)};
+  for(const f of NCLEX_RECORD_TEXT_FIELDS){const v=text(q[f]);if(v)out[f]=v;}
+  out.diseases_conditions=nclexConditions(q.diseases_conditions);
+  const num=Number(q.question_number);if(q.question_number!==undefined&&q.question_number!==null&&q.question_number!==''&&Number.isFinite(num))out.question_number=num;
+  if(q.options_repaired===true)out.options_repaired=true;
+  if(typeof q.id==='string'&&q.id)out.id=q.id;
+  return out;
+}
+function nclexAccumulate(seen,allQ,incoming,track){
   for(const q of incoming||[]){
-    if(!q||!q.question)continue;
-    const k=nclexKey(q);
+    const rec=nclexAdmitRecord(q);
+    if(!rec){if(track){track.malformed=(track.malformed||0)+1;let sample;try{sample=JSON.stringify(q);}catch(e){sample=String(q);}if((track.samples||(track.samples=[])).length<3)track.samples.push(String(sample).slice(0,200));}continue;}
+    const k=nclexKey(rec);
     if(seen.has(k))continue;
-    seen.add(k);allQ.push({...q,diseases_conditions:nclexConditions(q.diseases_conditions)});
+    seen.add(k);allQ.push(rec);
   }
+  if(track)track.questions=allQ.length;
   return allQ;
 }
+// v17.4: the extractor reported "Done" after swallowed chunk failures and after a cancel, and its exports
+// carried no trace of either. The tracker records what was attempted; the summary is derived from it, shown
+// in the results view and written into every export.
+function nclexNewTrack(){return {attempted:0,succeeded:0,failed:[],malformed:0,samples:[],notes:[],questions:0,cancelled:false,stopped:''};}
+function nclexRunSummary(track){
+  const t=track||{},failed=Array.isArray(t.failed)?t.failed.map(String):[],attempted=Math.max(0,t.attempted|0),succeeded=Math.max(0,t.succeeded|0),malformed=Math.max(0,t.malformed|0);
+  const status=t.cancelled?'cancelled':t.stopped?'stopped':attempted&&!succeeded?'failed':failed.length?'partial':attempted?'complete':'empty';
+  const label={complete:'Complete',partial:'Incomplete',failed:'Failed',cancelled:'Cancelled',stopped:'Stopped',empty:'Nothing extracted'}[status];
+  const parts=[attempted?`${succeeded} of ${attempted} extraction request${attempted===1?'':'s'} succeeded`:'no extraction request was sent'];
+  if(failed.length)parts.push(`failed: ${failed.join(', ')}`);
+  if(malformed)parts.push(`${malformed} malformed record${malformed===1?'':'s'} skipped`);
+  for(const note of Array.isArray(t.notes)?t.notes:[])parts.push(String(note));
+  if(t.cancelled)parts.push('cancelled before the remaining requests were sent');
+  else if(t.stopped)parts.push('the remaining requests were not sent');
+  const detail=parts.join('; ')+'.';
+  return {status,label,attempted,succeeded,failed,malformed,questions:Math.max(0,t.questions|0),cancelled:!!t.cancelled,stopped:String(t.stopped||''),detail,headline:label+': '+detail,exportLine:label+': '+detail+(t.stopped?' Reason: '+String(t.stopped):'')};
+}
+function nclexSummaryLine(summary){return summary?'Extraction status: '+summary.exportLine:'';}
 
 // Split-mode: extract text from specific page ranges
 // v15.8 moved this onto the shared pdfLayoutText. v15.14 moves the walk itself: this used
@@ -7026,7 +7106,7 @@ function nclexSplitStemOptions(text){
 // book's own bytes. Inline mode has no equivalent source to repair from: there the model
 // itself decides where a question begins, so the chunk overlap is what covers a split.
 function nclexRepairOptions(item,sourceText){
-  if(!item||!item.question)return item;
+  if(!item||typeof item.question!=='string'||!item.question.trim())return item; // v17.4: a non-string question is left for admission to reject
   if(nclexSplitStemOptions(item.question).options.length)return item;
   const src=nclexSplitStemOptions(String(sourceText||''));
   if(!src.options.length)return item;
@@ -7036,6 +7116,25 @@ function nclexRepairOptions(item,sourceText){
 function nclexPairQA(qText,aText){
   const questions=nclexSplitByQNum(qText),answers=nclexSplitByQNum(aText);
   return Object.keys(questions).map(Number).sort((a,b)=>a-b).map(num=>({number:num,question:questions[num]||'',answer:answers[num]||'',matched:!!answers[num]}));
+}
+// v17.4: the AI pairing fallback replaced the regex pairing outright when it found more questions and only
+// filled answers when it found the same number or fewer, so questions found by one pass and not the other
+// vanished. Merge by question number instead: the page text and matched answers already in hand are kept,
+// missing answers are filled from the model, questions only the model found are appended, and a number whose
+// two texts clearly differ is counted so the log can ask for a numbering check rather than choosing silently.
+function nclexMergePairs(regexPairs,aiRows){
+  const byNum=new Map(),norm=v=>String(v||'').replace(/\s+/g,' ').trim().toLowerCase();
+  let filled=0,added=0,collisions=0;
+  for(const p of regexPairs||[])if(p&&p.question)byNum.set(Number(p.number)||0,{...p});
+  for(const r of aiRows||[]){
+    if(!r||!String(r.question||'').trim())continue;
+    const n=Number(r.number)||0,prev=byNum.get(n);
+    if(!prev){byNum.set(n,{number:n,question:String(r.question),answer:String(r.answer||''),matched:!!r.answer});added++;continue;}
+    const a=norm(prev.question),b=norm(r.question);
+    if(a&&b&&!a.startsWith(b.slice(0,40))&&!b.startsWith(a.slice(0,40)))collisions++;
+    if(!prev.matched&&r.answer){prev.answer=String(r.answer);prev.matched=true;filled++;}
+  }
+  return {pairs:[...byNum.values()].sort((x,y)=>x.number-y.number),filled,added,collisions};
 }
 
 // v15.14: hard clamp on the stride, the same fix v15 made for nclexChunkText and missed
@@ -7125,6 +7224,7 @@ function NCLEXExtractor(){
   const [questions,setQuestions]=useState([]);
   const [error,setError]=useState('');
   const [log,pushLog,setLog]=useCappedLog();
+  const [runSummary,setRunSummary]=useState(null); // v17.4: complete/incomplete/failed/cancelled/stopped; every export carries it
   const [filterStrategy,setFilterStrategy]=useState('');
   const [filterDisease,setFilterDisease]=useState('');
   const abortRef=useRef(null); // v15: holds the run's AbortController — the old boolean only skipped FUTURE chunks; in-flight requests and retries could not be cancelled
@@ -7191,8 +7291,12 @@ function NCLEXExtractor(){
     }
   }
 
+  // v17.4: one admission path for both modes. Malformed provider records are counted on the run tracker and
+  // never rendered (nclexAdmitRecord); the log names the count so a quiet skip stays visible.
+  const admit=(seen,allQ,records,track)=>{const before=track.malformed;nclexAccumulate(seen,allQ,records,track);setQuestions(allQ.slice());if(track.malformed>before)addLog(`    ⚠ ${track.malformed-before} malformed record(s) skipped; see the run summary`);};
+
   // ── Inline mode runner ──
-  async function runInline(file,existingQ,signal){
+  async function runInline(file,existingQ,signal,track){
     addLog(`📄 Extracting "${file.name}"...`);
     // v15.14: the signal is threaded now, so Cancel works during the local read instead of
     // only between chunks. runInline awaits the whole extraction before its first check.
@@ -7211,16 +7315,18 @@ function NCLEXExtractor(){
       if(signal.aborted)throw new DOMException('Aborted','AbortError');
       addLog(`  Chunk ${i+1}/${chunks.length}...`);
       try{
+        track.attempted++;
         const result=await nclexCallGemini(NCLEX_INLINE_PROMPT+chunks[i],signal);
-        if(Array.isArray(result)&&result.length>0){nclexAccumulate(seen,allQ,result.map(q=>({...q,id:uid()})));setQuestions(allQ.slice());addLog(`    ✓ ${result.length} found → ${allQ.length} unique`);}else addLog(`    — No questions.`);
-      }catch(e){if(e.name==='AbortError')throw e;addLog(`    ⚠ ${e.message}`);}
+        track.succeeded++;
+        if(Array.isArray(result)&&result.length>0){admit(seen,allQ,result.map(q=>({...q,id:uid()})),track);addLog(`    ✓ ${result.length} found → ${allQ.length} unique`);}else addLog(`    — No questions.`);
+      }catch(e){if(geminiHaltsBatch(e))throw e;track.failed.push(`Chunk ${i+1}`);addLog(`    ⚠ ${e.message}`);} // v17.4: a halting transport error stops the run; ordinary chunk failures are counted
       setProgress({current:i+1,total:chunks.length});if(i<chunks.length-1)await _sleep(500,signal);
     }
     return allQ;
   }
 
   // ── Split Q&A mode runner ──
-  async function runSplit(file,existingQ,signal){
+  async function runSplit(file,existingQ,signal,track){
     addLog(`📄 Extracting QUESTION pages from "${file.name}"...`);
     let qText='';for(const r of qRanges){addLog(`  Pages ${r.start}–${r.end}`);qText+=await nclexExtractPageRange(file,r.start,r.end,signal)+'\n\n';}
     addLog(`  → ${qText.length.toLocaleString()} chars`);
@@ -7268,21 +7374,14 @@ function NCLEXExtractor(){
           if(w<W-1)await _sleep(500,signal);
         }
         const aiResult=[...byNum.values()].sort((x,y)=>x.number-y.number);
-        if(aiResult.length>pairs.length){
-          pairs=aiResult;
-          addLog(`  → AI paired ${pairs.length} questions (better than regex)`);
-        }else if(aiResult.length){
-          // v16.9: the fallback replaced the pairing only when it found MORE questions, so a run
-          // that recovered the missing ANSWERS for the same questions paid for the call and then
-          // threw the answers away. Merge them into unmatched pairs; keep every question found.
-          const recovered=new Map(aiResult.filter(r=>r.matched).map(r=>[Number(r.number),r]));
-          let filled=0;
-          pairs=pairs.map(p=>{const r=recovered.get(Number(p.number));if(p.matched||!r)return p;filled++;return {...p,answer:r.answer,matched:true};});
-          if(filled)addLog(`  → AI recovered ${filled} answer(s) for existing questions`);
-        }
-      }catch(e){if(e.name==='AbortError')throw e;addLog(`  ⚠ AI pairing failed: ${e.message}`);}
+        // v17.4: union by question number (nclexMergePairs) instead of replace-if-larger / fill-answers-otherwise.
+        const merged=nclexMergePairs(pairs,aiResult);pairs=merged.pairs;
+        if(merged.added||merged.filled)addLog(`  → AI added ${merged.added} question(s) and recovered ${merged.filled} answer(s); ${pairs.length} questions total`);
+        else addLog(`  → AI found nothing beyond the regex pairing; ${pairs.length} questions total`);
+        if(merged.collisions)addLog(`  ⚠ ${merged.collisions} question number(s) carry clearly different text in the two passes; the page text was kept — check the numbering`);
+      }catch(e){if(geminiHaltsBatch(e))throw e;track.notes.push('AI pairing failed: '+e.message);addLog(`  ⚠ AI pairing failed: ${e.message}`);}
     }
-    if(!pairs.length){addLog('⚠ No numbered questions detected. Try adjusting page ranges or Inline mode.');return existingQ;}
+    if(!pairs.length){track.notes.push('no numbered questions were detected in the page ranges');addLog('⚠ No numbered questions detected. Try adjusting page ranges or Inline mode.');return existingQ;}
     const batches=nclexBatchPairs(pairs,batchSize);
     addLog(`Sending ${batches.length} batches of ~${batchSize} to ${model}...`);
     setProgress({current:0,total:batches.length});
@@ -7291,7 +7390,9 @@ function NCLEXExtractor(){
       if(signal.aborted)throw new DOMException('Aborted','AbortError');
       const batch=batches[i];addLog(`  Batch ${i+1}/${batches.length} (Q#${batch[0].number}–#${batch[batch.length-1].number})...`);
       try{
+        track.attempted++;
         const result=await nclexCallGemini(NCLEX_SPLIT_PROMPT+nclexPairsToText(batch),signal);
+        track.succeeded++;
         if(Array.isArray(result)&&result.length>0){
           // v15.15: put the choices back from the page when the model returned a bare stem.
           // The batch still holds each question's verbatim source text, so this costs nothing
@@ -7299,10 +7400,10 @@ function NCLEXExtractor(){
           const srcByNum=new Map(batch.map(p=>[Number(p.number),p.question]));
           const fixed=result.map(q=>nclexRepairOptions(q,srcByNum.get(Number(q&&q.question_number))));
           const nRepaired=fixed.filter(q=>q&&q.options_repaired).length;
-          nclexAccumulate(seen,allQ,fixed.map(q=>({...q,id:uid()})));setQuestions(allQ.slice());
+          admit(seen,allQ,fixed.map(q=>({...q,id:uid()})),track);
           addLog(`    ✓ ${result.length} → ${allQ.length} unique${nRepaired?` (${nRepaired} choice list${nRepaired!==1?'s':''} restored from the page)`:''}`);
         }else addLog(`    — No output.`);
-      }catch(e){if(e.name==='AbortError')throw e;addLog(`    ⚠ ${e.message}`);}
+      }catch(e){if(geminiHaltsBatch(e))throw e;track.failed.push(`Batch ${i+1}`);addLog(`    ⚠ ${e.message}`);}
       setProgress({current:i+1,total:batches.length});if(i<batches.length-1)await _sleep(500,signal);
     }
     return allQ;
@@ -7311,7 +7412,8 @@ function NCLEXExtractor(){
   const run=useCallback(async()=>{
     if(!cfg.apiKey||!files.length)return;
     const ctl=new AbortController();abortRef.current=ctl;
-    setError('');setQuestions([]);setLog([]);setStatus('processing');
+    setError('');setQuestions([]);setRunSummary(null);setLog([]);setStatus('processing');
+    const track=nclexNewTrack();
     try{
       addLog(`Mode: ${mode==='inline'?'Inline (Q+A together)':'Split Q&A (separated sections)'} · ${model} [${toolLevel}]${cfg.autoProfile?' (auto)':''}`);
       // v15.15: a page range describes ONE file's layout, so inline mode with ranges enabled
@@ -7325,13 +7427,15 @@ function NCLEXExtractor(){
       for(let fi=0;fi<workFiles.length;fi++){
         if(ctl.signal.aborted)throw new DOMException('Aborted','AbortError');
         addLog(`\n📁 File ${fi+1}/${workFiles.length}: ${workFiles[fi].name}`);
-        if(mode==='inline')allQ=await runInline(workFiles[fi],allQ,ctl.signal);
-        else allQ=await runSplit(workFiles[fi],allQ,ctl.signal);
+        if(mode==='inline')allQ=await runInline(workFiles[fi],allQ,ctl.signal,track);
+        else allQ=await runSplit(workFiles[fi],allQ,ctl.signal,track);
       }
-      addLog(`✅ Done! ${allQ.length} unique questions from ${workFiles.length} file(s).`);setStatus('done');
+      // v17.4: "Done" is earned, not assumed (nclexRunSummary).
+      const summary=nclexRunSummary(track);setRunSummary(summary);
+      addLog(summary.status==='complete'?`✅ Done! ${allQ.length} unique questions from ${workFiles.length} file(s).`:`⚠ ${summary.headline} ${allQ.length} unique question(s) kept.`);setStatus('done');
     }catch(e){
-      if(e.name==='AbortError'){addLog('⚠ Aborted \u2014 keeping the questions extracted so far.');setStatus('done');}
-      else{setError(e.message);setStatus('error');addLog(`❌ ${e.message}`);}
+      if(e.name==='AbortError'){track.cancelled=true;setRunSummary(nclexRunSummary(track));addLog('⚠ Aborted \u2014 keeping the questions extracted so far.');setStatus('done');}
+      else{track.stopped=e.message;setRunSummary(nclexRunSummary(track));setError(e.message);setStatus('error');addLog(`❌ ${e.message}`);}
     }finally{abortRef.current=null;}
   },[cfg,files,mode,chunkSize,overlap,iRangeOn,iRanges,qRanges,aRanges,batchSize,model,toolLevel,addLog]);
 
@@ -7341,7 +7445,7 @@ function NCLEXExtractor(){
   // same shape the NCLEX Generator worksheet has always used (## Questions / ## Answer Key).
   const nclexQText=q=>{const {stem,options}=nclexSplitStemOptions(q.question);return options.length?stem+'\n'+options.map(o=>`   ${o.label}. ${o.text}`).join('\n'):String(q.question||'');};
   const exportTxt=()=>{
-    let out='NCLEX PRACTICE QUESTIONS\n\n'+filtered.length+' questions\n\n';
+    let out='NCLEX PRACTICE QUESTIONS\n\n'+filtered.length+' questions\n\n'+(runSummary?nclexSummaryLine(runSummary)+'\n\n':''); // v17.4
     filtered.forEach((q,i)=>{out+=`${i+1}. ${nclexQText(q)}\n\n`;});
     out+='\n============================\nANSWER KEY\n============================\n\n';
     filtered.forEach((q,i)=>{out+=`${i+1}. Answer: ${q.correct_answer}\nRationale: ${q.rationale}\n${q.priority_nursing_tip?'Tip: '+q.priority_nursing_tip+'\n':''}${q.test_taking_strategy?'Strategy: '+q.test_taking_strategy+'\n':''}${q.clinical_judgment_skill?'CJ: '+q.clinical_judgment_skill+'\n':''}${q.diseases_conditions?.length?'Conditions: '+q.diseases_conditions.join(', ')+'\n':''}\n---\n\n`;});
@@ -7349,7 +7453,7 @@ function NCLEXExtractor(){
   };
 
   const nclexToMd=()=>{
-    let out='# NCLEX Practice Questions\n\n**'+filtered.length+' questions** extracted from source material.\n\n---\n\n## Questions\n\n';
+    let out='# NCLEX Practice Questions\n\n**'+filtered.length+' questions** extracted from source material.\n\n'+(runSummary?'> '+nclexSummaryLine(runSummary)+'\n\n':'')+'---\n\n## Questions\n\n'; // v17.4
     filtered.forEach((q,i)=>{
       const {stem,options}=nclexSplitStemOptions(q.question);
       out+=`**${i+1}.** ${options.length?stem:String(q.question||'')}\n\n`;
@@ -7450,6 +7554,7 @@ function NCLEXExtractor(){
     </>}
   >
     {error&&<div className="error-banner"><span>❌</span>{error}</div>}
+    {runSummary&&runSummary.status!=='complete'&&!isProcessing&&<div className={runSummary.status==='failed'?'error-banner':'tip-banner'}><span>⚠</span><div><strong>{runSummary.label}:</strong> {runSummary.detail} Exports carry this status.</div></div>}
     {(isProcessing||log.length>0)&&<RunStatus label="Question extraction" value={progress.current} max={progress.total||1} caption={isProcessing?(mode==='split'?`Batch ${progress.current}/${progress.total}`:`Chunk ${progress.current}/${progress.total}`):'Done'} detail={questions.length+' question(s) so far'}>
       <details className="disclose" style={{marginBottom:0}}><summary>Extraction log<span className="disclose-note">{log.length} line(s)</span></summary><div>
         <div className="log-stream">{log.map((l,i)=><div key={i}>{l}</div>)}</div>
@@ -8714,7 +8819,8 @@ ${NG_GROUNDING_ADAPTER}
           owned_log('  ⚠ Batch '+b+' failed: '+e.message,'err');
           owned_setTrackers(p=>p.map(t=>t.id===b?{...t,status:'error'}:t));
           // v15.17: a permanent HTTP failure cannot succeed by advancing to another batch.
-          if(e.isFatal&&e.status)throw e;
+          // v17.4: neither can a deferred retry or an exhausted quota window (geminiHaltsBatch).
+          if(geminiHaltsBatch(e))throw e;
           owned_setProg((b/numBatches)*100);continue;
         }
 
@@ -9988,6 +10094,11 @@ function validateCaseStudy(caseStudy,factIndex,allowedFactIds,expectedCondition)
         const answerMatches=/^[+−-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(answer)?[...derived].some(key=>key.match(/^[+-]?[\d.]+/)[0]===caseDecimal(answer)):answerTokens.tokens.length===1&&!answerTokens.unsupported.length&&derived.has(answerTokens.tokens[0].key);
         if(!answerMatches)
           issues.push({sev:'error',msg:qn+': numeric answer disagrees with the verified calculation result'});
+      }else if(q.type==='Calculation'){
+        // v17.4: with no supported equation in the rationale the answer was not checked at all, and the review
+        // carried no trace of that. The bounded verifier stays bounded (DECISIONS.md); the gap is disclosed as a
+        // warning that reaches every export, never promoted to an error.
+        issues.push({sev:'warn',msg:qn+': calculation answer was not independently verified: no supported equation was found in the rationale. Check the working against the cited source.'});
       }
       neiaTerminologyScan(q.stem,`${qn} stem`,issues);
       for(const o of q.options||[])neiaTerminologyScan(o.text,`${qn} option ${o.label||'?'}`,issues);
@@ -11221,10 +11332,9 @@ function App(){
       try{
         let durable=null,unavailable=false;
         try{durable=await kbLoadPersisted();}catch{unavailable=true;}
-        const fallbackRecords=kbReadFallbacks();let capturedFallbacks;
         // v16.7: failed fallback access also enters paused recovery; it cannot leave hydration pending forever.
-        try{capturedFallbacks=kbCaptureFallbacks();}
-        catch(e){fallbackRecords.push({kb:null,storageKey:'browser fallback',raw:null,unavailable:true,recoveryError:'Browser fallback access failed: '+String(e.message||e)+'. Restore browser storage access, then reload before choosing a recovery copy.'});}
+        // v17.4: one read supplies both the restored records and the save queue's conflict baseline.
+        const {records:fallbackRecords,captured:capturedFallbacks}=kbReadFallbackSnapshot();
         const reconciled=kbReconcileStored([durable,...fallbackRecords]);
         if(!alive)return;saveQueue.current.setHead(durable,capturedFallbacks);
         if(reconciled.choices.length){setRecoveryChoices(reconciled.choices);setPersistenceStatus('conflict');setPersistenceError('Saved copies disagree. Both are preserved. Export or inspect each copy, then choose one to continue saving.');}

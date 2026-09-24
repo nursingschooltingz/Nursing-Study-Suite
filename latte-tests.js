@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 3360;
+const EXPECTED_ASSERTIONS = 3427;
 
 let file;
 try {
@@ -62,9 +62,9 @@ const NXO = new Function(spanFrom('const NCLEX_OPTION_GAP', 'options_repaired:tr
 // The two exports are closures over component state, so they are extracted with `filtered`
 // and their helpers injected as parameters. exportTxt ends inside downloadBlob, so the
 // capture stub firing is itself proof the span reached its tail.
-const nclexToMd = new Function('filtered', 'nclexSplitStemOptions',
+const nclexToMd = new Function('filtered', 'nclexSplitStemOptions', 'runSummary', 'nclexSummaryLine', // v17.4: exports read the run summary
   spanFrom('const nclexToMd=()=>{', '    return out;\n  };') + ';return nclexToMd();');
-const nclexToTxt = new Function('filtered', 'nclexSplitStemOptions',
+const nclexToTxt = new Function('filtered', 'nclexSplitStemOptions', 'runSummary', 'nclexSummaryLine',
   'let CAP=null;const Blob=function(p){this.p=p;};const downloadBlob=(b)=>{CAP=b.p[0];};' +
   spanFrom('const nclexQText=q=>', "'nclex_questions.txt');\n  };") + ';exportTxt();return CAP;');
 
@@ -244,6 +244,9 @@ section('NCLEX extractor export grouping');
       priority_nursing_tip: 'Watch for hypokalaemia', diseases_conditions: [] }
   ];
   const md = nclexToMd(fx, NXO.nclexSplitStemOptions);
+  // v17.4: a run summary is written ahead of the questions; without one the export is byte-identical to before.
+  const summarized = nclexToMd(fx, NXO.nclexSplitStemOptions, { exportLine: 'Incomplete: synthetic' }, s => 'Extraction status: ' + s.exportLine);
+  t('a run summary is written into the Markdown export before the questions', summarized.indexOf('> Extraction status: Incomplete: synthetic') > -1 && summarized.indexOf('> Extraction status') < summarized.indexOf('## Questions') && summarized.replace('> Extraction status: Incomplete: synthetic\n\n', '') === md);
   const cut = md.indexOf("## Answer Key");
   t('markdown has a Questions section before the Answer Key', md.indexOf('## Questions') > -1 && md.indexOf('## Questions') < cut);
   t('the answer key starts on its own printed page', md.indexOf('<div class="pagebreak"></div>') < cut && cut > -1);
@@ -260,6 +263,7 @@ section('NCLEX extractor export grouping');
   t('choices are rendered as a list under the stem', /\n1\. Weight gain\n2\. Crackles\n3\. K 3\.9\n4\. BP 128\/78/.test(md.slice(0, cut)));
 
   const txt = nclexToTxt(fx, NXO.nclexSplitStemOptions);
+  t('a run summary is written into the text export header', nclexToTxt(fx, NXO.nclexSplitStemOptions, { exportLine: 'Incomplete: synthetic' }, s => 'Extraction status: ' + s.exportLine).indexOf('Extraction status: Incomplete: synthetic') > -1 && !txt.includes('Extraction status'));
   t('exportTxt reached downloadBlob', typeof txt === 'string' && txt.length > 0);
   const tcut = txt.indexOf("ANSWER KEY");
   t('plaintext groups its answers at the end too', tcut > txt.indexOf('Which lab is monitored'));
@@ -2484,7 +2488,7 @@ section('v15.14 — tier 3');
     !S.includes('<form') && !S.includes('<object') && !S.includes('<embed') && !S.includes('<base '));
   // T3.8 — the shared DOMPurify hash was an assumption; it is now a measurement.
   t('the shared SRI hash is recorded as measured, not assumed',
-    S.includes('Measured 2026-09-11: both') && S.includes('29,369 identical bytes'));
+    S.includes('Measured 2026-09-11 and again') && S.includes('for 3.4.16 on 2026-09-24: both URLs serve 28,885 identical bytes')); // v17.4: re-measured for DOMPurify 3.4.16
 }
 {
   // T3.10 — a single-unit chunk used to return null, and the caller then discarded it.
@@ -2747,6 +2751,9 @@ section('v15.14 — clamps, backoff, storage');
   section('v17.3 settings persistence and remaining review findings');
   require('./tools/settings-persistence-tests')(S,t);
   await require('./tools/review-low-findings-tests')(S,t);
+
+  section('v17.4 second production review, findings R01-R12');
+  await require('./tools/review-r-findings-tests')(S,t);
 
   console.log('\n════════════════════════════');
   const total = pass + fail;

@@ -1,5 +1,20 @@
 # Current maintainer state
 
+## v17.4 second production-review fixes (2026-09-24)
+
+The canonical application is `Nursing-Study-Suite v17.4.html`. A second review (recorded in [production-review-2026-09-24.md](docs/reviews/production-review-2026-09-24.md)) reported eight Medium and four Low findings; all twelve were checked against the source before implementation. Ten held, R02 was overstated (the two reads it describes are synchronous and cannot interleave in a browser) and R11 is test-only. v17.4 implements R01–R07 and R09–R12 and hardens R02; R08 (PDF ingestion budgets) is deferred until limits are chosen from measurements.
+
+- **Calculation disclosure (R01).** A Calculation answer with no supported equation in its rationale gets a warning that reaches every export; the bounded verifier is unchanged and nothing is promoted to an error.
+- **Fallback hydration (R02).** `kbReadFallbackSnapshot` returns the parsed records and the exact bytes from one read; the hydration effect and the save queue baseline use the same bytes. The two existing hydration harnesses compile the effect with the new function.
+- **NCLEX extraction (R03, R05, R06).** `nclexMergePairs` unions the regex and model pairings by question number; `nclexAdmitRecord` rebuilds each record from typed, bounded fields; a run tracker feeds `nclexRunSummary`, shown in the results view and written into the Markdown, text, PDF and copy exports.
+- **Batch halting (R04).** `geminiHaltsBatch` is the one rule for the Knowledge Base build (both lanes), the Priority harvest, both NCLEX extraction modes and the NCLEX generator: cancellation, a deferred retry, a 429 after the transport's retries or a permanent HTTP failure stops the run and keeps what was extracted. A stopped Knowledge Base build commits nothing, like a cancelled one, and names the chunks attempted and never sent.
+- **Anki factless guard (R07).** `kbUsableFactCount` runs before the deck is cleared or a packet is built.
+- **Priority (R09, R10).** Streamed text survives any failure with an incomplete notice; `paParseOverlap` accepts zero.
+- **Harness (R11).** The browser fixture releases its loopback server on every failure path.
+- **Dependencies.** DOMPurify 3.4.16 on both CDNs; the app never uses the in-place mode the advisories require.
+
+Verification: **3,427 assertions passed, zero failed** (67 added: 59 in `tools/review-r-findings-tests.js`, 3 build-halting scenarios, 3 Priority scenarios, 2 export-summary assertions); all eleven frozen prompt hashes, regenerated prompt documentation, LF/version checks and the full JSX transform; the six Playwright runners (visual 78 checks, remediation 17 scenarios, case remediation 12, Anki quality 25 checks, Anki source review, production recovery 4) all passing on the final bytes; eleven pinned CDN entries re-hashed with the two DOMPurify pins new and the rest matching; real-browser checks of the boot, the zero overlap and the factless Anki refusal with zero requests. See the [release verification record](docs/reviews/v17.4-release.md). Still open: R08 (PDF ingestion budgets, measured change), the inline-style migration, the harness assertion-total bookkeeping, and the PDF.js ESM migration plan.
+
 ## v17.3 production-review fixes (2026-09-23)
 
 The canonical application is `Nursing-Study-Suite v17.3.html`. The [2026-09-23 production review](docs/reviews/production-review-2026-09-23.md) found one High, six Medium and twelve Low items; v17.3 implements plan steps 1–3 and 5–10 and withdraws step 4 and finding 16.

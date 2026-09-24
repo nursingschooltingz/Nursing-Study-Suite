@@ -53,10 +53,10 @@ async function runTests(source,t){
   const repaired=N.nclexRepairOptions({question:stem},question);
   t('split repair retains the sixth option verbatim',repaired.options_repaired&&N.nclexSplitStemOptions(repaired.question).options[5].text==='Choice 6');
   const filtered=[{question,correct_answer:'F',rationale:'Synthetic rationale.'}];
-  const md=new Function('filtered','nclexSplitStemOptions',span('  const nclexToMd=()=>{','  const exportMd=')+';return nclexToMd();')(filtered,N.nclexSplitStemOptions);
+  const md=new Function('filtered','nclexSplitStemOptions','runSummary','nclexSummaryLine',span('  const nclexToMd=()=>{','  const exportMd=')+';return nclexToMd();')(filtered,N.nclexSplitStemOptions,null,()=>''); // v17.4: exports read the run summary
   t('Markdown export has a separate sixth choice',md.includes('\nF. Choice 6\n')&&!md.includes('Choice 5 F.'));
   let txt;
-  new Function('filtered','nclexQText','downloadBlob','Blob',span('  const exportTxt=()=>{','\n\n  const nclexToMd=')+';exportTxt();')(filtered,q=>{const p=N.nclexSplitStemOptions(q.question);return p.stem+'\n'+p.options.map(o=>'   '+o.label+'. '+o.text).join('\n');},blob=>{txt=blob;},Blob);
+  new Function('filtered','nclexQText','downloadBlob','Blob','runSummary','nclexSummaryLine',span('  const exportTxt=()=>{','\n\n  const nclexToMd=')+';exportTxt();')(filtered,q=>{const p=N.nclexSplitStemOptions(q.question);return p.stem+'\n'+p.options.map(o=>'   '+o.label+'. '+o.text).join('\n');},blob=>{txt=blob;},Blob,null,()=>'');
   t('TXT export has a separate sixth choice',(await txt.text()).includes('\n   F. Choice 6\n'));
 
   const file={name:'synthetic-card.png'},old={file:file.name,transcript:{face:'front',title:'Synthetic',category:'Synthetic',cardNumber:'1',sections:[],numerics:[],overallLegibility:'clean'},runs:[{kind:'old successful run'}],agreement:null,comparisonIncomplete:false};
@@ -81,7 +81,7 @@ async function runTests(source,t){
   const storageFixture=(rows={},denied=false)=>{
     const data=new Map(Object.entries(rows)),events=[];
     const localStorage={getItem:key=>{if(denied)throw Error('Synthetic denied read');return data.get(key)??null;},setItem:(key,value)=>{events.push({kind:'write',key,value});data.set(key,value);},removeItem:key=>{events.push({kind:'remove',key});data.delete(key);}};
-    const P=new Function('localStorage','kbOpenDB',persistenceCode+';return {kbReadFallbacks,kbReconcileStored,kbCaptureFallbacks,kbClearFallbacks,kbCreateSaveQueue,kbArchiveRecovery};')(localStorage,async()=>{throw Error('Synthetic unavailable IndexedDB archive');});
+    const P=new Function('localStorage','kbOpenDB',persistenceCode+';return {kbReadFallbacks,kbReadFallbackSnapshot,kbReconcileStored,kbCaptureFallbacks,kbClearFallbacks,kbCreateSaveQueue,kbArchiveRecovery};')(localStorage,async()=>{throw Error('Synthetic unavailable IndexedDB archive');});
     return{P,data,events};
   };
   const goodKB={metadata:{course:'Synthetic',exam:'',schemaVersion:'1.1',createdAt:'2026-09-18'},sources:[],conditions:[{id:'synthetic',name:'Synthetic',aliases:[],facts:[{id:'fact-1',text:'Synthetic finding.',tier:1,latteBucket:'Look',sourceQuote:'Synthetic finding.',sources:[]}]}],medications:[],diagnostics:[],scoringTools:[],formulas:[],contradictions:[]};
@@ -96,10 +96,10 @@ async function runTests(source,t){
   t('invalid fallback metadata stays raw recovery evidence',store.P.kbReadFallbacks()[0].recoveryError.includes('metadata')&&store.P.kbReadFallbacks()[0].raw===store.data.get(fallbackKey));
   const normalizer=new Function(span('function kbSlug(','// v15.14: the class kept ASCII')+span('const KB_IMPORT_MAX_BYTES=','// ── Durable Knowledge Base persistence')+';return kbNormalizeImported;')();
   const hydrateSource=span('    (async()=>{\n      try{\n        let durable=null,unavailable=false;',';return()=>{alive=false;mounted.current=false;};');
-  const hydrate=new Function('kbLoadPersisted','kbReconcileStored','kbReadFallbacks','saveQueue','kbCaptureFallbacks','kbMutation','started','kbNormalizeImported','EMPTY_LATTE_KB','currentKnowledge','publishKnowledgeBase','setPersistenceStatus','setPersistenceError','setRecoveryChoices','setHydrated','alive','return '+hydrateSource+';');
+  const hydrate=new Function('kbLoadPersisted','kbReconcileStored','kbReadFallbackSnapshot','saveQueue','kbCaptureFallbacks','kbMutation','started','kbNormalizeImported','EMPTY_LATTE_KB','currentKnowledge','publishKnowledgeBase','setPersistenceStatus','setPersistenceError','setRecoveryChoices','setHydrated','alive','return '+hydrateSource+';');
   async function hydrateFixture(store){
     const state={choices:[],hydrated:false,status:[],errors:[],published:[],head:null,captured:null};
-    await hydrate(async()=>durable,store.P.kbReconcileStored,store.P.kbReadFallbacks,{current:{setHead:(head,captured)=>{state.head=head;state.captured=captured;}}},store.P.kbCaptureFallbacks,{current:0},0,normalizer,{conditions:[]},{current:{conditions:[]}},x=>state.published.push(x),x=>state.status.push(x),x=>state.errors.push(x),x=>{state.choices=x;},x=>{state.hydrated=x;},true);
+    await hydrate(async()=>durable,store.P.kbReconcileStored,store.P.kbReadFallbackSnapshot,{current:{setHead:(head,captured)=>{state.head=head;state.captured=captured;}}},store.P.kbCaptureFallbacks,{current:0},0,normalizer,{conditions:[]},{current:{conditions:[]}},x=>state.published.push(x),x=>state.status.push(x),x=>state.errors.push(x),x=>{state.choices=x;},x=>{state.hydrated=x;},true);
     return state;
   }
   store=storageFixture({[fallbackKey]:raw});const hydrated=await hydrateFixture(store);

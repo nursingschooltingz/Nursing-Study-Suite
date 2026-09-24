@@ -7,13 +7,14 @@ module.exports=async function productionPriorityTests(S,t){
   const sourceHelpers=new Function('buildFactIndex',span('function artifactSourceSnapshot(','function artifactExportNotice(')+';return {artifactSourceSnapshot,artifactSourceCurrent};')(()=>new Map());
   const P=new Function('kbSourceText','artifactSourceCurrent',span('function kbForPriority(','function PriorityAnalyzer(){')+';return {kbForPriority,paResultNotice};')(()=>'',sourceHelpers.artifactSourceCurrent);
   const runSource=span('  async function runAnalysis(){','\n  const resultNotice=');
+  const {geminiHaltsBatch}=new Function(span('function geminiHaltsBatch(','\nasync function callGemini(')+';return {geminiHaltsBatch};')(); // v17.4: the harvest catch consults the shared halting rule
   const effectSource=span('    if(analysisSlot.current.active&&analysisSource.current!==K.knowledgeBase){','\n  },[K.knowledgeBase]);');
   const A=syntheticKB('A'),B=syntheticKB('B');
   function fixture({query='',chunks,call}={}){
     const out={output:'',error:'',step:'idle',calls:[],harvest:null,busy:false};let activeKB=A;
     const set=(key,value)=>{out[key]=typeof value==='function'?value(out[key]):value;};
     const env={cfg:{apiKey:'synthetic',forTool:id=>({model:id,level:'low'})},K:{knowledgeBase:A,isCurrentSource:kb=>kb===activeKB},analysisSlot:{current:createOperationSlot()},analysisSource:{current:null},
-      kbTiers:[1,2,3],kbConditionFilter:query,chunkSize:12000,overlapSize:1500,context:'',...sourceHelpers,...P,
+      kbTiers:[1,2,3],kbConditionFilter:query,chunkSize:12000,overlapSize:1500,context:'',...sourceHelpers,...P,geminiHaltsBatch,
       paChunkText:text=>chunks||[text],paBuildExtractPrompt:text=>'HARVEST:'+text,paBuildSynthPrompt:rows=>'SYNTHESIZE:'+rows.join('\n'),paParseTiers:text=>({tier1:text}),
       setAnalysisBusy:value=>set('busy',value),setResultSource:value=>set('source',value),setHarvestState:value=>set('harvest',value),setStep:value=>set('step',value),setError:value=>set('error',value),setOutput:value=>set('output',value),
       setAbortController(){},setIsStreaming(){},setProgress(){},setPhase(){},setParsedTiers(){},setMeta:value=>set('meta',value),setChunks(){}};
@@ -37,6 +38,15 @@ module.exports=async function productionPriorityTests(S,t){
   t('Priority partial success synthesizes only usable harvest text',h.out.calls.length===3&&h.out.calls[2][2][0].text==='SYNTHESIZE:Usable partial evidence');
   t('Priority failed and truncated chunk identities are preserved',h.out.harvest.failed[0].chunk===1&&h.out.harvest.truncated[0]===2);
   t('Priority retained notice discloses partial source coverage',/1 of 2/.test(h.notice())&&/Missing source chunks: 1/.test(h.notice())&&/Truncated source chunks: 2/.test(h.notice()));
+  // v17.4: a deferred retry on a harvest chunk stops the run; the next chunk is never sent (R04).
+  const deferredRetry=Object.assign(Error('The provider requested a wait of 120 seconds. No automatic retry was sent; wait before trying again.'),{name:'RetryDeferredError',retryDeferred:true,status:429,retryAfterMs:120000});
+  h=fixture({chunks:['one','two'],call:async n=>{if(n===1)throw deferredRetry;return 'Never reached';}});await h.run();
+  t('Priority deferred retry stops the harvest before the next chunk is sent',h.out.calls.length===1&&h.out.step==='error'&&/Harvest stopped at chunk 1 of 2/.test(h.out.error)&&/wait of 120 seconds/.test(h.out.error)&&h.out.harvest.failed.length===1&&h.out.harvest.successful===0);
+  // v17.4: streamed synthesis text survives a failure and is labelled incomplete (R09).
+  h=fixture({call:async(n,args)=>{if(n===1)return 'Captured A';args[3].onUpdate('Streamed before failure');throw Error('Synthetic timeout');}});await h.run();
+  t('Priority keeps streamed text after a synthesis failure and labels it incomplete',h.out.step==='results'&&h.out.output==='Streamed before failure'&&h.out.error==='Synthetic timeout'&&/Analysis status: Synthetic timeout/.test(h.notice()));
+  h=fixture({call:async(n,args)=>{if(n===1)return 'Captured A';throw Error('Synthetic timeout');}});await h.run();
+  t('Priority synthesis failure with no streamed text still shows the error view',h.out.step==='error'&&h.out.error==='Synthetic timeout');
   let release;h=fixture({call:async(n)=>n===1?new Promise(r=>{release=r;}):'Should not synthesize'});
   let pending=h.run();h.replace();release('Old source evidence');await pending;
   t('Priority source replacement aborts the old harvest',h.out.calls[0][3].signal.aborted);

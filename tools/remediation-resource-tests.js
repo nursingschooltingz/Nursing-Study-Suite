@@ -3,7 +3,7 @@
 const assert=require('assert');
 const fs=require('fs');
 const {resolveSuiteFile}=require('./repo-checks');
-const EXPECTED_PURIFY_HASH='sha384-uUMu9JDY09vBzRf9SPcK2VgUj+W/70J6Soc+Dded5P474ElQ63iv9j5N3DE7Kp3N';
+const EXPECTED_PURIFY_HASH='sha384-a7SzOxErzJ3ZpQz0zJ32d67dSitNzPcbfybc/ykU9KJhMgZkwqfSxlhhdJRS+XGL'; // v17.4: DOMPurify 3.4.16, identical bytes on both CDNs
 const EXPECTED_WORKER_HASH='sha384-SnzOobpRMLXZ52iJvZm/C0fYw0OQemTXzTjIsdsfMcrCtCEe9qgzxTd3RSklO5x2';
 function extract(source,start,end){const a=source.indexOf(start),b=source.indexOf(end,a+start.length);if(a<0||b<a)throw Error('Resource regression anchor missing: '+start);return source.slice(a,b);}
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};};
@@ -12,7 +12,7 @@ async function runTests(source,test=(name,ok)=>assert.ok(ok,name)){
   const rejected=async promise=>{try{await promise;return false;}catch{return true;}};
   const pins=[...source.matchAll(/<script src="([^"]+)" integrity="([^"]+)"/g)];
   t('eight SRI script resources remain distinct from the worker pin',pins.length===8&&pins.every(p=>p[2].startsWith('sha384-')));
-  t('both sanitizer CDNs use the verified current patch',pins.filter(p=>p[1].includes('purify')).every(p=>p[1].includes('3.4.15')&&p[2]===EXPECTED_PURIFY_HASH));
+  t('both sanitizer CDNs use the verified current patch',pins.filter(p=>p[1].includes('purify')).every(p=>p[1].includes('3.4.16')&&p[2]===EXPECTED_PURIFY_HASH));
   t('main CSP disables image/media fetch without a default-src migration',
     source.includes("img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:")&&
     !source.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)"/)[1].includes('default-src'));

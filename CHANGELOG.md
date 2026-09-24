@@ -9,6 +9,32 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [17.4] — 2026-09-24
+
+Second production-review fixes from the [2026-09-24 review](docs/reviews/production-review-2026-09-24.md). No prompt bytes, model profiles, warning tiers, storage formats or export layouts change. DOMPurify moves to 3.4.16. R08 (PDF ingestion budgets) is deferred to its own measured change.
+
+### Fixed
+
+- R01: a calculation question whose rationale carries no supported equation had its answer skipped by the validator with no trace. It now carries the warning "calculation answer was not independently verified", which reaches the Markdown, JSON and print exports. Verified equations, and wrong answers against them, behave exactly as before; nothing is promoted to an error.
+- R03: in split mode the AI pairing fallback replaced the regex pairing when it found more questions and only filled answers otherwise, so questions found by one pass and not the other vanished. The two results are merged by question number (`nclexMergePairs`): page text and matched answers are kept, missing answers are filled, questions only the model found are appended, and a number whose two texts clearly differ is counted in the log for a numbering check.
+- R04: the transport gives up on a provider wait longer than a minute and on a permanent HTTP failure, but the Knowledge Base build, the Priority harvest, both NCLEX extraction modes and the NCLEX generator caught those as ordinary chunk failures and sent the next request half a second later. One rule (`geminiHaltsBatch`) now stops each scheduler on cancellation, a deferred retry, an exhausted quota window (429 after the transport's own retries) or a permanent HTTP failure and keeps what was already extracted; with two Knowledge Base lanes the other lane settles and nothing further is scheduled. Content failures without an HTTP status (malformed JSON, a safety block, an empty MAX_TOKENS answer) stay per-chunk.
+- R05: NCLEX extraction admitted any record with a truthy question, so an object-valued question or answer from a malformed provider item crashed the tool and lost every extracted question. Each record is rebuilt from typed, bounded fields at admission (`nclexAdmitRecord`); malformed records are counted and sampled on the run summary, never rendered.
+- R06: the extractor reported "Done" after swallowed chunk failures and after a cancel, and its exports carried no trace of either. A run summary (complete, incomplete, failed, cancelled, stopped, or nothing extracted) now appears in the results view and in every export, naming the failed chunks or batches and any skipped records.
+- R07: the Anki generator checked for conditions, not facts, so a Knowledge Base whose conditions carry no facts cleared the current deck and sent a header-only packet to the model. It now refuses before clearing anything, with zero requests.
+- R09: Priority discarded streamed text after a timeout, an incomplete stream or an exhausted retry. The text stays visible, labelled incomplete with the failure, and the export notice carries the same status.
+- R10: the Priority overlap control treated a typed 0 as missing and restored 1500; 0 is accepted.
+- R11: the browser fixture created its context outside its protected region and skipped closing its loopback server when the context failed to close. Both paths release the server.
+
+### Changed
+
+- R02: hydration read the browser fallback keys twice, once to restore and once to capture the save queue's conflict baseline. The reads were synchronous and back to back, so a browser cannot interleave another tab's write between them, but one read (`kbReadFallbackSnapshot`) now feeds both.
+- DOMPurify 3.4.15 → 3.4.16 with both CDN pins re-hashed. The two advisories published on 2026-09-23 (GHSA-6688-9rhm-gjv2, GHSA-p98j-92pf-mc4p) require the in-place sanitization mode this file never uses; the update is routine currency, not a reachable exposure.
+- R12: the README describes fact provenance as the source file plus its page or slide range with a quote check, instead of "the exact page".
+
+### Added
+
+- `tools/review-r-findings-tests.js`: the shipped validator, fallback reader, hydration effect, pairing merge, halting rule, inline extraction runner, record admission, run summary, fact counter and overlap parser exercised with synthetic data, plus source contracts for the handler edits. Three deferred-retry build scenarios in `tools/anki-integrity-source-regression.js` (sequential, two lanes, exhausted quota) and the single-read hydration environment in the two existing hydration harnesses.
+
 ## [17.3] — 2026-09-23
 
 Production-review fixes from the [2026-09-23 review](docs/reviews/production-review-2026-09-23.md). No prompt, model profile, warning tier, storage key, export format or dependency pin changed; the pinned resources were re-hashed against both CDNs without edits.

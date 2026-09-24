@@ -97,9 +97,12 @@ module.exports = async function productionReviewFollowupTests(S, t) {
     Object.keys(N.nclexSplitByQNum(allHeaded)).length === 12);
 
   // ── 6. Split extraction: equal-count AI recovery is merged, not discarded ──
-  const pairSource = span('        const aiResult=[...byNum.values()]', '      }catch(e){if(e.name===\'AbortError\')throw e;addLog(');
-  const mergePairs = (pairs, recovered) => new Function('byNum', 'pairs', 'addLog', pairSource + ';return pairs;')(
-    new Map(recovered.map(r => [r.number, r])), pairs, () => { });
+  // v17.4: the block now merges through nclexMergePairs and its catch consults geminiHaltsBatch; the assertions
+  // below keep the v16.9 answer-recovery invariants and add the union invariant that replaced replace-if-larger.
+  const pairSource = span('        const aiResult=[...byNum.values()]', '      }catch(e){if(geminiHaltsBatch(e))throw e;track.notes.push(');
+  const nclexMergePairs = new Function(span('function nclexMergePairs(', 'function nclexBatchPairs(') + ';return nclexMergePairs;')();
+  const mergePairs = (pairs, recovered) => new Function('byNum', 'pairs', 'addLog', 'nclexMergePairs', pairSource + ';return pairs;')(
+    new Map(recovered.map(r => [r.number, r])), pairs, () => { }, nclexMergePairs);
   const regexPairs = [1, 2, 3].map(n => ({ number: n, question: 'q' + n, answer: '', matched: false }));
   const sameCount = mergePairs(regexPairs.map(p => ({ ...p })), [1, 2, 3].map(n => ({ number: n, question: 'q' + n, answer: 'Answer ' + n + '.', matched: true })));
   t('nclex: equal-count answer recovery reaches the formatting stage',
@@ -108,7 +111,7 @@ module.exports = async function productionReviewFollowupTests(S, t) {
   const alreadyMatched = mergePairs([{ number: 1, question: 'q1', answer: 'kept', matched: true }], [{ number: 1, question: 'q1', answer: 'replacement', matched: true }]);
   t('nclex: an already-matched pair is not overwritten by recovery', alreadyMatched[0].answer === 'kept');
   const moreQuestions = mergePairs(regexPairs.map(p => ({ ...p })), [1, 2, 3, 4].map(n => ({ number: n, question: 'q' + n, answer: 'a', matched: true })));
-  t('nclex: a larger AI result still replaces the pairing outright', moreQuestions.length === 4);
+  t('nclex: a larger AI result adds its new questions and keeps every regex question (v17.4 union)', moreQuestions.length === 4 && moreQuestions.map(p => p.question).join(',') === 'q1,q2,q3,q4' && moreQuestions.slice(0, 3).every(p => p.matched));
 
   // ── 7. NCLEX accumulation: scalar condition metadata is normalized once ──
   t('nclex: a scalar condition string becomes a one-element array', JSON.stringify(N.nclexConditions('Synthetic condition')) === JSON.stringify(['Synthetic condition']));
