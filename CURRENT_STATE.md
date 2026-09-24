@@ -1,5 +1,9 @@
 # Current maintainer state
 
+## v17.5 license line (2026-09-24)
+
+The canonical application is `Nursing-Study-Suite v17.5.html`. The only change from v17.4 is the "GPL-3.0 licensed" link beside the version in the rail footer. The user has frozen the suite here for the semester; open items (R08, PDF.js ESM plan, inline styles, assertion bookkeeping) are deferred by choice.
+
 ## v17.4 second production-review fixes (2026-09-24)
 
 The canonical application is `Nursing-Study-Suite v17.4.html`. A second review (recorded in [production-review-2026-09-24.md](docs/reviews/production-review-2026-09-24.md)) reported eight Medium and four Low findings; all twelve were checked against the source before implementation. Ten held, R02 was overstated (the two reads it describes are synchronous and cannot interleave in a browser) and R11 is test-only. v17.4 implements R01–R07 and R09–R12 and hardens R02; R08 (PDF ingestion budgets) is deferred until limits are chosen from measurements.

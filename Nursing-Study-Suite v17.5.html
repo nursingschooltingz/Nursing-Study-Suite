@@ -8,7 +8,9 @@
      Babel, so this adds narrow resource directives without a default-src/script-src migration. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net">
 <title>LATTE Study Suite</title>
-<!-- v17.4 (2026-09-24): second production-review fixes. A calculation answer with no verified equation now carries a
+<!-- v17.5 (2026-09-24): the rail footer names the GPL-3.0 license beside the version, linking to the license text.
+     No other change.
+     v17.4 (2026-09-24): second production-review fixes. A calculation answer with no verified equation now carries a
      warning in every export; hydration reads each fallback key once for both the restored copy and the save baseline;
      split-mode NCLEX pairing keeps the union of the regex and model results; every NCLEX record is rebuilt from typed
      fields at admission; a deferred retry, an exhausted quota or a permanent HTTP failure stops every batch scheduler
@@ -305,6 +307,8 @@ input[type="checkbox"],input[type="radio"]{width:17px;height:17px;flex-shrink:0;
 .rail-foot{margin-top:auto;padding:var(--space-3) var(--space-4) var(--space-4);border-top:1px solid var(--rail-line);}
 .rail-stat{display:block;font-size:var(--t-micro);line-height:1.5;color:var(--ink-mute);}
 .rail-stat b{color:var(--ink);font-weight:600;}
+.rail-license{color:inherit;text-decoration:underline dotted;text-underline-offset:2px;}
+.rail-license:hover{color:var(--ink);}
 .rail-settings{width:100%;display:flex;align-items:center;gap:8px;min-height:38px;padding:8px 10px;margin-bottom:var(--space-3);border:1px solid var(--hairline-strong);border-radius:var(--radius);background:var(--panel);font-size:var(--t-small);font-weight:600;color:var(--ink-body);transition:border-color var(--transition),color var(--transition);}
 .rail-settings:hover{border-color:var(--blue);color:var(--blue);}
 .rail-settings[aria-expanded="true"]{border-color:var(--blue);background:var(--blue-tint);color:var(--blue-deep);}
@@ -5868,7 +5872,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '17.4';}
+function suiteVersion(){return '17.5';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -11433,7 +11437,7 @@ function App(){
             <button ref={settingsTrigger} className="rail-settings" aria-label="Study settings" aria-expanded={showConfig} aria-controls="suite-settings" onClick={()=>showConfig?closeSettings():openSettings()} title="Show or hide study settings">
               <NavIcons.gear/>Settings<span className="rail-settings-state">{apiKey?'key set':'no key'}</span>
             </button>
-            <span className="rail-stat">Version {suiteVersion()}</span>
+            <span className="rail-stat">Version {suiteVersion()} · <a className="rail-license" href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener noreferrer">GPL-3.0 licensed</a></span>{/* v17.5: the license was only in the repository; the file itself now says so beside the version */}
             <span className="rail-stat">Built for your next step.</span>
           </div>
         </nav>

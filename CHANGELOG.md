@@ -9,6 +9,12 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [17.5] — 2026-09-24
+
+### Added
+
+- The rail footer shows "GPL-3.0 licensed" beside the version, linking to the license text. No other change; prompts, pins and behavior are identical to v17.4.
+
 ## [17.4] — 2026-09-24
 
 Second production-review fixes from the [2026-09-24 review](docs/reviews/production-review-2026-09-24.md). No prompt bytes, model profiles, warning tiers, storage formats or export layouts change. DOMPurify moves to 3.4.16. R08 (PDF ingestion budgets) is deferred to its own measured change.
