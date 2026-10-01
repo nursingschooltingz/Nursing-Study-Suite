@@ -1,5 +1,9 @@
 # Current maintainer state
 
+## v17.8 NCLEX ordering answers (2026-09-30)
+
+The canonical application is `Nursing-Study-Suite v17.8.html`. A 70-question generator run failed validation with 16 errors. Fifteen came from the one ordering item per batch: the model's ordering answer formats, and one lost `N. ORDER:` entry per affected batch. The sixteenth was a legitimate grounding error. Because every batch had an error, the item audit ran on none of them. `ngCanonicalOrderingAnswers` restates an ordering answer as its step sequence only when the entry itself shows the order. A replay on the exported worksheet cleared all 14 ordering and count errors and kept the grounding error. Verification: see the [release verification record](docs/reviews/v17.8-release.md). The live rerun is pending.
+
 ## v17.7 Priority and NCLEX worksheet fixes (2026-09-30)
 
 The canonical application is `Nursing-Study-Suite v17.7.html`. The semester freeze still holds. v17.7 is a fix for a problem hit in real use, which the freeze allows.

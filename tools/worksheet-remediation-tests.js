@@ -110,7 +110,7 @@ module.exports=function worksheetRemediationTests(S,t){
   t('all non-MCQ gates have complete N/A coverage without model calls',W.ngWorksheetAuditSeed([{num:1,eligible:false},{num:2,eligible:false}]).length===2);
   // v17.7: choices numbered 1, 2, 3... are relabelled with their key; the self-check list stays out of the key;
   // the printed worksheet keeps inner numbered lines from continuing the question list.
-  const L=new Function('neiaTerminologyScan','itemHeuristics',span('function ngSplitParts(','function ngRenumber(')+';return {ngLetterNumberedOptions,ngSplitParts,validateNCLEXWorksheet};')(()=>{},()=>{});
+  const L=new Function('neiaTerminologyScan','itemHeuristics',span('function ngSplitParts(','function ngRenumber(')+';return {ngLetterNumberedOptions,ngCanonicalOrderingAnswers,ngSplitParts,validateNCLEXWorksheet};')(()=>{},()=>{});
   const why=(label,ok)=>'     Why '+label+' is '+(ok?'correct':'wrong')+': reason. (Source: C1)';
   const keyEntry=(n,answer,labels,right)=>'  '+n+'. ANSWER: '+answer+'\n'+labels.map(l=>why(l,right.includes(l))).join('\n')+'\n     Strategy: s.\n     Tags: Tier 1';
   const mcq=(n,stem)=>'  '+n+'. '+stem+'\n     A. One\n     B. Two\n     C. Three\n     D. Four';
@@ -141,5 +141,28 @@ module.exports=function worksheetRemediationTests(S,t){
   t('inner numbered lines are escaped for print and the block keeps its own number',M(answerBlock)==='72. ANSWER: Correct sequence:\n1\\. Stop the infusion\n2\\) Notify the provider\n   3\\. Recheck the level\nWhy 1 is first: reason.');
   t('plain-text export reads escaped numbers as written',plain(M(answerBlock))===answerBlock&&plain('Dose 1\\. per protocol')==='Dose 1\\. per protocol');
   t('the generator relabels each batch before splitting or checking it',S.indexOf('const lettered=ngLetterNumberedOptions(raw);')>0&&S.indexOf('const lettered=ngLetterNumberedOptions(raw);')<S.indexOf('        const P=ngSplitParts(raw);'));
+  // v17.8: ordering answers in the model's other shapes are restated as the step sequence when the entry shows it.
+  // Correct order Gamma, Alpha, Beta: step numbers 3, 1, 2; positions of the presented steps 2, 3, 1.
+  const ordQ='  1. Place the steps in the correct order.\n     ___ Alpha step\n     ___ Beta step\n     ___ Gamma step';
+  const whyOrd='     Why step 1 (Gamma step): first. (Source: C1)\n     Why step 2 (Alpha step): second. (Source: C1)\n     Why step 3 (Beta step): third. (Source: C1)';
+  const canon='1. ANSWER: Gamma step → Alpha step → Beta step';
+  const ordCheck=(key,q=ordQ)=>{const raw=batch(q,key+'\n     Strategy: s.\n     Tags: Tier 1','Tier [1:1] | Types [Ordering:1]'),out=L.ngCanonicalOrderingAnswers(raw);return {raw,out,p4:L.ngSplitParts(out.text).p4,before:L.validateNCLEXWorksheet(raw,1,null),after:L.validateNCLEXWorksheet(out.text,1,null)};};
+  let oc=ordCheck('  1. ANSWER:\n     1: Gamma step\n     2: Alpha step\n     3: Beta step\n'+whyOrd);
+  t('an ordering answer listed under ANSWER: is restated as the step sequence',oc.p4.includes(canon)&&has(oc.before,'no ANSWER line','error')&&!error(oc.after));
+  oc=ordCheck('  1. ANSWER:\n     ___ 2\n     ___ 3\n     ___ 1\n'+whyOrd);
+  t('blanks filled with positions become the sequence and the blank lines are dropped',oc.p4.includes(canon)&&!/___/.test(oc.p4)&&!error(oc.after));
+  oc=ordCheck('  1. ORDER: 2, 3, 1\n'+whyOrd);
+  t('an ORDER entry gets its ANSWER header and position digits read as positions',oc.p4.includes(canon)&&has(oc.before,'every presented step exactly once','error')&&!error(oc.after));
+  oc=ordCheck('  1. ANSWER: 3, 1, 2\n'+whyOrd);
+  t('sequence digits confirmed by the step lines are restated as step texts',oc.p4.includes(canon)&&!error(oc.after));
+  oc=ordCheck('  1. ANSWER: 1, 2, 3\n'+whyOrd);
+  t('digits that match neither meaning of the step lines are left as written',oc.out.rewritten.length===0&&oc.out.text===oc.raw);
+  const commaQ='  1. Place the pulses from weakest to strongest.\n     ___ Full pulse, increased\n     ___ Weak pulse\n     ___ Normal pulse';
+  oc=ordCheck('  1. ANSWER: Weak pulse, Normal pulse, Full pulse, increased\n     First. (Source: C1)\n     Second. (Source: C1)\n     Third. (Source: C1)',commaQ);
+  t('step texts separated by commas are matched whole, including a step that contains a comma',oc.p4.includes('1. ANSWER: Weak pulse → Normal pulse → Full pulse, increased')&&!error(oc.after));
+  oc=ordCheck('  1. ORDER: 2, 3, 1\n     Reasons follow. (Source: C1)\n     More. (Source: C1)\n     More. (Source: C1)');
+  t('an ORDER entry with no confirming step lines keeps its text under an ANSWER header and stays flagged',oc.p4.includes('1. ANSWER: ORDER: 2, 3, 1')&&!has(oc.after,'no matching PART 4 answer entry')&&has(oc.after,'every presented step exactly once','error'));
+  t('worksheets without ordering items pass through unchanged',L.ngCanonicalOrderingAnswers(build()).text===build()&&L.ngCanonicalOrderingAnswers(sataBatch).text===sataBatch);
+  t('the generator restates ordering answers after relabelling and before splitting the batch',S.indexOf('const lettered=ngLetterNumberedOptions(raw);')<S.indexOf('const ordered=ngCanonicalOrderingAnswers(raw);')&&S.indexOf('const ordered=ngCanonicalOrderingAnswers(raw);')<S.indexOf('        const P=ngSplitParts(raw);'));
   t('the printed worksheet escapes inner numbers in questions and answers',S.includes('ws.questions.map(ngMdLiteralNumbers)')&&S.includes('ws.answers.map(ngMdLiteralNumbers)'));
 };

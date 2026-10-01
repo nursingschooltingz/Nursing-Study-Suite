@@ -9,6 +9,21 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [17.8] — 2026-09-30
+
+### Fixed
+
+- NCLEX Generator ordering answers. NCLEX_GEN_PROMPT asks ordering items for "the correct sequence and one line per step" without a format, and the model writes it many ways. In a real 70-question run, 6 of 7 ordering answers failed the worksheet check: 15 of the run's 16 errors, which also kept the item audit off every batch. The shapes were:
+  - `7. ORDER: 4, 1, 5, 2, 3` with no ANSWER header, so the entry was lost and the batch's counts failed.
+  - `ANSWER:` over `1: Inspection` lines, over `___ 3` blanks, or over a numbered list.
+  - `ANSWER: Inspection, Auscultation, …`.
+
+  A bare digit list also meant the sequence of step numbers on one item and each step's position on another. `ngCanonicalOrderingAnswers` runs on each batch after `ngLetterNumberedOptions`. When the entry shows the order, it restates the ANSWER line as the step texts joined by arrows, which the checks read and a student cannot misread. The order can come from step texts on the ANSWER line, from the step and explanation lines (every listing must agree), or from blanks filled with positions. A digit list is kept only when those lines confirm one of its two meanings. An ordering entry labelled ORDER or SEQUENCE gets its ANSWER header so it is not lost. Anything else is left as written for the checks to report. Replayed on that run's exported worksheet, all seven ordering answers resolve to the order their own explanations give, and the ordering and count errors fall from 14 to 0. The one grounding error is unchanged.
+
+### Added
+
+- 9 assertions in `tools/worksheet-remediation-tests.js` cover the ANSWER-list, blank, ORDER-header, digit-as-sequence, contradictory-digit, comma-text and unconfirmed-ORDER shapes, plus pass-through and the generator order.
+
 ## [17.7] — 2026-09-30
 
 Fixes for Priority and NCLEX Generator problems hit in real use. No prompt bytes, model profiles, warning tiers, storage formats or CDN pins change.

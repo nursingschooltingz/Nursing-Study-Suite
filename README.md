@@ -8,7 +8,7 @@ Turn your lecture PDFs and PowerPoints into a complete, source-cited study syste
 
 The whole suite is **one HTML file**. There is nothing to install, no account to create, and no website collecting your data. You open the file in your web browser, paste in a free Google Gemini API key, upload your study materials, and go.
 
-**Published release: v17.7.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v17.7/Nursing-Study-Suite.v17.7.html) or open the [repository HTML](Nursing-Study-Suite%20v17.7.html).
+**Published release: v17.8.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v17.8/Nursing-Study-Suite.v17.8.html) or open the [repository HTML](Nursing-Study-Suite%20v17.8.html).
 
 The left rail lists the six tools in the order you use them, grouped by stage. **Source:** *Knowledge Base* builds or imports the cited facts everything else reads from. **Plan:** *Priority* sorts those facts into Tier 1/2/3. **Practice:** *Anki* for recall, *NCLEX Extract* for questions out of a review book you already own, *NCLEX Generate* for new ones written from your facts, and *Case Studies* for unfolding cases.
 
@@ -270,6 +270,8 @@ This writes **brand-new** NCLEX-style questions from your Knowledge Base — and
 Skeptical of any answer? Click its fact IDs — the source quote is one tap away.
 
 Replacing the KB cancels pending worksheet/case generation from the old source. Completed outputs remain inspectable, but their earlier-source badges cannot open facts in the replacement KB. Worksheet and case exports state source staleness, requested/actual question counts, and incomplete or unresolved item-audit results. A repaired item is explicitly **not re-audited**; deterministic source checks do not establish clinical accuracy.
+
+**Ordering answers (v17.8).** The model writes ordering answers in many shapes, and a bare list like "4, 1, 5, 2, 3" can mean either the order of the steps or each step's position. When the answer's own step lines show the order, the answer key states it as the steps themselves, for example "Aortic area → Pulmonic area → Erb's point → …". The log says which questions were restated. An answer that doesn't show its order clearly is left as written and flagged.
 
 **Numbered choices (v17.7).** The model sometimes numbers a question's choices 1, 2, 3… instead of A, B, C…, and keys the answer "1, 2, 3". The generator now relabels those choices, the ANSWER line and the "Why" lines to letters together, and says so in the log. It does this only when the answer key agrees exactly, and never for an ordering question. Anything it can't safely relabel stays as written and the worksheet check flags it. The PDF also keeps question and answer numbers lined up. Numbered lines inside a question or answer used to print as extra question numbers, and the "FINAL — VERIFY" self-check list no longer appears at the end of each batch's answer key.
 
