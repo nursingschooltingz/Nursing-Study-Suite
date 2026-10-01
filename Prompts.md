@@ -1,6 +1,6 @@
 # Nursing Study Suite — Prompt Library
 
-The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, and the item-quality auditor, **extracted verbatim from the shipped v17.5 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
+The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, and the item-quality auditor, **extracted verbatim from the shipped v17.7 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
 
 > **Coverage.** All 12 named prompt constants are represented from live HTML bytes. Eleven are byte-frozen; `CARD_TRANSCRIBE_PROMPT` is deliberately tunable but requires two transcription runs per card after an edit. The generated appendix is maintained by `node tools/render-prompts.js --write` and checked by `node verify-repo.js`.
 
@@ -834,6 +834,10 @@ BEGIN
 ## 3 · Priority Analyzer (two-stage, v2.1)
 
 Stage 1 runs once **per chunk** on its own model profile (a fast, deliberately tier-free inventory sweep — tier assignment is withheld until Stage 2 can see everything). Stage 2 runs once over the combined harvest and applies the full rule cascade.
+
+Since v17.7, a harvest over 40,000 characters (`PA_SYNTH_PART_CHARS`) is sent to Stage 2 in parts. The whole extractions are packed in order, and each part gets the same prompt below, built from only that part's chunks. The app merges the parts' tiers, Study Strategy and audit footers into one guide. The prompt bytes are unchanged. At or under the limit, Stage 2 is still one request over the whole harvest.
+
+Also since v17.7, Stage 1's `## Content` is always whole fact lines. Each chunk opens with the Knowledge Base packet preamble and puts every fact under its own `## Condition` heading, so the rule "If the chunk has no heading, use [§ untitled]" no longer has a headingless chunk to fire on. A condition too large for one chunk continues under the same heading. Its harvests stay in one Stage 2 part, and the app combines `###` topics that share a heading across parts.
 
 ### Stage 1 — harvest (`paBuildExtractPrompt`, 3,759 chars)
 

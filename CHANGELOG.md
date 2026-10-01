@@ -9,6 +9,34 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [17.7] — 2026-09-30
+
+Fixes for Priority and NCLEX Generator problems hit in real use. No prompt bytes, model profiles, warning tiers, storage formats or CDN pins change.
+
+### Fixed
+
+- Priority synthesis sent the whole harvested inventory in one request. Thinking shares that request's 65,536-token output ceiling with the guide. A 650-fact Knowledge Base (input 39,345 tokens) spent 62,914 tokens thinking and returned 2,618, so the guide stopped after two topics. When the harvest exceeds 40,000 characters (`PA_SYNTH_PART_CHARS`, about 10k input tokens), `paSynthGroups` packs the extractions in order, never splitting one, into parts. Each part is synthesized with the unchanged prompt. `paMergeSynthesis` joins the parts' Tier 1/2/3 sections and Study Strategy in order and sums their audit footers (`paMergeAudits`). If an audit footer is missing, it is listed rather than counted as zero. If a part has no tier headings, every part goes to the raw view instead of being dropped. A harvest at or under the limit makes the same single request, with the same progress item, metadata and failure handling, as v17.5.
+- In a split run:
+  - A content failure (for example an empty MAX_TOKENS answer or a safety block) costs only its own part. Any partial text that streamed is kept, and the error names the part.
+  - A cancel, a deferred retry, an exhausted quota or a permanent HTTP failure stops before the next part (`geminiHaltsBatch`) and keeps the streamed text.
+  - The truncation banner and the export notice name the truncated parts. Every export states how many parts were used and how they were combined.
+- Priority chunked the Knowledge Base packet as prose: paragraphs, then sentences, then raw slices. It also prepended the last ~1,500 characters of each chunk to the next.
+  - **"untitled" topics.** On the same Knowledge Base, 18 of 19 chunks began mid-fact with no condition heading. The harvest files those items under `[§ untitled]` (its rule for a headingless chunk), and the guide showed an "untitled" topic.
+  - **Double ranking.** 109 of 650 facts were copied into two chunks and ranked twice once those chunks fell in different synthesis parts.
+  - **The fix.** `paChunkText` now builds chunks from whole fact lines. Each chunk opens with the packet preamble, and every fact sits under its own condition heading. A condition that fits is never split. A larger one continues under the same heading, and only there does the overlap repeat that condition's preceding facts, capped at a quarter of a chunk. On that Knowledge Base: 16 chunks, none with a fact before a heading, and 5 facts repeated (all within the one condition too large for a chunk).
+- `paChunkJoins` marks chunks that continue a condition, and `paSynthGroups` keeps those harvests in one part; a failed chunk inside a condition does not divide the rest of it. Only a condition larger than a whole part is divided. When the parts are joined, `paMergeTopics` combines each tier's `###` topics by heading (case and spacing ignored) in first-appearance order and keeps a word-for-word repeated item once.
+
+- NCLEX Generator, from a real 154-question worksheet:
+  - **Numbered choices.** When the model numbered a question's choices "1." to "6." and keyed it "ANSWER: 1, 2, 3", `ngSplitNumbered` read each choice numbered above the question's own number as a new question, and the key attached to the wrong blocks. `ngLetterNumberedOptions` now runs on each batch before it is split or checked. It relabels such a run to A, B, C… together with that question's ANSWER and "Why N is" lines, only when the key agrees exactly (every pick and rationale within the run, not every choice picked, no lettered rationales) and the stem is not an ordering item. Otherwise the batch is left as written for the worksheet check. The log names each relabelled question.
+  - **PDF numbering.** Markdown continued the question list at any numbered line inside a question or answer: numbered choices, or ordering steps in the key. Those lines printed as the next question numbers, and every later number drifted away from the key. `ngMdLiteralNumbers` escapes numbers on a block's later lines in the printed, .md and copied worksheet. `markdownToPlainText` restores them in .txt exports, and the in-app view is unchanged.
+  - **Self-check list in the key.** The prompt's FINAL VERIFY list (`Q1: topic=… gate=…`) was read as part of each batch's last answer and printed in the key. `ngSplitParts` ends PART 4 at the uppercase FINAL…VERIFY heading or the first `Qn: topic=` line, and drops trailing banner rules. Rationale prose is unaffected.
+
+### Added
+
+- The streaming row shows which part is running, and the Analyze note says a large Knowledge Base runs the cascade in parts.
+- 14 assertions in `tools/worksheet-remediation-tests.js`: relabelling (indented and flush choices, a question number that continues a choice run, and no relabel for a lettered key, an ordering item, or a key that picks every choice), the self-check list trim and rationale prose kept, print escaping with the plain-text round trip, and source contracts for the generator loop and the worksheet export.
+- 36 assertions in `tools/production-priority-tests.js`: grouping, merging, audits, notices, and the extracted `runAnalysis` with three parts (per-part prompts, a truncated part, a content failure, retained partial text, a quota halt, all parts failing, and an unchanged single part). The rest cover chunking (preamble and own heading for every fact, whole lines, conditions that fit never split, overlap limited to the continuing condition, joins), condition-aware grouping, topic merging, and `runAnalysis` keeping a continuing condition in one part. The R04 source contract counts the second `geminiHaltsBatch(err)` scheduler. A two-part scenario was added to `tools/production-priority-browser-tests.js`.
+
 ## [17.5] — 2026-09-24
 
 ### Added

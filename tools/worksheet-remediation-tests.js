@@ -108,4 +108,38 @@ module.exports=function worksheetRemediationTests(S,t){
   t('published worksheet and verdicts remain available if no further audit callback arrives',pub.results()[0].raw===original&&pub.results()[0].auditRows.length===2);
   t('quota interruption is not restamped complete at the end of generation',S.includes("setAuditState(runAudit?(auditInterrupted?'interrupted':'complete'):'disabled')"));
   t('all non-MCQ gates have complete N/A coverage without model calls',W.ngWorksheetAuditSeed([{num:1,eligible:false},{num:2,eligible:false}]).length===2);
+  // v17.7: choices numbered 1, 2, 3... are relabelled with their key; the self-check list stays out of the key;
+  // the printed worksheet keeps inner numbered lines from continuing the question list.
+  const L=new Function('neiaTerminologyScan','itemHeuristics',span('function ngSplitParts(','function ngRenumber(')+';return {ngLetterNumberedOptions,ngSplitParts,validateNCLEXWorksheet};')(()=>{},()=>{});
+  const why=(label,ok)=>'     Why '+label+' is '+(ok?'correct':'wrong')+': reason. (Source: C1)';
+  const keyEntry=(n,answer,labels,right)=>'  '+n+'. ANSWER: '+answer+'\n'+labels.map(l=>why(l,right.includes(l))).join('\n')+'\n     Strategy: s.\n     Tags: Tier 1';
+  const mcq=(n,stem)=>'  '+n+'. '+stem+'\n     A. One\n     B. Two\n     C. Three\n     D. Four';
+  const batch=(p3,p4,dist='Tier [1:3] | Types [MCQ:2 SATA:1]')=>'PART 1 — INVENTORY\nC1 | concept [fact-1] |\nPART 2 — AUDIT\nQ1 cites C1\nPART 3 — QUESTIONS\n'+p3+'\nPART 4 — KEY\n'+p4+'\nDISTRIBUTION: '+dist;
+  const numberedSata='  2. (Select all that apply) Which findings should the nurse expect?\n     1. Finding one\n     2. Finding two\n     3. Finding three\n     4. Finding four\n     5. Finding five';
+  const sataBatch=batch([mcq(1,'Which action is first?'),numberedSata,mcq(3,'Which statement is correct?')].join('\n'),
+    [keyEntry(1,'A',['A','B','C','D'],['A']),keyEntry(2,'1, 2, 3',['1','2','3','4','5'],['1','2','3']),keyEntry(3,'B',['A','B','C','D'],['B'])].join('\n'));
+  const relabelled=L.ngLetterNumberedOptions(sataBatch),parts=L.ngSplitParts(relabelled.text);
+  t('numbered SATA choices and their key are relabelled together',JSON.stringify(relabelled.relabelled)==='[2]'&&parts.p3.includes('     A. Finding one')&&parts.p3.includes('     E. Finding five')&&parts.p4.includes('2. ANSWER: A, B, C')&&parts.p4.includes('Why C is correct')&&parts.p4.includes('Why E is wrong')&&!/Why \d/.test(parts.p4));
+  const flush=sataBatch.replace(/\n {5}(\d)\. Finding/g,'\n  $1. Finding'),flushRelabelled=L.ngLetterNumberedOptions(flush);
+  t('choices numbered at the question indentation are relabelled too',JSON.stringify(flushRelabelled.relabelled)==='[2]'&&L.ngSplitParts(flushRelabelled.text).p3.includes('  E. Finding five')&&!error(L.validateNCLEXWorksheet(flushRelabelled.text,3,null))&&has(L.validateNCLEXWorksheet(flush,3,null),'this batch asked for 3','error'));
+  t('a relabelled batch validates as three questions where the numbered one did not',!error(L.validateNCLEXWorksheet(relabelled.text,3,null))&&has(L.validateNCLEXWorksheet(sataBatch,3,null),'SATA must select 2-4 answers','error'));
+  const collide=batch([mcq(1,'Which action is first?'),mcq(2,'Which finding matters?'),'  3. Which statement is correct?\n     1. Choice one\n     2. Choice two\n     3. Choice three',mcq(4,'Which client is seen first?')].join('\n'),
+    [keyEntry(1,'A',['A','B','C','D'],['A']),keyEntry(2,'A',['A','B','C','D'],['A']),keyEntry(3,'2',['1','2','3'],['2']),keyEntry(4,'D',['A','B','C','D'],['D'])].join('\n'),'Tier [1:4] | Types [MCQ:4]');
+  const collided=L.ngLetterNumberedOptions(collide);
+  t('a next question whose number continues a choice run stays a question',JSON.stringify(collided.relabelled)==='[3]'&&L.ngSplitParts(collided.text).p3.includes('  4. Which client is seen first?')&&!error(L.validateNCLEXWorksheet(collided.text,4,null)));
+  t('numbered choices are left as written when the key uses letters',L.ngLetterNumberedOptions(sataBatch.replace('ANSWER: 1, 2, 3','ANSWER: A, B, C')).text===sataBatch.replace('ANSWER: 1, 2, 3','ANSWER: A, B, C'));
+  t('numbered steps of an ordering question are never relabelled',L.ngLetterNumberedOptions(sataBatch.replace('(Select all that apply) Which findings should the nurse expect?','In which order should the nurse act?')).relabelled.length===0);
+  t('a key that selects every numbered choice is left as written',L.ngLetterNumberedOptions(sataBatch.replace('ANSWER: 1, 2, 3','ANSWER: 1, 2, 3, 4, 5')).relabelled.length===0);
+  const verify=build().replace('\nDISTRIBUTION:','\n═══════════\nFINAL — VERIFY BEFORE YOU REPORT\n═══════════\n  Q1: topic=X tier=1 cjmm=Take Action type=MCQ activity=Y gate=PASS\nDISTRIBUTION:');
+  t('the FINAL VERIFY list is not part of the last answer',/Tags: Tier 1$/.test(L.ngSplitParts(verify).p4)&&!L.ngSplitParts(verify).p4.includes('topic=')&&!error(run(verify)));
+  t('a bare self-check list is cut at its first question line',!L.ngSplitParts(build().replace('\nDISTRIBUTION:','\nQ1: topic=X tier=1 gate=PASS\nDISTRIBUTION:')).p4.includes('topic='));
+  const oldP4=raw=>raw.match(/PART\s*4\b[^\n]*\n([\s\S]*?)(?=DISTRIBUTION:|$)/i)[1].trim(),prose=build().replace('     Strategy:','     Final step: verify the site.\n     Strategy:');
+  t('rationale prose that mentions a final verification step stays in the key',L.ngSplitParts(prose).p4===oldP4(prose)&&L.ngSplitParts(prose).p4.includes('Final step: verify the site.')&&L.ngSplitParts(build()).p4===oldP4(build()));
+  const M=new Function(span('function ngMdLiteralNumbers(','function ngStem(')+';return ngMdLiteralNumbers;')();
+  const plain=new Function(span('function markdownToPlainText(','\n}')+'\n}\n;return markdownToPlainText;')();
+  const answerBlock='72. ANSWER: Correct sequence:\n1. Stop the infusion\n2) Notify the provider\n   3. Recheck the level\nWhy 1 is first: reason.';
+  t('inner numbered lines are escaped for print and the block keeps its own number',M(answerBlock)==='72. ANSWER: Correct sequence:\n1\\. Stop the infusion\n2\\) Notify the provider\n   3\\. Recheck the level\nWhy 1 is first: reason.');
+  t('plain-text export reads escaped numbers as written',plain(M(answerBlock))===answerBlock&&plain('Dose 1\\. per protocol')==='Dose 1\\. per protocol');
+  t('the generator relabels each batch before splitting or checking it',S.indexOf('const lettered=ngLetterNumberedOptions(raw);')>0&&S.indexOf('const lettered=ngLetterNumberedOptions(raw);')<S.indexOf('        const P=ngSplitParts(raw);'));
+  t('the printed worksheet escapes inner numbers in questions and answers',S.includes('ws.questions.map(ngMdLiteralNumbers)')&&S.includes('ws.answers.map(ngMdLiteralNumbers)'));
 };

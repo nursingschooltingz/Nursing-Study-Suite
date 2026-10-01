@@ -1,5 +1,22 @@
 # Current maintainer state
 
+## v17.7 Priority and NCLEX worksheet fixes (2026-09-30)
+
+The canonical application is `Nursing-Study-Suite v17.7.html`. The semester freeze still holds. v17.7 is a fix for a problem hit in real use, which the freeze allows.
+
+- **What happened.** A Priority run on a 62-condition, 650-fact Knowledge Base sent 39,345 input tokens to one synthesis request. It returned thinking 62,914 · output 2,618 · MAX_TOKENS, and the guide covered two topics. Ranking about 650 items needs an estimated 25–35k output tokens by itself, so no thinking level makes one request reliable at that size.
+- **Change.** Harvest extractions over `PA_SYNTH_PART_CHARS` (40,000 characters, about 10k tokens) are synthesized in parts with the unchanged `paBuildSynthPrompt` and merged by `paMergeSynthesis`. The limit comes from that one run (~1.6 thinking tokens per input token). It has not been measured across thinking levels or models. At or under the limit, the request, metadata and failure path are the same as in v17.5.
+- **Chunking and merging.** The user's first v17.7 run (5 parts) showed an "untitled" topic and repeated topics. Both came from the prose chunker's 1,500-character overlap: 18 of 19 chunks began mid-fact with no heading, and 109 facts sat in two chunks. `paChunkText` now builds chunks from whole facts under their condition heading and repeats facts only inside a condition that continues. `paChunkJoins` and `paSynthGroups` keep a continuing condition in one part. `paMergeTopics` combines same-heading topics across parts.
+- **NCLEX Generator.** A 154-question worksheet printed Q102's six numbered choices as Q103–Q108, keyed "1, 2, 3", and every later question number drifted from its key. Separately, each batch's FINAL VERIFY self-check list was printed after its last answer. In v17.7:
+  - `ngLetterNumberedOptions` relabels a numbered choice run to letters together with its key when the key agrees exactly.
+  - `ngMdLiteralNumbers` keeps inner numbered lines from continuing the printed question list.
+  - `ngSplitParts` ends PART 4 before the self-check list.
+  - Batches the relabeller cannot fix stay as written and fail the worksheet check. The PDF carried no validation stamp, which suggests that run's raw output differed from the shapes reproduced here. The raw text was not available to confirm.
+- **Known limit.** Topics are combined only when their headings match (ignoring case and spacing). Items are deduplicated only when they are word-for-word identical. Related conditions that the model names differently (for example "Fever / Thermoregulation" and "Thermoregulation") stay separate. Each part contributes its own Study Strategy bullets.
+- **Open.** A live rerun on the user's Knowledge Base, which spends quota, will confirm the part count and that no part truncates. R08, the PDF.js ESM plan, inline styles and assertion bookkeeping remain deferred.
+
+Verification: see the [release verification record](docs/reviews/v17.7-release.md).
+
 ## v17.5 license line (2026-09-24)
 
 The canonical application is `Nursing-Study-Suite v17.5.html`. The only change from v17.4 is the "GPL-3.0 licensed" link beside the version in the rail footer. The user has frozen the suite here for the semester; open items (R08, PDF.js ESM plan, inline styles, assertion bookkeeping) are deferred by choice.

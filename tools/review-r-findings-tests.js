@@ -84,7 +84,8 @@ async function run(S,t){
   const err=props=>Object.assign(Error('synthetic'),props);
   t('R04: cancellation, a deferred retry, an exhausted quota and a permanent HTTP failure halt a batch',halts(err({name:'AbortError'}))&&halts(err({retryDeferred:true,status:429}))&&halts(err({status:429,retryable:true}))&&halts(err({status:401,isFatal:true}))&&halts(err({status:403,isFatal:true})));
   t('R04: content failures without an HTTP status stay per-chunk',!halts(err({}))&&!halts(err({isFatal:true}))&&!halts(err({incomplete:true,finishReason:'MAX_TOKENS'}))&&!halts(err({status:500,retryable:true}))&&!halts(null)&&!halts(undefined));
-  t('R04: every batch scheduler uses the one halting rule',count(S,'if(geminiHaltsBatch(e))throw e;')===5&&count(S,'geminiHaltsBatch(err)')===1&&count(S,'if(e.isFatal&&e.status)throw e;')===0);
+  // v17.7: the split Priority synthesis is the second scheduler that consults the rule through `err`.
+  t('R04: every batch scheduler uses the one halting rule',count(S,'if(geminiHaltsBatch(e))throw e;')===5&&count(S,'geminiHaltsBatch(err)')===2&&count(S,'if(geminiHaltsBatch(err))throw new Error(\'Synthesis stopped at part ')===1&&count(S,'if(e.isFatal&&e.status)throw e;')===0);
   const kbBuild=span(S,'      const processJob=async job=>{','      // v17.3: chunk order, not completion order, decides fact numbering and diagnostics order.');
   t('R04: the Knowledge Base build stops scheduling and reports what was never sent',kbBuild.includes('if(geminiHaltsBatch(e))throw e;')&&kbBuild.includes('try{await kbRunLanes(queue,laneCount,processJob,controller.signal);}')&&kbBuild.includes('chunk(s) were not sent. '));
   const priority=span(S,'function PriorityAnalyzer(){','// ──── TOOL: Anki Generator ────');

@@ -8,7 +8,7 @@ Turn your lecture PDFs and PowerPoints into a complete, source-cited study syste
 
 The whole suite is **one HTML file**. There is nothing to install, no account to create, and no website collecting your data. You open the file in your web browser, paste in a free Google Gemini API key, upload your study materials, and go.
 
-**Published release: v17.5.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v17.5/Nursing-Study-Suite.v17.5.html) or open the [repository HTML](Nursing-Study-Suite%20v17.5.html).
+**Published release: v17.7.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v17.7/Nursing-Study-Suite.v17.7.html) or open the [repository HTML](Nursing-Study-Suite%20v17.7.html).
 
 The left rail lists the six tools in the order you use them, grouped by stage. **Source:** *Knowledge Base* builds or imports the cited facts everything else reads from. **Plan:** *Priority* sorts those facts into Tier 1/2/3. **Practice:** *Anki* for recall, *NCLEX Extract* for questions out of a review book you already own, *NCLEX Generate* for new ones written from your facts, and *Case Studies* for unfolding cases.
 
@@ -156,6 +156,8 @@ This tab answers the question every nursing student asks the night before an exa
 
 **How to use it:** feed it your content, adjust **Chunk size / Overlap** only if you have a very long document (defaults are fine), and run. Then work the output: **Filter by Strategy**, **Search Disease/Keyword**, or **Show All**, and export as **.md**, **.txt**, or **Print / Save as PDF**. Study Tier 1 until you're solid before touching Tier 2.
 
+**Large Knowledge Bases (v17.7).** One request has 65,536 output tokens, shared between the model's thinking and the guide it writes. A whole exam's Knowledge Base can use that up in thinking before the guide is written; one 650-fact run stopped after two topics. When the harvest is large, the synthesis pass now runs in parts of about 10,000 input tokens each. The app merges them into one guide with the audit counts added together. Each part is one more request against your quota. The results and every export say how many parts were used. Each condition is kept whole inside one part, and topics that share a heading are combined into one section. If one part fails or is cut off, the notice names that part and the other parts are still shown. The harvest also reads your Knowledge Base whole facts at a time, always under their condition heading, so nothing is filed as "untitled". **Overlap** now only repeats facts within a condition too large for one chunk.
+
 ## 03 · Practice — LATTE Anki Generator
 
 *Anki cloze cards with LATTE tagging + tiers.*
@@ -268,6 +270,8 @@ This writes **brand-new** NCLEX-style questions from your Knowledge Base — and
 Skeptical of any answer? Click its fact IDs — the source quote is one tap away.
 
 Replacing the KB cancels pending worksheet/case generation from the old source. Completed outputs remain inspectable, but their earlier-source badges cannot open facts in the replacement KB. Worksheet and case exports state source staleness, requested/actual question counts, and incomplete or unresolved item-audit results. A repaired item is explicitly **not re-audited**; deterministic source checks do not establish clinical accuracy.
+
+**Numbered choices (v17.7).** The model sometimes numbers a question's choices 1, 2, 3… instead of A, B, C…, and keys the answer "1, 2, 3". The generator now relabels those choices, the ANSWER line and the "Why" lines to letters together, and says so in the log. It does this only when the answer key agrees exactly, and never for an ordering question. Anything it can't safely relabel stays as written and the worksheet check flags it. The PDF also keeps question and answer numbers lined up. Numbered lines inside a question or answer used to print as extra question numbers, and the "FINAL — VERIFY" self-check list no longer appears at the end of each batch's answer key.
 
 Cancelling an item audit keeps the completed worksheet and any finished verdicts. Non-MCQ questions show **N/A**, and a rejected repair keeps the previous item. Case JSON Copy retains the case fields and adds `_suiteReview` with source/audit notices and validation findings.
 

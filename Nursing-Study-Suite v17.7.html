@@ -8,7 +8,17 @@
      Babel, so this adds narrow resource directives without a default-src/script-src migration. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net">
 <title>LATTE Study Suite</title>
-<!-- v17.5 (2026-09-24): the rail footer names the GPL-3.0 license beside the version, linking to the license text.
+<!-- v17.7 (2026-09-30): Priority synthesis runs in parts when the harvested inventory is large. One request for a
+     650-fact Knowledge Base spent 62,914 of its 65,536 output tokens thinking and stopped after two topics; parts of
+     about 10k input tokens each are merged into one tiered guide, and every export says how many parts it used.
+     Harvest chunks are built from whole facts under their condition heading, so no item is filed as "untitled" and
+     overlap never copies facts across conditions. A condition split over chunks stays in one synthesis part, and
+     topics that share a heading are combined across parts. Small inventories still make one synthesis request.
+     NCLEX Generator: choices the model numbered 1, 2, 3... are relabelled A, B, C... with their answer key when the key
+     agrees; numbered lines inside a question or answer no longer print as extra question numbers in the PDF; and the
+     FINAL VERIFY self-check list is no longer printed in the answer key.
+     Prompts, model profiles and warning tiers are unchanged.
+     v17.5 (2026-09-24): the rail footer names the GPL-3.0 license beside the version, linking to the license text.
      No other change.
      v17.4 (2026-09-24): second production-review fixes. A calculation answer with no verified equation now carries a
      warning in every export; hydration reads each fallback key once for both the restored copy and the save baseline;
@@ -1416,7 +1426,8 @@ async function getPdfPageCount(file){const pdf=await getPdfDoc(file);return pdf.
 // Markdown to plain text
 function markdownToPlainText(md){
   // The print-only page-break marker must not leak into plaintext exports; render it as a rule.
-  return String(md||'').replace(/<div class="pagebreak"><\/div>/g,'\n---\n').replace(/^#{1,6}\s+/gm,'').replace(/\*\*(.+?)\*\*/g,'$1').replace(/\*(.+?)\*/g,'$1').replace(/`(.+?)`/g,'$1').replace(/```[\s\S]*?```/g,'').replace(/^\|.*\|$/gm,line=>{if(/^[\|\s:-]+$/.test(line))return'';return line.replace(/^\||\|$/g,'').split('|').map(c=>c.trim()).join('\t');}).replace(/^[-*+]\s+/gm,'\u2022 ').replace(/^>\s+/gm,'  ').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1').replace(/---+/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+  // v17.7: a line-leading number escaped for Markdown ("12\." in the NCLEX worksheet) reads as written.
+  return String(md||'').replace(/^([ \t]*\d{1,9})\\([.)])/gm,'$1$2').replace(/<div class="pagebreak"><\/div>/g,'\n---\n').replace(/^#{1,6}\s+/gm,'').replace(/\*\*(.+?)\*\*/g,'$1').replace(/\*(.+?)\*/g,'$1').replace(/`(.+?)`/g,'$1').replace(/```[\s\S]*?```/g,'').replace(/^\|.*\|$/gm,line=>{if(/^[\|\s:-]+$/.test(line))return'';return line.replace(/^\||\|$/g,'').split('|').map(c=>c.trim()).join('\t');}).replace(/^[-*+]\s+/gm,'\u2022 ').replace(/^>\s+/gm,'  ').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1').replace(/---+/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
 }
 
 // Shared export helpers
@@ -3756,13 +3767,50 @@ function KnowledgeBaseBuilder(){
 // v17.4: parseInt(value)||1500 treated a typed 0 as missing and restored 1500, so overlap could never be
 // turned off. Blank or non-numeric input still restores the default; 0 is a valid choice.
 function paParseOverlap(value,fallback=1500){const n=Number.parseInt(String(value),10);return Math.max(0,Math.min(5000,Number.isNaN(n)?fallback:n));}
+// v17.7: the analyzer's only input is the kbForPriority packet, but it was chunked as prose (paragraphs, then
+// sentences, then raw slices), and the last ~1,500 characters of each chunk were prepended to the next. On a
+// 650-fact Knowledge Base every chunk after the first began mid-fact with no condition heading, so the harvest
+// labelled those items [§ untitled] (its rule for a headingless chunk), and 109 facts sat in two chunks and were
+// ranked twice once the chunks fell in different synthesis parts. Chunks are now built from whole fact lines,
+// each chunk opens with the packet preamble, and every fact sits under its condition heading. A condition that
+// fits is never split. A larger one continues in the next chunk under the same heading, and only there does the
+// overlap repeat that condition's preceding facts (at most a quarter of a chunk); nothing crosses conditions.
 function paChunkText(text,chunkSize=12000,overlapSize=1500){
-  let paragraphs=text.split(/\n{2,}/);if(paragraphs.length===1&&paragraphs[0].length>chunkSize)paragraphs=text.split(/\n/);
-  const segments=[];
-  for(const para of paragraphs){if(para.length<=chunkSize){segments.push(para);}else{const sentences=para.split(/(?<=[.!?])\s+/);let buf='';for(const sent of sentences){if(sent.length>chunkSize){if(buf){segments.push(buf);buf='';}for(let i=0;i<sent.length;i+=chunkSize)segments.push(sent.slice(i,i+chunkSize));}else if(buf.length+sent.length+1>chunkSize){segments.push(buf);buf=sent;}else{buf+=(buf?' ':'')+sent;}}if(buf)segments.push(buf);}}
-  const chunks=[];let current='';let overlapBuffer='';
-  for(const seg of segments){if(current.length+seg.length+2>chunkSize&&current.length>0){chunks.push(current.trim());const words=current.split(/\s+/);overlapBuffer='';for(let i=words.length-1;i>=0;i--){const c=words.slice(i).join(' ');if(c.length>overlapSize)break;overlapBuffer=c;}current=overlapBuffer?overlapBuffer+'\n\n'+seg:seg;}else{current+=(current?'\n\n':'')+seg;}}
-  if(current.trim())chunks.push(current.trim());return chunks;
+  const lines=String(text||'').split('\n'),first=lines.findIndex(l=>l.startsWith('## '));
+  const preamble=first>0?lines.slice(0,first).join('\n').trim():'',head=preamble?preamble+'\n\n':'';
+  const blocks=[];let block=null;
+  for(const line of first>0?lines.slice(first):lines){
+    if(line.startsWith('## ')){block={heading:line,facts:[]};blocks.push(block);continue;}
+    if(!line.trim())continue;
+    if(!block){block={heading:'',facts:[]};blocks.push(block);}
+    block.facts.push(line);
+  }
+  const chunks=[],carryLimit=Math.min(overlapSize,Math.floor(chunkSize/4));let body=[],size=head.length;
+  const flush=()=>{if(body.length)chunks.push((head+body.join('\n')).trim());body=[];size=head.length;};
+  const add=line=>{body.push(line);size+=line.length+1;};
+  for(const b of blocks){
+    const need=(b.heading?b.heading.length+1:0)+b.facts.reduce((n,f)=>n+f.length+1,0);
+    if(body.length&&size+1+need>chunkSize)flush();
+    if(body.length)add('');
+    if(b.heading)add(b.heading);
+    let placed=0;
+    b.facts.forEach((fact,i)=>{
+      if(placed&&size+fact.length+1>chunkSize){
+        const carry=[];let n=0;
+        for(let k=i-1;k>=0;k--){const prev=b.facts[k];if(n+prev.length+1>carryLimit)break;carry.unshift(prev);n+=prev.length+1;}
+        flush();if(b.heading)add(b.heading);carry.forEach(add);placed=carry.length;
+      }
+      add(fact);placed++;
+    });
+  }
+  flush();
+  return chunks;
+}
+// A chunk continues the previous one when it opens under the heading the previous chunk ended with. Synthesis
+// keeps such chunks in one part so a condition is ranked once.
+function paChunkJoins(chunks){
+  const heads=c=>String(c||'').match(/^## .*$/gm)||[];
+  return chunks.map((c,i)=>{if(!i)return false;const now=heads(c),before=heads(chunks[i-1]);return !!now.length&&now[0]===before[before.length-1];});
 }
 
 // STAGE 1 — Harvest (v2). Harvests an inventory only; tiering happens in Stage 2.
@@ -4020,6 +4068,78 @@ function paParseTiers(text){
     strategy:clean(sec.strategy),audit};
 }
 
+// v17.7: synthesis sent the whole harvested inventory in one request, and thinking shares that request's
+// 65,536-token output ceiling with the guide. A 650-fact Knowledge Base (input 39,345 tokens) spent 62,914 tokens
+// thinking and returned 2,618, so the guide stopped after two topics. Extractions are now packed in order, never
+// split, into parts of about 10k input tokens. At the ~1.6 thinking tokens per input token that run showed, a
+// part needs roughly 16k thinking plus its guide text, about half the ceiling. An inventory at or under the
+// limit is one part: the same single request, prompt and output as before.
+const PA_SYNTH_PART_CHARS=40000;
+// joins[i] marks an extraction that continues extraction i-1's condition (paChunkJoins). Joined runs stay in
+// one part so each condition is ranked once; only a run larger than a whole part is divided, by size.
+function paSynthGroups(extractions,limit=PA_SYNTH_PART_CHARS,joins=[]){
+  const len=t=>String(t||'').length,units=[];
+  extractions.forEach((text,i)=>{if(i&&joins[i])units[units.length-1].push(text);else units.push([text]);});
+  const groups=[];let cur=null,size=0;
+  for(const unit of units){
+    const need=unit.reduce((n,t)=>n+len(t),0);
+    if(cur&&size+need<=limit){cur.push(...unit);size+=need;continue;}
+    if(need<=limit){cur=[...unit];groups.push(cur);size=need;continue;}
+    cur=null;
+    for(const text of unit){if(!cur||size+len(text)>limit){cur=[];groups.push(cur);size=0;}cur.push(text);size+=len(text);}
+  }
+  return groups;
+}
+// Parts were concatenated, so a topic ranked in two parts appeared twice under the same heading. Each tier's
+// ### topics are keyed by heading (case and spacing ignored) and combined in first-appearance order, and an
+// item repeated word for word is kept once. Items worded differently are both kept.
+function paMergeTopics(bodies){
+  const norm=s=>s.toLowerCase().replace(/\s+/g,' ').trim(),sections=[],byKey=new Map();
+  for(const body of bodies){
+    let sec=null;
+    for(const raw of String(body||'').split('\n')){
+      const line=raw.replace(/\s+$/,''),h=line.match(/^#{3,6}\s+(.+)$/);
+      if(!h&&!line.trim())continue;
+      const key=h?norm(h[1]):(sec?null:'');
+      if(key!==null){
+        sec=byKey.get(key);
+        if(!sec){sec={heading:h?line:'',lines:[],seen:new Set()};byKey.set(key,sec);sections.push(sec);}
+        if(h)continue;
+      }
+      if(/^\s*[-*]\s/.test(line)){const k=norm(line);if(sec.seen.has(k))continue;sec.seen.add(k);}
+      sec.lines.push(line);
+    }
+  }
+  return sections.map(s=>(s.heading?s.heading+'\n':'')+s.lines.join('\n')).join('\n\n');
+}
+// Each part prints its own audit footer. Sum them when every part has one; otherwise list them so a missing
+// part stays visible instead of being counted as zero.
+function paMergeAudits(audits){
+  const re=/(\d+)\s*items?\b[^\d]*?(\d+)\s*unverified\b[^\d]*?(\d+)\s*inferred\b[^\d]*?(\d+)\s*\/\s*(\d+)\s*T1/i;
+  const rows=audits.map(a=>String(a||'').match(re));
+  if(rows.length&&rows.every(Boolean)){
+    const s=[1,2,3,4,5].map(k=>rows.reduce((n,m)=>n+Number(m[k]),0));
+    return s[0]+' items · '+s[1]+' unverified · '+s[2]+' inferred · '+s[3]+'/'+s[4]+' T1 rule-tagged';
+  }
+  return audits.map((a,i)=>'Part '+(i+1)+': '+(String(a||'').trim()||'(missing)')).join(' | ');
+}
+// One part passes through untouched. Several parts are rebuilt as one guide in the same Markdown shape the
+// prompt asks for, so paParseTiers, the tier view and every export read it unchanged. An empty entry is a part
+// that returned no text; any part whose text has no tier headings sends the whole result to the raw view.
+function paMergeSynthesis(texts){
+  if(texts.length===1)return{text:texts[0],tiers:paParseTiers(texts[0])};
+  const n=texts.length,parsed=texts.map(t=>String(t||'').trim()?paParseTiers(t):false);
+  if(parsed.some(p=>p===null)||!parsed.some(Boolean)){
+    const text=texts.map((t,i)=>'## Part '+(i+1)+' of '+n+'\n\n'+(String(t||'').trim()||'_This part returned no text._')).join('\n\n');
+    return{text,tiers:null};
+  }
+  const join=key=>paMergeTopics(parsed.filter(Boolean).map(p=>p[key]).filter(Boolean));
+  const strategy=parsed.map((p,i)=>p&&p.strategy?'**Part '+(i+1)+' of '+n+'**\n\n'+p.strategy:'').filter(Boolean).join('\n\n');
+  const text=['## TIER 1 — Must Know',join('tier1'),'## TIER 2 — Should Know',join('tier2'),'## TIER 3 — Good to Know',join('tier3'),
+    '---','## Study Strategy',strategy,'*Audit: '+paMergeAudits(parsed.map(p=>p?p.audit:''))+'*'].join('\n\n');
+  return{text,tiers:paParseTiers(text)};
+}
+
 function kbForPriority(kb,{tiers=[1,2,3],conditionQuery=""}={}){
   const q=String(conditionQuery||"").trim().toLowerCase();
   const lines=[
@@ -4053,7 +4173,12 @@ function paResultNotice({source,activeKB,harvest,meta,error,busy}){
     if(harvest.failed.length)lines.push('Missing source chunks: '+harvest.failed.map(f=>f.chunk).join(', ')+'. This guide is incomplete.');
     if(harvest.truncated.length)lines.push('Truncated source chunks: '+harvest.truncated.join(', ')+'. Some supplied facts may be missing.');
   }
-  if(meta?.truncated)lines.push('Analysis output was truncated; review it before studying.');
+  // v17.7: a split synthesis names its truncated parts and always discloses the split and how parts were combined.
+  if(meta?.parts>1){
+    const cut=meta.truncatedParts||[],many=cut.length>1;
+    if(cut.length)lines.push('Synthesis part'+(many?'s ':' ')+cut.join(', ')+' of '+meta.parts+(many?' were':' was')+' truncated; review '+(many?'them':'it')+' before studying.');
+    lines.push('Synthesized in '+meta.parts+' parts to stay under the output limit; each condition is ranked within one part where it fits, and topics that share a heading are combined.');
+  }else if(meta?.truncated)lines.push('Analysis output was truncated; review it before studying.');
   if(error)lines.push('Analysis status: '+error);
   else if(busy)lines.push('Analysis is still in progress; this output is incomplete.');
   return lines.length?'> '+lines.join('\n> ')+'\n\n':'';
@@ -4098,7 +4223,7 @@ function PriorityAnalyzer(){
     const source=artifactSourceSnapshot(K.knowledgeBase);
     const analysisText=kbForPriority(source.kb,{tiers:kbTiers,conditionQuery:kbConditionFilter});
     if(!analysisText.trim()){clearNotices();setError('The current Knowledge Base filters contain no facts. Include another tier or clear the condition filter.');setStep('error');return;}
-    const textChunks=paChunkText(analysisText,chunkSize,overlapSize);const total=textChunks.length;
+    const textChunks=paChunkText(analysisText,chunkSize,overlapSize);const total=textChunks.length;const chunkJoins=paChunkJoins(textChunks);
     const chunkItems=[...textChunks.map((_,i)=>({id:`ext-${i}`,name:`Chunk ${i+1}/${total}`,phase:'extraction',status:'pending'})),{id:'synthesis',name:'Final Synthesis',phase:'synthesis',status:'pending'}];
     const run=analysisSlot.current.start(),controller=run.ctl;analysisSource.current=source.sourceKB;setAnalysisBusy(true);setResultSource(source);
     const sourceCurrent=()=>!K.isCurrentSource||K.isCurrentSource(source.sourceKB);
@@ -4107,7 +4232,7 @@ function PriorityAnalyzer(){
     const [owned_setStep,owned_setProgress,owned_setPhase,owned_setOutput,owned_setParsedTiers,owned_setError,owned_setMeta,owned_setChunks,owned_setIsStreaming]=[setStep,setProgress,setPhase,setOutput,setParsedTiers,setError,setMeta,setChunks,setIsStreaming].map(guard);
     owned_setStep('processing');owned_setProgress(0);owned_setPhase(`${total} chunks`);owned_setOutput('');owned_setParsedTiers(null);owned_setError('');owned_setMeta(null);owned_setChunks(chunkItems);
     setAbortController(controller);
-    const totalSteps=total+1;let completed=0;const extractions=[];let gotOutput=false;
+    const totalSteps=total+1;let completed=0;const extractions=[],extractionChunks=[];let gotOutput=false;
     const harvest={total,successful:0,failed:[],truncated:[]};
     const publishHarvest=guard(()=>setHarvestState({...harvest,failed:[...harvest.failed],truncated:[...harvest.truncated]}));publishHarvest();
     try{
@@ -4124,7 +4249,7 @@ function PriorityAnalyzer(){
           const result=await callGemini(cfg.apiKey,hCfg.model,[{text:prompt}],{thinkingLevel:hCfg.level,signal:controller.signal,onMeta:m=>{harvestMeta=m;}});
           if(!current())throw new DOMException('Aborted','AbortError');
           if(!String(result||'').trim())throw new Error('No usable text was returned for this source chunk.');
-          extractions.push(result);harvest.successful++;if(harvestMeta?.truncated)harvest.truncated.push(i+1);
+          extractions.push(result);extractionChunks.push(i);harvest.successful++;if(harvestMeta?.truncated)harvest.truncated.push(i+1);
           owned_setChunks(p=>p.map(c=>c.id===`ext-${i}`?{...c,status:'done'}:c));
         }catch(err){if(err.name==='AbortError'||!current())throw new DOMException('Aborted','AbortError');owned_setChunks(p=>p.map(c=>c.id===`ext-${i}`?{...c,status:'error'}:c));harvest.failed.push({chunk:i+1,message:err.message||String(err)});if(geminiHaltsBatch(err)){publishHarvest();throw new Error(`Harvest stopped at chunk ${i+1} of ${total}; the remaining chunks were not sent. `+(err.message||String(err)));}} // v17.4: stop instead of harvesting into a closed quota window
         publishHarvest();
@@ -4133,14 +4258,44 @@ function PriorityAnalyzer(){
       if(!current())throw new DOMException('Aborted','AbortError');
       // v16.7: transport failures are metadata, never study evidence for synthesis.
       if(!extractions.length)throw new Error('No source chunks were harvested successfully. Review the errors and try again.');
-      owned_setChunks(p=>p.map(c=>c.id==='synthesis'?{...c,status:'running'}:c));owned_setPhase('Synthesizing...');
-      const synthPrompt=paBuildSynthPrompt(extractions,context);
+      // v17.7: synthesis runs in parts when the inventory exceeds PA_SYNTH_PART_CHARS (see there). One part keeps
+      // the previous single request, chunk item, metadata and failure path exactly.
+      // A harvest stays in the previous harvest's part when every chunk from there to it continues one condition
+      // (paChunkJoins), so a failed chunk inside a condition does not divide what survived of it.
+      const joins=extractionChunks.map((c,j)=>j>0&&chunkJoins.slice(extractionChunks[j-1]+1,c+1).every(Boolean));
+      const groups=paSynthGroups(extractions,undefined,joins),parts=groups.length;
+      const synthIds=parts>1?groups.map((_,k)=>'synthesis-'+(k+1)):['synthesis'];
+      if(parts>1)owned_setChunks(p=>[...p.filter(c=>c.id!=='synthesis'),...synthIds.map((id,k)=>({id,name:'Synthesis '+(k+1)+'/'+parts,phase:'synthesis',status:'pending'}))]);
       const {model:synthModel,level:synthLevel}=cfg.forTool('priority');
-      owned_setIsStreaming(true);
-      const full=await callGemini(cfg.apiKey,synthModel,[{text:synthPrompt}],{thinkingLevel:synthLevel,signal:controller.signal,onUpdate:t=>{if(!current())return;gotOutput=true;owned_setOutput(t);owned_setStep('results');},onMeta:owned_setMeta});
+      const texts=[],metas=[],failed=[],SEP='\n\n---\n\n';
+      // Published metadata for a split run: the first truncated part's usage for the banner, plus every truncated part.
+      const publishSynthMeta=()=>{const cut=[];metas.forEach((m,i)=>{if(m&&m.truncated)cut.push(i+1);});const base=cut.length?metas[cut[0]-1]:metas.filter(Boolean).pop();owned_setMeta({...(base||{}),part:cut[0]||null,parts,truncatedParts:cut});};
+      if(parts>1)publishSynthMeta();
+      for(let k=0;k<parts;k++){
+        if(!current())throw new DOMException('Aborted','AbortError');
+        owned_setChunks(p=>p.map(c=>c.id===synthIds[k]?{...c,status:'running'}:c));owned_setPhase(parts>1?'Synthesizing part '+(k+1)+' of '+parts+'...':'Synthesizing...');
+        const synthPrompt=paBuildSynthPrompt(groups[k],context),before=texts.filter(t=>String(t||'').trim()).join(SEP);
+        owned_setIsStreaming(true);
+        try{
+          const full=await callGemini(cfg.apiKey,synthModel,[{text:synthPrompt}],{thinkingLevel:synthLevel,signal:controller.signal,onUpdate:t=>{if(!current())return;gotOutput=true;owned_setOutput(before?before+SEP+t:t);owned_setStep('results');},onMeta:m=>{metas[k]=m;if(parts>1)publishSynthMeta();else owned_setMeta(m);}});
+          owned_setIsStreaming(false);
+          if(!current())throw new DOMException('Aborted','AbortError');
+          texts[k]=full;owned_setChunks(p=>p.map(c=>c.id===synthIds[k]?{...c,status:'done'}:c));
+        }catch(err){
+          // A single part, a cancel, a source change or a halting transport failure ends the run as before;
+          // the outer handler keeps whatever streamed. Any other failure costs only its own part.
+          if(parts===1||err.name==='AbortError'||!current())throw err;
+          if(geminiHaltsBatch(err))throw new Error('Synthesis stopped at part '+(k+1)+' of '+parts+'; the remaining parts were not sent. '+(err.message||String(err)));
+          texts[k]=err.partialText||'';failed.push({part:k+1,message:err.message||String(err)});
+          owned_setChunks(p=>p.map(c=>c.id===synthIds[k]?{...c,status:'error'}:c));
+        }
+      }
       owned_setIsStreaming(false);
       if(!current())throw new DOMException('Aborted','AbortError');
-      owned_setOutput(full);owned_setParsedTiers(paParseTiers(full));owned_setChunks(p=>p.map(c=>c.id==='synthesis'?{...c,status:'done'}:c));owned_setProgress(100);owned_setStep('results');
+      if(parts>1&&!texts.some(t=>String(t||'').trim()))throw new Error('No synthesis part returned text. '+failed.map(f=>'Part '+f.part+': '+f.message).join(' '));
+      const merged=paMergeSynthesis(texts);
+      owned_setOutput(merged.text);owned_setParsedTiers(merged.tiers);owned_setProgress(100);owned_setStep('results');
+      if(failed.length)owned_setError('Synthesis part'+(failed.length>1?'s ':' ')+failed.map(f=>f.part).join(', ')+' of '+parts+' failed ('+failed.map(f=>f.message).join('; ')+'). The other parts are shown.');
     }catch(e){
       owned_setIsStreaming(false);
       const cancelled=e.name==='AbortError';
@@ -4197,7 +4352,7 @@ function PriorityAnalyzer(){
         <button className="btn-primary" disabled={!cfg.apiKey||!(K.knowledgeBase.conditions||[]).length||analysisBusy} onClick={runAnalysis}>{analysisBusy?'⏳ Analyzing...':'△ Analyze Knowledge Base'}</button>
         {step==='processing'&&abortController&&<button className="btn-danger" onClick={()=>abortController.abort()}>Cancel</button>}
       </div>
-      <p className="act-note">Two passes: a Stage-1 inventory harvest, then the Stage-2 rule cascade that assigns every tier.</p>
+      <p className="act-note">Two passes: a Stage-1 inventory harvest, then the Stage-2 rule cascade that assigns every tier. A large Knowledge Base runs the cascade in parts so each part has room to finish.</p>
     </>}
   >
     {resultNotice&&<div role="status" style={{whiteSpace:'pre-wrap',padding:12,marginBottom:12,border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',color:'var(--accent-warm)'}}>{resultNotice.replace(/^> ?/gm,'').trim()}</div>}
@@ -4208,8 +4363,8 @@ function PriorityAnalyzer(){
             <div style={{marginTop:10}}>{chunks.map(c=><div className="chunk-item" key={c.id}><div className={`chunk-dot ${c.status}`}>{c.status==='done'?'✓':c.status==='error'?'!':''}</div><span style={{flex:1,fontWeight:500}}>{c.name}</span><span style={{fontSize:12,color:'var(--text-dim)',textTransform:'uppercase'}}>{c.phase}</span></div>)}</div>
     </Panel>}
     {step==='results'&&<>
-            {isStreaming&&abortController&&<div className="meta-row"><span className="spinner" aria-hidden="true"/><span>Streaming the analysis…</span><button className="btn-danger" onClick={()=>abortController.abort()}>■ Stop</button></div>}
-            {!isStreaming&&<TruncationNotice meta={meta}/>}
+            {isStreaming&&abortController&&<div className="meta-row"><span className="spinner" aria-hidden="true"/><span>{phase.startsWith('Synthesizing part')?phase:'Streaming the analysis…'}</span><button className="btn-danger" onClick={()=>abortController.abort()}>■ Stop</button></div>}
+            {!isStreaming&&<TruncationNotice meta={meta} label={meta&&meta.parts>1&&meta.part?'Synthesis part '+meta.part+' of '+meta.parts:''}/>}
             {!isStreaming&&error&&<div className="tip-banner"><span>⚠</span><div><strong>Incomplete analysis:</strong> {error} The text below is what arrived before that; copies and exports carry the same notice.</div></div>}
       <ResultsHead title="Priority Analysis">
         <button className="btn-secondary" onClick={copyOutput}>📋 Copy</button><button className="btn-secondary" onClick={downloadMd}>⬇ .md</button><button className="btn-secondary" onClick={()=>exportAsTxt(exportOutput,'priority-analysis.txt')}>⬇ .txt</button><button className="btn-secondary" onClick={()=>exportAsPdf(exportOutput,'Pyramid Priority Analysis','LATTE Knowledge Base')}>🖨 PDF</button><button className="btn-secondary" onClick={resetAll}>↺ New</button>
@@ -5872,7 +6027,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '17.5';}
+function suiteVersion(){return '17.7';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -8193,9 +8348,14 @@ function ngParseFactIds(text){
 function ngSplitParts(raw){
   const grab=(a,b)=>{const m=raw.match(new RegExp('PART\\s*'+a+'\\b[^\\n]*\\n([\\s\\S]*?)(?=PART\\s*'+b+'\\b|$)','i'));return m?m[1].trim():'';};
   const p1=grab(1,2),p2=grab(2,3),p3=grab(3,4);
+  // v17.7: the prompt's FINAL VERIFY step prints a "Q1: topic=... gate=..." list between the key and the
+  // DISTRIBUTION line; it was read as part of the last answer and printed in every batch's answer key.
+  // Only the uppercase heading or the list's own "Qn: topic=" shape ends the key, never rationale prose.
   const p4m=raw.match(/PART\s*4\b[^\n]*\n([\s\S]*?)(?=DISTRIBUTION:|$)/i);
+  let p4=p4m?p4m[1]:'';const verify=p4.search(/\n[^\S\n]*[^\w\n]*[^\S\n]*FINAL[^\S\n]*[—–-]?[^\S\n]*VERIFY\b|\n[^\S\n]*Q\d{1,3}[^\S\n]*:[^\S\n]*topic[^\S\n]*=/);
+  if(verify>=0)p4=p4.slice(0,verify).replace(/(?:\n[^\S\n]*[═=─━*#_-]{3,}[^\S\n]*)+\s*$/,'');
   const dm=raw.match(/DISTRIBUTION:([^\n]*)/i);
-  return{p1,p2,p3,p4:p4m?p4m[1].trim():'',dist:dm?dm[1].trim():''};
+  return{p1,p2,p3,p4:p4.trim(),dist:dm?dm[1].trim():''};
 }
 // v15.7: resolve PART 3/4 citations back to fact IDs.
 // The grounding adapter asks for [fact-N] in PART 1 concept names; NCLEX_GEN_PROMPT asks for
@@ -8565,6 +8725,51 @@ function ngSpliceSection(doc,oldSec,newSec){
   const at=String(doc).indexOf(oldSec);
   return at<0?doc:doc.slice(0,at)+newSec+doc.slice(at+oldSec.length);
 }
+// v17.7: NCLEX_GEN_PROMPT asks for "A. text" choices, but the model sometimes numbers a question's choices
+// "1." to "6." and keys it "ANSWER: 1, 2, 3". ngSplitNumbered then read each choice numbered above the question's
+// own number as a new question, the answer key attached to the wrong blocks, and the printed worksheet showed the
+// choices as questions (a real 154-question run printed Q102's six choices as Q103-Q108, keyed "1, 2, 3"). A run
+// of choices numbered from 1 directly under a question is relabelled A, B, C... together with that question's
+// ANSWER and "Why N is" lines, only when the answer key agrees exactly and the item is not an ordering item.
+// Anything else is left as written for the worksheet checks to report.
+function ngLetterNumberedOptions(raw){
+  const text=String(raw||''),P=ngSplitParts(text),none={text,relabelled:[]};
+  if(!P.p3||!P.p4)return none;
+  // Choices may sit at any indentation; a question number, as in ngSplitNumbered, is indented at most 4.
+  const NUM=/^([ \t]*)(?:Q)?(\d{1,3})([.)])([ \t]+\S.*)$/,LETTER=/^[ \t]*[A-Z][.)][ \t]/;
+  const opens=line=>LETTER.test(line)||/^[ \t]*_{2,}/.test(line)||/^[ \t]*Answer:[ \t]*_{2,}/i.test(line);
+  const lines=P.p3.split('\n'),questions=[];let cur=null;
+  // A line that could continue a choice run but is also the next question number is that question when
+  // lettered choices, ordering blanks, a calculation blank or a fresh "1." follow it before the next number.
+  const opensQuestion=i=>{for(let j=i+1;j<lines.length;j++){const m=lines[j].match(NUM);if(m)return Number(m[2])===1;if(opens(lines[j]))return true;}return false;};
+  lines.forEach((line,i)=>{
+    const m=line.match(NUM);
+    if(!m){if(cur){if(LETTER.test(line))cur.lettered=true;if(!cur.run.length)cur.stem.push(line);}return;}
+    const n=Number(m[2]),header=m[1].replace(/\t/g,'    ').length<=4;
+    if(cur&&!cur.lettered&&!cur.run.length&&n===1){cur.run.push(i);return;}
+    if(cur&&cur.run.length&&n===cur.run.length+1&&!(header&&n===cur.num+1&&opensQuestion(i))){cur.run.push(i);return;}
+    if(header&&n>(cur?cur.num:0)){cur={num:n,run:[],lettered:false,stem:[m[4]]};questions.push(cur);}
+  });
+  const keyLines=P.p4.split('\n'),heads=[];
+  keyLines.forEach((line,i)=>{const m=line.match(/^[ \t]{0,4}(?:Q)?(\d{1,3})[.)][ \t]+ANSWER:/i);if(m)heads.push({num:Number(m[1]),at:i});});
+  const letter=n=>String.fromCharCode(64+n),relabelled=[];
+  for(const q of questions){
+    const k=q.run.length,head=heads.filter(h=>h.num===q.num);
+    if(k<2||k>8||q.lettered||head.length!==1||/\b(?:order|sequence|chronolog|rank)/i.test(q.stem.join(' ')))continue;
+    const from=head[0].at,to=(heads.find(h=>h.at>from)||{at:keyLines.length}).at,entry=keyLines.slice(from,to).join('\n');
+    const am=keyLines[from].match(/^(.*?ANSWER:[ \t]*)(\d{1,2}(?:(?:[ \t]*(?:,|;|\/|&|\band\b)[ \t]*|[ \t]+)\d{1,2})*)(?=$|[ \t.:—–(-])(.*)$/i);
+    const picks=am?am[2].match(/\d+/g).map(Number):[];
+    const whys=[...entry.matchAll(/\bWhy[ \t]+(\d{1,2})[ \t]+is[ \t]+(?:correct|wrong)\b/gi)].map(x=>Number(x[1]));
+    if(!picks.length||picks.length===k||new Set(picks).size!==picks.length||[...picks,...whys].some(x=>x<1||x>k))continue;
+    if(/\bWhy[ \t]+[A-Z][ \t]+is[ \t]+(?:correct|wrong)\b/.test(entry))continue;
+    q.run.forEach((at,idx)=>{const m=lines[at].match(NUM);lines[at]=m[1]+letter(idx+1)+'.'+m[4];});
+    keyLines[from]=am[1]+picks.map(letter).join(', ')+am[3];
+    for(let i=from;i<to;i++)keyLines[i]=keyLines[i].replace(/\b(Why[ \t]+)(\d{1,2})([ \t]+is[ \t]+(?:correct|wrong)\b)/gi,(s,a,d,b)=>a+letter(Number(d))+b);
+    relabelled.push(q.num);
+  }
+  if(!relabelled.length)return none;
+  return{text:ngSpliceSection(ngSpliceSection(text,P.p3,lines.join('\n')),P.p4,keyLines.join('\n')),relabelled};
+}
 function ngBuildRepairPrompt({item,criterion,keyBlock}){
   return `═══ REPAIR ONE NCLEX ITEM ═══
 
@@ -8601,6 +8806,11 @@ ${keyBlock||'(unavailable)'}
 }`;
 }
 function ngRenumber(text,n){return text.replace(/^(\s{0,4})(?:Q)?\d{1,3}[.)]\s+/,'$1'+n+'. ');} // v15.14: {1,2} -> {1,3}
+// v17.7: the printed worksheet is Markdown, which continues the question list at any line inside a question or
+// answer that starts with a number (ordering steps, numbered reasons). Each such line printed as the next
+// question number and shifted every later number, so the PDF's questions and answer key stopped lining up.
+// A block keeps its own number; the numbers on its later lines are escaped so they print as written.
+function ngMdLiteralNumbers(block){const [first,...rest]=String(block||'').split('\n');return [first,...rest.map(l=>l.replace(/^([ \t]*\d{1,9})([.)])(?=[ \t]|$)/,'$1\\$2'))].join('\n');}
 function ngStem(t){
   const f=t.replace(/^(\s{0,4})(?:Q)?\d{1,3}[.)]\s+/,'').split('\n')[0].trim(); // v15.14: {1,2} -> {1,3}
   return f.length>95?f.slice(0,95)+'…':f;
@@ -8828,6 +9038,9 @@ ${NG_GROUNDING_ADAPTER}
           owned_setProg((b/numBatches)*100);continue;
         }
 
+        // v17.7: numbered choices are relabelled before anything splits or checks the batch (see ngLetterNumberedOptions).
+        const lettered=ngLetterNumberedOptions(raw);
+        if(lettered.relabelled.length){raw=lettered.text;owned_log('  ⓘ Batch '+b+': Q'+lettered.relabelled.join(', Q')+' had choices numbered 1, 2, 3…; relabelled A, B, C… together with the answer key.','warn');}
         const P=ngSplitParts(raw);
         const concepts=ngParseConcepts(P.p1);
         const citedIds=ngParseCited(P.p2);
@@ -9033,7 +9246,7 @@ ${NG_GROUNDING_ADAPTER}
     // Same policy the case generator already applies to a failed case.
     return exportNotice+caseValidationStamp(wsIssuesAll,'worksheet')
       +'# NCLEX Practice Questions\n\n**'+ws.count+' questions** generated from source material.\n\n---\n\n## Questions\n\n'
-      +ws.questions.join('\n\n')+'\n\n<div class="pagebreak"></div>\n\n## Answer Key\n\n'+ws.answers.join('\n\n');
+      +ws.questions.map(ngMdLiteralNumbers).join('\n\n')+'\n\n<div class="pagebreak"></div>\n\n## Answer Key\n\n'+ws.answers.map(ngMdLiteralNumbers).join('\n\n');
   },[ws,wsIssuesAll,exportNotice]);
 
   // v15.7: the audit trail now carries the deterministic worksheet findings, the per-item
