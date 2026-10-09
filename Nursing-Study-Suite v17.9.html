@@ -8,7 +8,11 @@
      Babel, so this adds narrow resource directives without a default-src/script-src migration. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net">
 <title>LATTE Study Suite</title>
-<!-- v17.8 (2026-09-30): NCLEX Generator ordering answers. The prompt gives ordering items no answer format, and in a
+<!-- v17.9 (2026-10-09): NCLEX to Anki tab. The three stand-alone Python converters (nclex2anki.py, img2anki.py and
+     extract2anki.py) now run inside the suite as one tab with three options: Generator/Extractor exports, question
+     images read by Gemini, and Extractor exports or Copy output. Cards, tags, NeedsReview checks and GUIDs match the
+     scripts, so files from either side update the same Anki notes. No existing tool, prompt or warning tier changed.
+     v17.8 (2026-09-30): NCLEX Generator ordering answers. The prompt gives ordering items no answer format, and in a
      real 70-question run 6 of 7 ordering answers failed the worksheet check (15 of 16 errors), so the item audit ran on
      no batch. When the entry shows the order, its ANSWER line is restated as the step texts joined by arrows; an
      ordering entry labelled ORDER or SEQUENCE gets its ANSWER header. Prompts and warning tiers are unchanged.
@@ -1779,6 +1783,8 @@ const TOOLS=[
   {id:'nclex',stage:'practice',label:'NCLEX Extract',step:'Use existing questions',title:'NCLEX Question Extractor',desc:'Extract practice questions from review PDFs'},
   {id:'nclexgen',stage:'practice',label:'NCLEX Generate',step:'Create new questions',title:'NCLEX Question Generator',desc:'Create practice questions from your Knowledge Base'},
   {id:'cases',stage:'practice',label:'Case Studies',step:'Apply clinical reasoning',title:'Clinical Case Study Generator',desc:'Generate source-grounded unfolding nursing cases'},
+  // v17.9: the three NCLEX → Anki scripts moved into the suite as one tab with three converters.
+  {id:'nclex2anki',stage:'practice',label:'NCLEX to Anki',step:'Turn questions into cards',title:'NCLEX to Anki',desc:'Convert NCLEX exports or question images into an Anki import file'},
 ];
 const TOOL_INDEX=new Map(TOOLS.map((t,i)=>[t.id,String(i+1).padStart(2,'0')]));
 const TOOL_BY_ID=new Map(TOOLS.map(t=>[t.id,t]));
@@ -6031,7 +6037,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '17.8';}
+function suiteVersion(){return '17.9';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -7737,6 +7743,1078 @@ function NCLEXExtractor(){
       {filtered.map((q,i)=><NCLEXQuestionCard key={q.id||i} q={q} index={i}/>)}{/* v15: id assigned at extraction — index keys made open/closed state jump across cards whenever the filter changed */}
     </>}
     {status==='idle'&&questions.length===0&&<EmptyState mark="?" title="No questions extracted yet" note="This tool reads practice questions out of a review book you already own — it does not write new ones. Question wording, rationales and answer keys come from the PDF." steps={['Choose the layout your book uses: inline, or split Q&A.','Add the PDF, and optionally limit it to the pages you care about.','Extract — answers are grouped into one key at the end of every export.']}/>}
+  </Workbench>;
+}
+
+// ──── TOOL: NCLEX to Anki ────
+// v17.9: the three stand-alone converters (nclex2anki.py, img2anki.py, extract2anki.py) were
+// separate Python scripts run outside the suite. They are ported here unchanged in behavior so
+// everything runs from one file: same card layout, same Anki header, same NeedsReview checks and
+// the same GUIDs, so a file made here and one made by the scripts update the same notes.
+// Shared helpers first; each converter keeps its own prefix (n2a / i2a / x2a).
+
+// Python's \s (str.isspace) also covers \x1c-\x1f and \x85, which JavaScript's \s does not. The
+// GUID basis joins fields with \x1f and relies on it collapsing to a space, so GUIDs only match
+// the scripts' when this class is used.
+const N2A_PY_WS='\\t\\n\\v\\f\\r \\x1c-\\x1f\\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000';
+const N2A_PY_WS_RUN=new RegExp('['+N2A_PY_WS+']+','g');
+const N2A_PY_WS_EDGE=new RegExp('^['+N2A_PY_WS+']+|['+N2A_PY_WS+']+$','g');
+function n2aPyStrip(s){return String(s).replace(N2A_PY_WS_EDGE,'');}
+// Python str.strip(chars).
+function n2aStripChars(s,chars){let a=0,b=s.length;while(a<b&&chars.includes(s[a]))a++;while(b>a&&chars.includes(s[b-1]))b--;return s.slice(a,b);}
+// Python repr() of a short string, for the warning text the scripts print.
+function n2aRepr(s){s=String(s);const q=s.includes("'")&&!s.includes('"')?'"':"'";return q+s.replace(/\\/g,'\\\\').replace(q==="'"?/'/g:/"/g,'\\'+q).replace(/\n/g,'\\n').replace(/\t/g,'\\t')+q;}
+// Synchronous SHA-1 so card building stays synchronous and needs no secure context. GUIDs are
+// "n2a"/"x2a" + the first 20 hex digits, exactly as the scripts compute them.
+function n2aSha1Hex(str){
+  const bytes=new TextEncoder().encode(str),len=bytes.length,words=((len+8)>>6)+1,W=new Uint32Array(words*16);
+  for(let i=0;i<len;i++)W[i>>2]|=bytes[i]<<(24-(i&3)*8);
+  W[len>>2]|=0x80<<(24-(len&3)*8);W[words*16-1]=len*8;W[words*16-2]=Math.floor(len/0x20000000);
+  let h0=0x67452301,h1=0xEFCDAB89,h2=0x98BADCFE,h3=0x10325476,h4=0xC3D2E1F0;const w=new Uint32Array(80);
+  const rol=(x,n)=>(x<<n)|(x>>>(32-n));
+  for(let b=0;b<W.length;b+=16){
+    for(let t=0;t<16;t++)w[t]=W[b+t];
+    for(let t=16;t<80;t++)w[t]=rol(w[t-3]^w[t-8]^w[t-14]^w[t-16],1);
+    let a=h0,bb=h1,c=h2,d=h3,e=h4;
+    for(let t=0;t<80;t++){
+      const f=t<20?((bb&c)|(~bb&d)):t<40?(bb^c^d):t<60?((bb&c)|(bb&d)|(c&d)):(bb^c^d);
+      const k=t<20?0x5A827999:t<40?0x6ED9EBA1:t<60?0x8F1BBCDC:0xCA62C1D6;
+      const tmp=(rol(a,5)+f+e+k+w[t])>>>0;e=d;d=c;c=rol(bb,30)>>>0;bb=a;a=tmp;
+    }
+    h0=(h0+a)>>>0;h1=(h1+bb)>>>0;h2=(h2+c)>>>0;h3=(h3+d)>>>0;h4=(h4+e)>>>0;
+  }
+  return [h0,h1,h2,h3,h4].map(x=>x.toString(16).padStart(8,'0')).join('');
+}
+function n2aGuidBasis(basis){return n2aPyStrip(basis.toLowerCase().replace(N2A_PY_WS_RUN,' '));}
+// html.escape(quote=True), then the scripts' newline and tab handling.
+function n2aEsc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#x27;').replace(/\n/g,'<br>').replace(/\t/g,' ');}
+function n2aTagSafe(t){return String(t).trim().replace(/"/g,'').replace(/\s+/g,'_').replace(/^_+|_+$/g,'');}
+const N2A_ANKI_HEADER=deck=>['#separator:tab','#html:true','#notetype:Basic','#deck:'+deck,'#tags column:3','#guid column:4'];
+// quoteFix: nclex2anki/img2anki turn the (attribute-only) raw " into ', extract2anki does not.
+function n2aAnkiFileText(cards,deck,quoteFix){
+  return N2A_ANKI_HEADER(deck).join('\n')+'\n'+cards.map(c=>[c.front,c.back,c.tags.join(' '),c.guid].map(x=>quoteFix?x.replace(/"/g,"'"):x).join('\t')+'\n').join('');
+}
+function n2aDedupeTags(tags){const seen=new Set(),out=[];for(const t of tags){if(t&&!seen.has(t.toLowerCase())){seen.add(t.toLowerCase());out.push(t);}}return out;}
+function n2aRank(label){return /^\d$/.test(label)?parseInt(label,10):label.toLowerCase().charCodeAt(0)-96;}
+function n2aIsLowerStart(line){const c=line.slice(0,1);return !!c&&c===c.toLowerCase()&&c!==c.toUpperCase();}
+// Port of the suite's nclexSplitStemOptions as each script carries it. `lookbehind` selects the
+// extract2anki variant, whose marks do not consume the whitespace before the next choice.
+function n2aMarks(s,lookbehind){
+  const out=[];
+  if(lookbehind){
+    for(const m of s.matchAll(/(?:(?<=\s)|^)\(?([1-9]|[a-fA-F])[.)]\s+/g)){
+      const nl=s.lastIndexOf('\n',m.index-1);
+      out.push({label:m[1],rank:n2aRank(m[1]),numeric:/\d/.test(m[1]),from:m.index,at:m.index+m[0].length,line_start:/^[ \t]*$/.test(s.slice(nl+1,m.index))});
+    }
+    return out;
+  }
+  const rx=/(?:^|\n|\s)\(?([1-9]|[a-fA-F])[.)]\s+/g;let m;
+  while((m=rx.exec(s))){
+    const start=m.index+(/\s/.test(m[0].slice(0,1))?1:0),nl=s.lastIndexOf('\n',start-1);
+    out.push({label:m[1],rank:n2aRank(m[1]),numeric:/\d/.test(m[1]),at:m.index+m[0].length,from:start,line_start:start===0||/^[ \t]*$/.test(s.slice(nl+1,start))});
+  }
+  return out;
+}
+function n2aSplitStemOptions(s,lookbehind){
+  const marks=n2aMarks(s,lookbehind);let best=null,bestPool=null;
+  for(const pool of [marks.filter(x=>x.line_start),marks.filter(x=>!x.line_start)]){
+    pool.forEach((mk,i)=>{
+      if(mk.rank!==1)return;
+      let j=i;while(j+1<pool.length&&pool[j+1].rank===pool[j].rank+1&&pool[j+1].numeric===mk.numeric)j++;
+      const n=j-i+1;
+      if(n>=3&&(!best||n>best[2]||(n===best[2]&&mk.from>best[3]))){best=[i,j,n,mk.from];bestPool=pool;}
+    });
+  }
+  if(!best)return [s.trim(),[]];
+  const [i,j,,start]=best,options=[];
+  for(let k=i;k<=j;k++){const end=k<j?bestPool[k+1].from:s.length;options.push([bestPool[k].label.toUpperCase(),s.slice(bestPool[k].at,end).replace(/\s+/g,' ').trim()]);}
+  return [s.slice(0,start).trim(),options];
+}
+const N2A_OK_STYLE='margin:.45em 0;padding:.4em .6em;border-left:4px solid #2e9e48;background:rgba(46,158,72,.13);border-radius:4px';
+const N2A_NO_STYLE='margin:.45em 0;padding:.4em .6em;border-left:4px solid #c94040;background:rgba(201,64,64,.07);border-radius:4px';
+
+// ── nclex2anki: NCLEX Generator worksheet / Extractor export (.md/.txt) ─────
+const N2A_KEY_HEAD=/^[ \t]*(?:#{1,6}[ \t]*)?(?:\*\*)?answer key(?:\*\*)?[ \t]*$/gim;
+const N2A_Q_HEAD=/^[ \t]*(?:#{1,6}[ \t]*)?(?:\*\*)?(?:nclex practice )?questions(?:\*\*)?[ \t]*$/gim;
+const N2A_BOLD_HEAD=/^[ \t]*\*\*Q?(\d{1,3})[.)]\*\*/;
+const N2A_ANS_HEAD=/^[ \t]{0,4}(?:\*\*)?Q?(\d{1,3})[.)](?:\*\*)?[ \t]+ANSWER\s*:/i;
+const N2A_NUM_HEAD=/^([ \t]{0,4})Q?(\d{1,3})[.)][ \t]+\S/;
+const N2A_HEAD_STRIP=/^[ \t]*(?:\*\*)?Q?\d{1,3}[.)](?:\*\*)?[ \t]*/;
+function n2aSplitBlocks(text){
+  // A new block starts only where the number ascends by exactly one, so numbered lines inside a
+  // question (lab lists, numeric choices) cannot start a block of their own.
+  const lines=text.split('\n');let head;
+  if(lines.some(l=>N2A_BOLD_HEAD.test(l)))head=l=>{const m=l.match(N2A_BOLD_HEAD);return m?parseInt(m[1],10):null;};
+  else if(lines.some(l=>N2A_ANS_HEAD.test(l)))head=l=>{const m=l.match(N2A_ANS_HEAD);return m?parseInt(m[1],10):null;};
+  else{
+    const first=lines.map(l=>l.match(N2A_NUM_HEAD)).find(Boolean),indent=first?first[1]:'';
+    head=l=>{const m=l.match(N2A_NUM_HEAD);return m&&m[1]===indent?parseInt(m[2],10):null;};
+  }
+  const blocks=[];let cur=null,last=null;
+  for(const line of lines){
+    const n=head(line);
+    if(n!==null&&(last===null||n===last+1)){cur=[n,[line.replace(N2A_HEAD_STRIP,'')]];blocks.push(cur);last=n;}
+    else if(cur)cur[1].push(line);
+  }
+  return blocks.map(([n,b])=>[n,b.join('\n')]);
+}
+function n2aCleanBlock(s){return s.replace(/^([ \t]*\d{1,9})\\([.)])/gm,'$1$2').replace(/^[ \t]*>[ \t]?/gm,'').split('**').join('');}
+function n2aTidy(text){
+  const out=[];
+  for(const line of text.split('\n').map(l=>l.trim())){
+    if(out.length&&out[out.length-1]&&n2aIsLowerStart(line))out[out.length-1]+=' '+line;else out.push(line);
+  }
+  return out.join('\n').replace(/\n{3,}/g,'\n\n').trim();
+}
+function n2aParseQuestion(block){
+  const steps=[],keep=[];let calc=false,unit='';
+  for(const line of block.split('\n')){
+    if(/^[ \t]*[-=_*─═]{3,}[ \t]*$/.test(line))continue;
+    let m=line.match(/^[ \t]*_{2,}[ \t]*(.*)$/);
+    if(m){steps.push(m[1].trim());continue;}
+    m=line.match(/^[ \t]*Answer:[ \t]*_{2,}(.*)$/i);
+    if(m){calc=true;unit=m[1].trim();continue;}
+    if(steps.length&&/^[ \t]+\S/.test(line)){steps[steps.length-1]=(steps[steps.length-1]+' '+line.trim()).trim();continue;}
+    keep.push(line);
+  }
+  const body=keep.join('\n');
+  let [stem,options]=steps.length?[body,[]]:n2aSplitStemOptions(body,false);
+  stem=n2aTidy(stem);
+  const type=steps.length?'Ordering':calc?'Calculation':/select all that apply/i.test(stem)?'SATA':options.length?'MCQ':'Unknown';
+  return {stem,options,steps,type,unit};
+}
+const N2A_WHY=/^Why[ \t]+([A-Z1-9])[ \t]+is[ \t]+(correct|wrong|incorrect)[ \t]*:?[ \t]*(.*)$/i;
+const N2A_LABELED=/^(?:[^\w\s]{1,3}[ \t]*)?(ANSWER|Rationale|Strategy|Tip|CJ|Conditions|Tags)[ \t]*:[ \t]*(.*)$/iu;
+function n2aParseKey(block){
+  const key={answer:'',answer_body:[],why:new Map(),why_order:[],rationale:[],strategy:'',tip:'',cj:'',conditions:'',tags:''};
+  const hasAnswerLabel=/^[ \t]*ANSWER[ \t]*:/im.test(block);let cur=null,first=true;
+  for(const raw of block.split('\n')){
+    const line=raw.trim();
+    if(!line||/^[-=_*─═]{3,}$/.test(line)){if(cur==='rationale'&&key.rationale.length&&key.rationale[key.rationale.length-1]!=='')key.rationale.push('');continue;}
+    let m=line.match(N2A_WHY);
+    if(m){const label=m[1].toUpperCase();key.why.set(label,[m[2].toLowerCase()==='correct'?'correct':'wrong',m[3].trim()]);key.why_order.push(label);cur=['why',label];first=false;continue;}
+    m=line.match(N2A_LABELED);
+    if(m){
+      const name=m[1].toLowerCase(),val=m[2].trim();
+      if(name==='answer')key.answer=val;else if(name==='rationale')key.rationale.push(val);else key[name]=val;
+      cur=name;first=false;continue;
+    }
+    if(first&&!hasAnswerLabel){key.answer=line;cur='rationale';first=false;continue;} // Extractor .md: line 1 IS the answer
+    first=false;
+    if(Array.isArray(cur)){const w=key.why.get(cur[1]);w[1]=(w[1]+' '+line).trim();}
+    else if(cur==='answer')key.answer_body.push(line);
+    else if(['strategy','tip','cj','conditions','tags'].includes(cur))key[cur]=(key[cur]+' '+line).trim();
+    else key.rationale.push(line);
+  }
+  while(key.rationale.length&&key.rationale[key.rationale.length-1]==='')key.rationale.pop();
+  return key;
+}
+// Worksheet C-numbers only resolve inside that worksheet's PART 1, so they are dropped. The
+// verbatim anchor quote on the correct answer is kept and returned separately.
+function n2aStripSources(text){
+  let quote='';const m=text.match(/\(\s*Sources?\s*:\s*(.*)\)\s*$/i);
+  if(m){const q=m[1].match(/["“](.+)["”]/);quote=q?q[1].trim():'';text=text.slice(0,m.index);}
+  return [text.replace(/\(\s*Sources?\s*:[^)]*\)|\bSources?\s*:.*$/gi,'').trim(),quote];
+}
+function n2aAnswerLabels(answer,options){
+  const [value]=n2aStripSources(answer);
+  const m=value.match(/^([A-Z1-9])((?:(?:[ \t]*[,;/&][ \t]*(?:and[ \t]+)?|[ \t]+and[ \t]+|[ \t]+)[A-Z1-9]\b)*)(?=$|[ \t.:—–(\-])/i);
+  const valid=new Set(options.map(([l])=>l));
+  const labels=m?(m[0].match(/\b[A-Z1-9]\b/gi)||[]).map(x=>x.toUpperCase()):[];
+  if(labels.length&&(!valid.size||labels.every(l=>valid.has(l))))return labels;
+  const norm=s=>s.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  const hits=options.filter(([,t])=>norm(t)&&norm(value).includes(norm(t))).map(([l])=>l);
+  return hits.length===1?hits:labels;
+}
+function n2aRenderFront(q){
+  const p=['<div style="text-align:left">','<div>'+n2aEsc(q.stem)+'</div>'];
+  if(q.options.length){p.push('<div style="margin-top:.8em">');p.push(...q.options.map(([l,t])=>'<div style="margin:.4em 0"><b>'+n2aEsc(l)+'.</b> '+n2aEsc(t)+'</div>'));p.push('</div>');}
+  else if(q.steps.length){p.push('<div style="margin-top:.8em">');p.push(...q.steps.map((s,i)=>'<div style="margin:.4em 0"><b>'+(i+1)+'.</b> '+n2aEsc(s)+'</div>'));p.push('</div>');}
+  if(q.type==='Calculation')p.push('<div style="margin-top:.8em"><i>Answer: ______ '+n2aEsc(q.unit)+'</i></div>');
+  p.push('</div>');return p.join('');
+}
+function n2aRenderBack(q,key,labels){
+  const opts=new Map(q.options),[answer]=n2aStripSources(key.answer);
+  let head='Answer: '+answer;
+  if(labels.length===1&&opts.has(labels[0])&&!answer.toLowerCase().includes(opts.get(labels[0]).toLowerCase()))head+=' — '+opts.get(labels[0]);
+  const p=['<div style="text-align:left">','<div style="font-size:1.05em"><b>'+n2aEsc(head)+'</b></div>'];
+  if(key.answer_body.length)p.push('<div style="margin-top:.4em">'+n2aEsc(key.answer_body.map(l=>n2aStripSources(l)[0]).join('\n'))+'</div>');
+  let quote='';
+  if(q.options.length&&(key.why.size||labels.length)){
+    for(const [lab,txt] of q.options){
+      const why=key.why.get(lab),correct=why?why[0]==='correct':labels.includes(lab);
+      if(!why&&!correct)continue; // extractor: highlight the key only
+      const [body,src]=why?n2aStripSources(why[1]):['',''];
+      if(correct&&src&&!quote)quote=src;
+      let row='<b>'+(correct?'✓':'✗')+' '+n2aEsc(lab)+'.</b> '+n2aEsc(txt);
+      if(body)row+='<div style="margin-top:.25em">'+n2aEsc(body)+'</div>';
+      p.push('<div style="'+(correct?N2A_OK_STYLE:N2A_NO_STYLE)+'">'+row+'</div>');
+    }
+  }else if(key.why.size){
+    for(const lab of key.why_order){
+      const [kind,txt]=key.why.get(lab),[body,src]=n2aStripSources(txt);
+      quote=quote||(kind==='correct'?src:'');
+      p.push('<div style="'+(kind==='correct'?N2A_OK_STYLE:N2A_NO_STYLE)+'"><b>'+(kind==='correct'?'✓':'✗')+' '+n2aEsc(lab)+'.</b> '+n2aEsc(body)+'</div>');
+    }
+  }
+  const rationale=key.rationale.join('\n').trim();
+  if(rationale)p.push('<div style="margin-top:.7em"><b>Rationale:</b> '+n2aEsc(n2aStripSources(rationale)[0])+'</div>');
+  for(const [field,label] of [['strategy','🎯 Strategy'],['tip','⚡ Tip'],['cj','🧠 CJ']])if(key[field])p.push('<div style="margin-top:.6em"><b>'+label+':</b> '+n2aEsc(key[field])+'</div>');
+  if(quote)p.push('<div style="margin-top:.7em;font-size:.85em;opacity:.75"><i>Source: “'+n2aEsc(quote)+'”</i></div>');
+  p.push('</div>');return p.join('');
+}
+function n2aBuildTags(q,key,sourceName,extra){
+  const tags=[];
+  for(const part of key.tags.split('|').map(p=>p.trim()).filter(Boolean)){
+    const tier=part.match(/^Tier\s*([123])$/i);
+    if(part.includes('::'))tags.push(n2aTagSafe(part));else if(tier)tags.push('Tier::'+tier[1]);else tags.push('CJMM::'+n2aTagSafe(part));
+  }
+  for(const c of key.conditions.split(/[,;]/).map(c=>c.trim()).filter(Boolean))tags.push('Condition::'+n2aTagSafe(c));
+  if(key.cj&&key.cj.length<=40&&!tags.some(t=>t.startsWith('CJMM::')))tags.push('CJMM::'+n2aTagSafe(key.cj));
+  tags.push('NCLEX_Type::'+q.type,'Source::'+n2aTagSafe(sourceName),...extra.filter(t=>t.trim()).map(n2aTagSafe));
+  return n2aDedupeTags(tags);
+}
+function n2aGuid(q){return 'n2a'+n2aSha1Hex(n2aGuidBasis(q.stem+'\x1f'+q.options.map(([,t])=>t).join('\x1f')+'\x1f'+q.steps.join('\x1f'))).slice(0,20);}
+function n2aConvertText(text,sourceName,extraTags=[]){
+  const warnings=[];
+  text=String(text).replace(/^\ufeff/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n').replace(/<div class="pagebreak"><\/div>/g,'\n');
+  const keys=[...text.matchAll(N2A_KEY_HEAD)];
+  if(!keys.length)return {cards:[],warnings:[sourceName+": no 'Answer Key' heading found - is this a suite NCLEX export?"]};
+  if(keys.length>1)warnings.push(sourceName+': '+keys.length+" 'Answer Key' headings; only the first export in the file was read.");
+  const keyHead=keys[0],before=text.slice(0,keyHead.index),qHeads=[...before.matchAll(N2A_Q_HEAD)];
+  const qText=qHeads.length?before.slice(qHeads[qHeads.length-1].index+qHeads[qHeads.length-1][0].length):before;
+  const kStart=keyHead.index+keyHead[0].length,kText=keys.length>1?text.slice(kStart,keys[1].index):text.slice(kStart);
+  const needsReview=/FAILED VALIDATION|Unresolved item findings remain/i.test(before);
+  if(needsReview)warnings.push(sourceName+': export is stamped FAILED VALIDATION / unresolved findings; every card is tagged NeedsReview.');
+  const questions=new Map(n2aSplitBlocks(qText).map(([n,b])=>[n,n2aParseQuestion(n2aCleanBlock(b))]));
+  const answers=new Map(n2aSplitBlocks(kText).map(([n,b])=>[n,n2aParseKey(n2aCleanBlock(b))]));
+  if(!questions.size)return {cards:[],warnings:[...warnings,sourceName+': no numbered questions found.']};
+  const cards=[];
+  for(const n of [...questions.keys()].sort((a,b)=>a-b)){
+    const q=questions.get(n),where=sourceName+' Q'+n,key=answers.get(n);
+    if(!key||!(key.answer||key.why.size||key.answer_body.length)){warnings.push(where+': SKIPPED - no answer key entry.');continue;}
+    if(!q.stem){warnings.push(where+': SKIPPED - empty question stem.');continue;}
+    let flag=needsReview,labels=q.options.length?n2aAnswerLabels(key.answer,q.options):[];
+    if(!labels.length&&key.why.size)labels=[...key.why].filter(([,[k]])=>k==='correct').map(([l])=>l);
+    if(q.type==='Unknown'){warnings.push(where+': no answer choices detected; card made from the stem only.');flag=true;}
+    if(q.options.length){
+      const valid=new Set(q.options.map(([l])=>l));
+      if(!labels.length){warnings.push(where+': could not tell which choice is correct (answer: '+n2aRepr(key.answer.slice(0,60))+').');flag=true;}
+      else if(labels.some(l=>!valid.has(l))){warnings.push(where+': answer '+labels.join(',')+' is not among the choices '+[...valid].sort().join('')+'.');flag=true;}
+      if(key.why.size){
+        const missing=[...valid].sort().filter(l=>!key.why.has(l));
+        if(missing.length){warnings.push(where+': no rationale line for choice(s) '+missing.join(', ')+'.');flag=true;}
+        const disagree=[...key.why].filter(([l,[k]])=>(k==='correct')!==labels.includes(l)).map(([l])=>l);
+        if(labels.length&&disagree.length){warnings.push(where+': rationale for '+disagree.join(', ')+' disagrees with ANSWER '+labels.join(',')+'.');flag=true;}
+      }
+    }
+    const tags=n2aBuildTags(q,key,sourceName,extraTags);
+    if(flag)tags.push('NeedsReview');
+    cards.push({num:n,front:n2aRenderFront(q),back:n2aRenderBack(q,key,labels),tags,guid:n2aGuid(q),type:q.type});
+  }
+  const orphan=[...answers.keys()].filter(n=>!questions.has(n)).sort((a,b)=>a-b);
+  if(orphan.length)warnings.push(sourceName+': answer key entries with no question: '+orphan.join(', ')+'.');
+  return {cards,warnings};
+}
+// sources: [{name,text}] — name is the file name without its extension, as the script uses.
+function n2aConvertSources(sources,extraTags=[]){
+  const all=[],warnings=[],seen=new Set();let dupes=0;
+  for(const s of sources){
+    const r=n2aConvertText(s.text,s.name,extraTags);warnings.push(...r.warnings);
+    for(const c of r.cards){if(seen.has(c.guid)){dupes++;continue;}seen.add(c.guid);all.push(c);}
+  }
+  if(dupes)warnings.push(dupes+' duplicate question(s) across inputs were dropped.');
+  return {cards:all,warnings};
+}
+
+// ── extract2anki: NCLEX Extractor export (.md, .txt or the Copy button) ────
+const X2A_MD_QHEAD=/^\*\*(\d{1,4})\.\*\*[ \t]?/gm;
+const X2A_MD_KEY=/^##[ \t]+Answer Key[ \t]*$/im;
+const X2A_MD_QSEC=/^##[ \t]+Questions[ \t]*$/im;
+const X2A_TXT_KEY=/^=+[ \t]*\n[ \t]*ANSWER KEY[ \t]*\n[ \t]*=+[ \t]*$/m;
+const X2A_TXT_AHEAD=/^(\d{1,4})\.[ \t]+Answer:[ \t]?/gm;
+const X2A_RULE=/^[ \t]*-{3,}[ \t]*$/;
+const X2A_MD_META=[['tip',/^>[ \t]*\S*[ \t]*\*\*Tip:\*\*[ \t]*(.*)$/],['strategy',/^>[ \t]*\S*[ \t]*\*\*Strategy:\*\*[ \t]*(.*)$/],['cj',/^>[ \t]*\S*[ \t]*\*\*CJ:\*\*[ \t]*(.*)$/],['conditions',/^Conditions:[ \t]*(.*)$/]];
+const X2A_TXT_META=[['tip',/^Tip:[ \t]*(.*)$/],['strategy',/^Strategy:[ \t]*(.*)$/],['cj',/^CJ:[ \t]*(.*)$/],['conditions',/^Conditions:[ \t]*(.*)$/]];
+function x2aBlocks(text,headRe){
+  const kept=[...text.matchAll(headRe)];
+  return kept.map((m,i)=>[parseInt(m[1],10),text.slice(m.index+m[0].length,i+1<kept.length?kept[i+1].index:text.length)]);
+}
+function x2aTxtQuestionBlocks(text){
+  // A question starts with a flush-left "N. " that continues the numbering AND follows a blank
+  // line, so a raw choice line "2. ..." inside a question can't split it.
+  const out=[];let cur=null,last=0,prevBlank=true;
+  for(const line of text.split('\n')){
+    const m=line.match(/^(\d{1,4})\.[ \t]+(?=\S)/);
+    if(m&&prevBlank&&parseInt(m[1],10)===last+1){last=parseInt(m[1],10);cur=[last,[line.slice(m[0].length)]];out.push(cur);}
+    else if(cur)cur[1].push(line);
+    prevBlank=!line.trim();
+  }
+  return out.map(([n,b])=>[n,b.join('\n')]);
+}
+function x2aPopMeta(lines,meta){
+  const found={};
+  while(lines.length&&!lines[lines.length-1].trim())lines.pop();
+  for(const [name,rx] of [...meta].reverse()){
+    while(lines.length&&!lines[lines.length-1].trim())lines.pop();
+    if(lines.length){const m=lines[lines.length-1].trim().match(rx);if(m){found[name]=m[1].trim();lines.pop();}}
+  }
+  return found;
+}
+function x2aParseExport(text){
+  text=String(text).replace(/\r\n/g,'\n').replace(/\r/g,'\n').replace(/^\ufeff+/,'').replace(/<div class="pagebreak"><\/div>/g,'\n');
+  const info={format:null,status:null,expected:null,problems:[]};
+  const st=text.match(/^(?:>[ \t]*)?Extraction status:[ \t]*(.*)$/m);
+  if(st){info.status=st[1].trim();text=text.slice(0,st.index)+text.slice(st.index+st[0].length);}
+  let c,qBlocks,aBlocks,meta;
+  const mdKey=text.match(X2A_MD_KEY);
+  if(mdKey&&new RegExp(X2A_MD_QHEAD.source,'m').test(text)){
+    info.format='md';c=text.match(/^\*\*(\d+) questions?\*\*/m);
+    const qsec=text.slice(0,mdKey.index).match(X2A_MD_QSEC);
+    qBlocks=x2aBlocks(text.slice(qsec?qsec.index+qsec[0].length:0,mdKey.index),X2A_MD_QHEAD);
+    aBlocks=x2aBlocks(text.slice(mdKey.index+mdKey[0].length),X2A_MD_QHEAD);meta=X2A_MD_META;
+  }else{
+    const key=text.match(X2A_TXT_KEY);
+    if(!key){info.problems.push('not an NCLEX Extractor export (no Answer Key section found)');return {records:[],info};}
+    info.format='txt';c=text.match(/^(\d+) questions?[ \t]*$/m);
+    const cEnd=c?c.index+c[0].length:0;
+    qBlocks=x2aTxtQuestionBlocks(text.slice(c&&cEnd<key.index?cEnd:0,key.index));
+    aBlocks=x2aBlocks(text.slice(key.index+key[0].length),X2A_TXT_AHEAD);meta=X2A_TXT_META;
+  }
+  info.expected=c?parseInt(c[1],10):null;
+  const answers=new Map();
+  for(const [n,body] of aBlocks){
+    const lines=body.split('\n');
+    while(lines.length&&(!lines[lines.length-1].trim()||X2A_RULE.test(lines[lines.length-1])))lines.pop();
+    let rec=x2aPopMeta(lines,meta);
+    if(info.format==='md'){
+      // "**N.** <correct_answer>\n\n<rationale>": the answer runs to the first blank line.
+      let cut=lines.findIndex(l=>!l.trim());if(cut<0)cut=lines.length;
+      rec.answer=lines.slice(0,cut).map(l=>l.trim()).join(' ').trim();rec.rationale=lines.slice(cut+1).join('\n').trim();
+      rec=Object.fromEntries(Object.entries(rec).map(([k,v])=>[k,v.split('**').join('')]));
+    }else{
+      const cut=lines.findIndex(l=>l.startsWith('Rationale:'));
+      if(cut<0){rec.answer=lines.map(l=>l.trim()).join(' ').trim();rec.rationale='';}
+      else{rec.answer=lines.slice(0,cut).map(l=>l.trim()).join(' ').trim();rec.rationale=[lines[cut].slice('Rationale:'.length).trim(),...lines.slice(cut+1)].join('\n').trim();}
+    }
+    answers.set(n,rec);
+  }
+  const records=[];
+  for(const [n,b] of qBlocks){
+    let body=b.split('\n').filter(l=>!X2A_RULE.test(l)).join('\n').trim();
+    if(info.format==='md')body=body.split('**').join('');
+    records.push(Object.assign({num:n,question:body},answers.get(n)||{}));
+  }
+  const nums=new Set(records.map(r=>r.num)),orphans=[...answers.keys()].filter(n=>!nums.has(n)).sort((a,b)=>a-b);
+  if(orphans.length)info.problems.push('answer key entries with no question: '+orphans.join(', '));
+  if(info.expected!==null&&records.length!==info.expected)info.problems.push('header says '+info.expected+' questions, '+records.length+' were read');
+  return {records,info};
+}
+const X2A_ANS_PREFIX=/^(?:(?:the\s+)?correct\s+)?(?:answers?|options?|choices?|key)(?:\s+is)?\s*[:#\-–—]?\s*|^the\s+correct\s+answer\s+is\s*:?\s*/i;
+const X2A_LABEL_LIST=/^([A-Z1-9])((?:(?:[ \t]*[,;/&][ \t]*(?:and[ \t]+)?|[ \t]+and[ \t]+|[ \t]+)[A-Z1-9](?![A-Za-z0-9]))+)/i;
+const X2A_LABEL_ONE=/^([A-Z1-9])(?:[.):]|[ \t]+[-–—][ \t]|$)/i;
+function x2aNorm(s){return s.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();}
+function x2aTextHits(text,options){
+  const t=x2aNorm(text);if(t.length<3)return [];
+  const exact=options.filter(([,o])=>x2aNorm(o)===t).map(([l])=>l);if(exact.length)return exact;
+  return options.filter(([,o])=>x2aNorm(o).length>=4&&(t.includes(x2aNorm(o))||(t.length>=8&&x2aNorm(o).includes(t)))).map(([l])=>l);
+}
+// Returns [labels, note, trusted]; trusted=false means a guess that needs review.
+function x2aResolveAnswer(answer,options){
+  let a=answer.trim();
+  for(let i=0;i<3;i++){const a2=a.replace(X2A_ANS_PREFIX,'').trim();if(a2===a)break;a=a2;} // "Answer: Answer: 1"
+  a=a.replace(/^\(([A-Z1-9])\)/i,'$1.');
+  const valid=options.map(([l])=>l);let labels=[],rest=a;
+  let m=a.match(X2A_LABEL_LIST);
+  if(m&&(m[0].match(/[A-Z1-9](?![A-Za-z0-9])/gi)||[]).length>1){labels=(m[0].match(/(?<![A-Za-z0-9])[A-Z1-9](?![A-Za-z0-9])/gi)||[]).map(x=>x.toUpperCase());rest=a.slice(m[0].length);}
+  else{m=a.match(X2A_LABEL_ONE);if(m){labels=[m[1].toUpperCase()];rest=a.slice(m[0].length);}}
+  rest=n2aStripChars(rest,' .:-–—');
+  if(!options.length)return [[],'',true];
+  if(labels.length&&labels.every(l=>valid.includes(l))){
+    const hits=labels.length===1?x2aTextHits(rest,options):[];
+    if(hits.length===1&&hits[0]!==labels[0])return [hits,'key says '+labels[0]+' but its text is choice '+hits[0]+'; used '+hits[0],false];
+    return [labels,'',true];
+  }
+  const hits=x2aTextHits(labels.length?rest:a,options);
+  if(hits.length===1){
+    if(labels.length)return [hits,'key label '+labels.join(',')+' is not a choice here; matched its text to choice '+hits[0],true];
+    return [hits,'',true];
+  }
+  if(!labels.length&&/[,;]| and /.test(a)){ // SATA written as text
+    const parts=a.split(/\s*(?:[,;]|\band\b)\s*/).filter(p=>p.trim()),multi=parts.map(p=>x2aTextHits(p,options));
+    if(parts.length&&multi.every(h=>h.length===1))return [[...new Set(multi.map(h=>h[0]))].sort((x,y)=>valid.indexOf(x)-valid.indexOf(y)),'',true];
+  }
+  if(labels.length){
+    const numeric=/^\d$/.test(valid[0]);
+    const mapped=labels.filter(l=>/^\d$/.test(l)!==numeric).map(l=>numeric?String(n2aRank(l)):String.fromCharCode(64+parseInt(l,10)));
+    if(mapped.length===labels.length&&mapped.every(x=>valid.includes(x)))return [mapped,'key uses '+labels.join(',')+' but choices are '+(numeric?'number':'letter')+'-numbered; mapped to '+mapped.join(','),false];
+    return [[],'answer '+labels.join(',')+' is not among the choices '+valid.join(''),false];
+  }
+  return [[],'could not tell which choice the answer '+n2aRepr(a.slice(0,60))+' is',false];
+}
+const X2A_TRAILER=/(?:^|(?<=\n)|(?<=[.!?])[ \t]+)(?=(?:TEST[- ]TAKING (?:HINT|STRATEGY|TIP)S?\b|CONTENT[ \t]*[–—:-]|CLIENT NEEDS?\b|COGNITIVE LEVEL\b|INTEGRATED NURSING PROCESS\b|NURSING PROCESS[ \t]*[–—:-]|CONCEPTS?[ \t]*[–—:-]|PRIORITY CONCEPTS?\b|References?[ \t]*:|Ref[ \t]*:))/;
+const X2A_OPTION_WORD=/(?:^|(?<=\n)|(?<=[.!?][ \t])|(?<=[.!?][ \t][ \t]))(?:Option|Choice|Answer)[ \t]+\(?([A-Z1-9])\)?(?![A-Za-z0-9])/g;
+// Returns [preface, Map(label->text) or null, trailer].
+function x2aSplitRationale(rationale,options){
+  const m=rationale.match(X2A_TRAILER);
+  const body=m?rationale.slice(0,m.index):rationale,trailer=m?rationale.slice(m.index):'';
+  const labels=options.map(([l])=>l);
+  if(labels.length<2)return [body.trim(),null,trailer.trim()];
+  const numeric=/^\d$/.test(labels[0]);
+  const tryMarks=(marks,stripLabel)=>{
+    marks=marks.filter(x=>labels.includes(x.label.toUpperCase())&&/^\d$/.test(x.label)===numeric);
+    for(let i=0;i<marks.length;i++){
+      if(marks[i].label.toUpperCase()!==labels[0])continue;
+      const seq=marks.slice(i,i+labels.length);
+      if(seq.map(x=>x.label.toUpperCase()).join('\x00')===labels.join('\x00')){
+        const segs=new Map();
+        seq.forEach((x,k)=>{const end=k+1<seq.length?seq[k+1].from:body.length;segs.set(x.label.toUpperCase(),body.slice(stripLabel?x.at:x.from,end).replace(/[ \t]*\n[ \t]*/g,' ').trim());});
+        if([...segs.values()].every(Boolean))return [body.slice(0,seq[0].from).trim(),segs];
+      }
+    }
+    return null;
+  };
+  const marks=n2aMarks(body,true);
+  for(const pool of [marks.filter(x=>x.line_start),marks.filter(x=>!x.line_start)]){const got=tryMarks(pool,true);if(got)return [got[0],got[1],trailer.trim()];}
+  const words=[...body.matchAll(X2A_OPTION_WORD)].map(w=>({label:w[1],from:w.index,at:w.index+w[0].length}));
+  if(words.filter(w=>labels.includes(w.label.toUpperCase())).length===labels.length){const got=tryMarks(words,false);if(got)return [got[0],got[1],trailer.trim()];}
+  return [body.trim(),null,trailer.trim()];
+}
+const X2A_ORDER_WORDS=/\b(in (?:what|which|the correct|the proper|priority) order|order of priority|in sequence|correct sequence|sequence (?:of|the)|arrange|place .* in order|prioriti[sz]e (?:the following|these))\b/i;
+const X2A_CALC_WORDS=/\b(calculate|how many|what (?:rate|dose|volume)|record your answer|round(?:ed)? to|mL\/hr|mL\/h|gtt\/min|mg\/kg|units\/hr|mcg\/min|tablets?|drops? per minute)\b/i;
+const X2A_ROW='margin:.4em 0;padding:.35em .55em;border-radius:4px';
+const X2A_OK=X2A_ROW+';border-left:4px solid #2e9e48;background:rgba(46,158,72,.14)';
+const X2A_NO=X2A_ROW+';border-left:4px solid #c94040;background:rgba(201,64,64,.07)';
+const X2A_PLAIN=X2A_ROW+';border-left:4px solid rgba(128,128,128,.35)';
+function x2aRenderFront(stem,options,qtype){
+  const p=["<div style='text-align:left'>",'<div>'+n2aEsc(stem)+'</div>'];
+  if(options.length){p.push("<div style='margin-top:.8em'>");p.push(...options.map(([l,t])=>"<div style='margin:.45em 0'><b>"+n2aEsc(l)+'.</b> '+n2aEsc(t)+'</div>'));p.push('</div>');}
+  if(qtype==='Ordering'&&!/order|sequence|arrange|prioriti/i.test(stem))p.push("<div style='margin-top:.6em'><i>Put the choices in order.</i></div>");
+  if(qtype==='Calculation')p.push("<div style='margin-top:.8em'><i>Answer: ______</i></div>");
+  p.push('</div>');return p.join('');
+}
+function x2aRenderBack(answer,labels,options,qtype,preface,perChoice,trailer,rec){
+  const opts=new Map(options);let head;
+  if(qtype==='Ordering')head='Correct order: '+labels.join(' → ');
+  else if(labels.length===1)head='Answer: '+labels[0]+'. '+(opts.get(labels[0])||'');
+  else if(labels.length)head='Answer: '+labels.join(', ');
+  else head='Answer: '+(answer||'(none in export)');
+  const p=["<div style='text-align:left'>","<div style='font-size:1.05em'><b>"+n2aEsc(head)+'</b></div>'];
+  if(qtype==='Ordering')p.push(...labels.map((l,i)=>"<div style='"+X2A_PLAIN+"'><b>"+(i+1)+'.</b> '+n2aEsc(opts.has(l)?opts.get(l):l)+'</div>'));
+  else if(perChoice){
+    if(preface)p.push("<div style='margin:.5em 0'>"+n2aEsc(preface)+'</div>');
+    for(const [lab,txt] of options){const ok=labels.includes(lab);p.push("<div style='"+(ok?X2A_OK:X2A_NO)+"'><b>"+(ok?'✓':'✗')+' '+n2aEsc(lab)+'.</b> '+n2aEsc(txt)+"<div style='margin-top:.25em'>"+n2aEsc(perChoice.get(lab))+'</div></div>');}
+  }else if(options.length&&labels.length)p.push(...labels.filter(l=>opts.has(l)).map(l=>"<div style='"+X2A_OK+"'><b>✓ "+n2aEsc(l)+'.</b> '+n2aEsc(opts.get(l))+'</div>'));
+  if(!perChoice&&preface)p.push("<div style='margin-top:.6em'><b>Rationale:</b> "+n2aEsc(preface)+'</div>');
+  for(const [key,label] of [['tip','⚡ Tip'],['strategy','🎯 Strategy'],['cj','🧠 CJ']])if(rec[key])p.push("<div style='margin-top:.55em'><b>"+label+':</b> '+n2aEsc(rec[key])+'</div>');
+  if(trailer)p.push("<div style='margin-top:.7em;font-size:.85em;opacity:.75'>"+n2aEsc(trailer)+'</div>');
+  p.push('</div>');return p.join('');
+}
+function x2aBuildCard(rec,source,extraTags){
+  const warnings=[];let flag=false;
+  let [stem,options]=n2aSplitStemOptions(rec.question,true);stem=n2aTidyPlain(stem);
+  const answer=(rec.answer||'').trim();
+  const [labels,note,trusted]=answer?x2aResolveAnswer(answer,options):[[],'',true];
+  if(note)warnings.push(note);
+  flag=flag||!trusted;
+  let qtype;
+  if(options.length&&labels.length&&labels.length===options.length&&options.length>=3&&[...labels].sort().join()===options.map(([l])=>l).sort().join()&&X2A_ORDER_WORDS.test(stem))qtype='Ordering';
+  else if(options.length&&(/select all that apply/i.test(stem)||labels.length>1))qtype='SATA';
+  else if(options.length)qtype='MCQ';
+  else if(/\d/.test(answer)&&X2A_CALC_WORDS.test(stem+' '+answer))qtype='Calculation';
+  else{qtype='NoChoices';warnings.push('no answer choices found in the question text; card made from the stem');flag=true;}
+  if(options.length&&qtype==='MCQ'&&options.length!==4)warnings.push(options.length+' choices (expected 4 for a single-answer item)');
+  const [preface,perChoice,trailer]=x2aSplitRationale(rec.rationale||'',qtype!=='Ordering'?options:[]);
+  if(perChoice&&labels.length){
+    for(const [lab,txt] of perChoice){
+      const v=txt.slice(0,70).match(/\b(incorrect|not correct|wrong|correct)\b/i);
+      if(v&&(v[1].toLowerCase()==='correct')!==labels.includes(lab)){warnings.push('rationale for '+lab+" says '"+v[1]+"' but the key is "+labels.join(','));flag=true;}
+    }
+  }
+  const tags=[];
+  for(const c of (rec.conditions||'').split(',').map(c=>c.trim()).filter(Boolean))tags.push('Condition::'+n2aTagSafe(c));
+  const cj=rec.cj||'';
+  if(cj&&cj.length<=40)tags.push('CJMM::'+n2aTagSafe(cj));
+  tags.push('NCLEX_Type::'+qtype,'Source::'+n2aTagSafe(source),...extraTags.filter(t=>t.trim()).map(n2aTagSafe));
+  if(flag)tags.push('NeedsReview');
+  const guid='x2a'+n2aSha1Hex(n2aGuidBasis(stem+'\x1f'+options.map(([,o])=>o).join('\x1f'))).slice(0,20);
+  return [{front:x2aRenderFront(stem,options,qtype),back:x2aRenderBack(answer,labels,options,qtype,preface,perChoice,trailer,rec),tags:n2aDedupeTags(tags),guid,type:qtype},warnings];
+}
+function n2aTidyPlain(text){return text.split('\n').map(l=>l.trim()).join('\n').replace(/\n{3,}/g,'\n\n').trim();}
+function x2aConvertText(text,source,extraTags=[]){
+  const {records,info}=x2aParseExport(text),warnings=info.problems.map(p=>source+': '+p),cards=[];
+  if(info.status&&!info.status.toLowerCase().startsWith('complete'))warnings.push(source+': the extraction itself was not complete - '+info.status);
+  for(const rec of records){
+    const where=source+' Q'+rec.num;
+    if(!rec.answer&&!rec.rationale){warnings.push(where+': SKIPPED - no answer key entry');continue;}
+    const [card,w]=x2aBuildCard(rec,source,extraTags);
+    warnings.push(...w.map(x=>where+': '+x));cards.push(card);
+  }
+  return {cards,warnings,info};
+}
+function x2aConvertSources(sources,extraTags=[]){
+  const cards=[],warnings=[],seen=new Set();let dupes=0;
+  for(const s of sources){
+    const r=x2aConvertText(s.text,s.name,extraTags);warnings.push(...r.warnings);
+    for(const c of r.cards){if(seen.has(c.guid)){dupes++;continue;}seen.add(c.guid);cards.push(c);}
+  }
+  if(dupes)warnings.push(dupes+' duplicate question(s) across inputs dropped');
+  return {cards,warnings};
+}
+
+// ── img2anki: NCLEX question screenshots / photos, read by Gemini ──────────
+// One Gemini call per image copies what it shows; everything after that is local: questions
+// cut off at the bottom of one image are finished by the next, answer-key pages are matched by
+// printed number, and optionally Gemini answers what the images never answer (labelled and
+// tagged AI_Answer). Transcripts are cached for the session under the script's own key, and the
+// cache can be saved and reloaded, so a run stopped by a quota limit resumes without re-reading.
+const I2A_VERSION='1.0',I2A_PROMPT_VERSION='t1'; // bump I2A_PROMPT_VERSION when I2A_TRANSCRIBE_PROMPT changes
+const I2A_MAX_RAW_BYTES=14*1024*1024; // Gemini's ~20 MB inline ceiling less base64's third
+const I2A_AI_BATCH=8;
+const I2A_IMAGE_EXT=['jpg','jpeg','png','webp','heic','heif'];
+// NOT one of the 11 frozen constants. Copied verbatim from img2anki.py so transcripts cached by
+// the script and by the suite are interchangeable.
+const I2A_TRANSCRIBE_PROMPT=`You are transcribing NCLEX-style practice questions from ONE image: a screenshot of a question bank, a photo of a review-book page, or a scan.
+
+Your ONLY job is to reproduce what the image shows. You are not answering, teaching, correcting, or summarizing. A later step builds flashcards from your output and never sees this image, so anything you add, fix, or reword becomes indistinguishable from the source and nobody can catch it.
+
+ABSOLUTE RULES
+1. VERBATIM. Copy wording exactly, including punctuation, capitalization, abbreviations ("NGT" stays "NGT"), arrows, inequalities, degree signs and units. Do not rephrase, condense, join, split, or expand anything.
+2. NEVER GUESS A NUMBER. If any digit, decimal point, unit, or inequality is not certain, write [?] in its place and list it in "unreadable". A missing number is recoverable; a wrong number is not.
+3. NO OUTSIDE KNOWLEDGE. Never supply an answer or rationale the image does not show. If the image shows no correct answer, "answer" is null. If it shows no rationale, leave the rationale fields empty.
+4. THE CORRECT ANSWER IS NOT THE TEST-TAKER'S PICK. Question-bank screenshots often mark the option the user chose ("Your answer", red, an X, "Incorrect") as well as the correct one ("Correct answer", green, a check mark). "answer" is ONLY the option shown as correct. If the image shows which option was chosen but not which is correct, "answer" is null.
+5. IGNORE SCREEN CHROME: timers, "Question 3 of 75" counters (but DO use a printed question number), navigation buttons, "% of people chose this", flags, highlighting tools, ads, and anything else that is not the question, its answer, or its explanation.
+6. OPTION LABELS. Use labels as printed (A-F or 1-6). If the choices are unlabeled (radio buttons, check boxes), label them A, B, C ... in the order shown and set "labels_assigned" to true.
+
+ITEMS
+List every item in reading order. "kind" is one of:
+  "question"      a question stem (with its choices if shown), plus its answer and explanation if the image shows them.
+  "answer_only"   an answer-key entry for a question whose stem is NOT in this image, such as the answer pages at the back of a chapter. Give its printed number.
+  "continuation"  content at the very TOP of the image that finishes a question begun on an earlier image (leftover choices, or its answer and explanation) and has no stem of its own. Only the first item can be a continuation.
+A question cut off at the BOTTOM of the image is still a "question": transcribe what is visible and set "cut_off" to true.
+
+"format" is one of: "multiple_choice" (one answer), "select_all" ("select all that apply" or more than one answer), "ordering" (put the steps in order), "fill_in" (calculation or typed answer), "other" (hot spot, matrix, bowtie, drag-and-drop, case-study grid).
+
+EXHIBITS. If the question depends on a picture, graph, ECG strip, chart excerpt, or table, say what it is in "exhibit" (for example "ECG rhythm strip"). Transcribe any text and values it contains into the stem, verbatim. Do not interpret it.
+
+"answer": the correct label(s) exactly as shown, e.g. "B" or "A, C, E"; for ordering the sequence, e.g. "3, 1, 4, 2"; for fill_in the value with its unit; null when not shown.
+"answer_evidence": "printed" when the answer is stated in text ("Answer: B", "Correct answer: B"), "marked" when it is shown only by color, a check mark, or similar, null when there is no answer.
+"option_rationales": one entry per choice the explanation discusses on its own, verdict "correct" or "incorrect" only when the image says so.
+"rationale": the explanation text that is not tied to a single choice, verbatim.
+"extras": any other labeled block that belongs to the question (Test-Taking Strategy, Client Need, Topic, Clinical Judgment, Tip), with its heading exactly as printed.
+
+Return ONLY this JSON object, with no commentary:
+{
+  "items": [
+    {
+      "kind": "question",
+      "number": "printed question number as a string, or null",
+      "format": "multiple_choice",
+      "stem": "question text verbatim, or null",
+      "options": [{"label": "A", "text": "verbatim"}],
+      "labels_assigned": false,
+      "answer": null,
+      "answer_evidence": null,
+      "option_rationales": [{"label": "A", "verdict": "incorrect", "text": "verbatim"}],
+      "rationale": null,
+      "extras": [{"heading": "Test-Taking Strategy", "text": "verbatim"}],
+      "exhibit": null,
+      "cut_off": false,
+      "legibility": "clean or uncertain or unreadable",
+      "unreadable": ["short description of each thing you could not read"]
+    }
+  ]
+}
+If the image contains no question content, return {"items": []}.`;
+const I2A_ANSWER_PROMPT=`You are an NCLEX-RN item writer and nursing educator. For each question below, determine the correct answer and explain every option.
+
+Rules:
+- Answer by current NCLEX-RN standards and current evidence-based nursing practice.
+- "select_all": list EVERY correct option. "ordering": give the full sequence of option labels. "fill_in": give the value with its unit and show the calculation in "rationale".
+- Write a rationale for EVERY option (except fill_in): why it is correct or why it is wrong, one or two sentences, tied to the specific clinical facts in the stem.
+- Use only facts stated in the stem. Do not assume labs, ages, orders, or history that are not there.
+- If a KEYED ANSWER is given, it came from the source material. Explain it. If you are confident it is wrong, still explain the keyed answer's options as asked, set "agrees_with_key" to false, and give the reason in "key_dispute". Otherwise "agrees_with_key" is true. With no keyed answer it is null.
+
+Return ONLY JSON:
+{"answers": [{"id": "the question id", "answer": "B", "option_rationales": [{"label": "A", "verdict": "correct or incorrect", "text": "..."}], "rationale": "one short paragraph on the key concept", "strategy": "one test-taking strategy, or null", "agrees_with_key": null, "key_dispute": null}]}
+
+QUESTIONS:
+`;
+const I2A_KINDS=['question','answer_only','continuation'],I2A_FORMATS=['multiple_choice','select_all','ordering','fill_in','other'];
+// Never trust the model's JSON shape.
+function i2aS(v){
+  if(v===null||v===undefined)return '';
+  if(Array.isArray(v))return v.map(i2aS).filter(Boolean).join(', ');
+  if(typeof v==='boolean')return v?'True':'False';
+  return n2aPyStrip(String(v));
+}
+function i2aNormalizeItem(it){
+  if(!it||typeof it!=='object'||Array.isArray(it))return null;
+  let kind=i2aS(it.kind).toLowerCase();kind=I2A_KINDS.includes(kind)?kind:'question';
+  const fmt=i2aS(it.format).toLowerCase(),label=v=>i2aS(v).toUpperCase().replace(/[.)]+$/,'');
+  const opts=[];
+  for(const o of Array.isArray(it.options)?it.options:[])if(o&&typeof o==='object'&&i2aS(o.text))opts.push([label(o.label)||String.fromCharCode(65+opts.length),i2aS(o.text)]);
+  const whys=[];
+  for(const o of Array.isArray(it.option_rationales)?it.option_rationales:[])if(o&&typeof o==='object'&&i2aS(o.text)){const v=i2aS(o.verdict).toLowerCase();whys.push([label(o.label),['correct','incorrect'].includes(v)?v:'',i2aS(o.text)]);}
+  const extras=(Array.isArray(it.extras)?it.extras:[]).filter(e=>e&&typeof e==='object'&&i2aS(e.text)).map(e=>[i2aS(e.heading)||'Note',i2aS(e.text)]);
+  const leg=i2aS(it.legibility).toLowerCase(),num=i2aS(it.number).match(/\d+/); // "Q12", "Question 12", "12." -> "12"
+  return {
+    kind,number:num?(num[0].replace(/^0+/,'')||'0'):null,
+    format:I2A_FORMATS.includes(fmt)?fmt:(/select all/i.test(i2aS(it.stem))?'select_all':opts.length?'multiple_choice':'other'),
+    stem:i2aS(it.stem),options:opts,labels_assigned:!!it.labels_assigned,
+    answer:i2aS(it.answer),answer_evidence:i2aS(it.answer_evidence),
+    whys,rationale:i2aS(it.rationale),extras,exhibit:i2aS(it.exhibit),cut_off:!!it.cut_off,
+    legibility:['clean','uncertain','unreadable'].includes(leg)?leg:'uncertain',
+    unreadable:Array.isArray(it.unreadable)?it.unreadable.map(i2aS).filter(Boolean):[],
+  };
+}
+function i2aNormalizeTranscript(obj){
+  const items=obj&&typeof obj==='object'&&!Array.isArray(obj)?obj.items:Array.isArray(obj)?obj:null;
+  if(!Array.isArray(items))throw Object.assign(new Error('reply was not an item list'),{i2aContent:true});
+  return items.map(i2aNormalizeItem).filter(Boolean);
+}
+// Copy answer/rationale fields from a continuation or key entry into a question.
+function i2aMergeAnswer(q,src,image){
+  const conflict=!!(q.answer&&src.answer&&q.answer!==src.answer);
+  if(src.answer&&!q.answer){q.answer=src.answer;q.answer_evidence=src.answer_evidence;q.answer_image=image;}
+  const have=new Set(q.whys.map(w=>w[0]));
+  q.whys=[...q.whys,...src.whys.filter(w=>!have.has(w[0]))];
+  if(src.rationale)q.rationale=(q.rationale+'\n\n'+src.rationale).trim();
+  q.extras=[...q.extras,...src.extras];q.unreadable=[...q.unreadable,...src.unreadable];
+  if(src.legibility!=='clean')q.legibility=src.legibility;
+  return conflict;
+}
+// transcripts: [[imageName, items]] in page order. Returns {questions, warnings}.
+function i2aAssemble(transcripts){
+  const questions=[],keys=[],warnings=[];
+  for(const [img,items] of transcripts){
+    items.forEach((src,idx)=>{
+      const it={...src},where=img+' item '+(idx+1);
+      if(it.kind==='continuation'){
+        const prev=questions.length?questions[questions.length-1]:null;
+        const renumbered=it.number&&prev&&prev.number&&it.number!==prev.number;
+        if(idx===0&&prev&&prev.images[prev.images.length-1]!==img&&!renumbered){
+          if(it.stem&&!prev.options.length)prev.stem=(prev.stem+' '+it.stem).trim();
+          const have=new Set(prev.options.map(([l])=>l));
+          prev.options=[...prev.options,...it.options.filter(o=>!have.has(o[0]))];
+          if(i2aMergeAnswer(prev,it,img)){warnings.push(where+': continuation gives answer '+it.answer+' but '+prev.images[0]+' already said '+prev.answer+'.');prev.flags.push('conflicting answers across images');}
+          prev.images.push(img);prev.cut_off=it.cut_off;return;
+        }
+        if(!it.number){warnings.push(where+': text continued from an earlier image that is not in this run - ignored.');return;}
+        it.kind='answer_only';
+      }
+      if(it.kind==='answer_only'){
+        if(!it.number){warnings.push(where+': answer-key entry with no question number - ignored.');return;}
+        keys.push({...it,image:img,after:questions.length,used:false});return;
+      }
+      questions.push({...it,images:[img],answer_image:it.answer?img:'',flags:[],ai:null});
+    });
+  }
+  questions.forEach((q,qi)=>{
+    if(q.answer||!q.number)return;
+    const cands=keys.filter(k=>!k.used&&k.number===q.number),later=cands.filter(k=>k.after>qi),pick=(later.length?later:cands)[0];
+    if(pick){
+      if(later.length>1)warnings.push('Q'+q.number+' ('+q.images[0]+'): '+later.length+' answer-key entries carry this number; used the one in '+pick.image+'.');
+      pick.used=true;i2aMergeAnswer(q,pick,pick.image);
+    }
+  });
+  const unused=keys.filter(k=>!k.used);
+  if(unused.length)warnings.push('answer-key entries with no matching question in this run: '+unused.map(k=>k.number+' ('+k.image+')').join(', ')+'.');
+  return {questions,warnings};
+}
+// 'B' / 'A, C, and E' / '1 and 4' -> labels; falls back to matching the choice text.
+function i2aAnswerLabels(answer,options){
+  const m=answer.trim().match(/^\(?([A-Z1-9])\)?((?:(?:[ \t]*[,;/&][ \t]*(?:and[ \t]+)?|[ \t]+and[ \t]+|[ \t]+)\(?[A-Z1-9]\b\)?)*)(?=$|[ \t.:—–(\-])/i);
+  const valid=new Set(options.map(([l])=>l)),labels=m?(m[0].match(/\b[A-Z1-9]\b/gi)||[]).map(x=>x.toUpperCase()):[];
+  if(labels.length&&(!valid.size||labels.every(l=>valid.has(l))))return labels;
+  const norm=s=>s.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  const hits=options.filter(([,t])=>norm(t)&&norm(answer).includes(norm(t))).map(([l])=>l);
+  return hits.length===1?hits:labels;
+}
+// 'answer' = no answer anywhere; 'rationale' = keyed but nothing explains it.
+function i2aNeedsAi(q){
+  if(q.format==='other'||q.exhibit)return null;
+  if(!q.answer)return 'answer';
+  if(!q.whys.length&&!q.rationale)return 'rationale';
+  return null;
+}
+// Same basis as nclex2anki, so the same question imported both ways is one note.
+function i2aGuid(q){return 'n2a'+n2aSha1Hex(n2aGuidBasis(q.stem+'\x1f'+q.options.map(([,t])=>t).join('\x1f')+'\x1f')).slice(0,20);}
+function i2aQid(q){return i2aGuid(q).slice(3,15);}
+function i2aAnswerBatchText(batch){
+  const lines=[];
+  for(const q of batch){
+    lines.push('id: '+i2aQid(q)+'\nformat: '+q.format+'\n'+q.stem);
+    lines.push(...q.options.map(([l,t])=>l+'. '+t));
+    lines.push(q.answer?'KEYED ANSWER: '+q.answer+'\n':'KEYED ANSWER: none\n');
+  }
+  return I2A_ANSWER_PROMPT+lines.join('\n');
+}
+// Apply cached AI answers (cache: {qid+model: answer object}) to the questions that need them.
+function i2aApplyAi(questions,cache,model){
+  const warnings=[];
+  for(const q of questions.filter(i2aNeedsAi)){
+    const a=cache[i2aQid(q)+model];
+    if(!a||typeof a!=='object'||Array.isArray(a))continue;
+    const whys=(Array.isArray(a.option_rationales)?a.option_rationales:[]).filter(w=>w&&typeof w==='object'&&i2aS(w.text)).map(w=>[i2aS(w.label).toUpperCase(),i2aS(w.verdict).toLowerCase(),i2aS(w.text)]);
+    q.ai={mode:i2aNeedsAi(q),answer:i2aS(a.answer),whys,rationale:i2aS(a.rationale),strategy:i2aS(a.strategy),agrees:a.agrees_with_key,dispute:i2aS(a.key_dispute)};
+    if(q.ai.mode==='answer'){q.answer=q.ai.answer;q.answer_evidence='ai';}
+    else{
+      q.whys=whys;q.rationale=q.ai.rationale;
+      if(q.ai.strategy)q.extras=[...q.extras,['Strategy (AI)',q.ai.strategy]];
+      if(q.ai.agrees===false){q.flags.push('AI disputes the keyed answer');warnings.push('Q'+(q.number||'?')+' ('+q.images[0]+'): AI disputes the keyed answer '+q.answer+': '+q.ai.dispute.slice(0,140));}
+    }
+  }
+  return warnings;
+}
+const I2A_AI_STYLE='margin:.3em 0 .6em;padding:.35em .6em;border:1px dashed #b07d1a;border-radius:4px;font-size:.88em';
+const I2A_NCLEX_TYPE={multiple_choice:'MCQ',select_all:'SATA',ordering:'Ordering',fill_in:'Calculation',other:'Unknown'};
+function i2aRenderFront(q){
+  const p=["<div style='text-align:left'>",'<div>'+n2aEsc(q.stem)+'</div>'];
+  if(q.exhibit)p.push("<div style='margin-top:.5em;font-size:.9em'><i>[Exhibit: "+n2aEsc(q.exhibit)+' - see '+n2aEsc(q.images[0])+']</i></div>');
+  if(q.options.length){p.push("<div style='margin-top:.8em'>");p.push(...q.options.map(([l,t])=>"<div style='margin:.4em 0'><b>"+n2aEsc(l)+'.</b> '+n2aEsc(t)+'</div>'));p.push('</div>');}
+  if(q.format==='fill_in')p.push("<div style='margin-top:.8em'><i>Answer: ______</i></div>");
+  p.push('</div>');return p.join('');
+}
+function i2aRenderBack(q,labels){
+  const opts=new Map(q.options),ai=q.ai;
+  let head='Answer: '+q.answer;
+  if(labels.length===1&&opts.has(labels[0])&&!q.answer.toLowerCase().includes(opts.get(labels[0]).toLowerCase()))head+=' — '+opts.get(labels[0]);
+  const p=["<div style='text-align:left'>"];
+  if(ai&&ai.mode==='answer')p.push("<div style='"+I2A_AI_STYLE+"'>⚠ <b>AI-generated answer and rationales</b> - your images did not show the answer. Check it against your source.</div>");
+  else if(ai)p.push("<div style='"+I2A_AI_STYLE+"'>Answer from your source; <b>rationales are AI-written</b>.</div>");
+  p.push("<div style='font-size:1.05em'><b>"+n2aEsc(head)+'</b></div>');
+  if(ai&&ai.agrees===false&&ai.dispute)p.push("<div style='"+I2A_AI_STYLE+"'>⚠ <b>AI disagrees with this key:</b> "+n2aEsc(ai.dispute)+'</div>');
+  const why=new Map((ai&&ai.mode==='answer'?ai.whys:q.whys).map(w=>[w[0],w])),ordering=q.format==='ordering';
+  if(q.options.length&&!ordering&&(why.size||labels.length)){
+    for(const [lab,txt] of q.options){
+      const w=why.get(lab),correct=labels.includes(lab);
+      if(!w&&!correct)continue; // only a general rationale: highlight the key
+      let row='<b>'+(correct?'✓':'✗')+' '+n2aEsc(lab)+'.</b> '+n2aEsc(txt);
+      if(w)row+="<div style='margin-top:.25em'>"+n2aEsc(w[2])+'</div>';
+      p.push("<div style='"+(correct?N2A_OK_STYLE:N2A_NO_STYLE)+"'>"+row+'</div>');
+    }
+  }else if(ordering&&why.size)p.push(...[...why].map(([l,w])=>"<div style='margin:.35em 0'><b>"+n2aEsc(l)+'.</b> '+n2aEsc(w[2])+'</div>'));
+  const rationale=ai&&ai.mode==='answer'?ai.rationale:q.rationale;
+  if(rationale)p.push("<div style='margin-top:.7em'><b>Rationale:</b> "+n2aEsc(rationale)+'</div>');
+  const extras=[...q.extras];
+  if(ai&&ai.mode==='answer'&&ai.strategy)extras.push(['Strategy (AI)',ai.strategy]);
+  for(const [h,text] of extras)p.push("<div style='margin-top:.6em'><b>"+n2aEsc(h)+':</b> '+n2aEsc(text)+'</div>');
+  const src=q.images.join(', ')+(q.answer_image&&!q.images.includes(q.answer_image)?' (answer: '+q.answer_image+')':'');
+  p.push("<div style='margin-top:.7em;font-size:.8em;opacity:.65'><i>From: "+n2aEsc(src)+'</i></div>');
+  p.push('</div>');return p.join('');
+}
+function i2aBuildCards(questions,sourceTag,extraTags=[]){
+  const cards=[],warnings=[],seen=new Set();
+  for(const q of questions){
+    const where='Q'+(q.number||'?')+' ('+q.images[0]+')';
+    if(!q.stem){warnings.push(where+': SKIPPED - no question stem was readable.');continue;}
+    if(!q.answer){
+      const why=q.exhibit?' (has an exhibit, so it is not sent for an AI answer)':q.format==='other'?' (unsupported format)':' - tick "Have Gemini answer" to have Gemini answer it';
+      warnings.push(where+': SKIPPED - no answer in the images'+why+'.');continue;
+    }
+    const flags=[...q.flags],tags=[];
+    const labels=q.options.length&&q.format!=='ordering'?i2aAnswerLabels(q.answer,q.options):[];
+    const valid=new Set(q.options.map(([l])=>l)),choice=['multiple_choice','select_all'].includes(q.format);
+    if(choice&&!q.options.length)flags.push('no answer choices were read');
+    if(q.options.length&&choice){
+      if(!labels.length)flags.push('could not tell which choice the answer '+n2aRepr(q.answer.slice(0,40))+' means');
+      else if(labels.some(l=>!valid.has(l)))flags.push('answer '+labels.join(',')+' is not among the choices');
+      else if(q.format==='multiple_choice'&&labels.length>1)flags.push('one-answer item keyed with '+labels.length+' answers');
+      const whys=q.ai&&q.ai.mode==='answer'?q.ai.whys:q.whys;
+      const bad=whys.filter(w=>w[1]&&(w[1]==='correct')!==labels.includes(w[0])).map(w=>w[0]);
+      if(labels.length&&bad.length)flags.push('rationale verdict for '+bad.join(', ')+' disagrees with the answer');
+      if(q.ai&&q.ai.mode==='answer'){const got=new Set(whys.map(w=>w[0])),missing=[...valid].filter(l=>!got.has(l)).sort();if(missing.length)flags.push('AI gave no rationale for '+missing.join(', '));}
+    }
+    if(q.legibility!=='clean'||q.unreadable.length||(q.stem+q.answer+q.options.map(([,t])=>t).join('')).includes('[?]'))flags.push('Gemini could not read everything: '+(q.unreadable.join('; ')||q.legibility));
+    if(q.cut_off)flags.push('cut off at the bottom of '+q.images[q.images.length-1]+' and not continued on the next image');
+    if(q.exhibit){tags.push('Exhibit');flags.push('depends on an exhibit ('+q.exhibit+') that is not on the card');}
+    if(q.answer_evidence==='marked')tags.push('Answer::Marked');
+    if(!q.whys.length&&!q.rationale&&!q.ai){tags.push('NoRationale');warnings.push(where+': no rationale in the images; card has the answer only.');}
+    if(q.ai)tags.push(q.ai.mode==='answer'?'AI_Answer':'AI_Rationale');
+    tags.push('NCLEX_Type::'+I2A_NCLEX_TYPE[q.format]);
+    if(sourceTag)tags.push('Source::'+n2aTagSafe(sourceTag));
+    tags.push(...extraTags.filter(t=>t.trim()).map(n2aTagSafe));
+    if(flags.length){tags.push('NeedsReview');warnings.push(...flags.map(f=>where+': '+f+'.'));}
+    const guid=i2aGuid(q);
+    if(seen.has(guid)){warnings.push(where+': duplicate of an earlier question - dropped.');continue;}
+    seen.add(guid);
+    cards.push({front:i2aRenderFront(q),back:i2aRenderBack(q,labels),tags,guid,type:I2A_NCLEX_TYPE[q.format]});
+  }
+  return {cards,warnings};
+}
+function i2aNaturalKey(name){return String(name).toLowerCase().split(/(\d+)/).map(t=>/^\d+$/.test(t)?parseInt(t,10):t);}
+function i2aNaturalCompare(a,b){ // "shot 2" before "shot 10"
+  const x=i2aNaturalKey(a),y=i2aNaturalKey(b);
+  for(let i=0;i<Math.min(x.length,y.length);i++){if(x[i]===y[i])continue;if(typeof x[i]===typeof y[i])return x[i]<y[i]?-1:1;return typeof x[i]==='number'?-1:1;}
+  return x.length-y.length;
+}
+function i2aEmptyCache(){return {tool:'img2anki '+I2A_VERSION,images:{},ai:{}};}
+// Accepts the script's <output>_transcripts.json as well as one saved from here.
+function i2aMergeCache(cache,loaded){
+  if(!loaded||typeof loaded!=='object'||!loaded.images||typeof loaded.images!=='object'||Array.isArray(loaded.images))throw new Error('not an img2anki transcripts file');
+  let n=0;
+  for(const [k,v] of Object.entries(loaded.images))if(v&&typeof v==='object'&&'items' in v){cache.images[k]=v;n++;}
+  if(loaded.ai&&typeof loaded.ai==='object'&&!Array.isArray(loaded.ai))Object.assign(cache.ai,loaded.ai);
+  return n;
+}
+// The whole image run. images: [{name, key, payload: async()=>{mimeType,data,resized}}], already in
+// page order. gemini(parts,thinkingLevel) resolves to parsed JSON or throws; halts(e) says whether
+// an error stops the run (quota, cancel, rejected key) rather than failing one image.
+async function i2aConvert({images,gemini,halts,model,cache,deck,extraTags=[],sourceTag='',aiAnswers=false,thinking='low',log=()=>{},onProgress=()=>{}}){
+  const warnings=[],result={cards:[],warnings,stopped:null,calls:0,images:images.length,needsAi:0,ai:0,needsReview:0,deck};
+  if(!images.length){warnings.push('No images to read.');return result;}
+  const transcripts=[];
+  for(let n=0;n<images.length;n++){
+    const im=images[n],key=im.key+'|'+model+'|'+I2A_PROMPT_VERSION,hit=cache.images[key];onProgress(n,images.length);
+    if(hit){log('['+(n+1)+'/'+images.length+'] '+im.name+' (cached)');try{transcripts.push([im.name,i2aNormalizeTranscript(hit.items)]);}catch(e){warnings.push(im.name+': cached transcript unreadable - '+e.message);transcripts.push([im.name,[]]);}continue;}
+    log('['+(n+1)+'/'+images.length+'] '+im.name);
+    let obj,items;
+    try{
+      const payload=await im.payload();
+      if(payload.resized)log('    resized to '+payload.resized.to);
+      obj=await gemini([{inlineData:{mimeType:payload.mimeType,data:payload.data}},{text:I2A_TRANSCRIBE_PROMPT}],thinking);
+      result.calls++;items=i2aNormalizeTranscript(obj);
+    }catch(e){
+      if(halts(e)){result.stopped=(e.name==='AbortError'?'Cancelled.':e.message)+' Stopped at '+im.name+'; '+(images.length-n)+' image(s) left. Run again later - finished images are cached.';break;}
+      warnings.push(im.name+': could not be read - '+(e.message||String(e)));transcripts.push([im.name,[]]);continue;
+    }
+    cache.images[key]={file:im.name,model,items:obj&&typeof obj==='object'&&!Array.isArray(obj)?obj.items:obj};
+    if(!items.length)warnings.push(im.name+': no question content found.');
+    transcripts.push([im.name,items]);
+  }
+  onProgress(transcripts.length,images.length);
+  if(result.stopped){warnings.unshift(result.stopped);if(!transcripts.length)return result;}
+  const {questions,warnings:w}=i2aAssemble(transcripts);warnings.push(...w);
+  const todo=questions.filter(i2aNeedsAi);result.needsAi=todo.length;
+  if(todo.length&&aiAnswers&&!result.stopped){
+    const pending=todo.filter(q=>!((i2aQid(q)+model) in cache.ai));
+    try{
+      for(let i=0;i<pending.length;i+=I2A_AI_BATCH){
+        const batch=pending.slice(i,i+I2A_AI_BATCH);
+        log('  AI answers '+(i+1)+'-'+(i+batch.length)+' of '+pending.length);
+        let out;
+        try{out=await gemini([{text:i2aAnswerBatchText(batch)}],'high');result.calls++;}
+        catch(e){if(halts(e))throw e;warnings.push('AI answers for '+batch.length+' question(s) failed: '+(e.message||String(e)));continue;}
+        const got=new Map((out&&Array.isArray(out.answers)?out.answers:[]).filter(a=>a&&typeof a==='object').map(a=>[String(a.id),a]));
+        for(const q of batch){if(got.has(i2aQid(q)))cache.ai[i2aQid(q)+model]=got.get(i2aQid(q));else warnings.push('Q'+(q.number||'?')+' ('+q.images[0]+'): AI returned no answer for it.');}
+      }
+    }catch(e){warnings.unshift((e.name==='AbortError'?'Cancelled.':e.message)+' AI answers unfinished; run again later to finish them.');}
+    warnings.push(...i2aApplyAi(questions,cache.ai,model));
+  }
+  const built=i2aBuildCards(questions,sourceTag,extraTags);
+  warnings.push(...built.warnings);
+  result.cards=built.cards;result.needsReview=built.cards.filter(c=>c.tags.includes('NeedsReview')).length;result.ai=built.cards.filter(c=>c.tags.includes('AI_Answer')).length;
+  return result;
+}
+
+async function i2aFileKey(file){
+  // The script keys its cache on the SHA-256 of the image bytes; the same key lets a saved
+  // transcripts file from either side skip images already read.
+  try{const d=await globalThis.crypto.subtle.digest('SHA-256',await file.arrayBuffer());return Array.from(new Uint8Array(d),x=>x.toString(16).padStart(2,'0')).join('');}
+  catch(e){return 'file:'+file.name+':'+file.size+':'+file.lastModified;}
+}
+// Only an image over the inline ceiling is touched, as in the script; the suite's card resizer
+// then brings its long edge to 3000px so small print and digits stay legible.
+async function i2aImagePayload(file){
+  if(file.size<=I2A_MAX_RAW_BYTES)return {mimeType:CARD_MIME[getExt(file.name)]||'image/jpeg',data:await cardFileToBase64(file)};
+  const p=await cardFilePayload(file);
+  if(!p.resized)throw new Error((file.size/1048576).toFixed(0)+" MB is over Gemini's inline limit and could not be shrunk here. Export a smaller image.");
+  return p;
+}
+const N2A_MODES=[
+  {id:'worksheet',icon:'📝',title:'NCLEX → Anki converter',desc:'NCLEX Generator worksheet or Extractor export (.md / .txt)',deck:'NCLEX'},
+  {id:'images',icon:'📷',title:'NCLEX images → Anki flashcards',desc:'Question screenshots or photos, read by Gemini',deck:'NCLEX'},
+  {id:'extract',icon:'📑',title:'NCLEX Extractor → Anki flashcards',desc:'Review-book questions from the Extractor (.md, .txt or Copy)',deck:'NCLEX::Extracted'},
+];
+const N2A_PREVIEW_LIMIT=40;
+const N2A_CARD_POLICY={ALLOWED_TAGS:['div','b','i','br'],ALLOWED_ATTR:['style']};
+function NCLEXToAnki(){
+  const cfg=useConfig();
+  const [mode,setMode]=useState('worksheet');
+  const [decks,setDecks]=useState(()=>Object.fromEntries(N2A_MODES.map(m=>[m.id,m.deck])));
+  const [tagText,setTagText]=useState('');
+  const [textFiles,setTextFiles]=useState({worksheet:[],extract:[]});
+  const [pasted,setPasted]=useState('');
+  const [images,setImages]=useState([]);
+  const [aiAnswers,setAiAnswers]=useState(false);
+  const [sourceTag,setSourceTag]=useState('');
+  const [thinking,setThinking]=useState('low');
+  const [fresh,setFresh]=useState(false);
+  const [results,setResults]=useState({});
+  const [busy,setBusy]=useState(false);
+  const [progress,setProgress]=useState({current:0,total:0});
+  const [note,setNote]=useState('');
+  const [error,setError]=useState('');
+  const [log,pushLog,setLog]=useCappedLog();
+  const [reviewOnly,setReviewOnly]=useState(false);
+  const cacheRef=useRef(i2aEmptyCache());
+  const [cacheCount,setCacheCount]=useState(0);
+  const abortRef=useRef(null),fileRef=useRef(null),imgRef=useRef(null),cacheFileRef=useRef(null);
+  const meta=N2A_MODES.find(m=>m.id===mode),deck=decks[mode].trim()||meta.deck,result=results[mode];
+  const files=mode==='images'?images:textFiles[mode];
+  const extraTags=tagText.split(/\s+/).filter(Boolean);
+  const fileKey=f=>f.name+'|'+f.size+'|'+f.lastModified;
+  const addInputs=fl=>{
+    const picked=Array.from(fl||[]);setNote('');
+    if(mode==='images'){
+      const ok=picked.filter(f=>I2A_IMAGE_EXT.includes(getExt(f.name||''))),bad=picked.filter(f=>!ok.includes(f));
+      if(bad.length)setNote(bad.map(f=>f.name).join(', ')+': not a supported image (jpg, png, webp, heic) - skipped.');
+      setImages(p=>{const have=new Set(p.map(fileKey));return [...p,...ok.filter(f=>!have.has(fileKey(f)))];});
+    }else{
+      const ok=picked.filter(f=>/\.(md|txt|markdown)$/i.test(f.name||'')),bad=picked.filter(f=>!ok.includes(f));
+      if(bad.length)setNote(bad.map(f=>f.name).join(', ')+': not a .md or .txt export - skipped.');
+      setTextFiles(p=>{const have=new Set(p[mode].map(fileKey));return {...p,[mode]:[...p[mode],...ok.filter(f=>!have.has(fileKey(f)))]};});
+    }
+  };
+  const removeFile=i=>mode==='images'?setImages(p=>p.filter((_,j)=>j!==i)):setTextFiles(p=>({...p,[mode]:p[mode].filter((_,j)=>j!==i)}));
+  const clearFiles=()=>{if(mode==='images')setImages([]);else setTextFiles(p=>({...p,[mode]:[]}));if(mode==='extract')setPasted('');setNote('');};
+  const base=f=>f.name.replace(/\.[^.]*$/,'');
+
+  const convertText=async()=>{
+    setError('');
+    const runMode=mode,list=textFiles[runMode],sources=[],readWarnings=[];
+    for(const f of list){
+      if(f.size>50*1024*1024){readWarnings.push(f.name+': could not read (larger than 50 MB).');continue;}
+      try{sources.push({name:base(f),text:await f.text()});}catch(e){readWarnings.push(f.name+': could not read ('+(e.message||e)+').');}
+    }
+    if(runMode==='extract'&&pasted.trim())sources.push({name:'clipboard',text:pasted});
+    const r=runMode==='worksheet'?n2aConvertSources(sources,extraTags):x2aConvertSources(sources,extraTags);
+    const outName=runMode==='worksheet'
+      ?(list.length===1?base(list[0])+'_anki.txt':'nclex_anki.txt')
+      :(list.length===1&&sources.length===1?base(list[0])+'_anki.txt':'nclex_extracted_anki.txt');
+    const cards=r.cards;
+    setResults(p=>({...p,[runMode]:{cards,warnings:[...readWarnings,...r.warnings],deck,outName,text:cards.length?n2aAnkiFileText(cards,deck,runMode==='worksheet'):'',needsReview:cards.filter(c=>c.tags.includes('NeedsReview')).length,ai:0}}));
+  };
+
+  const runImages=async()=>{
+    if(!cfg.apiKey||!images.length||busy)return;
+    setError('');setLog([]);setBusy(true);setProgress({current:0,total:images.length});
+    const ac=new AbortController();abortRef.current=ac;
+    // The script's default model and its thinking levels: low to read images, high to answer.
+    const model=cfg.flashModel;
+    if(fresh){cacheRef.current=i2aEmptyCache();setCacheCount(0);}
+    try{
+      const ordered=[...images].sort((a,b)=>i2aNaturalCompare(a.name,b.name)),prepared=[];
+      for(const f of ordered)prepared.push({name:f.name,key:await i2aFileKey(f),payload:()=>i2aImagePayload(f)});
+      const gemini=async(parts,level)=>{
+        let last=null;
+        const text=await callGemini(cfg.apiKey,model,parts,{thinkingLevel:level,signal:ac.signal,retries:4,onMeta:m=>{last=m;},generationConfig:{responseMimeType:'application/json'}});
+        if(last&&last.truncated)throw new Error('response cut off at the output limit');
+        try{return extractJSON(text);}catch(e){throw new Error(/No JSON/.test(e.message)?"no JSON in Gemini's reply":"malformed JSON in Gemini's reply");}
+      };
+      const r=await i2aConvert({images:prepared,gemini,halts:geminiHaltsBatch,model,cache:cacheRef.current,deck,extraTags,sourceTag:sourceTag.trim(),aiAnswers,thinking,log:m=>pushLog(m),onProgress:(current,total)=>setProgress({current,total})});
+      setCacheCount(Object.keys(cacheRef.current.images).length);
+      setResults(p=>({...p,images:{...r,outName:'nclex_images_anki.txt',text:r.cards.length?n2aAnkiFileText(r.cards,deck,true):''}}));
+    }catch(e){setError(e.message||String(e));}
+    finally{abortRef.current=null;setBusy(false);}
+  };
+
+  const saveTranscripts=()=>downloadBlob(new Blob([JSON.stringify(cacheRef.current,null,1)],{type:'application/json'}),'nclex_images_anki_transcripts.json');
+  const loadTranscripts=async fl=>{
+    const f=fl&&fl[0];if(!f)return;setNote('');
+    try{const n=i2aMergeCache(cacheRef.current,JSON.parse(await f.text()));setCacheCount(Object.keys(cacheRef.current.images).length);setNote('Loaded '+n+' cached transcript(s) from '+f.name+'. Images that match are not sent to Gemini again.');}
+    catch(e){setNote(f.name+': '+(e.message||String(e)));}
+  };
+
+  const canRun=mode==='images'?!!cfg.apiKey&&images.length>0&&!busy:mode==='extract'?(textFiles.extract.length>0||!!pasted.trim()):textFiles.worksheet.length>0;
+  const shown=useMemo(()=>{const list=result?result.cards:[];return (reviewOnly?list.filter(c=>c.tags.includes('NeedsReview')):list);},[result,reviewOnly]);
+  const types=useMemo(()=>{const t={};for(const c of result?result.cards:[])t[c.type]=(t[c.type]||0)+1;return Object.entries(t).sort(([a],[b])=>a<b?-1:1);},[result]);
+
+  return <Workbench
+    setupLabel="NCLEX to Anki converter and inputs"
+    resultsLabel="Anki import file"
+    setup={<>
+      <Step n="01" title="Converter" lede="Three converters, one Anki format. Every card gets the same layout, tags and a stable GUID, so importing a corrected file updates the notes instead of duplicating them.">
+        <div className="segmented-control" role="group" aria-label="NCLEX to Anki converter" style={{marginBottom:14}}>
+          {N2A_MODES.map(m=><button key={m.id} aria-pressed={mode===m.id} onClick={()=>{setMode(m.id);setNote('');setReviewOnly(false);}}>
+            <div style={{fontSize:13,fontWeight:600,color:mode===m.id?'var(--text-bright)':'var(--text-dim)'}}>{m.icon} {m.title}</div>
+            <div style={{fontSize:12,color:'var(--text-dim)',marginTop:2}}>{m.desc}</div>
+          </button>)}
+        </div>
+      </Step>
+      <Step n="02" title={mode==='images'?'Question images':'Export files'} note={files.length?files.length+(files.length===1?' file':' files'):'none yet'}
+        lede={mode==='worksheet'?'The .md or .txt download from the NCLEX Generator worksheet or the NCLEX Extractor.':mode==='extract'?"The Extractor's .md download (preferred), its .txt download, or paste what its Copy button copied.":'Screenshots of a question bank, photos of review-book pages, or scans. They are read in file-name order, so a question cut off at the bottom of one image is finished by the next.'}>
+        <div role="button" tabIndex={0} aria-label={mode==='images'?'Add question images':'Add NCLEX export files'} className="upload-zone"
+          onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();(mode==='images'?imgRef:fileRef).current?.click();}}}
+          onClick={()=>(mode==='images'?imgRef:fileRef).current?.click()}
+          onDragOver={e=>{e.preventDefault();e.currentTarget.classList.add('dragover');}} onDragLeave={e=>e.currentTarget.classList.remove('dragover')}
+          onDrop={e=>{e.preventDefault();e.currentTarget.classList.remove('dragover');addInputs(e.dataTransfer.files);}}>
+          <input aria-label="NCLEX export files" ref={fileRef} type="file" accept=".md,.txt,.markdown" multiple style={{display:'none'}} onChange={e=>{addInputs(e.target.files);e.target.value='';}}/>
+          <input aria-label="Question images" ref={imgRef} type="file" accept=".jpg,.jpeg,.png,.webp,.heic,.heif" multiple style={{display:'none'}} onChange={e=>{addInputs(e.target.files);e.target.value='';}}/>
+          <div style={{fontSize:28,marginBottom:4,opacity:.6}}>{meta.icon}</div>
+          <p style={{fontSize:12,color:'var(--text)'}}>Drop {mode==='images'?'images':'.md / .txt files'} or <strong style={{color:'var(--accent)'}}>click to browse</strong></p>
+        </div>
+        {files.map((f,i)=><div className="file-chip" key={fileKey(f)}><div className="f-icon">{mode==='images'?'IMG':getExt(f.name).toUpperCase()}</div><span className="f-name">{f.name}</span><span className="f-size">{formatSize(f.size)}</span><button className="f-rm" aria-label={'Remove '+f.name} disabled={busy} onClick={()=>removeFile(i)}>×</button></div>)}
+        {mode==='extract'&&<div className="sb-field" style={{marginTop:10}}><label htmlFor="n2a-paste">Or paste the Extractor's Copy output</label><textarea id="n2a-paste" rows={5} value={pasted} onChange={e=>setPasted(e.target.value)} placeholder="Press Copy in the NCLEX Extractor, then paste here" style={{width:'100%',fontFamily:'JetBrains Mono',fontSize:12}}/></div>}
+        {note&&<div style={{fontSize:12,color:'var(--accent-warm)',marginTop:6,lineHeight:1.5}}>{note}</div>}
+      </Step>
+      <Step n="03" title="Anki deck and tags">
+        <div className="sb-field"><label htmlFor="n2a-deck">Deck (use :: for subdecks)</label><input id="n2a-deck" type="text" value={decks[mode]} placeholder={meta.deck} onChange={e=>{const v=e.target.value;setDecks(p=>({...p,[mode]:v}));}}/></div>
+        <div className="sb-field" style={{marginTop:8}}><label htmlFor="n2a-tags">Extra tags for every card</label><input id="n2a-tags" type="text" value={tagText} placeholder="e.g. exam2 cardiac" onChange={e=>setTagText(e.target.value)}/><div style={{fontSize:12,color:'var(--text-dim)',marginTop:2}}>Separate tags with spaces.</div></div>
+        {mode==='images'&&<div className="sb-field" style={{marginTop:8}}><label htmlFor="n2a-source">Source tag (optional)</label><input id="n2a-source" type="text" value={sourceTag} placeholder="e.g. Saunders_Ch12" onChange={e=>setSourceTag(e.target.value)}/></div>}
+      </Step>
+      {mode==='images'&&<Disclose summary="Gemini reading" note={(aiAnswers?'AI answers on':'AI answers off')+' · '+thinking+' · '+cacheCount+' cached'}>
+        <label style={{display:'flex',gap:7,alignItems:'flex-start',fontSize:12,color:'var(--text)',cursor:'pointer',lineHeight:1.5}}>
+          <input type="checkbox" checked={aiAnswers} onChange={e=>setAiAnswers(e.target.checked)} style={{marginTop:3}}/>
+          <span><b>Have Gemini answer</b> questions whose answer or rationale is not in the images. Those cards say so on the back and are tagged AI_Answer / AI_Rationale. Check them against your source.</span>
+        </label>
+        <div className="sb-field" style={{marginTop:10}}><label htmlFor="n2a-thinking">Thinking level for reading images</label><select id="n2a-thinking" value={thinking} onChange={e=>setThinking(e.target.value)}>{['low','medium','high'].map(v=><option key={v} value={v}>{v}{v==='low'?' (default)':''}</option>)}</select></div>
+        <div style={{fontSize:12,color:'var(--text-dim)',marginTop:6,lineHeight:1.5}}>Model: {cfg.flashModel} (the Flash model in Settings). One call per image, plus one per 8 questions for AI answers.</div>
+        <label style={{display:'flex',gap:7,alignItems:'center',fontSize:12,color:'var(--text)',cursor:'pointer',marginTop:10}}><input type="checkbox" checked={fresh} onChange={e=>setFresh(e.target.checked)}/>Ignore cached transcripts and re-read every image</label>
+        <div className="act-row" style={{marginTop:10}}>
+          <button className="btn-secondary" onClick={saveTranscripts} disabled={!cacheCount}>⬇ Save transcripts</button>
+          <button className="btn-secondary" onClick={()=>cacheFileRef.current?.click()} disabled={busy}>⬆ Load transcripts</button>
+          <input aria-label="Transcripts file" ref={cacheFileRef} type="file" accept=".json" style={{display:'none'}} onChange={e=>{loadTranscripts(e.target.files);e.target.value='';}}/>
+        </div>
+        <div style={{fontSize:12,color:'var(--text-dim)',marginTop:6,lineHeight:1.5}}>Transcripts are kept while this page is open, so a run stopped by a quota limit resumes where it stopped. Save them to resume another day; img2anki.py's _transcripts.json loads here too.</div>
+      </Disclose>}
+    </>}
+    action={<>
+      <div className="act-row">
+        <button className="btn-primary" disabled={!canRun} onClick={mode==='images'?runImages:convertText}>
+          {mode==='images'?(busy?'⏳ Reading images...':'📷 Read '+images.length+' image'+(images.length!==1?'s':'')+' → Anki'):'🔄 Convert to Anki'}
+        </button>
+        {busy&&mode==='images'&&<button className="btn-danger" onClick={()=>abortRef.current?.abort()}>Cancel</button>}
+      </div>
+      <div className="act-row">
+        {(files.length>0||(mode==='extract'&&pasted))&&!busy&&<button className="btn-secondary" onClick={clearFiles}>Clear</button>}
+        {mode==='images'&&!cfg.apiKey&&<span className="act-note">Add your Gemini API key in Settings to read images.</span>}
+      </div>
+    </>}
+  >
+    {error&&<div className="error-banner"><span>❌</span>{error}</div>}
+    {mode==='images'&&(busy||log.length>0)&&<RunStatus label="Reading images" value={progress.current} max={progress.total||1} caption={busy?'Image '+Math.min(progress.current+1,progress.total)+'/'+progress.total:'Done'}>
+      <details className="disclose" style={{marginBottom:0}}><summary>Run log<span className="disclose-note">{log.length} line(s)</span></summary><div>
+        <div className="log-stream">{log.map((l,i)=><div key={i}>{l}</div>)}</div>
+      </div></details>
+    </RunStatus>}
+    {result&&<>
+      <ResultsHead title="Anki import file" count={<><b>{result.cards.length}</b> card{result.cards.length!==1?'s':''}</>}>
+        <button className="btn-primary" disabled={!result.text} onClick={()=>downloadBlob(new Blob([result.text],{type:'text/plain;charset=utf-8'}),result.outName)}>⬇ {result.outName}</button>
+      </ResultsHead>
+      {result.cards.length>0?<div className="tip-banner"><span>✓</span><div>
+        <div><b>{result.cards.length}</b> card(s) for deck <b>{result.deck}</b>{types.length>0&&<> · {types.map(([k,v])=>k+' '+v).join(', ')}</>}</div>
+        {result.ai>0&&<div>{result.ai} answered by AI (tag:AI_Answer) - check them against your source.</div>}
+        {result.needsReview>0&&<div>{result.needsReview} tagged NeedsReview (search tag:NeedsReview in the Anki browser).</div>}
+        <div>Import: Anki → File → Import → pick the file. Deck, note type and tags are preset.</div>
+      </div></div>:<div className="error-banner"><span>⚠</span><div>No cards written.{result.needsAi>0&&!aiAnswers?' '+result.needsAi+' question(s) show no answer in the images; tick "Have Gemini answer" and run again (images already read are not sent again).':''}</div></div>}
+      {result.warnings.length>0&&<Panel title={result.warnings.length+' warning(s)'} className="flat">
+        <div className="log-stream" style={{maxHeight:260,overflowY:'auto'}}>{result.warnings.map((w,i)=><div key={i}>- {w}</div>)}</div>
+      </Panel>}
+      {result.cards.length>0&&<Panel title="Card preview" className="flat" actions={result.needsReview>0&&<label style={{display:'flex',gap:6,alignItems:'center',fontSize:12,cursor:'pointer'}}><input type="checkbox" checked={reviewOnly} onChange={e=>setReviewOnly(e.target.checked)}/>NeedsReview only</label>}>
+        {shown.slice(0,N2A_PREVIEW_LIMIT).map(c=><div key={c.guid} style={{border:'1px solid var(--border)',borderRadius:8,padding:12,marginBottom:10,background:'var(--bg-card)'}}>
+          <div style={{fontSize:13,lineHeight:1.55}} dangerouslySetInnerHTML={{__html:DOMPurify.sanitize(c.front,N2A_CARD_POLICY)}}/>
+          <div style={{borderTop:'1px dashed var(--border)',margin:'10px 0'}}/>
+          <div style={{fontSize:13,lineHeight:1.55}} dangerouslySetInnerHTML={{__html:DOMPurify.sanitize(c.back,N2A_CARD_POLICY)}}/>
+          <div style={{fontFamily:'JetBrains Mono',fontSize:11,color:c.tags.includes('NeedsReview')?'var(--accent-warm)':'var(--text-dim)',marginTop:8,overflowWrap:'anywhere'}}>{c.tags.join(' ')}</div>
+        </div>)}
+        {shown.length>N2A_PREVIEW_LIMIT&&<div style={{fontSize:12,color:'var(--text-dim)'}}>Showing the first {N2A_PREVIEW_LIMIT} of {shown.length}. The download has every card.</div>}
+      </Panel>}
+    </>}
+    {!result&&!(mode==='images'&&(busy||log.length>0))&&<EmptyState mark="⇄" title={meta.title}
+      note={mode==='worksheet'?'Turns an NCLEX Generator worksheet or NCLEX Extractor export into one Anki import file: question and choices on the front; the answer, every choice marked right or wrong with its rationale, and the strategy, tip and CJ on the back.':mode==='extract'?'Built for questions pulled out of review books by the NCLEX Extractor. When the book explains each choice, every choice gets its own explanation on the back.':'Gemini copies each image verbatim — it never guesses a number and never supplies an answer the image does not show — then the questions are assembled and checked here.'}
+      steps={mode==='images'?['Add the images (and your API key in Settings).','Optionally let Gemini answer questions the images never answer.','Read the images, then download the .txt and import it in Anki.']:['Add the export'+(mode==='extract'?' or paste the Copy output':'')+'.','Set the deck and any extra tags.','Convert, then download the .txt and import it in Anki (File → Import).']}/>}
   </Workbench>;
 }
 
@@ -11542,7 +12620,7 @@ class BootErrorBoundary extends React.Component{
 
 // v17.3: the six tools take no props, so React.memo lets an App re-render (tab switch, header chip,
 // drawer toggle) skip them; changes to the contexts they consume still reach them.
-const TOOL_COMPONENTS={knowledge:React.memo(KnowledgeBaseBuilder),priority:React.memo(PriorityAnalyzer),anki:React.memo(AnkiGenerator),nclex:React.memo(NCLEXExtractor),nclexgen:React.memo(NCLEXGenerator),cases:React.memo(CaseStudyGenerator)}; // v15: hoisted — was rebuilt on every App render
+const TOOL_COMPONENTS={knowledge:React.memo(KnowledgeBaseBuilder),priority:React.memo(PriorityAnalyzer),anki:React.memo(AnkiGenerator),nclex:React.memo(NCLEXExtractor),nclexgen:React.memo(NCLEXGenerator),cases:React.memo(CaseStudyGenerator),nclex2anki:React.memo(NCLEXToAnki)}; // v15: hoisted — was rebuilt on every App render
 
 function App(){
   const [apiKey,setApiKey]=useState(()=>{try{return sessionStorage.getItem('suite_key')||'';}catch{return'';}});

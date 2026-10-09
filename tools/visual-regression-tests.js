@@ -58,10 +58,11 @@ module.exports=function visualRegressionTests(S,t){
     ['Knowledge Base extraction','Priority analysis','Anki generation','Question extraction','NCLEX question generation']
       .every(name=>S.includes('<RunStatus label="'+name+'"')||S.includes('role="progressbar" aria-label="'+name+'" aria-valuemin={0}')));
   t('v17 shared forms and dense browsers use responsive hooks', ['kb-browser','kb-condition-list','workbench','wb-setup','wb-results','form-grid','stats-grid'].every(name=>S.includes('className="'+name)));
+  // v17.9: seven tools now; the NCLEX to Anki tab uses the same workbench and empty state.
   t('v17 every tool composes the same setup-beside-results workbench',
-    (S.match(/<Workbench\n/g)||[]).length===6&&(S.match(/setupLabel="/g)||[]).length===6&&(S.match(/resultsLabel="/g)||[]).length===6
+    (S.match(/<Workbench\n/g)||[]).length===7&&(S.match(/setupLabel="/g)||[]).length===7&&(S.match(/resultsLabel="/g)||[]).length===7
     &&S.includes('<section className="wb-setup" aria-label={setupLabel}>')&&S.includes('<section className="wb-results" aria-label={resultsLabel}>'));
-  t('v17 each tool offers an empty state naming the next useful action',(S.match(/<EmptyState mark=/g)||[]).length===6);
+  t('v17 each tool offers an empty state naming the next useful action',(S.match(/<EmptyState mark=/g)||[]).length===7);
   t('v17 focus indicators cover ordinary interactive controls',css.includes(':focus-visible')&&/outline\s*:\s*[^;}]*(?:var\(--focus|[23]px)/.test(css));
   t('v17 motion respects the operating-system reduction preference',/prefers-reduced-motion:\s*reduce/.test(css)&&/animation(?:-duration)?\s*:\s*(?:none|0(?:\.01)?m?s)/.test(css));
   t('v17 provides explicit tablet and phone layout recompositions',/@media\s*\(max-width:\s*1080px\)/.test(css)&&/@media\s*\(max-width:\s*720px\)/.test(css)&&/@media\(max-width:1080px\)\{[\s\S]*?\.workbench\{display:block;\}/.test(css.replace(/\s*\n\s*/g,'')));

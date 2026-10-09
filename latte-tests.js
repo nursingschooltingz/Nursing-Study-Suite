@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 3486;
+const EXPECTED_ASSERTIONS = 3525;
 
 let file;
 try {
@@ -2439,10 +2439,12 @@ section('v15.14 — tier 3');
   // T3.6 — the KB builder capped its log at 200; the other four grew without bound and
   // rendered every entry as an index-keyed div.
   // v17.3: one useCappedLog hook (definition plus five tools) replaced the six copies.
-  t('all five tool logs and the KB-replacement notice are capped', S.split('useCappedLog(').length - 1 === 6 && S.split('p.slice(-cap)').length - 1 === 1 && !S.includes('p.slice(-200)'));
+  // v17.9: the NCLEX to Anki tab's image log is the seventh use of the same hook.
+  t('all five tool logs and the KB-replacement notice are capped', S.split('useCappedLog(').length - 1 === 7 && S.split('p.slice(-cap)').length - 1 === 1 && !S.includes('p.slice(-200)'));
   // T3.13i — ten positional parameters, one of them inert since v15.
   t('callGemini takes an options object', S.includes('async function callGemini(apiKey,model,parts,opts={}){'));
-  t('no positional call site survives the migration, including source-owned wrappers', !S.includes('],true,') && [...S.matchAll(/\b(?:ownedCallGemini|callGemini)\(/g)].length === 13);
+  // v17.9: the NCLEX to Anki image reader adds one options-object call site (13 -> 14).
+  t('no positional call site survives the migration, including source-owned wrappers', !S.includes('],true,') && [...S.matchAll(/\b(?:ownedCallGemini|callGemini)\(/g)].length === 14);
   t('a missed migration fails loudly instead of binding a boolean to opts',
     S.includes("throw new Error('callGemini: pass an options object"));
   t('the inert useThinking parameter is gone from the signature and every call site',
@@ -2754,6 +2756,9 @@ section('v15.14 — clamps, backoff, storage');
 
   section('v17.4 second production review, findings R01-R12');
   await require('./tools/review-r-findings-tests')(S,t);
+
+  section('v17.9 NCLEX to Anki converters');
+  await require('./tools/nclex-to-anki-tests')(S,t);
 
   console.log('\n════════════════════════════');
   const total = pass + fail;

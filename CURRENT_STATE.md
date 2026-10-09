@@ -1,5 +1,9 @@
 # Current maintainer state
 
+## v17.9 NCLEX to Anki tab (2026-10-09)
+
+The canonical application is `Nursing-Study-Suite v17.9.html`. The user asked to bring three Python converters written the same day (nclex2anki.py, img2anki.py, extract2anki.py) into the suite so everything is in one file. They are a new seventh tab with three options; no other tool's code changed. The conversion logic is a line-for-line port, checked in Node against synthetic suite-shaped exports and fake Gemini transcripts, and in the browser for the two text converters. Python was not available on the machine, so outputs were not compared byte-for-byte with the scripts; SHA-1 GUIDs were checked against Node crypto. A live image run has not been made. Verification: see the [release verification record](docs/reviews/v17.9-release.md).
+
 ## v17.8 NCLEX ordering answers (2026-09-30)
 
 The canonical application is `Nursing-Study-Suite v17.8.html`. A 70-question generator run failed validation with 16 errors. Fifteen came from the one ordering item per batch: the model's ordering answer formats, and one lost `N. ORDER:` entry per affected batch. The sixteenth was a legitimate grounding error. Because every batch had an error, the item audit ran on none of them. `ngCanonicalOrderingAnswers` restates an ordering answer as its step sequence only when the entry itself shows the order. A replay on the exported worksheet cleared all 14 ordering and count errors and kept the grounding error. Verification: see the [release verification record](docs/reviews/v17.8-release.md). The live rerun is pending.

@@ -20,6 +20,8 @@ const APPENDIX_PROMPTS = [
   'NCLEX_SPLIT_PROMPT',
   'NCLEX_AI_PAIR_PROMPT',
   'CARD_TRANSCRIBE_PROMPT',
+  'I2A_TRANSCRIBE_PROMPT',
+  'I2A_ANSWER_PROMPT',
 ];
 
 function promptBlock(literal, status) {
@@ -38,16 +40,19 @@ function buildGeneratedAppendix(source) {
   const blocks = APPENDIX_PROMPTS.map(name => {
     const status = name === 'CARD_TRANSCRIBE_PROMPT'
       ? 'tunable; remeasure with 2 runs per card after edits'
-      : 'byte-frozen';
+      : name.startsWith('I2A_')
+        ? 'tunable; copied from img2anki.py, bump I2A_PROMPT_VERSION after edits'
+        : 'byte-frozen';
     return promptBlock(extractPromptLiteral(source, name), status);
   });
   return [
     START,
-    '## Appendix · NCLEX Extractor and card-transcription constants',
+    '## Appendix · NCLEX Extractor, card-transcription and NCLEX to Anki constants',
     '',
     'Generated verbatim from the shipped HTML by `node tools/render-prompts.js --write`.',
     'Do not edit inside these markers. The three extractor prompts are among the 11 byte-frozen',
     'constants. `CARD_TRANSCRIBE_PROMPT` is not byte-frozen, but its safety rules are load-bearing.',
+    'The two `I2A_` prompts belong to the NCLEX to Anki image reader and are not byte-frozen either.',
     '',
     blocks.join('\n\n'),
     END,

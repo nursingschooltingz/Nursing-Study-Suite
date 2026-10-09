@@ -9,6 +9,18 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [17.9] — 2026-10-09
+
+### Added
+
+- **NCLEX to Anki** tab (07, Practice). The three stand-alone converters nclex2anki.py, img2anki.py and extract2anki.py are ported into the suite as one tab with three options: Generator/Extractor exports (.md/.txt), question images read by Gemini (with optional AI answers), and Extractor exports or Copy output. Card HTML, tags, NeedsReview checks, the Anki file header and the GUIDs match the scripts, so files from the suite and the scripts update the same notes. Image runs use the shared `callGemini` transport and `geminiHaltsBatch` stop rule; transcripts are cached for the session under the script's key and can be saved and reloaded, including the script's `_transcripts.json`. Card previews are sanitized with DOMPurify.
+- `I2A_TRANSCRIBE_PROMPT` and `I2A_ANSWER_PROMPT`, copied verbatim from img2anki.py. They are not frozen; bump `I2A_PROMPT_VERSION` after an edit so cached transcripts are redone. Both are in the generated Prompts.md appendix.
+- 39 assertions in `tools/nclex-to-anki-tests.js`: SHA-1 and GUID parity with the scripts, worksheet and Extractor parsing, NeedsReview flags, cross-image assembly, the cache, AI-answer labelling and quota stops.
+
+### Changed
+
+- Four source-shape assertions that count one use per tool now expect seven tools: Workbench, EmptyState, `useCappedLog` and `callGemini` call sites (13 → 14). No existing tool, prompt byte, model profile, warning tier or CDN pin changed.
+
 ## [17.8] — 2026-09-30
 
 ### Fixed

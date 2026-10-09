@@ -1,8 +1,8 @@
 # Nursing Study Suite — Prompt Library
 
-The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, and the item-quality auditor, **extracted verbatim from the shipped v17.8 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
+The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, the item-quality auditor, and the NCLEX to Anki image reader, **extracted verbatim from the shipped v17.9 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
 
-> **Coverage.** All 12 named prompt constants are represented from live HTML bytes. Eleven are byte-frozen; `CARD_TRANSCRIBE_PROMPT` is deliberately tunable but requires two transcription runs per card after an edit. The generated appendix is maintained by `node tools/render-prompts.js --write` and checked by `node verify-repo.js`.
+> **Coverage.** All 14 named prompt constants are represented from live HTML bytes. Eleven are byte-frozen; `CARD_TRANSCRIBE_PROMPT` is deliberately tunable but requires two transcription runs per card after an edit. `I2A_TRANSCRIBE_PROMPT` and `I2A_ANSWER_PROMPT` (NCLEX to Anki, v17.9) are copied from img2anki.py and are not frozen. The generated appendix is maintained by `node tools/render-prompts.js --write` and checked by `node verify-repo.js`.
 
 How to read them: text inside `${...}` is filled in at runtime by the app (your settings, your Knowledge Base, the current chunk). The Priority, Case, and audit prompts are shown as their complete builder functions because the assembly logic is part of the design.
 
@@ -1847,11 +1847,12 @@ rather than truncating one.
 ---
 
 <!-- BEGIN GENERATED: EXTRACTOR_AND_TRANSCRIBER_PROMPTS -->
-## Appendix · NCLEX Extractor and card-transcription constants
+## Appendix · NCLEX Extractor, card-transcription and NCLEX to Anki constants
 
 Generated verbatim from the shipped HTML by `node tools/render-prompts.js --write`.
 Do not edit inside these markers. The three extractor prompts are among the 11 byte-frozen
 constants. `CARD_TRANSCRIBE_PROMPT` is not byte-frozen, but its safety rules are load-bearing.
+The two `I2A_` prompts belong to the NCLEX to Anki image reader and are not byte-frozen either.
 
 ### `NCLEX_INLINE_PROMPT` (757 source chars; byte-frozen)
 
@@ -1937,6 +1938,86 @@ Return ONLY this JSON object, with no commentary:
 }
 
 "numerics" must list EVERY number carrying clinical meaning — thresholds, doses, sizes, times, lab values — even though those numbers also appear inside the bullets. The duplication is deliberate: it is the list a human checks against the card by eye, and it is what the safety gate keys on.`;
+````
+
+### `I2A_TRANSCRIBE_PROMPT` (4,657 source chars; tunable; copied from img2anki.py, bump I2A_PROMPT_VERSION after edits)
+
+SHA-256 of the raw template-literal body: `5de635d62576d7c81bdd17b34d31deabbbb028087ff0e30955db53e82dff1494`
+
+````js
+const I2A_TRANSCRIBE_PROMPT=`You are transcribing NCLEX-style practice questions from ONE image: a screenshot of a question bank, a photo of a review-book page, or a scan.
+
+Your ONLY job is to reproduce what the image shows. You are not answering, teaching, correcting, or summarizing. A later step builds flashcards from your output and never sees this image, so anything you add, fix, or reword becomes indistinguishable from the source and nobody can catch it.
+
+ABSOLUTE RULES
+1. VERBATIM. Copy wording exactly, including punctuation, capitalization, abbreviations ("NGT" stays "NGT"), arrows, inequalities, degree signs and units. Do not rephrase, condense, join, split, or expand anything.
+2. NEVER GUESS A NUMBER. If any digit, decimal point, unit, or inequality is not certain, write [?] in its place and list it in "unreadable". A missing number is recoverable; a wrong number is not.
+3. NO OUTSIDE KNOWLEDGE. Never supply an answer or rationale the image does not show. If the image shows no correct answer, "answer" is null. If it shows no rationale, leave the rationale fields empty.
+4. THE CORRECT ANSWER IS NOT THE TEST-TAKER'S PICK. Question-bank screenshots often mark the option the user chose ("Your answer", red, an X, "Incorrect") as well as the correct one ("Correct answer", green, a check mark). "answer" is ONLY the option shown as correct. If the image shows which option was chosen but not which is correct, "answer" is null.
+5. IGNORE SCREEN CHROME: timers, "Question 3 of 75" counters (but DO use a printed question number), navigation buttons, "% of people chose this", flags, highlighting tools, ads, and anything else that is not the question, its answer, or its explanation.
+6. OPTION LABELS. Use labels as printed (A-F or 1-6). If the choices are unlabeled (radio buttons, check boxes), label them A, B, C ... in the order shown and set "labels_assigned" to true.
+
+ITEMS
+List every item in reading order. "kind" is one of:
+  "question"      a question stem (with its choices if shown), plus its answer and explanation if the image shows them.
+  "answer_only"   an answer-key entry for a question whose stem is NOT in this image, such as the answer pages at the back of a chapter. Give its printed number.
+  "continuation"  content at the very TOP of the image that finishes a question begun on an earlier image (leftover choices, or its answer and explanation) and has no stem of its own. Only the first item can be a continuation.
+A question cut off at the BOTTOM of the image is still a "question": transcribe what is visible and set "cut_off" to true.
+
+"format" is one of: "multiple_choice" (one answer), "select_all" ("select all that apply" or more than one answer), "ordering" (put the steps in order), "fill_in" (calculation or typed answer), "other" (hot spot, matrix, bowtie, drag-and-drop, case-study grid).
+
+EXHIBITS. If the question depends on a picture, graph, ECG strip, chart excerpt, or table, say what it is in "exhibit" (for example "ECG rhythm strip"). Transcribe any text and values it contains into the stem, verbatim. Do not interpret it.
+
+"answer": the correct label(s) exactly as shown, e.g. "B" or "A, C, E"; for ordering the sequence, e.g. "3, 1, 4, 2"; for fill_in the value with its unit; null when not shown.
+"answer_evidence": "printed" when the answer is stated in text ("Answer: B", "Correct answer: B"), "marked" when it is shown only by color, a check mark, or similar, null when there is no answer.
+"option_rationales": one entry per choice the explanation discusses on its own, verdict "correct" or "incorrect" only when the image says so.
+"rationale": the explanation text that is not tied to a single choice, verbatim.
+"extras": any other labeled block that belongs to the question (Test-Taking Strategy, Client Need, Topic, Clinical Judgment, Tip), with its heading exactly as printed.
+
+Return ONLY this JSON object, with no commentary:
+{
+  "items": [
+    {
+      "kind": "question",
+      "number": "printed question number as a string, or null",
+      "format": "multiple_choice",
+      "stem": "question text verbatim, or null",
+      "options": [{"label": "A", "text": "verbatim"}],
+      "labels_assigned": false,
+      "answer": null,
+      "answer_evidence": null,
+      "option_rationales": [{"label": "A", "verdict": "incorrect", "text": "verbatim"}],
+      "rationale": null,
+      "extras": [{"heading": "Test-Taking Strategy", "text": "verbatim"}],
+      "exhibit": null,
+      "cut_off": false,
+      "legibility": "clean or uncertain or unreadable",
+      "unreadable": ["short description of each thing you could not read"]
+    }
+  ]
+}
+If the image contains no question content, return {"items": []}.`;
+````
+
+### `I2A_ANSWER_PROMPT` (1,296 source chars; tunable; copied from img2anki.py, bump I2A_PROMPT_VERSION after edits)
+
+SHA-256 of the raw template-literal body: `b3dd80bcabb25463af687d88ebb4893d10638b8ccf3f834e20cef71d77d0d050`
+
+````js
+const I2A_ANSWER_PROMPT=`You are an NCLEX-RN item writer and nursing educator. For each question below, determine the correct answer and explain every option.
+
+Rules:
+- Answer by current NCLEX-RN standards and current evidence-based nursing practice.
+- "select_all": list EVERY correct option. "ordering": give the full sequence of option labels. "fill_in": give the value with its unit and show the calculation in "rationale".
+- Write a rationale for EVERY option (except fill_in): why it is correct or why it is wrong, one or two sentences, tied to the specific clinical facts in the stem.
+- Use only facts stated in the stem. Do not assume labs, ages, orders, or history that are not there.
+- If a KEYED ANSWER is given, it came from the source material. Explain it. If you are confident it is wrong, still explain the keyed answer's options as asked, set "agrees_with_key" to false, and give the reason in "key_dispute". Otherwise "agrees_with_key" is true. With no keyed answer it is null.
+
+Return ONLY JSON:
+{"answers": [{"id": "the question id", "answer": "B", "option_rationales": [{"label": "A", "verdict": "correct or incorrect", "text": "..."}], "rationale": "one short paragraph on the key concept", "strategy": "one test-taking strategy, or null", "agrees_with_key": null, "key_dispute": null}]}
+
+QUESTIONS:
+`;
 ````
 <!-- END GENERATED: EXTRACTOR_AND_TRANSCRIBER_PROMPTS -->
 

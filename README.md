@@ -8,11 +8,11 @@ Turn your lecture PDFs and PowerPoints into a complete, source-cited study syste
 
 The whole suite is **one HTML file**. There is nothing to install, no account to create, and no website collecting your data. You open the file in your web browser, paste in a free Google Gemini API key, upload your study materials, and go.
 
-**Published release: v17.8.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v17.8/Nursing-Study-Suite.v17.8.html) or open the [repository HTML](Nursing-Study-Suite%20v17.8.html).
+**Published release: v17.9.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v17.9/Nursing-Study-Suite.v17.9.html) or open the [repository HTML](Nursing-Study-Suite%20v17.9.html).
 
-The left rail lists the six tools in the order you use them, grouped by stage. **Source:** *Knowledge Base* builds or imports the cited facts everything else reads from. **Plan:** *Priority* sorts those facts into Tier 1/2/3. **Practice:** *Anki* for recall, *NCLEX Extract* for questions out of a review book you already own, *NCLEX Generate* for new ones written from your facts, and *Case Studies* for unfolding cases.
+The left rail lists the seven tools in the order you use them, grouped by stage. **Source:** *Knowledge Base* builds or imports the cited facts everything else reads from. **Plan:** *Priority* sorts those facts into Tier 1/2/3. **Practice:** *Anki* for recall, *NCLEX Extract* for questions out of a review book you already own, *NCLEX Generate* for new ones written from your facts, *Case Studies* for unfolding cases, and *NCLEX to Anki* to turn NCLEX questions into Anki cards.
 
-Inside each tool, what you supply sits on the left and what it produced sits on the right, with the larger share of the screen. Optional settings stay collapsed and show their current value on the closed row, so you can open them when you need them and ignore them when you don't. **Settings** — the API key and model choices shared by all six tools — opens as a panel from the right and closes with Escape; when no key is set, the **Add API key** chip in the header opens it directly. Switching tools preserves your inputs, your results and any unsaved edits. A keyboard **Skip to study workspace** link bypasses navigation.
+Inside each tool, what you supply sits on the left and what it produced sits on the right, with the larger share of the screen. Optional settings stay collapsed and show their current value on the closed row, so you can open them when you need them and ignore them when you don't. **Settings** — the API key and model choices shared by all seven tools — opens as a panel from the right and closes with Escape; when no key is set, the **Add API key** chip in the header opens it directly. Switching tools preserves your inputs, your results and any unsaved edits. A keyboard **Skip to study workspace** link bypasses navigation.
 
 ---
 
@@ -298,6 +298,22 @@ Calculation checking supports explicit quantity multiplication and division with
 The **Review appendix** follows the answer key and retains every validation finding and each item’s review status, criterion, detail and warnings. JSON Copy carries equivalent `_suiteReview` metadata. Pending, interrupted, unscored and N/A items are distinct from PASS. An unchanged attempted repair retains FAIL; an accepted rewrite remains **REPAIRED — not re-audited**. Source references, numeric checks and item-quality review do not establish clinical accuracy.
 
 A validation panel reports the results: **errors** mean the case broke the rules (it's still viewable/exportable, but it's excluded from the trusted fact-link registry and stamped as failed); **amber warnings** are advisories worth a glance — sometimes they flag a real fabrication, sometimes just a legitimately derived value. Either way, you can see exactly why.
+
+## 07 · Practice — NCLEX to Anki
+
+*Convert NCLEX exports or question images into an Anki import file.*
+
+Three converters that used to be separate Python scripts, now one tab. Pick one at the top:
+
+- **NCLEX → Anki converter** — the **.md** or **.txt** download from the NCLEX Generator worksheet or the NCLEX Extractor.
+- **NCLEX images → Anki flashcards** — screenshots of a question bank, photos of review-book pages, or scans. Gemini copies each image word for word: it never guesses a number and never supplies an answer the image does not show. Images are read in file-name order, so a question cut off at the bottom of one image is finished by the next, and answer pages at the back of a chapter are matched to their questions by number. Tick **Have Gemini answer** to fill in questions the images never answer; those cards say so on the back and are tagged `AI_Answer` or `AI_Rationale`. This option needs your API key.
+- **NCLEX Extractor → Anki flashcards** — questions the Extractor pulled from a review book: its **.md** (best) or **.txt** download, or paste what its **Copy** button copied. When the book explains each choice, every choice gets its own explanation on the back.
+
+Set the **Deck** (use `::` for subdecks) and any **extra tags**, convert, check the **Card preview**, then download the .txt and import it in Anki with **File → Import**. The deck, note type and tags are preset in the file. Each card has the question and choices on the front; the answer, each choice marked right or wrong with its rationale, and any strategy, tip or CJ on the back.
+
+Anything the converter could not confirm — an answer that isn't one of the choices, a rationale that disagrees with the key, a number Gemini could not read, an export stamped FAILED VALIDATION — is listed as a warning and the card is tagged `NeedsReview` (search `tag:NeedsReview` in the Anki browser). Every card has a stable ID, so importing a corrected file updates the notes instead of duplicating them, including notes made earlier by the Python scripts.
+
+Image transcripts are kept while the page is open, so a run stopped by a quota limit picks up where it stopped. **Save transcripts** keeps them for another day; **Load transcripts** also accepts img2anki.py's `_transcripts.json`.
 
 ## The Fact Inspector (works everywhere)
 

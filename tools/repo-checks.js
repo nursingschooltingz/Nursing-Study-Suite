@@ -25,6 +25,8 @@ const FROZEN_PROMPTS = Object.freeze([
 const DOCUMENTED_PROMPTS = Object.freeze([
   ...FROZEN_PROMPTS,
   'CARD_TRANSCRIBE_PROMPT',
+  'I2A_TRANSCRIBE_PROMPT',
+  'I2A_ANSWER_PROMPT',
 ]);
 
 function listSuiteFiles(rootDir = process.cwd()) {
