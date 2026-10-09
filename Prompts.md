@@ -1,6 +1,6 @@
 # Nursing Study Suite — Prompt Library
 
-The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, the item-quality auditor, and the NCLEX to Anki image reader, **extracted verbatim from the shipped v17.9 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
+The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, the item-quality auditor, and the NCLEX to Anki image reader, **extracted verbatim from the shipped v17.10 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
 
 > **Coverage.** All 14 named prompt constants are represented from live HTML bytes. Eleven are byte-frozen; `CARD_TRANSCRIBE_PROMPT` is deliberately tunable but requires two transcription runs per card after an edit. `I2A_TRANSCRIBE_PROMPT` and `I2A_ANSWER_PROMPT` (NCLEX to Anki, v17.9) are copied from img2anki.py and are not frozen. The generated appendix is maintained by `node tools/render-prompts.js --write` and checked by `node verify-repo.js`.
 

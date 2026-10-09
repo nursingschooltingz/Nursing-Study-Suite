@@ -1,6 +1,7 @@
 'use strict';
 
 // v17.9: the NCLEX to Anki tab ports nclex2anki.py, img2anki.py and extract2anki.py into the suite.
+// v17.10: the two text converters also read the Generator and Extractor PDF exports.
 // These assertions run the shipped converter functions on synthetic exports shaped like the
 // suite's own NCLEX Generator and Extractor downloads, and on fake Gemini transcripts.
 
@@ -130,7 +131,7 @@ async function run(S,t){
   t('the NCLEX to Anki tab is a memoized tool component',!!components&&components[1].includes('nclex2anki:React.memo(NCLEXToAnki)'));
   const core=span(S,'// ──── TOOL: NCLEX to Anki ────','async function i2aFileKey(');
   const ui=span(S,'async function i2aFileKey(','/* ═══════════════════════════════════════════════════════\n   CONFIG SIDEBAR');
-  const M=new Function(core+';return {n2aSha1Hex,n2aGuidBasis,n2aEsc,n2aConvertSources,n2aAnkiFileText,x2aConvertSources,x2aResolveAnswer,i2aNormalizeTranscript,i2aAssemble,i2aBuildCards,i2aConvert,i2aGuid,i2aNaturalCompare,i2aMergeCache,i2aEmptyCache,I2A_TRANSCRIBE_PROMPT,I2A_PROMPT_VERSION};')();
+  const M=new Function(core+';return {n2aSha1Hex,n2aGuidBasis,n2aEsc,n2aConvertSources,n2aAnkiFileText,x2aConvertSources,x2aResolveAnswer,i2aNormalizeTranscript,i2aAssemble,i2aBuildCards,i2aConvert,i2aGuid,i2aNaturalCompare,i2aMergeCache,i2aEmptyCache,I2A_TRANSCRIBE_PROMPT,I2A_PROMPT_VERSION,n2aPdfPageLines,n2aPdfBlocks,n2aPdfChoiceLines,n2aPdfToWorksheetText,x2aPdfToExportText};')();
 
   t('the converter SHA-1 matches Node crypto on ASCII, Unicode and multi-block input',
     ['','abc','é ünïcode ✓ 🧠','x'.repeat(55),'y'.repeat(64),'z'.repeat(1000)].every(s=>M.n2aSha1Hex(s)===crypto.createHash('sha1').update(s,'utf8').digest('hex')));
@@ -209,6 +210,47 @@ async function run(S,t){
   t('the transcription prompt is the script prompt, versioned for cache keys',M.I2A_PROMPT_VERSION==='t1'&&M.I2A_TRANSCRIBE_PROMPT.startsWith('You are transcribing NCLEX-style practice questions from ONE image')&&M.I2A_TRANSCRIBE_PROMPT.includes('2. NEVER GUESS A NUMBER.'));
   t('image runs reuse the shared Gemini transport, halt rule and JSON parser',ui.includes('callGemini(cfg.apiKey,model,parts,{')&&ui.includes('halts:geminiHaltsBatch')&&ui.includes('extractJSON(text)'));
   t('card previews are sanitized before rendering',(ui.match(/dangerouslySetInnerHTML/g)||[]).length===2&&(ui.match(/DOMPurify\.sanitize\(c\.(front|back),N2A_CARD_POLICY\)/g)||[]).length===2);
+
+  // v17.10: PDF exports. The fixture is the line geometry pdf.js read from synthetic Generator and
+  // Extractor exports printed by headless Chrome from the suite's own print document, with and
+  // without the browser's header and footer. A PDF must give the same cards as its .md source.
+  const FX=require('./fixtures/nclex-to-anki-pdf.json');
+  const blocksOf=name=>M.n2aPdfBlocks(FX.pdfs[name].map(page=>page.map(([x,y,fs,text])=>({x,y,fs,text}))));
+  const same=(a,b,loose=()=>false)=>a.cards.length===b.cards.length&&a.cards.every((c,i)=>{const o=b.cards[i];return c.guid===o.guid&&c.back===o.back&&c.tags.join(' ')===o.tags.join(' ')&&(c.front===o.front||loose(i,c,o));});
+  const viaPdf=(name,adapter,conv)=>{const r=adapter(blocksOf(name),name);return {r,cards:conv([{name:'s',text:r.text}])};};
+  const lines=M.n2aPdfPageLines([{str:'1.',transform:[10,0,0,10,42,700],width:8},{str:' A client',transform:[10,0,0,10,50,700],width:40},{str:'next line',transform:[10,0,0,10,53,685],width:40},{str:'',transform:[10,0,0,10,0,0]}]);
+  t('pdf.js items on one baseline join into one line and a lower baseline starts the next',lines.length===2&&lines[0].text==='1. A client'&&lines[0].x===42&&lines[1].text==='next line');
+  const hf=blocksOf('bigws-hf.pdf');
+  t("the browser's date/title header and URL/page footer are dropped",hf.length>0&&!hf.some(b=>/127\.0\.0\.1|\d{1,2}:\d{2}\s*[AP]M|^\d+\/\d+$/.test(b.text))&&hf.some(b=>b.heading&&b.text==='Answer Key'));
+  t('each worksheet question and key entry is one block, including two-digit numbers on a later page',
+    [1,2,3,4,5,6,7,8,9,10,11,12].every(n=>hf.filter(b=>new RegExp('^'+n+'\\. (?!ANSWER)').test(b.text)).length===1&&hf.filter(b=>new RegExp('^'+n+'\\. ANSWER:').test(b.text)).length===1));
+  const wsMd=M.n2aConvertSources([{name:'s',text:FX.md['bigws.md']}]);
+  for(const name of ['bigws-hf.pdf','bigws-clean.pdf']){
+    const {r,cards}=viaPdf(name,M.n2aPdfToWorksheetText,M.n2aConvertSources);
+    t('a 12-question Generator PDF ('+name+') gives the same cards as its .md: choices, Why lines, ordering steps, calculations, tags and the FAILED VALIDATION flag',
+      r.warnings.length===0&&cards.cards.length===12&&same(cards,wsMd)&&cards.cards.filter(c=>c.tags.includes('NeedsReview')).length===12&&cards.cards[2].back.includes('1. Aortic area')&&cards.cards[3].front.includes('Answer: ______ mL/hr'));
+  }
+  const small=viaPdf('ws-hf.pdf',M.n2aPdfToWorksheetText,M.n2aConvertSources).cards,smallMd=M.n2aConvertSources([{name:'s',text:FX.md['ws.md']}]);
+  t('line breaks a PDF cannot carry (a lab list inside a stem) are the only front-side difference',
+    same(small,smallMd,(i,c,o)=>i===3&&c.front===o.front.replace(/<br>/g,' '))&&small.cards[3].front!==smallMd.cards[3].front);
+  const bxMd=FX.md['bigx.md'];
+  const bx=viaPdf('bigx-hf.pdf',M.x2aPdfToExportText,M.x2aConvertSources);
+  t('an Extractor PDF gives the same cards as its .md: numbered and inline choices, per-choice rationales, tips, CJ and conditions',
+    bx.r.warnings.length===0&&bx.cards.warnings.length===0&&bx.cards.cards.length===10&&same(bx.cards,M.x2aConvertSources([{name:'s',text:bxMd}])));
+  t('a paragraph split by a page break is read as one paragraph',same(bx.cards,M.x2aConvertSources([{name:'s',text:bxMd}]))&&!bx.cards.cards.some(c=>/finding<br>reflects/.test(c.back)));
+  t('the Extractor .txt rebuilt from a PDF keeps its status line and question count',/^Extraction status: complete$/m.test(bx.r.text)&&/^10 questions$/m.test(bx.r.text));
+  const bx1=viaPdf('bigx-hf.pdf',M.n2aPdfToWorksheetText,M.n2aConvertSources);
+  t('an Extractor PDF given to the first converter reads as the Extractor layout',same(bx1.cards,M.n2aConvertSources([{name:'s',text:bxMd}])));
+  t('an Extractor PDF numbers questions only at the left edge, so numbered choices stay choices',same(viaPdf('x-hf.pdf',M.x2aPdfToExportText,M.x2aConvertSources).cards,M.x2aConvertSources([{name:'s',text:FX.md['x.md']}])));
+  const wrong=viaPdf('bigws-hf.pdf',M.x2aPdfToExportText,M.x2aConvertSources);
+  t('a Generator PDF given to the Extractor converter names the right option',wrong.cards.cards.length===0&&wrong.r.warnings.some(w=>w.includes('looks like an NCLEX Generator worksheet')));
+  const missing=M.n2aPdfToWorksheetText(hf.filter(b=>!/^7\. Place/.test(b.text)),'w.pdf');
+  t("a question count that disagrees with the PDF's own count is reported",missing.warnings.some(w=>w.includes('says 12 questions but 6 were found')));
+  t('a PDF with no text layer is sent to the images option',M.n2aPdfToWorksheetText([],'scan.pdf').warnings[0].includes('no text layer')&&M.x2aPdfToExportText([],'scan.pdf').warnings[0].includes('NCLEX images option'));
+  t('a choice-only paragraph splits into one choice per line, and a stem does not',
+    (M.n2aPdfChoiceLines('A. Spinach B. Bananas C. Oranges D. Milk')||[]).join('|')==='A. Spinach|B. Bananas|C. Oranges|D. Milk'&&M.n2aPdfChoiceLines('A client needs vitamin A. B. C. D.')===null);
+  t('the two text converters accept PDFs and read them through the shared page walk',
+    ui.includes('accept=".md,.txt,.markdown,.pdf"')&&ui.includes("if(/\\.pdf$/i.test(f.name||'')){")&&core.includes('await pdfWalkPages(file,{onPage:async(text,i,pg)=>')&&core.includes('finally{destroyPdfDoc(file);}'));
 }
 
 module.exports=run;

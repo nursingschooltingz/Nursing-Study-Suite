@@ -8,7 +8,11 @@
      Babel, so this adds narrow resource directives without a default-src/script-src migration. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net">
 <title>LATTE Study Suite</title>
-<!-- v17.9 (2026-10-09): NCLEX to Anki tab. The three stand-alone Python converters (nclex2anki.py, img2anki.py and
+<!-- v17.10 (2026-10-09): NCLEX to Anki reads PDFs. The worksheet and Extractor converters accept the Generator and
+     Extractor PDF exports. A browser-printed PDF keeps no line structure, so it is rebuilt from the page geometry
+     (indents, line pitch, paragraph gaps; the browser header and footer dropped) into the text each converter already
+     reads. The converters, prompts and warning tiers are unchanged.
+     v17.9 (2026-10-09): NCLEX to Anki tab. The three stand-alone Python converters (nclex2anki.py, img2anki.py and
      extract2anki.py) now run inside the suite as one tab with three options: Generator/Extractor exports, question
      images read by Gemini, and Extractor exports or Copy output. Cards, tags, NeedsReview checks and GUIDs match the
      scripts, so files from either side update the same Anki notes. No existing tool, prompt or warning tier changed.
@@ -6037,7 +6041,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '17.9';}
+function suiteVersion(){return '17.10';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -8262,6 +8266,155 @@ function x2aConvertSources(sources,extraTags=[]){
   return {cards,warnings};
 }
 
+// ── PDF input for the two text converters ───────────────────────────────────
+// v17.10: the Generator and Extractor PDF exports are browser prints of rendered Markdown, so the
+// line structure both parsers read is gone: a question's choices and an answer's "Why X is" lines
+// run together and wrap at the page width, and the browser may add a date/title header and a
+// URL/page footer. The layout survives in the geometry. List items are indented from the body's
+// left edge, wrapped lines sit one line pitch apart while separate items and paragraphs sit
+// further apart, and the browser's header and footer are set outside the body margin in a small
+// font. Each PDF is rebuilt into the text its converter already reads (the worksheet's line shape,
+// or the Extractor's .txt layout). The converters are unchanged, so every NeedsReview check still
+// applies to what comes out, and a question count that disagrees with the PDF's own is reported.
+// One page's pdf.js text items -> visual lines {x, y, fs, text}, spaced like pdfLayoutText.
+function n2aPdfPageLines(items){
+  const lines=[];let cur=null,lastX=0,lastW=0;
+  for(const it of items||[]){
+    if(!it||typeof it.str!=='string'||!it.str)continue;
+    const t=it.transform||[],x=t[4]??0,y=t[5]??0,fs=Math.max(4,Math.hypot(t[0]??12,t[1]??0))||12;
+    if(!cur||Math.abs(y-cur.y)>fs*0.5){cur={x,y,fs,text:''};lines.push(cur);}
+    else if(x-(lastX+lastW)>fs*0.25)cur.text+=' ';
+    cur.text+=it.str;lastX=x;lastW=it.width??it.str.length*fs*0.5;
+  }
+  return lines.map(l=>({...l,text:l.text.replace(/\s+/g,' ').trim()})).filter(l=>l.text);
+}
+const N2A_PDF_CHROME=/^\d{1,2}\/\d{1,2}\/\d{2,4},?\s+\d{1,2}:\d{2}|^(?:https?|file|about|blob):\S*|^(?:page\s+)?\d+\s*(?:\/|of)\s*\d+$/i;
+// pages: [[line]] -> blocks {text, x, fs, page, indent, heading}. A block is one paragraph, list
+// item, heading or quote: a new one starts at a font-size change, at an outdent, after a gap wider
+// than the line pitch, or on a new page unless that page continues the sentence.
+function n2aPdfBlocks(pages){
+  const all=[];(pages||[]).forEach((ls,page)=>{for(const l of ls||[])if(l&&l.text)all.push({...l,page});});
+  if(!all.length)return [];
+  const weight=new Map();
+  for(const l of all){const k=Math.round(l.fs*2)/2;weight.set(k,(weight.get(k)||0)+l.text.length);}
+  const bodyFs=[...weight].sort((a,b)=>b[1]-a[1])[0][0];
+  const left=all.filter(l=>l.fs>=bodyFs*0.85).reduce((m,l)=>Math.min(m,l.x),Infinity);
+  const lines=all.filter(l=>!(l.x<left-4)&&!(l.fs<bodyFs*0.85&&N2A_PDF_CHROME.test(l.text)));
+  let pitch=bodyFs*1.45; // the print stylesheet's line-height; a measured wrap gap can only lower it
+  for(let i=1;i<lines.length;i++){const a=lines[i-1],b=lines[i],g=a.y-b.y;if(a.page===b.page&&Math.abs(a.fs-b.fs)<0.3&&g>b.fs*0.9&&g<pitch)pitch=g;}
+  const blocks=[];let cur=null,prev=null;
+  for(const l of lines){
+    const gap=prev?prev.y-l.y:0,samePage=!!prev&&l.page===prev.page;
+    // A paragraph split by a page break continues when the new page opens mid-sentence at its indent.
+    const carried=!!prev&&!samePage&&/^\p{Ll}/u.test(l.text)&&Math.abs(l.x-prev.x)<=2&&Math.abs(l.fs-prev.fs)<=0.5;
+    if(!cur||(!samePage&&!carried)||(samePage&&(Math.abs(l.fs-prev.fs)>0.5||l.x<prev.x-2||gap>pitch*1.09||gap<0))){
+      cur={text:l.text,x:l.x,fs:l.fs,page:l.page,indent:l.x-left>3,heading:l.fs>bodyFs*1.1};blocks.push(cur);
+    }else cur.text+=' '+l.text;
+    prev=l;
+  }
+  return blocks;
+}
+const N2A_PDF_Q_HEAD=/^(?:nclex practice )?questions$/i,N2A_PDF_KEY_HEAD=/^answer key$/i;
+function n2aPdfNoText(name){return {text:'',warnings:[name+': this PDF has no text layer (a scan or photo). Use the NCLEX images option for it.']};}
+function n2aPdfExpected(blocks){for(const b of blocks){const m=b.text.match(/^(\d+) questions? (?:generated|extracted)\b/i);if(m)return parseInt(m[1],10);}return null;}
+// A paragraph that is only a list of choices ("A. Spinach B. Bananas C. ...") -> one per line.
+// The splitter scans line-start and inline marks separately, so the first mark is moved off the
+// line start by a placeholder stem; the paragraph qualifies only if nothing precedes its first mark.
+function n2aPdfChoiceLines(text){
+  if(!/^\(?[1aA][.)]\s/.test(text))return null;
+  const [stem,opts]=n2aSplitStemOptions('¶ '+text,true);
+  return stem==='¶'&&opts.length>=3?opts.map(([l,t])=>l+'. '+t):null;
+}
+// Ordering steps ("___ Mitral area") and a calculation blank ("Answer: ____ mL/hr") back on their own lines.
+function n2aPdfQuestionLines(text,ind){
+  if(!/_{2,}/.test(text))return [ind+text];
+  const parts=text.replace(/\s+(?=Answer:[ \t]*_{2,})/,'\n').replace(/(?<!Answer:[ \t]*)\s+(?=_{2,})/g,'\n').split('\n');
+  return [ind+parts[0],...parts.slice(1).map(s=>ind+'  '+s.trim())];
+}
+const N2A_PDF_LABEL_SPLIT=/\s+(?=Why[ \t]+[A-Z1-9][ \t]+is[ \t]+(?:correct|wrong|incorrect)\b|(?:Strategy|Tip|CJ|Tags|Rationale|Conditions)[ \t]*:)/;
+// One "N. ANSWER: ..." paragraph -> the worksheet's ANSWER line, its numbered ordering steps or
+// worked calculation, and one line per "Why X is" / Strategy / Tags label.
+function n2aPdfKeyLines(text,calcUnits,ind){
+  const m=text.match(/^(\d{1,3})[.)][ \t]+ANSWER[ \t]*:[ \t]*/i),parts=text.slice(m[0].length).split(N2A_PDF_LABEL_SPLIT);
+  let head=parts[0].trim(),body=[];
+  const marks=[...head.matchAll(/(?:^|\s)(\d{1,2})[.)]\s/g)],first=marks.findIndex(x=>x[1]==='1');
+  if(first>=0){
+    let j=first;while(j+1<marks.length&&+marks[j+1][1]===+marks[j][1]+1)j++;
+    if(j>first){
+      const at=k=>marks[k].index+(/\s/.test(marks[k][0][0])?1:0);
+      for(let k=first;k<=j;k++)body.push(head.slice(at(k),k<j?at(k+1):head.length).trim());
+      head=head.slice(0,at(first)).trim();
+    }
+  }
+  const unit=calcUnits.get(m[1]);
+  if(!body.length&&unit){
+    const c=head.match(new RegExp('^([-\\d.,/]+[ \\t]*'+unit.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')[ \\t]+(\\S[\\s\\S]*)$'));
+    if(c){head=c[1];body=[c[2]];}
+  }
+  return [ind+m[1]+'. ANSWER: '+head,...body.map(b=>ind+'  '+b),...parts.slice(1).map(p=>ind+'  '+p.trim())];
+}
+const N2A_PDF_ANSWER=/^\d{1,3}[.)][ \t]+ANSWER[ \t]*:/i;
+// Option 1: rebuild a Generator worksheet PDF into the worksheet text n2aConvertText reads. Every
+// worksheet question and key entry is its own list item, so numbered blocks are read in order and
+// indentation is not needed (a two-digit list number moves its marker left of a one-digit one).
+function n2aPdfToWorksheetText(blocks,name){
+  if(!blocks.length)return n2aPdfNoText(name);
+  // An Extractor PDF has no "N. ANSWER:" entries; this converter also reads the Extractor's .txt layout.
+  if(!blocks.some(b=>N2A_PDF_ANSWER.test(b.text)))return x2aPdfToExportText(blocks,name);
+  const lines=[],calcUnits=new Map(),warnings=[];let section='',lastQ=0;
+  for(const b of blocks){
+    if(b.heading&&N2A_PDF_KEY_HEAD.test(b.text)){section='key';lines.push('','## Answer Key','');continue;}
+    if(b.heading&&N2A_PDF_Q_HEAD.test(b.text)){section='q';lines.push('','## '+b.text,'');continue;}
+    if(section==='key'&&N2A_PDF_ANSWER.test(b.text)){lines.push(...n2aPdfKeyLines(b.text,calcUnits,''),'');continue;}
+    if(section==='q'){
+      const m=b.text.match(/^(\d{1,3})[.)]\s/);
+      if(m&&+m[1]===lastQ+1){
+        lastQ=+m[1];
+        const c=b.text.match(/Answer:[ \t]*_{2,}[ \t]*(\S.*)?$/);if(c&&c[1])calcUnits.set(m[1],c[1].trim());
+      }
+      lines.push(...n2aPdfQuestionLines(b.text,''),'');continue;
+    }
+    lines.push(b.text,'');
+  }
+  const expected=n2aPdfExpected(blocks);
+  if(expected!==null&&lastQ!==expected)warnings.push(name+': the PDF says '+expected+' questions but '+lastQ+' were found. Check the cards against the PDF.');
+  return {text:lines.join('\n'),warnings};
+}
+// Option 3: rebuild an Extractor PDF into the Extractor's own .txt layout. Question and answer
+// numbers are the only numbered paragraphs at the body's left edge; numbered choices and numbered
+// rationales print as indented list items.
+function x2aPdfToExportText(blocks,name){
+  if(!blocks.length)return n2aPdfNoText(name);
+  const qs=[],keys=[],warnings=[];let section='',status=null,lastQ=0,lastK=0;
+  for(const b of blocks){
+    if(b.heading&&N2A_PDF_KEY_HEAD.test(b.text)){section='key';continue;}
+    if(b.heading&&/^questions$/i.test(b.text)){section='q';continue;}
+    const st=b.text.match(/^Extraction status:[ \t]*(.*)$/i);if(st){status=st[1].trim();continue;}
+    const head=!b.indent&&!b.heading?b.text.match(/^(\d{1,4})\.(?:\s+([\s\S]*))?$/):null;
+    if(section==='q'){
+      if(head&&+head[1]===lastQ+1){lastQ=+head[1];qs.push({n:lastQ,lines:[(head[2]||'').trim()]});continue;}
+      if(qs.length)qs[qs.length-1].lines.push(...(n2aPdfChoiceLines(b.text)||[b.text]).map(c=>'   '+c));
+    }else if(section==='key'){
+      if(head&&+head[1]===lastK+1){lastK=+head[1];keys.push({n:lastK,answer:(head[2]||'').trim(),rationale:[],meta:{}});continue;}
+      if(!keys.length)continue;
+      const k=keys[keys.length-1],m=b.text.match(/^\S{0,3}[ \t]*(Tip|Strategy|CJ):[ \t]*([\s\S]*)$/)||b.text.match(/^(Conditions):[ \t]*([\s\S]*)$/);
+      if(m)k.meta[m[1].toLowerCase()]=m[2].trim();else k.rationale.push(b.text);
+    }
+  }
+  if(!qs.length&&blocks.some(b=>/^\d{1,3}[.)][ \t]+ANSWER[ \t]*:/i.test(b.text)))warnings.push(name+': this looks like an NCLEX Generator worksheet. Use the NCLEX → Anki converter option for it.');
+  const expected=n2aPdfExpected(blocks),label={tip:'Tip',strategy:'Strategy',cj:'CJ',conditions:'Conditions'};
+  const out=['NCLEX PRACTICE QUESTIONS','',(expected??qs.length)+' questions',''];
+  if(status)out.push('Extraction status: '+status,'');
+  for(const q of qs)out.push(q.n+'. '+q.lines.join('\n'),'');
+  out.push('','============================','ANSWER KEY','============================','');
+  for(const k of keys){
+    out.push(k.n+'. Answer: '+k.answer,'Rationale: '+k.rationale.join('\n'));
+    for(const f of ['tip','strategy','cj','conditions'])if(k.meta[f])out.push(label[f]+': '+k.meta[f]);
+    out.push('','---','');
+  }
+  return {text:out.join('\n'),warnings};
+}
+
 // ── img2anki: NCLEX question screenshots / photos, read by Gemini ──────────
 // One Gemini call per image copies what it shows; everything after that is local: questions
 // cut off at the bottom of one image are finished by the next, answer-key pages are matched by
@@ -8608,6 +8761,13 @@ async function i2aConvert({images,gemini,halts,model,cache,deck,extraTags=[],sou
   return result;
 }
 
+// v17.10: one pass of the suite's own page walk; each page's text items keep their positions for n2aPdfBlocks.
+async function n2aReadPdfPages(file){
+  const pages=[];
+  try{await pdfWalkPages(file,{onPage:async(text,i,pg)=>{pages.push(n2aPdfPageLines((await pg.getTextContent()).items));}});}
+  finally{destroyPdfDoc(file);}
+  return pages;
+}
 async function i2aFileKey(file){
   // The script keys its cache on the SHA-256 of the image bytes; the same key lets a saved
   // transcripts file from either side skip images already read.
@@ -8642,7 +8802,7 @@ function NCLEXToAnki(){
   const [thinking,setThinking]=useState('low');
   const [fresh,setFresh]=useState(false);
   const [results,setResults]=useState({});
-  const [busy,setBusy]=useState(false);
+  const [busy,setBusy]=useState(false),[reading,setReading]=useState(false);
   const [progress,setProgress]=useState({current:0,total:0});
   const [note,setNote]=useState('');
   const [error,setError]=useState('');
@@ -8662,8 +8822,8 @@ function NCLEXToAnki(){
       if(bad.length)setNote(bad.map(f=>f.name).join(', ')+': not a supported image (jpg, png, webp, heic) - skipped.');
       setImages(p=>{const have=new Set(p.map(fileKey));return [...p,...ok.filter(f=>!have.has(fileKey(f)))];});
     }else{
-      const ok=picked.filter(f=>/\.(md|txt|markdown)$/i.test(f.name||'')),bad=picked.filter(f=>!ok.includes(f));
-      if(bad.length)setNote(bad.map(f=>f.name).join(', ')+': not a .md or .txt export - skipped.');
+      const ok=picked.filter(f=>/\.(md|txt|markdown|pdf)$/i.test(f.name||'')),bad=picked.filter(f=>!ok.includes(f));
+      if(bad.length)setNote(bad.map(f=>f.name).join(', ')+': not a .md, .txt or .pdf export - skipped.');
       setTextFiles(p=>{const have=new Set(p[mode].map(fileKey));return {...p,[mode]:[...p[mode],...ok.filter(f=>!have.has(fileKey(f)))]};});
     }
   };
@@ -8672,12 +8832,20 @@ function NCLEXToAnki(){
   const base=f=>f.name.replace(/\.[^.]*$/,'');
 
   const convertText=async()=>{
-    setError('');
+    if(reading)return;
+    setError('');setReading(true);
     const runMode=mode,list=textFiles[runMode],sources=[],readWarnings=[];
     for(const f of list){
       if(f.size>50*1024*1024){readWarnings.push(f.name+': could not read (larger than 50 MB).');continue;}
-      try{sources.push({name:base(f),text:await f.text()});}catch(e){readWarnings.push(f.name+': could not read ('+(e.message||e)+').');}
+      try{
+        // v17.10: a PDF export is rebuilt into the text this converter already reads.
+        if(/\.pdf$/i.test(f.name||'')){
+          const blocks=n2aPdfBlocks(await n2aReadPdfPages(f)),r=runMode==='worksheet'?n2aPdfToWorksheetText(blocks,f.name):x2aPdfToExportText(blocks,f.name);
+          readWarnings.push(...r.warnings);if(r.text)sources.push({name:base(f),text:r.text});
+        }else sources.push({name:base(f),text:await f.text()});
+      }catch(e){readWarnings.push(f.name+': could not read ('+(e.message||e)+').');}
     }
+    setReading(false);
     if(runMode==='extract'&&pasted.trim())sources.push({name:'clipboard',text:pasted});
     const r=runMode==='worksheet'?n2aConvertSources(sources,extraTags):x2aConvertSources(sources,extraTags);
     const outName=runMode==='worksheet'
@@ -8718,6 +8886,7 @@ function NCLEXToAnki(){
   };
 
   const canRun=mode==='images'?!!cfg.apiKey&&images.length>0&&!busy:mode==='extract'?(textFiles.extract.length>0||!!pasted.trim()):textFiles.worksheet.length>0;
+  const canConvert=canRun&&!reading;
   const shown=useMemo(()=>{const list=result?result.cards:[];return (reviewOnly?list.filter(c=>c.tags.includes('NeedsReview')):list);},[result,reviewOnly]);
   const types=useMemo(()=>{const t={};for(const c of result?result.cards:[])t[c.type]=(t[c.type]||0)+1;return Object.entries(t).sort(([a],[b])=>a<b?-1:1);},[result]);
 
@@ -8734,18 +8903,18 @@ function NCLEXToAnki(){
         </div>
       </Step>
       <Step n="02" title={mode==='images'?'Question images':'Export files'} note={files.length?files.length+(files.length===1?' file':' files'):'none yet'}
-        lede={mode==='worksheet'?'The .md or .txt download from the NCLEX Generator worksheet or the NCLEX Extractor.':mode==='extract'?"The Extractor's .md download (preferred), its .txt download, or paste what its Copy button copied.":'Screenshots of a question bank, photos of review-book pages, or scans. They are read in file-name order, so a question cut off at the bottom of one image is finished by the next.'}>
+        lede={mode==='worksheet'?'The .md, .txt or PDF download from the NCLEX Generator worksheet or the NCLEX Extractor.':mode==='extract'?"The Extractor's .md download (preferred), its .txt or PDF download, or paste what its Copy button copied.":'Screenshots of a question bank, photos of review-book pages, or scans. They are read in file-name order, so a question cut off at the bottom of one image is finished by the next.'}>
         <div role="button" tabIndex={0} aria-label={mode==='images'?'Add question images':'Add NCLEX export files'} className="upload-zone"
           onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();(mode==='images'?imgRef:fileRef).current?.click();}}}
           onClick={()=>(mode==='images'?imgRef:fileRef).current?.click()}
           onDragOver={e=>{e.preventDefault();e.currentTarget.classList.add('dragover');}} onDragLeave={e=>e.currentTarget.classList.remove('dragover')}
           onDrop={e=>{e.preventDefault();e.currentTarget.classList.remove('dragover');addInputs(e.dataTransfer.files);}}>
-          <input aria-label="NCLEX export files" ref={fileRef} type="file" accept=".md,.txt,.markdown" multiple style={{display:'none'}} onChange={e=>{addInputs(e.target.files);e.target.value='';}}/>
+          <input aria-label="NCLEX export files" ref={fileRef} type="file" accept=".md,.txt,.markdown,.pdf" multiple style={{display:'none'}} onChange={e=>{addInputs(e.target.files);e.target.value='';}}/>
           <input aria-label="Question images" ref={imgRef} type="file" accept=".jpg,.jpeg,.png,.webp,.heic,.heif" multiple style={{display:'none'}} onChange={e=>{addInputs(e.target.files);e.target.value='';}}/>
           <div style={{fontSize:28,marginBottom:4,opacity:.6}}>{meta.icon}</div>
-          <p style={{fontSize:12,color:'var(--text)'}}>Drop {mode==='images'?'images':'.md / .txt files'} or <strong style={{color:'var(--accent)'}}>click to browse</strong></p>
+          <p style={{fontSize:12,color:'var(--text)'}}>Drop {mode==='images'?'images':'.md / .txt / .pdf files'} or <strong style={{color:'var(--accent)'}}>click to browse</strong></p>
         </div>
-        {files.map((f,i)=><div className="file-chip" key={fileKey(f)}><div className="f-icon">{mode==='images'?'IMG':getExt(f.name).toUpperCase()}</div><span className="f-name">{f.name}</span><span className="f-size">{formatSize(f.size)}</span><button className="f-rm" aria-label={'Remove '+f.name} disabled={busy} onClick={()=>removeFile(i)}>×</button></div>)}
+        {files.map((f,i)=><div className="file-chip" key={fileKey(f)}><div className={'f-icon'+(getExt(f.name)==='pdf'?' pdf':'')}>{mode==='images'?'IMG':getExt(f.name).toUpperCase()}</div><span className="f-name">{f.name}</span><span className="f-size">{formatSize(f.size)}</span><button className="f-rm" aria-label={'Remove '+f.name} disabled={busy} onClick={()=>removeFile(i)}>×</button></div>)}
         {mode==='extract'&&<div className="sb-field" style={{marginTop:10}}><label htmlFor="n2a-paste">Or paste the Extractor's Copy output</label><textarea id="n2a-paste" rows={5} value={pasted} onChange={e=>setPasted(e.target.value)} placeholder="Press Copy in the NCLEX Extractor, then paste here" style={{width:'100%',fontFamily:'JetBrains Mono',fontSize:12}}/></div>}
         {note&&<div style={{fontSize:12,color:'var(--accent-warm)',marginTop:6,lineHeight:1.5}}>{note}</div>}
       </Step>
@@ -8772,8 +8941,8 @@ function NCLEXToAnki(){
     </>}
     action={<>
       <div className="act-row">
-        <button className="btn-primary" disabled={!canRun} onClick={mode==='images'?runImages:convertText}>
-          {mode==='images'?(busy?'⏳ Reading images...':'📷 Read '+images.length+' image'+(images.length!==1?'s':'')+' → Anki'):'🔄 Convert to Anki'}
+        <button className="btn-primary" disabled={mode==='images'?!canRun:!canConvert} onClick={mode==='images'?runImages:convertText}>
+          {mode==='images'?(busy?'⏳ Reading images...':'📷 Read '+images.length+' image'+(images.length!==1?'s':'')+' → Anki'):reading?'⏳ Reading PDF...':'🔄 Convert to Anki'}
         </button>
         {busy&&mode==='images'&&<button className="btn-danger" onClick={()=>abortRef.current?.abort()}>Cancel</button>}
       </div>
@@ -8814,7 +8983,7 @@ function NCLEXToAnki(){
     </>}
     {!result&&!(mode==='images'&&(busy||log.length>0))&&<EmptyState mark="⇄" title={meta.title}
       note={mode==='worksheet'?'Turns an NCLEX Generator worksheet or NCLEX Extractor export into one Anki import file: question and choices on the front; the answer, every choice marked right or wrong with its rationale, and the strategy, tip and CJ on the back.':mode==='extract'?'Built for questions pulled out of review books by the NCLEX Extractor. When the book explains each choice, every choice gets its own explanation on the back.':'Gemini copies each image verbatim — it never guesses a number and never supplies an answer the image does not show — then the questions are assembled and checked here.'}
-      steps={mode==='images'?['Add the images (and your API key in Settings).','Optionally let Gemini answer questions the images never answer.','Read the images, then download the .txt and import it in Anki.']:['Add the export'+(mode==='extract'?' or paste the Copy output':'')+'.','Set the deck and any extra tags.','Convert, then download the .txt and import it in Anki (File → Import).']}/>}
+      steps={mode==='images'?['Add the images (and your API key in Settings).','Optionally let Gemini answer questions the images never answer.','Read the images, then download the .txt and import it in Anki.']:['Add the export (.md, .txt or PDF)'+(mode==='extract'?' or paste the Copy output':'')+'.','Set the deck and any extra tags.','Convert, then download the .txt and import it in Anki (File → Import).']}/>}
   </Workbench>;
 }
 

@@ -1,5 +1,9 @@
 # Current maintainer state
 
+## v17.10 NCLEX to Anki PDF input (2026-10-09)
+
+The canonical application is `Nursing-Study-Suite v17.10.html`. The user asked for the two text converters in the NCLEX to Anki tab to read PDFs. Synthetic Generator and Extractor exports (up to 12 and 10 questions, every question type, multi-page, page-split paragraphs) were printed by headless Chrome from the suite's own print document, with and without the browser header and footer. Each converted to the same cards as its .md source; the only loss is line breaks inside a question stem, which the PDF does not record. Only Chrome-printed PDFs were tested, and none of the user's own PDFs. Verification: see the [release verification record](docs/reviews/v17.10-release.md).
+
 ## v17.9 NCLEX to Anki tab (2026-10-09)
 
 The canonical application is `Nursing-Study-Suite v17.9.html`. The user asked to bring three Python converters written the same day (nclex2anki.py, img2anki.py, extract2anki.py) into the suite so everything is in one file. They are a new seventh tab with three options; no other tool's code changed. The conversion logic is a line-for-line port, checked in Node against synthetic suite-shaped exports and fake Gemini transcripts, and in the browser for the two text converters. Python was not available on the machine, so outputs were not compared byte-for-byte with the scripts; SHA-1 GUIDs were checked against Node crypto. A live image run has not been made. Verification: see the [release verification record](docs/reviews/v17.9-release.md).

@@ -9,6 +9,13 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [17.10] — 2026-10-09
+
+### Added
+
+- **NCLEX to Anki reads PDFs.** The worksheet converter and the Extractor converter accept the PDF exports from the NCLEX Generator and NCLEX Extractor. Those PDFs are browser prints of rendered Markdown, so their text keeps no line structure: choices and "Why X is" lines run together and wrap, and the browser may add a date/title header and a URL/page footer. `n2aPdfPageLines` reads each page's pdf.js text items through the shared `pdfWalkPages`; `n2aPdfBlocks` rebuilds paragraphs, list items and headings from indents, line pitch and paragraph gaps, drops the browser header and footer, and joins a paragraph split by a page break. `n2aPdfToWorksheetText` rebuilds a Generator worksheet (ANSWER lines, Why/Strategy/Tags lines, ordering steps, calculation blanks and worked math) and `x2aPdfToExportText` rebuilds the Extractor's .txt layout, where question numbers are the only numbered paragraphs at the left margin. The converters themselves are unchanged. A question count that disagrees with the PDF's own count, a PDF with no text layer, and a Generator PDF given to the Extractor option are reported.
+- 16 assertions in `tools/nclex-to-anki-tests.js` with a geometry fixture (`tools/fixtures/nclex-to-anki-pdf.json`) read from synthetic exports printed by headless Chrome from the suite's own print document. Each PDF must give the same cards as its .md source.
+
 ## [17.9] — 2026-10-09
 
 ### Added

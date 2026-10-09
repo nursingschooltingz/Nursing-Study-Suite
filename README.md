@@ -8,7 +8,7 @@ Turn your lecture PDFs and PowerPoints into a complete, source-cited study syste
 
 The whole suite is **one HTML file**. There is nothing to install, no account to create, and no website collecting your data. You open the file in your web browser, paste in a free Google Gemini API key, upload your study materials, and go.
 
-**Published release: v17.9.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v17.9/Nursing-Study-Suite.v17.9.html) or open the [repository HTML](Nursing-Study-Suite%20v17.9.html).
+**Published release: v17.10.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v17.10/Nursing-Study-Suite.v17.10.html) or open the [repository HTML](Nursing-Study-Suite%20v17.10.html).
 
 The left rail lists the seven tools in the order you use them, grouped by stage. **Source:** *Knowledge Base* builds or imports the cited facts everything else reads from. **Plan:** *Priority* sorts those facts into Tier 1/2/3. **Practice:** *Anki* for recall, *NCLEX Extract* for questions out of a review book you already own, *NCLEX Generate* for new ones written from your facts, *Case Studies* for unfolding cases, and *NCLEX to Anki* to turn NCLEX questions into Anki cards.
 
@@ -305,13 +305,15 @@ A validation panel reports the results: **errors** mean the case broke the rules
 
 Three converters that used to be separate Python scripts, now one tab. Pick one at the top:
 
-- **NCLEX → Anki converter** — the **.md** or **.txt** download from the NCLEX Generator worksheet or the NCLEX Extractor.
+- **NCLEX → Anki converter** — the **.md**, **.txt** or **PDF** download from the NCLEX Generator worksheet or the NCLEX Extractor.
 - **NCLEX images → Anki flashcards** — screenshots of a question bank, photos of review-book pages, or scans. Gemini copies each image word for word: it never guesses a number and never supplies an answer the image does not show. Images are read in file-name order, so a question cut off at the bottom of one image is finished by the next, and answer pages at the back of a chapter are matched to their questions by number. Tick **Have Gemini answer** to fill in questions the images never answer; those cards say so on the back and are tagged `AI_Answer` or `AI_Rationale`. This option needs your API key.
-- **NCLEX Extractor → Anki flashcards** — questions the Extractor pulled from a review book: its **.md** (best) or **.txt** download, or paste what its **Copy** button copied. When the book explains each choice, every choice gets its own explanation on the back.
+- **NCLEX Extractor → Anki flashcards** — questions the Extractor pulled from a review book: its **.md** (best), **.txt** or **PDF** download, or paste what its **Copy** button copied. When the book explains each choice, every choice gets its own explanation on the back.
 
 Set the **Deck** (use `::` for subdecks) and any **extra tags**, convert, check the **Card preview**, then download the .txt and import it in Anki with **File → Import**. The deck, note type and tags are preset in the file. Each card has the question and choices on the front; the answer, each choice marked right or wrong with its rationale, and any strategy, tip or CJ on the back.
 
 Anything the converter could not confirm — an answer that isn't one of the choices, a rationale that disagrees with the key, a number Gemini could not read, an export stamped FAILED VALIDATION — is listed as a warning and the card is tagged `NeedsReview` (search `tag:NeedsReview` in the Anki browser). Every card has a stable ID, so importing a corrected file updates the notes instead of duplicating them, including notes made earlier by the Python scripts.
+
+**PDFs (v17.10).** The two text options also read the PDF you saved with the Generator's or Extractor's **🖨 PDF** button, with or without the browser's date and page-number header and footer. A printed PDF keeps the words but not the line breaks, so the converter rebuilds each question and answer from the page layout and then checks it exactly as it checks an .md file. The one thing a PDF cannot bring back is a line break inside a question, such as a lab list, which shows on one line on the card. If the number of questions found differs from the "N questions" line the PDF prints, a warning says so. A scanned PDF has no text to read; use the images option for it. The .md download is still the most exact input.
 
 Image transcripts are kept while the page is open, so a run stopped by a quota limit picks up where it stopped. **Save transcripts** keeps them for another day; **Load transcripts** also accepts img2anki.py's `_transcripts.json`.
 
