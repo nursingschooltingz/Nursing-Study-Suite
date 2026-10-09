@@ -2,6 +2,7 @@
 
 // v17.9: the NCLEX to Anki tab ports nclex2anki.py, img2anki.py and extract2anki.py into the suite.
 // v17.10: the two text converters also read the Generator and Extractor PDF exports.
+// v17.11: they are one option, and the PDF reader handles what two real worksheets showed.
 // These assertions run the shipped converter functions on synthetic exports shaped like the
 // suite's own NCLEX Generator and Extractor downloads, and on fake Gemini transcripts.
 
@@ -131,7 +132,7 @@ async function run(S,t){
   t('the NCLEX to Anki tab is a memoized tool component',!!components&&components[1].includes('nclex2anki:React.memo(NCLEXToAnki)'));
   const core=span(S,'// ──── TOOL: NCLEX to Anki ────','async function i2aFileKey(');
   const ui=span(S,'async function i2aFileKey(','/* ═══════════════════════════════════════════════════════\n   CONFIG SIDEBAR');
-  const M=new Function(core+';return {n2aSha1Hex,n2aGuidBasis,n2aEsc,n2aConvertSources,n2aAnkiFileText,x2aConvertSources,x2aResolveAnswer,i2aNormalizeTranscript,i2aAssemble,i2aBuildCards,i2aConvert,i2aGuid,i2aNaturalCompare,i2aMergeCache,i2aEmptyCache,I2A_TRANSCRIBE_PROMPT,I2A_PROMPT_VERSION,n2aPdfPageLines,n2aPdfBlocks,n2aPdfChoiceLines,n2aPdfToWorksheetText,x2aPdfToExportText};')();
+  const M=new Function(core+';return {n2aSha1Hex,n2aGuidBasis,n2aEsc,n2aConvertSources,n2aAnkiFileText,x2aConvertSources,x2aResolveAnswer,i2aNormalizeTranscript,i2aAssemble,i2aBuildCards,i2aConvert,i2aGuid,i2aNaturalCompare,i2aMergeCache,i2aEmptyCache,I2A_TRANSCRIBE_PROMPT,I2A_PROMPT_VERSION,n2aPdfPageLines,n2aPdfBlocks,n2aPdfChoiceLines,n2aPdfToWorksheetText,x2aPdfToExportText,n2aConvertExports,n2aExportKind,n2aConvertText,n2aKeyFit,n2aParseQuestion,n2aParseKey};')();
 
   t('the converter SHA-1 matches Node crypto on ASCII, Unicode and multi-block input',
     ['','abc','é ünïcode ✓ 🧠','x'.repeat(55),'y'.repeat(64),'z'.repeat(1000)].every(s=>M.n2aSha1Hex(s)===crypto.createHash('sha1').update(s,'utf8').digest('hex')));
@@ -242,15 +243,65 @@ async function run(S,t){
   const bx1=viaPdf('bigx-hf.pdf',M.n2aPdfToWorksheetText,M.n2aConvertSources);
   t('an Extractor PDF given to the first converter reads as the Extractor layout',same(bx1.cards,M.n2aConvertSources([{name:'s',text:bxMd}])));
   t('an Extractor PDF numbers questions only at the left edge, so numbered choices stay choices',same(viaPdf('x-hf.pdf',M.x2aPdfToExportText,M.x2aConvertSources).cards,M.x2aConvertSources([{name:'s',text:FX.md['x.md']}])));
-  const wrong=viaPdf('bigws-hf.pdf',M.x2aPdfToExportText,M.x2aConvertSources);
-  t('a Generator PDF given to the Extractor converter names the right option',wrong.cards.cards.length===0&&wrong.r.warnings.some(w=>w.includes('looks like an NCLEX Generator worksheet')));
   const missing=M.n2aPdfToWorksheetText(hf.filter(b=>!/^7\. Place/.test(b.text)),'w.pdf');
-  t("a question count that disagrees with the PDF's own count is reported",missing.warnings.some(w=>w.includes('says 12 questions but 6 were found')));
+  t("questions and answers that cannot be lined up fall back to printed numbers, and every card is marked for review",
+    missing.reviewAll===true&&missing.warnings.some(w=>w.includes('11 questions and 12 answers'))&&missing.warnings.some(w=>w.includes('says 12 questions but 11 were found'))&&
+    M.n2aConvertExports([{name:'w',text:missing.text,reviewAll:true}]).cards.every(c=>c.tags.includes('NeedsReview')));
   t('a PDF with no text layer is sent to the images option',M.n2aPdfToWorksheetText([],'scan.pdf').warnings[0].includes('no text layer')&&M.x2aPdfToExportText([],'scan.pdf').warnings[0].includes('NCLEX images option'));
   t('a choice-only paragraph splits into one choice per line, and a stem does not',
     (M.n2aPdfChoiceLines('A. Spinach B. Bananas C. Oranges D. Milk')||[]).join('|')==='A. Spinach|B. Bananas|C. Oranges|D. Milk'&&M.n2aPdfChoiceLines('A client needs vitamin A. B. C. D.')===null);
-  t('the two text converters accept PDFs and read them through the shared page walk',
-    ui.includes('accept=".md,.txt,.markdown,.pdf"')&&ui.includes("if(/\\.pdf$/i.test(f.name||'')){")&&core.includes('await pdfWalkPages(file,{onPage:async(text,i,pg)=>')&&core.includes('finally{destroyPdfDoc(file);}'));
+
+  // v17.11: what two real worksheets showed (reproduced here with synthetic content only).
+  const old=viaPdf('old-hf.pdf',M.n2aPdfToWorksheetText,M.n2aConvertSources),oldMd=M.n2aConvertSources([{name:'s',text:FX.md['old.md']}]);
+  const printed=blocksOf('old-hf.pdf').filter(b=>/^\d+\.\s/.test(b.text)).map(b=>+b.text.match(/^\d+/)[0]);
+  t('a pre-v17.7 PDF whose numbered choices and steps printed as extra list numbers still pairs every question with its own answer',
+    printed.join(',')==='1,2,3,4,5,6,7,8,9,1,2,3,4,5,6,7,8'&&/^8\. ANSWER/.test(blocksOf('old-hf.pdf').filter(b=>/ANSWER/.test(b.text)).pop().text)&&old.cards.cards.length===4&&same(old.cards,oldMd)&&!old.r.reviewAll&&old.r.warnings.some(w=>w.includes('exported before v17.7')));
+  t('those printed list items come back as numbered choices and numbered ordering steps',
+    /<b>✓ 1\.<\/b> Dry mucous membranes/.test(old.cards.cards[1].back)&&old.cards.cards[1].type==='SATA'&&/1\. Perform hand hygiene/.test(old.cards.cards[2].back));
+  t('choices printed as a paragraph of their own are read, including one that ends in "by 2."',old.cards.cards[0].type==='MCQ'&&(old.cards.cards[0].front.match(/<b>[A-D]\.<\/b>/g)||[]).length===4);
+  t('an older worksheet\'s "CORRECT SEQUENCE:" entry is read as that answer',/Answer: Perform hand hygiene →/.test(old.cards.cards[2].back));
+  const page=FX.pdfs['bigws-clean.pdf'].map(p=>p.map(([x,y,fs,text])=>({x,y,fs,text})));
+  const other=page.map((p,i)=>[...(i?[]:[{x:36,y:760,fs:9,text:'Generated note in small type'},{x:36,y:747,fs:9,text:'continues at a 9pt line pitch'}]),...p,{x:0,y:780,fs:10,text:'NCLEX-Practice-Questions-12-questions file:///C:/Users/x/suite.html'},{x:0,y:10,fs:10,text:(i+1)+' of '+page.length+' 10/6/2026, 10:01 PM'}]);
+  t("another browser's left-edge footer in body-size type, and a small-type note with a tighter pitch, change nothing",
+    same(M.n2aConvertSources([{name:'s',text:M.n2aPdfToWorksheetText(M.n2aPdfBlocks(other),'o').text}]),wsMd));
+  const deep=page.map(p=>p.map(l=>/^1[0-2]\. /.test(l.text)?{...l,x:30.8,text:l.text.replace(/^1/,'10')}:l));
+  t('three-digit list numbers set left of the margin do not move it',M.n2aPdfBlocks(deep).filter(b=>b.indent).length===M.n2aPdfBlocks(page).filter(b=>b.indent).length);
+
+  // A key misnumbered by the Generator: a "not parsed" placeholder at 2, answers for 2-3 printed one
+  // number late, and entry 4 printed twice. And an entry printed twice whose second copy is a placeholder.
+  // Each question's choices have words of their own (heartant, heartbee...), as real choices do.
+  const opt=w=>[w+'ant',w+'bee',w+'cat',w+'dog'];
+  const q4=(n,w)=>n+'. Which '+w+' is correct?\n'+opt(w).map((o,i)=>'     '+'ABCD'[i]+'. '+o).join('\n');
+  const k4=(n,w,right='A')=>n+'. ANSWER: '+right+'\n'+opt(w).map((o,i)=>'     Why '+'ABCD'[i]+' is '+('ABCD'[i]===right?'correct':'wrong')+': '+o+' explained.').join('\n');
+  const words=['heart','lung','kidney','liver','brain'];
+  const slip='## Questions\n\n'+words.map((w,i)=>q4(i+1,w)).join('\n\n')+'\n\n## Answer Key\n\n'+[k4(1,'heart'),'2. ANSWER: [not parsed — see Raw view]',k4(3,'lung'),k4(4,'kidney'),k4(4,'liver'),k4(5,'brain')].join('\n\n');
+  const fixed=M.n2aConvertText(slip,'w');
+  t('a Generator numbering slip (placeholder, answers one number late, a repeated number) is moved back when the rationales confirm it',
+    fixed.cards.length===5&&fixed.cards.every((c,i)=>c.back.includes(words[i]+'ant explained'))&&fixed.warnings.some(w=>w.includes('Q2-Q3 were printed one number late'))&&
+    [2,3].every(n=>fixed.cards[n-1].tags.includes('NeedsReview'))&&!fixed.cards[0].tags.includes('NeedsReview'));
+  // The same shape, but the entries after the placeholder already fit their own questions.
+  const noProof=M.n2aConvertText('## Questions\n\n'+words.map((w,i)=>q4(i+1,w)).join('\n\n')+'\n\n## Answer Key\n\n'+[k4(1,'heart'),'2. ANSWER: [not parsed — see Raw view]',k4(3,'kidney'),k4(4,'liver'),k4(4,'liver'),k4(5,'brain')].join('\n\n'),'w');
+  t('without that evidence nothing is moved: the placeholder is skipped',noProof.warnings.some(w=>w.includes('Q2: SKIPPED'))&&!noProof.warnings.some(w=>w.includes('printed one number late')));
+  const shiftOnly=M.n2aConvertText('## Questions\n\n'+[q4(1,'heart'),q4(2,'lung'),q4(3,'kidney')].join('\n\n')+'\n\n## Answer Key\n\n'+[k4(1,'heart'),k4(2,'kidney'),k4(3,'lung')].join('\n\n'),'w');
+  t("an answer whose rationales describe a neighbour's choices is kept but named and marked for review",
+    shiftOnly.warnings.some(w=>w.includes('Q2: its rationale lines describe the choices of answer entry 3'))&&shiftOnly.warnings.some(w=>w.includes('Q3: its rationale lines describe the choices of answer entry 2'))&&
+    shiftOnly.cards[1].tags.includes('NeedsReview')&&shiftOnly.cards[2].tags.includes('NeedsReview')&&!shiftOnly.cards[0].tags.includes('NeedsReview'));
+  const placeholderCopy=M.n2aConvertText('## Questions\n\n'+[q4(1,'heart'),q4(2,'lung')].join('\n\n')+'\n\n## Answer Key\n\n'+[k4(1,'heart'),'1. ANSWER: [not parsed — see Raw view]',k4(2,'lung')].join('\n\n'),'w');
+  t('an entry printed twice never uses a "not parsed" copy over a real one',placeholderCopy.cards.length===2&&placeholderCopy.cards[0].back.includes('Answer: A')&&placeholderCopy.warnings.some(w=>w.includes('the copy that has an answer was used')));
+  const gap=M.n2aConvertText('## Questions\n\n'+[q4(1,'heart'),q4(2,'lung'),q4(3,'kidney')].join('\n\n')+'\n\n## Answer Key\n\n'+[k4(1,'heart'),k4(3,'kidney')].join('\n\n'),'w');
+  t('a missing answer number no longer hides every answer after it',gap.cards.length===2&&gap.cards[1].back.includes('kidneyant explained')&&gap.warnings.some(w=>w.includes('Q2: SKIPPED - no answer key entry')));
+  t('an "Order:" line inside a rationale is not read as a new answer',M.n2aConvertText('## Questions\n\n'+q4(1,'heart')+'\n\n## Answer Key\n\n'+k4(1,'heart')+'\n     Order: give the drug after the assessment.','w').cards[0].back.includes('Answer: A'));
+
+  // One converter for both exports.
+  t('each export is routed by its own layout',M.n2aExportKind(WORKSHEET)==='worksheet'&&M.n2aExportKind(EXTRACT_MD)==='extract'&&M.n2aExportKind(EXTRACT_TXT)==='extract'&&M.n2aExportKind(blocksOf&&M.n2aPdfToWorksheetText(blocksOf('bigx-hf.pdf'),'x').text)==='extract');
+  const mixed=M.n2aConvertExports([{name:'ws',text:WORKSHEET},{name:'x',text:EXTRACT_MD},{name:'t',text:EXTRACT_TXT}]);
+  t('mixed Generator and Extractor exports convert together, each with its own card IDs',
+    mixed.cards.length===5&&mixed.kinds.map(k=>k.kind+':'+k.cards).join(',')==='worksheet:2,extract:2,extract:1'&&
+    mixed.cards.slice(0,2).every(c=>c.guid===ws.cards[mixed.cards.indexOf(c)].guid)&&mixed.cards.slice(2).every(c=>/^x2a/.test(c.guid)));
+  t('merged worksheet cards carry no raw double quote, so one Anki file serves both kinds',!M.n2aAnkiFileText(mixed.cards,'D',false).split('\n').slice(6).join('').includes('"'));
+  t('the tab offers one export option beside the image option, and reads PDFs through the shared page walk',
+    /const N2A_MODES=\[\n  \{id:'export',/.test(ui.slice(0,0)+S)&&!S.includes("{id:'extract',icon:")&&ui.includes('accept=".md,.txt,.markdown,.pdf"')&&ui.includes('n2aConvertExports(sources,extraTags)')&&
+    ui.includes("if(/\\.pdf$/i.test(f.name||'')){")&&core.includes('await pdfWalkPages(file,{onPage:async(text,i,pg)=>')&&core.includes('finally{destroyPdfDoc(file);}'));
 }
 
 module.exports=run;

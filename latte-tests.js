@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 3541;
+const EXPECTED_ASSERTIONS = 3555;
 
 let file;
 try {
@@ -2757,7 +2757,7 @@ section('v15.14 — clamps, backoff, storage');
   section('v17.4 second production review, findings R01-R12');
   await require('./tools/review-r-findings-tests')(S,t);
 
-  section('v17.9 NCLEX to Anki converters and v17.10 PDF input');
+  section('v17.9-v17.11 NCLEX to Anki converters, PDF input and the merged export option');
   await require('./tools/nclex-to-anki-tests')(S,t);
 
   console.log('\n════════════════════════════');

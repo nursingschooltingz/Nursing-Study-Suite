@@ -1,5 +1,9 @@
 # Current maintainer state
 
+## v17.11 NCLEX to Anki: one export option, real-world PDFs (2026-10-09)
+
+The canonical application is `Nursing-Study-Suite v17.11.html`. The user's two real Generator worksheet PDFs (Exam 1, Tier 1 and Tier 2) failed under v17.10: 66 cards and 196 warnings. They now give 153 of 154 and 62 of 62; Tier 1's Q21 has no answer in the worksheet. Tier 1 was a pre-v17.7 export with drifting printed numbers and three Generator numbering slips; after the fix, no question's rationale lines fit a neighbouring answer better than its own (mean fit 86%, chance about 25%). The user also asked to merge the worksheet and Extractor options; they are one option. The course PDFs were read only in session scratch space, then deleted; no course content is in the repository. Verification: see the [release verification record](docs/reviews/v17.11-release.md).
+
 ## v17.10 NCLEX to Anki PDF input (2026-10-09)
 
 The canonical application is `Nursing-Study-Suite v17.10.html`. The user asked for the two text converters in the NCLEX to Anki tab to read PDFs. Synthetic Generator and Extractor exports (up to 12 and 10 questions, every question type, multi-page, page-split paragraphs) were printed by headless Chrome from the suite's own print document, with and without the browser header and footer. Each converted to the same cards as its .md source; the only loss is line breaks inside a question stem, which the PDF does not record. Only Chrome-printed PDFs were tested, and none of the user's own PDFs. Verification: see the [release verification record](docs/reviews/v17.10-release.md).

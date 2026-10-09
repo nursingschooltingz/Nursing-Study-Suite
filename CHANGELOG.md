@@ -9,6 +9,33 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [17.11] — 2026-10-09
+
+Two real Generator worksheet PDFs (154 and 62 questions) converted to 66 cards with 196 warnings under v17.10. They now give 153 and 62 cards; the one missing question has no answer in its worksheet.
+
+### Changed
+
+- **One export option.** The worksheet converter and the Extractor converter are one "NCLEX export → Anki" option beside the image option. `n2aExportKind` routes each file by its layout (the Extractor's .md bold numbers or .txt ANSWER KEY rules go to extract2anki's converter, the rest to nclex2anki's), and `n2aConvertExports` writes one file; each kind keeps its own card IDs.
+
+### Fixed
+
+- PDF reading, from the two real files:
+  - The line pitch is measured on body-size lines only; a 9pt note had lowered it, so every wrapped line became its own paragraph.
+  - Choices printed as a paragraph of their own are split by following A, B, C… in sequence, so "by 2." inside a choice is text.
+  - A browser footer printed at the page's left edge in body-size type is recognised at the page edges (date and time, "N of M", file or web address, print-title slug) and dropped before the margin is measured. Three-digit list numbers no longer define the margin.
+  - Text before the first question (the FAILED VALIDATION stamp) is kept, so the stamp still marks every card.
+- Pre-v17.7 PDFs printed numbered choices and steps as extra list numbers, so printed question and answer numbers drift apart. `n2aPdfToWorksheetText` now numbers questions (a numbered paragraph that asks, has choices or a blank, or is followed by them) and labelled answer entries in order and pairs them in order. A numbered list item between questions becomes that question's numbered choices; one inside an answer becomes its numbered steps. When the counts disagree, printed numbers are used and every card is marked NeedsReview.
+- The worksheet converter, for .md, .txt and PDF alike:
+  - Ordering answers labelled "CORRECT SEQUENCE:", "SEQUENCE:" or "ORDER:" (capitals) start an entry; they used to fold every later answer into the one before.
+  - A skipped answer number no longer hides every answer after it. An entry printed twice uses the copy whose rationale lines fit the question's choices (never a "not parsed" copy) and is marked NeedsReview.
+  - A "[not parsed — see Raw view]" placeholder is reported and skipped instead of becoming a broken card.
+  - The question's choices are scanned with extract2anki's mark scan, which does not consume the whitespace before the next choice. The original lost choice C whenever choice B ended in "2." or "B.".
+- **Misnumbered answer keys.** `n2aKeyFit` measures how well an entry's "Why X is" lines match choice X. A Generator numbering slip (a "not parsed" placeholder, the next answers one number late, then a number printed twice) is moved back one place by `n2aRealignKey` only when some entry fits the question before it and none fits its own question better; those cards are marked NeedsReview. An answer whose rationales describe a neighbouring question's choices is named in the warnings and marked NeedsReview.
+
+### Added
+
+- 14 assertions in `tools/nclex-to-anki-tests.js`. Among them is a synthetic worksheet printed the pre-v17.7 way, numbered choices and steps included, which gives the same cards as its correctly numbered source.
+
 ## [17.10] — 2026-10-09
 
 ### Added

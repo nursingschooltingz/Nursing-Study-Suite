@@ -8,7 +8,13 @@
      Babel, so this adds narrow resource directives without a default-src/script-src migration. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net">
 <title>LATTE Study Suite</title>
-<!-- v17.10 (2026-10-09): NCLEX to Anki reads PDFs. The worksheet and Extractor converters accept the Generator and
+<!-- v17.11 (2026-10-09): NCLEX to Anki, one export option and real-world PDFs. The worksheet and Extractor converters
+     are one option that routes each file by its layout. Two real worksheet PDFs failed: their choices were a paragraph of
+     their own, a 9pt note set the line pitch, one browser put its footer at the left edge, and a pre-v17.7 export printed
+     numbered lines as extra list numbers so questions and answers drifted apart. Questions and answers are now paired in
+     order, older "CORRECT SEQUENCE:" labels and repeated or skipped key numbers are read, and a Generator numbering slip
+     (placeholder, answers one number late) is moved back when the rationale lines confirm it. Prompts are unchanged.
+     v17.10 (2026-10-09): NCLEX to Anki reads PDFs. The worksheet and Extractor converters accept the Generator and
      Extractor PDF exports. A browser-printed PDF keeps no line structure, so it is rebuilt from the page geometry
      (indents, line pitch, paragraph gaps; the browser header and footer dropped) into the text each converter already
      reads. The converters, prompts and warning tiers are unchanged.
@@ -6041,7 +6047,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '17.10';}
+function suiteVersion(){return '17.11';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -7841,15 +7847,22 @@ const N2A_NO_STYLE='margin:.45em 0;padding:.4em .6em;border-left:4px solid #c940
 const N2A_KEY_HEAD=/^[ \t]*(?:#{1,6}[ \t]*)?(?:\*\*)?answer key(?:\*\*)?[ \t]*$/gim;
 const N2A_Q_HEAD=/^[ \t]*(?:#{1,6}[ \t]*)?(?:\*\*)?(?:nclex practice )?questions(?:\*\*)?[ \t]*$/gim;
 const N2A_BOLD_HEAD=/^[ \t]*\*\*Q?(\d{1,3})[.)]\*\*/;
-const N2A_ANS_HEAD=/^[ \t]{0,4}(?:\*\*)?Q?(\d{1,3})[.)](?:\*\*)?[ \t]+ANSWER\s*:/i;
+// v17.10: worksheets generated before v17.8 label some ordering answers "N. CORRECT SEQUENCE:",
+// "N. SEQUENCE:" or "N. ORDER:" instead of "N. ANSWER:". The script read only ANSWER, so the first
+// such entry stopped every later answer from being found. The ordering labels are matched in
+// capitals only, so an "Order:" line inside a rationale is not mistaken for one.
+const N2A_ANS_HEAD=/^[ \t]{0,4}(?:\*\*)?Q?(\d{1,3})[.)](?:\*\*)?[ \t]+(?:[Aa][Nn][Ss][Ww][Ee][Rr]|(?:CORRECT[ \t]+)?(?:SEQUENCE|ORDER))\s*:/;
 const N2A_NUM_HEAD=/^([ \t]{0,4})Q?(\d{1,3})[.)][ \t]+\S/;
 const N2A_HEAD_STRIP=/^[ \t]*(?:\*\*)?Q?\d{1,3}[.)](?:\*\*)?[ \t]*/;
 function n2aSplitBlocks(text){
   // A new block starts only where the number ascends by exactly one, so numbered lines inside a
   // question (lab lists, numeric choices) cannot start a block of their own.
-  const lines=text.split('\n');let head;
+  // v17.10: "N. ANSWER:" headers cannot be confused with lines inside an entry, so in an answer key
+  // a skipped number no longer folds every later entry into the one before it, and an entry printed
+  // twice under the same number comes back as a separate block marked duplicate (third element).
+  const lines=text.split('\n');let head,answers=false;
   if(lines.some(l=>N2A_BOLD_HEAD.test(l)))head=l=>{const m=l.match(N2A_BOLD_HEAD);return m?parseInt(m[1],10):null;};
-  else if(lines.some(l=>N2A_ANS_HEAD.test(l)))head=l=>{const m=l.match(N2A_ANS_HEAD);return m?parseInt(m[1],10):null;};
+  else if(lines.some(l=>N2A_ANS_HEAD.test(l))){answers=true;head=l=>{const m=l.match(N2A_ANS_HEAD);return m?parseInt(m[1],10):null;};}
   else{
     const first=lines.map(l=>l.match(N2A_NUM_HEAD)).find(Boolean),indent=first?first[1]:'';
     head=l=>{const m=l.match(N2A_NUM_HEAD);return m&&m[1]===indent?parseInt(m[2],10):null;};
@@ -7857,10 +7870,11 @@ function n2aSplitBlocks(text){
   const blocks=[];let cur=null,last=null;
   for(const line of lines){
     const n=head(line);
-    if(n!==null&&(last===null||n===last+1)){cur=[n,[line.replace(N2A_HEAD_STRIP,'')]];blocks.push(cur);last=n;}
+    if(n!==null&&(last===null||n===last+1||(answers&&n>last))){cur=[n,[line.replace(N2A_HEAD_STRIP,'')],false];blocks.push(cur);last=n;}
+    else if(n!==null&&answers&&n===last){cur=[n,[line.replace(N2A_HEAD_STRIP,'')],true];blocks.push(cur);}
     else if(cur)cur[1].push(line);
   }
-  return blocks.map(([n,b])=>[n,b.join('\n')]);
+  return blocks.map(([n,b,dup])=>[n,b.join('\n'),dup]);
 }
 function n2aCleanBlock(s){return s.replace(/^([ \t]*\d{1,9})\\([.)])/gm,'$1$2').replace(/^[ \t]*>[ \t]?/gm,'').split('**').join('');}
 function n2aTidy(text){
@@ -7882,21 +7896,27 @@ function n2aParseQuestion(block){
     keep.push(line);
   }
   const body=keep.join('\n');
-  let [stem,options]=steps.length?[body,[]]:n2aSplitStemOptions(body,false);
+  // v17.11: extract2anki's mark scan, which does not consume the whitespace before the next mark.
+  // The original scan lost choice C whenever choice B ended in a mark-like "2." or "B.".
+  let [stem,options]=steps.length?[body,[]]:n2aSplitStemOptions(body,true);
   stem=n2aTidy(stem);
   const type=steps.length?'Ordering':calc?'Calculation':/select all that apply/i.test(stem)?'SATA':options.length?'MCQ':'Unknown';
   return {stem,options,steps,type,unit};
 }
 const N2A_WHY=/^Why[ \t]+([A-Z1-9])[ \t]+is[ \t]+(correct|wrong|incorrect)[ \t]*:?[ \t]*(.*)$/i;
 const N2A_LABELED=/^(?:[^\w\s]{1,3}[ \t]*)?(ANSWER|Rationale|Strategy|Tip|CJ|Conditions|Tags)[ \t]*:[ \t]*(.*)$/iu;
+// v17.10: an older worksheet's ordering label is read as that entry's ANSWER line (see N2A_ANS_HEAD).
+const N2A_SEQ_LABEL=/^(?:CORRECT[ \t]+)?(?:SEQUENCE|ORDER)[ \t]*:[ \t]*(.*)$/;
 function n2aParseKey(block){
   const key={answer:'',answer_body:[],why:new Map(),why_order:[],rationale:[],strategy:'',tip:'',cj:'',conditions:'',tags:''};
-  const hasAnswerLabel=/^[ \t]*ANSWER[ \t]*:/im.test(block);let cur=null,first=true;
+  const hasAnswerLabel=/^[ \t]*ANSWER[ \t]*:/im.test(block)||/^[ \t]*(?:CORRECT[ \t]+)?(?:SEQUENCE|ORDER)[ \t]*:/m.test(block);let cur=null,first=true;
   for(const raw of block.split('\n')){
     const line=raw.trim();
     if(!line||/^[-=_*─═]{3,}$/.test(line)){if(cur==='rationale'&&key.rationale.length&&key.rationale[key.rationale.length-1]!=='')key.rationale.push('');continue;}
     let m=line.match(N2A_WHY);
     if(m){const label=m[1].toUpperCase();key.why.set(label,[m[2].toLowerCase()==='correct'?'correct':'wrong',m[3].trim()]);key.why_order.push(label);cur=['why',label];first=false;continue;}
+    m=first&&!key.answer?line.match(N2A_SEQ_LABEL):null;
+    if(m){key.answer=m[1].trim();cur='answer';first=false;continue;}
     m=line.match(N2A_LABELED);
     if(m){
       const name=m[1].toLowerCase(),val=m[2].trim();
@@ -7979,6 +7999,47 @@ function n2aBuildTags(q,key,sourceName,extra){
   return n2aDedupeTags(tags);
 }
 function n2aGuid(q){return 'n2a'+n2aSha1Hex(n2aGuidBasis(q.stem+'\x1f'+q.options.map(([,t])=>t).join('\x1f')+'\x1f'+q.steps.join('\x1f'))).slice(0,20);}
+// v17.11: how well an answer entry fits a question: the share of its "Why X is" lines whose words
+// overlap choice X more than any other choice. A worksheet's rationale restates its own choices,
+// so an entry that belongs to a different question scores near chance (about 1 in 4). Null when
+// either side has fewer than three choices or rationale lines to compare.
+function n2aKeyFit(q,key){
+  if(!q||!key||q.options.length<3||key.why.size<3)return null;
+  const words=s=>new Set(s.toLowerCase().replace(/\(\s*sources?\s*:[^)]*\)/g,'').match(/[a-z]{4,}/g)||[]);
+  const opts=q.options.map(([l,t])=>[l,words(t)]);let hit=0;
+  for(const [label,[,text]] of key.why){
+    const w=words(text);let best=null,top=-1;
+    for(const [l,o] of opts){let s=0;for(const x of o)if(w.has(x))s++;s/=Math.max(1,o.size);if(s>top){top=s;best=l;}}
+    if(best===label)hit++;
+  }
+  return hit/key.why.size;
+}
+const N2A_NOT_PARSED=/^\[not parsed\b/i;
+// v17.11: a numbering slip seen three times in one pre-v17.8 Generator worksheet: a "not parsed"
+// placeholder at N, the real answers for N..M-1 printed one number late, and M's entry printed twice,
+// which brings the numbering back in step. When the rationale lines show that run belongs one place
+// earlier (some entry fits the question before it and none fits its own question better), the run
+// moves back, the placeholder is dropped and the second copy of M becomes M's entry. entries:
+// [{n, dup, key}] in key order, changed in place; returns the moved ranges [first, last].
+function n2aRealignKey(entries,questions){
+  const moved=[];
+  for(let i=0;i<entries.length;i++){
+    const p=entries[i];
+    if(p.dup||!N2A_NOT_PARSED.test(p.key.answer))continue;
+    let j=i+1;while(j<entries.length&&!entries[j].dup&&!N2A_NOT_PARSED.test(entries[j].key.answer))j++;
+    if(j>=entries.length||!entries[j].dup||j===i+1||N2A_NOT_PARSED.test(entries[j].key.answer))continue;
+    const run=entries.slice(i+1,j);let earlier=0,own=0;
+    for(const e of run){
+      const here=n2aKeyFit(questions.get(e.n),e.key),back=n2aKeyFit(questions.get(e.n-1),e.key);
+      if(here===null||back===null)continue;
+      if(back>=0.75&&here<0.5)earlier++;else if(here>=0.75&&back<0.5)own++;
+    }
+    if(!earlier||own)continue;
+    for(const e of run)e.n-=1;
+    p.drop=true;entries[j].dup=false;moved.push([p.n,entries[j].n-1]);i=j;
+  }
+  return moved;
+}
 function n2aConvertText(text,sourceName,extraTags=[]){
   const warnings=[];
   text=String(text).replace(/^\ufeff/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n').replace(/<div class="pagebreak"><\/div>/g,'\n');
@@ -7991,14 +8052,49 @@ function n2aConvertText(text,sourceName,extraTags=[]){
   const needsReview=/FAILED VALIDATION|Unresolved item findings remain/i.test(before);
   if(needsReview)warnings.push(sourceName+': export is stamped FAILED VALIDATION / unresolved findings; every card is tagged NeedsReview.');
   const questions=new Map(n2aSplitBlocks(qText).map(([n,b])=>[n,n2aParseQuestion(n2aCleanBlock(b))]));
-  const answers=new Map(n2aSplitBlocks(kText).map(([n,b])=>[n,n2aParseKey(n2aCleanBlock(b))]));
+  const entries=n2aSplitBlocks(kText).map(([n,b,dup])=>({n,dup,key:n2aParseKey(n2aCleanBlock(b))}));
+  const moved=n2aRealignKey(entries,questions),shifted=new Set();
+  for(const [a,b] of moved){
+    for(let n=a;n<=b;n++)shifted.add(n);
+    warnings.push(sourceName+': answer entries for Q'+a+(b>a?'-Q'+b:'')+' were printed one number late after a "not parsed" placeholder; their rationales match the question before, so they were moved back one place. Those cards are marked for review.');
+  }
+  const answers=new Map(),copies=new Map();
+  for(const {n,dup,key:k,drop} of entries){
+    if(drop)continue;
+    if(dup){if(!copies.has(n))copies.set(n,[answers.get(n)]);copies.get(n).push(k);}else answers.set(n,k);
+  }
   if(!questions.size)return {cards:[],warnings:[...warnings,sourceName+': no numbered questions found.']};
+  // Another entry that fits this question clearly better than its own, or null.
+  const better=(q,n,fit)=>{
+    if(fit===null||fit>=0.5)return null;
+    const near=[n-1,n+1].map(m=>[m,n2aKeyFit(q,answers.get(m))]).filter(([,f])=>f!==null&&f>=0.75).sort((a,b)=>b[1]-a[1]);
+    return near.length?near[0][0]:null;
+  };
   const cards=[];
   for(const n of [...questions.keys()].sort((a,b)=>a-b)){
-    const q=questions.get(n),where=sourceName+' Q'+n,key=answers.get(n);
+    const q=questions.get(n),where=sourceName+' Q'+n;let key=answers.get(n),flag=needsReview||shifted.has(n);
+    // v17.10/v17.11: an entry the worksheet printed twice under one number. A "not parsed" copy is
+    // never used over a real one; of the rest, the copy whose rationale lines fit this question's
+    // choices, or the last copy when none can be compared.
+    if(copies.has(n)){
+      const all=copies.get(n),real=all.filter(c=>c&&!N2A_NOT_PARSED.test(c.answer)),pool=real.length?real:all;
+      const fits=pool.map(c=>n2aKeyFit(q,c)),scored=fits.some(f=>f!==null);
+      const pick=scored?fits.reduce((b,f,i)=>(f??-1)>=(fits[b]??-1)?i:b,0):fits.length-1;
+      key=pool[pick];flag=true;
+      warnings.push(where+': the answer key lists this question '+all.length+' times; '+(pool.length===1&&pool.length<all.length?'the copy that has an answer':scored?'the copy whose rationales match its choices':'the last copy')+' was used.');
+    }
     if(!key||!(key.answer||key.why.size||key.answer_body.length)){warnings.push(where+': SKIPPED - no answer key entry.');continue;}
+    // v17.10: the Generator writes this placeholder when it could not parse a key entry; it is not an answer.
+    if(N2A_NOT_PARSED.test(key.answer)){
+      const next=n2aKeyFit(q,answers.get(n+1));
+      warnings.push(where+': SKIPPED - the worksheet has no answer for this question (its key entry says "not parsed")'+(next!==null&&next>=0.75?'; answer entry '+(n+1)+' matches its choices, so the key looks misnumbered from here':'')+'.');continue;
+    }
     if(!q.stem){warnings.push(where+': SKIPPED - empty question stem.');continue;}
-    let flag=needsReview,labels=q.options.length?n2aAnswerLabels(key.answer,q.options):[];
+    // v17.11: a key misnumbered by the Generator pairs a question with a neighbour's answer, which
+    // passes every label check when both have choices A-D. The card is kept and marked for review.
+    const other=better(q,n,n2aKeyFit(q,key));
+    if(other!==null){warnings.push(where+': its rationale lines describe the choices of answer entry '+other+', not its own; the answer key looks misnumbered here. Check this card.');flag=true;}
+    let labels=q.options.length?n2aAnswerLabels(key.answer,q.options):[];
     if(!labels.length&&key.why.size)labels=[...key.why].filter(([,[k]])=>k==='correct').map(([l])=>l);
     if(q.type==='Unknown'){warnings.push(where+': no answer choices detected; card made from the stem only.');flag=true;}
     if(q.options.length){
@@ -8266,16 +8362,20 @@ function x2aConvertSources(sources,extraTags=[]){
   return {cards,warnings};
 }
 
-// ── PDF input for the two text converters ───────────────────────────────────
+// ── PDF input and the merged export converter ───────────────────────────────
 // v17.10: the Generator and Extractor PDF exports are browser prints of rendered Markdown, so the
 // line structure both parsers read is gone: a question's choices and an answer's "Why X is" lines
 // run together and wrap at the page width, and the browser may add a date/title header and a
 // URL/page footer. The layout survives in the geometry. List items are indented from the body's
 // left edge, wrapped lines sit one line pitch apart while separate items and paragraphs sit
-// further apart, and the browser's header and footer are set outside the body margin in a small
-// font. Each PDF is rebuilt into the text its converter already reads (the worksheet's line shape,
-// or the Extractor's .txt layout). The converters are unchanged, so every NeedsReview check still
-// applies to what comes out, and a question count that disagrees with the PDF's own is reported.
+// further apart, and the browser's header and footer sit at the page edges. Each PDF is rebuilt
+// into the text a converter already reads (the worksheet's line shape, or the Extractor's .txt
+// layout). The converters' checks all still apply, and a question count that disagrees with the
+// PDF's own is reported.
+// v17.11: measured on two real worksheets. Their pitch was set by a few 9pt lines, their choices
+// were a paragraph of their own, one browser printed its footer at the page's left edge in body-size
+// type, and the older one (exported before v17.7) printed numbered lines inside a question or answer
+// as extra list items, so its printed numbers drift from the real ones on both sides of the key.
 // One page's pdf.js text items -> visual lines {x, y, fs, text}, spaced like pdfLayoutText.
 function n2aPdfPageLines(items){
   const lines=[];let cur=null,lastX=0,lastW=0;
@@ -8288,20 +8388,37 @@ function n2aPdfPageLines(items){
   }
   return lines.map(l=>({...l,text:l.text.replace(/\s+/g,' ').trim()})).filter(l=>l.text);
 }
-const N2A_PDF_CHROME=/^\d{1,2}\/\d{1,2}\/\d{2,4},?\s+\d{1,2}:\d{2}|^(?:https?|file|about|blob):\S*|^(?:page\s+)?\d+\s*(?:\/|of)\s*\d+$/i;
+// Browser header/footer text: a date and time, a page counter ("1/2", "5 of 28"), a web or file
+// address, or the print title as a hyphenated slug ("NCLEX-Practice-Questions-62-questions").
+const N2A_PDF_CHROME=/^\d{1,2}\/\d{1,2}\/\d{2,4},?\s+\d{1,2}:\d{2}|(?:https?|file|about|blob):\/\/|^(?:page\s+)?\d+\s*(?:\/|of)\s*\d+(?:\s|$)|\d{1,2}\/\d{1,2}\/\d{2,4},?\s+\d{1,2}:\d{2}(?:\s*[AP]M)?\s*$|^[A-Za-z0-9]+(?:-[A-Za-z0-9]+){2,}$/i;
+const N2A_PDF_NUM=/^\(?(\d{1,3})[.)]\s+/;
 // pages: [[line]] -> blocks {text, x, fs, page, indent, heading}. A block is one paragraph, list
 // item, heading or quote: a new one starts at a font-size change, at an outdent, after a gap wider
 // than the line pitch, or on a new page unless that page continues the sentence.
 function n2aPdfBlocks(pages){
-  const all=[];(pages||[]).forEach((ls,page)=>{for(const l of ls||[])if(l&&l.text)all.push({...l,page});});
+  const all=[];
+  (pages||[]).forEach((ls,page)=>{
+    // pdf.js lists a browser's header and footer first or last on the page; they are dropped before
+    // anything is measured, so a footer set at the page's left edge cannot define the margin.
+    const keep=(ls||[]).filter(l=>l&&l.text);let a=0,b=keep.length;
+    while(a<b&&a<3&&N2A_PDF_CHROME.test(keep[a].text))a++;
+    while(b>a&&keep.length-b<3&&N2A_PDF_CHROME.test(keep[b-1].text))b--;
+    for(const l of keep.slice(a,b))all.push({...l,page});
+  });
   if(!all.length)return [];
   const weight=new Map();
   for(const l of all){const k=Math.round(l.fs*2)/2;weight.set(k,(weight.get(k)||0)+l.text.length);}
   const bodyFs=[...weight].sort((a,b)=>b[1]-a[1])[0][0];
-  const left=all.filter(l=>l.fs>=bodyFs*0.85).reduce((m,l)=>Math.min(m,l.x),Infinity);
-  const lines=all.filter(l=>!(l.x<left-4)&&!(l.fs<bodyFs*0.85&&N2A_PDF_CHROME.test(l.text)));
-  let pitch=bodyFs*1.45; // the print stylesheet's line-height; a measured wrap gap can only lower it
-  for(let i=1;i<lines.length;i++){const a=lines[i-1],b=lines[i],g=a.y-b.y;if(a.page===b.page&&Math.abs(a.fs-b.fs)<0.3&&g>b.fs*0.9&&g<pitch)pitch=g;}
+  // The body's left edge. A list number is set to the left of its item, and a three-digit one
+  // ("100.") reaches past the margin, so numbered lines do not define it.
+  const numbered=l=>N2A_PDF_NUM.test(l.text);
+  const sized=all.filter(l=>l.fs>=bodyFs*0.85),plain=sized.filter(l=>!numbered(l));
+  const left=(plain.length?plain:sized).reduce((m,l)=>Math.min(m,l.x),Infinity);
+  const lines=all.filter(l=>!(l.x<left-4&&!numbered(l))&&!(l.fs<bodyFs*0.85&&N2A_PDF_CHROME.test(l.text)));
+  // The print stylesheet's line-height; a measured wrap gap between body-size lines can only lower
+  // it. Smaller type (a 9pt note) has a tighter pitch and must not set the body's.
+  let pitch=bodyFs*1.45;
+  for(let i=1;i<lines.length;i++){const a=lines[i-1],b=lines[i],g=a.y-b.y;if(a.page===b.page&&Math.abs(a.fs-bodyFs)<0.3&&Math.abs(b.fs-bodyFs)<0.3&&g>b.fs*0.9&&g<pitch)pitch=g;}
   const blocks=[];let cur=null,prev=null;
   for(const l of lines){
     const gap=prev?prev.y-l.y:0,samePage=!!prev&&l.page===prev.page;
@@ -8315,15 +8432,21 @@ function n2aPdfBlocks(pages){
   return blocks;
 }
 const N2A_PDF_Q_HEAD=/^(?:nclex practice )?questions$/i,N2A_PDF_KEY_HEAD=/^answer key$/i;
-function n2aPdfNoText(name){return {text:'',warnings:[name+': this PDF has no text layer (a scan or photo). Use the NCLEX images option for it.']};}
+function n2aPdfNoText(name){return {text:'',warnings:[name+': this PDF has no text layer (a scan or photo). Use the NCLEX images option for it.'],reviewAll:false};}
 function n2aPdfExpected(blocks){for(const b of blocks){const m=b.text.match(/^(\d+) questions? (?:generated|extracted)\b/i);if(m)return parseInt(m[1],10);}return null;}
-// A paragraph that is only a list of choices ("A. Spinach B. Bananas C. ...") -> one per line.
-// The splitter scans line-start and inline marks separately, so the first mark is moved off the
-// line start by a placeholder stem; the paragraph qualifies only if nothing precedes its first mark.
+// A paragraph that is only a list of choices ("A. Spinach B. Bananas C. ...") -> one per line. The
+// marks are followed in sequence (A, then B, then C), so a number or letter inside a choice ("by 2.")
+// stays part of its text.
 function n2aPdfChoiceLines(text){
-  if(!/^\(?[1aA][.)]\s/.test(text))return null;
-  const [stem,opts]=n2aSplitStemOptions('¶ '+text,true);
-  return stem==='¶'&&opts.length>=3?opts.map(([l,t])=>l+'. '+t):null;
+  const first=text.match(/^\(?([1aA])[.)]\s+/);if(!first)return null;
+  const numeric=first[1]==='1',out=[];let label=first[1].toUpperCase(),from=first[0].length;
+  for(let i=0;i<8;i++){
+    const next=numeric?String(i+2):String.fromCharCode(66+i),cls=numeric?next:next+next.toLowerCase();
+    const m=new RegExp('\\s\\(?['+cls+'][.)]\\s+').exec(text.slice(from));
+    if(!m||(numeric&&i+2>9)){out.push([label,text.slice(from).trim()]);break;}
+    out.push([label,text.slice(from,from+m.index).trim()]);label=next;from+=m.index+m[0].length;
+  }
+  return out.length>=3&&out.every(([,t])=>t)?out.map(([l,t])=>l+'. '+t):null;
 }
 // Ordering steps ("___ Mitral area") and a calculation blank ("Answer: ____ mL/hr") back on their own lines.
 function n2aPdfQuestionLines(text,ind){
@@ -8331,14 +8454,19 @@ function n2aPdfQuestionLines(text,ind){
   const parts=text.replace(/\s+(?=Answer:[ \t]*_{2,})/,'\n').replace(/(?<!Answer:[ \t]*)\s+(?=_{2,})/g,'\n').split('\n');
   return [ind+parts[0],...parts.slice(1).map(s=>ind+'  '+s.trim())];
 }
-const N2A_PDF_LABEL_SPLIT=/\s+(?=Why[ \t]+[A-Z1-9][ \t]+is[ \t]+(?:correct|wrong|incorrect)\b|(?:Strategy|Tip|CJ|Tags|Rationale|Conditions)[ \t]*:)/;
-// One "N. ANSWER: ..." paragraph -> the worksheet's ANSWER line, its numbered ordering steps or
-// worked calculation, and one line per "Why X is" / Strategy / Tags label.
+const N2A_PDF_LABEL_SPLIT=/\s+(?=Why[ \t]+(?:[A-Z1-9]|Step[ \t]+\d{1,2})[ \t]+is[ \t]+(?:correct|wrong|incorrect)\b|(?:Strategy|Tip|CJ|Tags|Rationale|Conditions)[ \t]*:)/;
+// "N. ANSWER:", or an older worksheet's "N. CORRECT SEQUENCE:" / "N. SEQUENCE:" / "N. ORDER:".
+const N2A_PDF_ANSWER=/^(\d{1,3})[.)][ \t]+([Aa][Nn][Ss][Ww][Ee][Rr]|(?:CORRECT[ \t]+)?(?:SEQUENCE|ORDER))[ \t]*:[ \t]*/;
+// One "N. ANSWER: ..." paragraph -> the worksheet's ANSWER line, its ordering steps or worked
+// calculation, and one line per "Why X is" / Strategy / Tags label.
 function n2aPdfKeyLines(text,calcUnits,ind){
-  const m=text.match(/^(\d{1,3})[.)][ \t]+ANSWER[ \t]*:[ \t]*/i),parts=text.slice(m[0].length).split(N2A_PDF_LABEL_SPLIT);
+  const m=text.match(N2A_PDF_ANSWER),parts=text.slice(m[0].length).split(N2A_PDF_LABEL_SPLIT);
   let head=parts[0].trim(),body=[];
+  // An older worksheet's ordering answer explains its steps as "Step 1 (Why it is 1st): ...".
+  const steps=head.split(/\s+(?=Step[ \t]+\d{1,2}\b)/);
+  if(steps.length>1){head=steps[0].trim();body=steps.slice(1).map(s=>s.trim());}
   const marks=[...head.matchAll(/(?:^|\s)(\d{1,2})[.)]\s/g)],first=marks.findIndex(x=>x[1]==='1');
-  if(first>=0){
+  if(first>=0&&!body.length){
     let j=first;while(j+1<marks.length&&+marks[j+1][1]===+marks[j][1]+1)j++;
     if(j>first){
       const at=k=>marks[k].index+(/\s/.test(marks[k][0][0])?1:0);
@@ -8351,38 +8479,72 @@ function n2aPdfKeyLines(text,calcUnits,ind){
     const c=head.match(new RegExp('^([-\\d.,/]+[ \\t]*'+unit.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')[ \\t]+(\\S[\\s\\S]*)$'));
     if(c){head=c[1];body=[c[2]];}
   }
-  return [ind+m[1]+'. ANSWER: '+head,...body.map(b=>ind+'  '+b),...parts.slice(1).map(p=>ind+'  '+p.trim())];
+  return [ind+m[1]+'. '+m[2]+': '+head,...body.map(b=>ind+'  '+b),...parts.slice(1).map(p=>ind+'  '+p.trim())];
 }
-const N2A_PDF_ANSWER=/^\d{1,3}[.)][ \t]+ANSWER[ \t]*:/i;
-// Option 1: rebuild a Generator worksheet PDF into the worksheet text n2aConvertText reads. Every
-// worksheet question and key entry is its own list item, so numbered blocks are read in order and
-// indentation is not needed (a two-digit list number moves its marker left of a one-digit one).
+// v17.11: a numbered paragraph is a question when it asks one ("?"), carries its own choices or
+// answer blank, or is followed by its choices or blank. Any other numbered paragraph between two
+// questions is a numbered line of the question before it (a numbered choice or a lab value) that a
+// worksheet exported before v17.7 printed as one more list item.
+function n2aPdfIsQuestion(b,next){
+  const body=b.text.replace(N2A_PDF_NUM,'');
+  if(/\?/.test(body)||/_{2,}/.test(body)||n2aSplitStemOptions(body,true)[1].length>=3)return true;
+  return !!next&&!next.heading&&!N2A_PDF_NUM.test(next.text)&&(/^\(?[Aa1][.)]\s/.test(next.text)||/_{2,}/.test(next.text));
+}
+// Rebuild a Generator worksheet PDF into the worksheet text n2aConvertText reads. Questions and
+// answer entries are numbered in the order they appear, which is their real numbering even where
+// the printed numbers drift; an entry printed twice under one number keeps that number. When the
+// two counts disagree the printed numbers are used instead and every card is marked for review.
 function n2aPdfToWorksheetText(blocks,name){
   if(!blocks.length)return n2aPdfNoText(name);
-  // An Extractor PDF has no "N. ANSWER:" entries; this converter also reads the Extractor's .txt layout.
+  // An Extractor PDF has no "N. ANSWER:" entries.
   if(!blocks.some(b=>N2A_PDF_ANSWER.test(b.text)))return x2aPdfToExportText(blocks,name);
-  const lines=[],calcUnits=new Map(),warnings=[];let section='',lastQ=0;
-  for(const b of blocks){
-    if(b.heading&&N2A_PDF_KEY_HEAD.test(b.text)){section='key';lines.push('','## Answer Key','');continue;}
-    if(b.heading&&N2A_PDF_Q_HEAD.test(b.text)){section='q';lines.push('','## '+b.text,'');continue;}
-    if(section==='key'&&N2A_PDF_ANSWER.test(b.text)){lines.push(...n2aPdfKeyLines(b.text,calcUnits,''),'');continue;}
+  const pre=[],qs=[],keys=[],warnings=[];let section='';
+  blocks.forEach((b,i)=>{
+    if(b.heading&&N2A_PDF_KEY_HEAD.test(b.text)){section='key';return;}
+    if(b.heading&&N2A_PDF_Q_HEAD.test(b.text)){section='q';return;}
+    const num=b.text.match(N2A_PDF_NUM);
     if(section==='q'){
-      const m=b.text.match(/^(\d{1,3})[.)]\s/);
-      if(m&&+m[1]===lastQ+1){
-        lastQ=+m[1];
-        const c=b.text.match(/Answer:[ \t]*_{2,}[ \t]*(\S.*)?$/);if(c&&c[1])calcUnits.set(m[1],c[1].trim());
-      }
-      lines.push(...n2aPdfQuestionLines(b.text,''),'');continue;
-    }
-    lines.push(b.text,'');
+      if(num&&n2aPdfIsQuestion(b,blocks[i+1]))qs.push({printed:+num[1],text:b.text.slice(num[0].length),list:[],more:[]});
+      else if(qs.length)(num?qs[qs.length-1].list:qs[qs.length-1].more).push(num?b.text.slice(num[0].length):b.text);
+      // The document title also reads "NCLEX Practice Questions"; anything before the first question
+      // (the FAILED VALIDATION stamp, the export notice) stays ahead of the questions.
+      else pre.push(b.text);
+    }else if(section==='key'){
+      const a=b.text.match(N2A_PDF_ANSWER);
+      if(a)keys.push({printed:+a[1],text:b.text.slice(a[1].length),list:[],more:[]});
+      else if(keys.length)(num?keys[keys.length-1].list:keys[keys.length-1].more).push(num?b.text.slice(num[0].length):b.text);
+    }else pre.push(b.text);
+  });
+  keys.forEach((k,i)=>{k.dup=i>0&&k.printed===keys[i-1].printed;});
+  const answered=keys.filter(k=>!k.dup).length,inOrder=qs.length===answered;
+  let n=0;for(const k of keys){if(!k.dup)n++;k.n=inOrder?n:k.printed;}
+  qs.forEach((q,i)=>{q.n=inOrder?i+1:q.printed;});
+  const drift=qs.some(q=>q.n!==q.printed)||keys.some(k=>k.n!==k.printed);
+  const expected=n2aPdfExpected(blocks),reviewAll=!inOrder||(expected!==null&&qs.length!==expected);
+  if(!inOrder)warnings.push(name+': '+qs.length+' questions and '+answered+' answers were found, so they could not be lined up in order and were paired by their printed numbers. Every card is marked NeedsReview; check each one against the PDF.');
+  else if(drift)warnings.push(name+': this PDF was exported before v17.7, so its printed numbers drift where a question or answer contains a numbered list. Questions and answers were paired in order; the question numbers below are the real ones.');
+  if(expected!==null&&qs.length!==expected)warnings.push(name+': the PDF says '+expected+' questions but '+qs.length+' were found. Check the cards against the PDF.');
+  const calcUnits=new Map(),lines=[...pre.flatMap(t=>[t,'']),'## Questions',''];
+  for(const q of qs){
+    const c=[q.text,...q.more].join(' ').match(/Answer:[ \t]*_{2,}[ \t]*([^_\s][^_]*?)?\s*$/m);if(c&&c[1])calcUnits.set(String(q.n),c[1].trim());
+    lines.push(...n2aPdfQuestionLines(q.n+'. '+q.text,''),...q.list.map((t,j)=>'  '+(j+1)+'. '+t));
+    // Choices printed as a paragraph of their own go one per line, as in the .md.
+    for(const t of q.more)lines.push(...(n2aPdfChoiceLines(t)||n2aPdfQuestionLines(t,'')).map(s=>'  '+s.trim()));
+    lines.push('');
   }
-  const expected=n2aPdfExpected(blocks);
-  if(expected!==null&&lastQ!==expected)warnings.push(name+': the PDF says '+expected+' questions but '+lastQ+' were found. Check the cards against the PDF.');
-  return {text:lines.join('\n'),warnings};
+  lines.push('## Answer Key','');
+  for(const k of keys){
+    lines.push(...n2aPdfKeyLines(k.n+k.text,calcUnits,''));
+    k.list.forEach((t,j)=>{const parts=t.split(N2A_PDF_LABEL_SPLIT);lines.push('  '+(j+1)+'. '+parts[0].trim(),...parts.slice(1).map(p=>'  '+p.trim()));});
+    // The rest of an entry that ran past a page break keeps its labels on their own lines.
+    for(const t of k.more)lines.push(...t.split(N2A_PDF_LABEL_SPLIT).map(p=>'  '+p.trim()));
+    lines.push('');
+  }
+  return {text:lines.join('\n'),warnings,reviewAll};
 }
-// Option 3: rebuild an Extractor PDF into the Extractor's own .txt layout. Question and answer
-// numbers are the only numbered paragraphs at the body's left edge; numbered choices and numbered
-// rationales print as indented list items.
+// Rebuild an Extractor PDF into the Extractor's own .txt layout. Question and answer numbers are
+// the only numbered paragraphs at the body's left edge; numbered choices and numbered rationales
+// print as indented list items.
 function x2aPdfToExportText(blocks,name){
   if(!blocks.length)return n2aPdfNoText(name);
   const qs=[],keys=[],warnings=[];let section='',status=null,lastQ=0,lastK=0;
@@ -8401,7 +8563,6 @@ function x2aPdfToExportText(blocks,name){
       if(m)k.meta[m[1].toLowerCase()]=m[2].trim();else k.rationale.push(b.text);
     }
   }
-  if(!qs.length&&blocks.some(b=>/^\d{1,3}[.)][ \t]+ANSWER[ \t]*:/i.test(b.text)))warnings.push(name+': this looks like an NCLEX Generator worksheet. Use the NCLEX → Anki converter option for it.');
   const expected=n2aPdfExpected(blocks),label={tip:'Tip',strategy:'Strategy',cj:'CJ',conditions:'Conditions'};
   const out=['NCLEX PRACTICE QUESTIONS','',(expected??qs.length)+' questions',''];
   if(status)out.push('Extraction status: '+status,'');
@@ -8412,7 +8573,32 @@ function x2aPdfToExportText(blocks,name){
     for(const f of ['tip','strategy','cj','conditions'])if(k.meta[f])out.push(label[f]+': '+k.meta[f]);
     out.push('','---','');
   }
-  return {text:out.join('\n'),warnings};
+  return {text:out.join('\n'),warnings,reviewAll:false};
+}
+// v17.11: one converter for both exports. Each file goes to the converter built for its layout: the
+// Extractor's .md (bold "**N.**" numbers under "## Answer Key") or .txt ("ANSWER KEY" between rules)
+// to extract2anki's, everything else to nclex2anki's. Each keeps its own card IDs, so notes imported
+// earlier from either script still update.
+function n2aExportKind(text){
+  const t=String(text).replace(/\r\n?/g,'\n');
+  return X2A_TXT_KEY.test(t)||(X2A_MD_KEY.test(t)&&/^\*\*\d{1,4}\.\*\*/m.test(t))?'extract':'worksheet';
+}
+// sources: [{name, text, reviewAll}]. Returns {cards, warnings, kinds}.
+function n2aConvertExports(sources,extraTags=[]){
+  const cards=[],warnings=[],kinds=[],seen=new Set();let dupes=0;
+  for(const s of sources){
+    const kind=n2aExportKind(s.text),r=kind==='extract'?x2aConvertText(s.text,s.name,extraTags):n2aConvertText(s.text,s.name,extraTags);
+    warnings.push(...r.warnings);kinds.push({name:s.name,kind,cards:r.cards.length});
+    for(const c0 of r.cards){
+      // nclex2anki writes the only raw quotes in its cards (attribute quotes) as '; extract2anki has none.
+      const c=kind==='worksheet'?{...c0,front:c0.front.replace(/"/g,"'"),back:c0.back.replace(/"/g,"'")}:{...c0};
+      if(s.reviewAll&&!c.tags.includes('NeedsReview'))c.tags=[...c.tags,'NeedsReview'];
+      if(seen.has(c.guid)){dupes++;continue;}
+      seen.add(c.guid);cards.push(c);
+    }
+  }
+  if(dupes)warnings.push(dupes+' duplicate question(s) across inputs were dropped.');
+  return {cards,warnings,kinds};
 }
 
 // ── img2anki: NCLEX question screenshots / photos, read by Gemini ──────────
@@ -8782,19 +8968,20 @@ async function i2aImagePayload(file){
   if(!p.resized)throw new Error((file.size/1048576).toFixed(0)+" MB is over Gemini's inline limit and could not be shrunk here. Export a smaller image.");
   return p;
 }
+// v17.11: the worksheet and Extractor converters are one option; each file is routed by n2aExportKind.
 const N2A_MODES=[
-  {id:'worksheet',icon:'📝',title:'NCLEX → Anki converter',desc:'NCLEX Generator worksheet or Extractor export (.md / .txt)',deck:'NCLEX'},
+  {id:'export',icon:'📝',title:'NCLEX export → Anki',desc:'NCLEX Generator worksheet or NCLEX Extractor export (.md, .txt, PDF or Copy)',deck:'NCLEX'},
   {id:'images',icon:'📷',title:'NCLEX images → Anki flashcards',desc:'Question screenshots or photos, read by Gemini',deck:'NCLEX'},
-  {id:'extract',icon:'📑',title:'NCLEX Extractor → Anki flashcards',desc:'Review-book questions from the Extractor (.md, .txt or Copy)',deck:'NCLEX::Extracted'},
 ];
+const N2A_KIND_LABEL={worksheet:'Generator worksheet',extract:'Extractor export'};
 const N2A_PREVIEW_LIMIT=40;
 const N2A_CARD_POLICY={ALLOWED_TAGS:['div','b','i','br'],ALLOWED_ATTR:['style']};
 function NCLEXToAnki(){
   const cfg=useConfig();
-  const [mode,setMode]=useState('worksheet');
+  const [mode,setMode]=useState('export');
   const [decks,setDecks]=useState(()=>Object.fromEntries(N2A_MODES.map(m=>[m.id,m.deck])));
   const [tagText,setTagText]=useState('');
-  const [textFiles,setTextFiles]=useState({worksheet:[],extract:[]});
+  const [textFiles,setTextFiles]=useState({export:[]});
   const [pasted,setPasted]=useState('');
   const [images,setImages]=useState([]);
   const [aiAnswers,setAiAnswers]=useState(false);
@@ -8828,7 +9015,7 @@ function NCLEXToAnki(){
     }
   };
   const removeFile=i=>mode==='images'?setImages(p=>p.filter((_,j)=>j!==i)):setTextFiles(p=>({...p,[mode]:p[mode].filter((_,j)=>j!==i)}));
-  const clearFiles=()=>{if(mode==='images')setImages([]);else setTextFiles(p=>({...p,[mode]:[]}));if(mode==='extract')setPasted('');setNote('');};
+  const clearFiles=()=>{if(mode==='images')setImages([]);else{setTextFiles(p=>({...p,[mode]:[]}));setPasted('');}setNote('');};
   const base=f=>f.name.replace(/\.[^.]*$/,'');
 
   const convertText=async()=>{
@@ -8838,21 +9025,19 @@ function NCLEXToAnki(){
     for(const f of list){
       if(f.size>50*1024*1024){readWarnings.push(f.name+': could not read (larger than 50 MB).');continue;}
       try{
-        // v17.10: a PDF export is rebuilt into the text this converter already reads.
+        // v17.10: a PDF export is rebuilt into the text a converter already reads; it routes itself.
         if(/\.pdf$/i.test(f.name||'')){
-          const blocks=n2aPdfBlocks(await n2aReadPdfPages(f)),r=runMode==='worksheet'?n2aPdfToWorksheetText(blocks,f.name):x2aPdfToExportText(blocks,f.name);
-          readWarnings.push(...r.warnings);if(r.text)sources.push({name:base(f),text:r.text});
+          const r=n2aPdfToWorksheetText(n2aPdfBlocks(await n2aReadPdfPages(f)),f.name);
+          readWarnings.push(...r.warnings);if(r.text)sources.push({name:base(f),text:r.text,reviewAll:r.reviewAll,pdf:true});
         }else sources.push({name:base(f),text:await f.text()});
       }catch(e){readWarnings.push(f.name+': could not read ('+(e.message||e)+').');}
     }
     setReading(false);
-    if(runMode==='extract'&&pasted.trim())sources.push({name:'clipboard',text:pasted});
-    const r=runMode==='worksheet'?n2aConvertSources(sources,extraTags):x2aConvertSources(sources,extraTags);
-    const outName=runMode==='worksheet'
-      ?(list.length===1?base(list[0])+'_anki.txt':'nclex_anki.txt')
-      :(list.length===1&&sources.length===1?base(list[0])+'_anki.txt':'nclex_extracted_anki.txt');
-    const cards=r.cards;
-    setResults(p=>({...p,[runMode]:{cards,warnings:[...readWarnings,...r.warnings],deck,outName,text:cards.length?n2aAnkiFileText(cards,deck,runMode==='worksheet'):'',needsReview:cards.filter(c=>c.tags.includes('NeedsReview')).length,ai:0}}));
+    if(pasted.trim())sources.push({name:'clipboard',text:pasted});
+    const r=n2aConvertExports(sources,extraTags),cards=r.cards;
+    const outName=list.length===1&&sources.length===1?base(list[0])+'_anki.txt':'nclex_anki.txt';
+    const read=r.kinds.map((k,i)=>k.name+(sources[i].pdf?' (PDF)':'')+': '+N2A_KIND_LABEL[k.kind]+', '+k.cards+' card'+(k.cards===1?'':'s'));
+    setResults(p=>({...p,[runMode]:{cards,warnings:[...readWarnings,...r.warnings],deck,outName,read,text:cards.length?n2aAnkiFileText(cards,deck,false):'',needsReview:cards.filter(c=>c.tags.includes('NeedsReview')).length,ai:0}}));
   };
 
   const runImages=async()=>{
@@ -8885,7 +9070,7 @@ function NCLEXToAnki(){
     catch(e){setNote(f.name+': '+(e.message||String(e)));}
   };
 
-  const canRun=mode==='images'?!!cfg.apiKey&&images.length>0&&!busy:mode==='extract'?(textFiles.extract.length>0||!!pasted.trim()):textFiles.worksheet.length>0;
+  const canRun=mode==='images'?!!cfg.apiKey&&images.length>0&&!busy:(textFiles.export.length>0||!!pasted.trim());
   const canConvert=canRun&&!reading;
   const shown=useMemo(()=>{const list=result?result.cards:[];return (reviewOnly?list.filter(c=>c.tags.includes('NeedsReview')):list);},[result,reviewOnly]);
   const types=useMemo(()=>{const t={};for(const c of result?result.cards:[])t[c.type]=(t[c.type]||0)+1;return Object.entries(t).sort(([a],[b])=>a<b?-1:1);},[result]);
@@ -8894,7 +9079,7 @@ function NCLEXToAnki(){
     setupLabel="NCLEX to Anki converter and inputs"
     resultsLabel="Anki import file"
     setup={<>
-      <Step n="01" title="Converter" lede="Three converters, one Anki format. Every card gets the same layout, tags and a stable GUID, so importing a corrected file updates the notes instead of duplicating them.">
+      <Step n="01" title="Converter" lede="Two converters, one Anki format. Every card gets the same layout, tags and a stable GUID, so importing a corrected file updates the notes instead of duplicating them.">
         <div className="segmented-control" role="group" aria-label="NCLEX to Anki converter" style={{marginBottom:14}}>
           {N2A_MODES.map(m=><button key={m.id} aria-pressed={mode===m.id} onClick={()=>{setMode(m.id);setNote('');setReviewOnly(false);}}>
             <div style={{fontSize:13,fontWeight:600,color:mode===m.id?'var(--text-bright)':'var(--text-dim)'}}>{m.icon} {m.title}</div>
@@ -8903,7 +9088,7 @@ function NCLEXToAnki(){
         </div>
       </Step>
       <Step n="02" title={mode==='images'?'Question images':'Export files'} note={files.length?files.length+(files.length===1?' file':' files'):'none yet'}
-        lede={mode==='worksheet'?'The .md, .txt or PDF download from the NCLEX Generator worksheet or the NCLEX Extractor.':mode==='extract'?"The Extractor's .md download (preferred), its .txt or PDF download, or paste what its Copy button copied.":'Screenshots of a question bank, photos of review-book pages, or scans. They are read in file-name order, so a question cut off at the bottom of one image is finished by the next.'}>
+        lede={mode==='export'?'The .md, .txt or PDF download from the NCLEX Generator worksheet or the NCLEX Extractor, or paste what either Copy button copied. Each file is recognised and read with the converter built for it; the .md is the most exact.':'Screenshots of a question bank, photos of review-book pages, or scans. They are read in file-name order, so a question cut off at the bottom of one image is finished by the next.'}>
         <div role="button" tabIndex={0} aria-label={mode==='images'?'Add question images':'Add NCLEX export files'} className="upload-zone"
           onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();(mode==='images'?imgRef:fileRef).current?.click();}}}
           onClick={()=>(mode==='images'?imgRef:fileRef).current?.click()}
@@ -8915,7 +9100,7 @@ function NCLEXToAnki(){
           <p style={{fontSize:12,color:'var(--text)'}}>Drop {mode==='images'?'images':'.md / .txt / .pdf files'} or <strong style={{color:'var(--accent)'}}>click to browse</strong></p>
         </div>
         {files.map((f,i)=><div className="file-chip" key={fileKey(f)}><div className={'f-icon'+(getExt(f.name)==='pdf'?' pdf':'')}>{mode==='images'?'IMG':getExt(f.name).toUpperCase()}</div><span className="f-name">{f.name}</span><span className="f-size">{formatSize(f.size)}</span><button className="f-rm" aria-label={'Remove '+f.name} disabled={busy} onClick={()=>removeFile(i)}>×</button></div>)}
-        {mode==='extract'&&<div className="sb-field" style={{marginTop:10}}><label htmlFor="n2a-paste">Or paste the Extractor's Copy output</label><textarea id="n2a-paste" rows={5} value={pasted} onChange={e=>setPasted(e.target.value)} placeholder="Press Copy in the NCLEX Extractor, then paste here" style={{width:'100%',fontFamily:'JetBrains Mono',fontSize:12}}/></div>}
+        {mode==='export'&&<div className="sb-field" style={{marginTop:10}}><label htmlFor="n2a-paste">Or paste a Copy output</label><textarea id="n2a-paste" rows={5} value={pasted} onChange={e=>setPasted(e.target.value)} placeholder="Press Copy in the NCLEX Extractor or Generator, then paste here" style={{width:'100%',fontFamily:'JetBrains Mono',fontSize:12}}/></div>}
         {note&&<div style={{fontSize:12,color:'var(--accent-warm)',marginTop:6,lineHeight:1.5}}>{note}</div>}
       </Step>
       <Step n="03" title="Anki deck and tags">
@@ -8947,7 +9132,7 @@ function NCLEXToAnki(){
         {busy&&mode==='images'&&<button className="btn-danger" onClick={()=>abortRef.current?.abort()}>Cancel</button>}
       </div>
       <div className="act-row">
-        {(files.length>0||(mode==='extract'&&pasted))&&!busy&&<button className="btn-secondary" onClick={clearFiles}>Clear</button>}
+        {(files.length>0||(mode==='export'&&pasted))&&!busy&&<button className="btn-secondary" onClick={clearFiles}>Clear</button>}
         {mode==='images'&&!cfg.apiKey&&<span className="act-note">Add your Gemini API key in Settings to read images.</span>}
       </div>
     </>}
@@ -8964,6 +9149,7 @@ function NCLEXToAnki(){
       </ResultsHead>
       {result.cards.length>0?<div className="tip-banner"><span>✓</span><div>
         <div><b>{result.cards.length}</b> card(s) for deck <b>{result.deck}</b>{types.length>0&&<> · {types.map(([k,v])=>k+' '+v).join(', ')}</>}</div>
+        {result.read&&result.read.length>0&&<div>Read {result.read.join(' · ')}</div>}
         {result.ai>0&&<div>{result.ai} answered by AI (tag:AI_Answer) - check them against your source.</div>}
         {result.needsReview>0&&<div>{result.needsReview} tagged NeedsReview (search tag:NeedsReview in the Anki browser).</div>}
         <div>Import: Anki → File → Import → pick the file. Deck, note type and tags are preset.</div>
@@ -8982,8 +9168,8 @@ function NCLEXToAnki(){
       </Panel>}
     </>}
     {!result&&!(mode==='images'&&(busy||log.length>0))&&<EmptyState mark="⇄" title={meta.title}
-      note={mode==='worksheet'?'Turns an NCLEX Generator worksheet or NCLEX Extractor export into one Anki import file: question and choices on the front; the answer, every choice marked right or wrong with its rationale, and the strategy, tip and CJ on the back.':mode==='extract'?'Built for questions pulled out of review books by the NCLEX Extractor. When the book explains each choice, every choice gets its own explanation on the back.':'Gemini copies each image verbatim — it never guesses a number and never supplies an answer the image does not show — then the questions are assembled and checked here.'}
-      steps={mode==='images'?['Add the images (and your API key in Settings).','Optionally let Gemini answer questions the images never answer.','Read the images, then download the .txt and import it in Anki.']:['Add the export (.md, .txt or PDF)'+(mode==='extract'?' or paste the Copy output':'')+'.','Set the deck and any extra tags.','Convert, then download the .txt and import it in Anki (File → Import).']}/>}
+      note={mode==='export'?'Turns NCLEX Generator worksheets and NCLEX Extractor exports into one Anki import file: question and choices on the front; the answer, every choice marked right or wrong with its rationale, and the strategy, tip and CJ on the back. For review-book questions, a rationale that explains each choice is split onto every choice.':'Gemini copies each image verbatim — it never guesses a number and never supplies an answer the image does not show — then the questions are assembled and checked here.'}
+      steps={mode==='images'?['Add the images (and your API key in Settings).','Optionally let Gemini answer questions the images never answer.','Read the images, then download the .txt and import it in Anki.']:['Add the exports (.md, .txt or PDF; Generator and Extractor can be mixed) or paste a Copy output.','Set the deck and any extra tags.','Convert, then download the .txt and import it in Anki (File → Import).']}/>}
   </Workbench>;
 }
 
