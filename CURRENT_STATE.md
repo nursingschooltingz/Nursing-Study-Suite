@@ -1,5 +1,9 @@
 # Current maintainer state
 
+## v17.12 NCLEX Generator answer positions (2026-10-09)
+
+The canonical application is `Nursing-Study-Suite v17.12.html`. The user reported that nearly every generated answer was A. Each lettered MCQ and SATA item's choices are now shuffled once per batch, before checking, audit and export, with the key and Why lines following their choice; items whose wording names a choice by letter or position keep their order and are logged. Over 400 seeded runs of a synthetic item the key landed on each letter 70–130 times. No live generation has been run; the share of real items kept as written is unmeasured. The CDN SRI recheck was not possible from the build environment and is still owed. Verification: see the [release verification record](docs/reviews/v17.12-release.md).
+
 ## v17.11 NCLEX to Anki: one export option, real-world PDFs (2026-10-09)
 
 The canonical application is `Nursing-Study-Suite v17.11.html`. The user's two real Generator worksheet PDFs (Exam 1, Tier 1 and Tier 2) failed under v17.10: 66 cards and 196 warnings. They now give 153 of 154 and 62 of 62; Tier 1's Q21 has no answer in the worksheet. Tier 1 was a pre-v17.7 export with drifting printed numbers and three Generator numbering slips; after the fix, no question's rationale lines fit a neighbouring answer better than its own (mean fit 86%, chance about 25%). The user also asked to merge the worksheet and Extractor options; they are one option. The course PDFs were read only in session scratch space, then deleted; no course content is in the repository. Verification: see the [release verification record](docs/reviews/v17.11-release.md).

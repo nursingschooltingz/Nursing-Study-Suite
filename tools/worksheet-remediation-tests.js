@@ -165,4 +165,41 @@ module.exports=function worksheetRemediationTests(S,t){
   t('worksheets without ordering items pass through unchanged',L.ngCanonicalOrderingAnswers(build()).text===build()&&L.ngCanonicalOrderingAnswers(sataBatch).text===sataBatch);
   t('the generator restates ordering answers after relabelling and before splitting the batch',S.indexOf('const lettered=ngLetterNumberedOptions(raw);')<S.indexOf('const ordered=ngCanonicalOrderingAnswers(raw);')&&S.indexOf('const ordered=ngCanonicalOrderingAnswers(raw);')<S.indexOf('        const P=ngSplitParts(raw);'));
   t('the printed worksheet escapes inner numbers in questions and answers',S.includes('ws.questions.map(ngMdLiteralNumbers)')&&S.includes('ws.answers.map(ngMdLiteralNumbers)'));
+  // v17.12: each lettered MCQ/SATA item's choices are shuffled once, with the ANSWER labels and Why lines following them.
+  const X=new Function('neiaTerminologyScan','itemHeuristics',span('function ngSplitParts(','function ngRenumber(')+';return {ngShuffleWorksheetOptions,ngSplitParts,ngSplitNumbered,ngParseItem,ngParseKeyItem,ngAnswerLabels,validateNCLEXWorksheet};')(()=>{},()=>{});
+  const seq=(...v)=>{let i=0;return ()=>v[i++%v.length];},lcg=seed=>()=>{seed=(seed*16807)%2147483647;return (seed-1)/2147483646;};
+  const mixQ=(n,stem,opts)=>'  '+n+'. '+stem+'\n'+opts.map((o,i)=>'     '+'ABCDEF'[i]+'. '+o).join('\n');
+  const mixK=(n,right,count,text=()=>'reason.')=>'  '+n+'. ANSWER: '+right.join(', ')+'\n'+[...'ABCDEF'.slice(0,count)].map(l=>'     Why '+l+' is '+(right.includes(l)?'correct':'wrong')+': '+text(l)+' (Source: C1)').join('\n')+'\n     Strategy: s.\n     Tags: Tier 1';
+  const mixBatch=(qs,ks,dist)=>batch(qs.join('\n\n'),ks.join('\n'),dist);
+  // Content-level view: the correct choices' texts, and each choice's text paired with its rationale.
+  const view=raw=>{const P=X.ngSplitParts(raw),keys=new Map(X.ngSplitNumbered(P.p4).map(k=>[k.num,X.ngParseKeyItem(k)]));
+    return X.ngSplitNumbered(P.p3).map(X.ngParseItem).map(it=>{const k=keys.get(it.num),text=l=>(it.options.find(o=>o.label===l)||{}).text;
+      return {num:it.num,labels:it.options.map(o=>o.label).join(''),answer:k.answer,correct:X.ngAnswerLabels(k.answer).map(text).sort().join('|'),
+        pairs:k.rationales.map(r=>text(r.label)+'='+r.kind+':'+r.text).sort().join('|'),whyOrder:k.rationales.map(r=>r.label+r.kind[0]).join(' ')};});};
+  const mcqOpts=['Assess the airway','Give the antiemetic','Call the provider','Document the finding'],sataOpts=['Finding one','Finding two','Finding three','Finding four','Finding five'];
+  const mix=mixBatch([mixQ(1,'A client with hepatitis B reports nausea. Which action should the nurse take first?',mcqOpts),mixQ(2,'(Select all that apply) Which findings should the nurse expect?',sataOpts),'  3. Place the steps in order.\n     ___ Alpha step\n     ___ Beta step'],
+    [mixK(1,['A'],4,l=>'reason '+l+'.'),mixK(2,['A','B','C'],5,l=>'reason '+l+'.'),'  3. ANSWER: Alpha step → Beta step\n     1. Alpha first. (Source: C1)\n     2. Beta second. (Source: C1)\n     Strategy: s.\n     Tags: Tier 1'],'Tier [1:3] | Types [MCQ:1 SATA:1 Ordering:1]');
+  const mixed=X.ngShuffleWorksheetOptions(mix,seq(.1,.1,.9,.5,.2,.7,.3)),mv=view(mixed.text),ov=view(mix);
+  t('worksheet shuffle moves MCQ and SATA choices and reports them',JSON.stringify(mixed.shuffled)==='[1,2]'&&!mixed.kept.length&&mixed.text!==mix&&X.ngSplitParts(mixed.text).p3.split('\n     A. ')[1].split('\n')[0]!=='Assess the airway');
+  t('the keyed answers and every rationale follow their choice text',mv.every((v,i)=>v.correct===ov[i].correct&&v.pairs===ov[i].pairs&&v.labels===ov[i].labels));
+  t('a shuffled worksheet validates exactly as the original did',JSON.stringify(X.validateNCLEXWorksheet(mixed.text,3,null))===JSON.stringify(X.validateNCLEXWorksheet(mix,3,null))&&!error(X.validateNCLEXWorksheet(mixed.text,3,null)));
+  t('Why lines are printed correct first, then by letter, and SATA keys in letter order',mv.slice(0,2).every(v=>{const w=v.whyOrder.split(' '),c=w.filter(x=>x.endsWith('c')),r=w.filter(x=>x.endsWith('w'));return w.join()===[...c].sort().concat([...r].sort()).join()&&X.ngAnswerLabels(v.answer).join()===c.map(x=>x[0]).join();})&&/^[A-E], [A-E], [A-E]$/.test(mv[1].answer));
+  t('ordering items, PART 1-2 and the DISTRIBUTION line are untouched',X.ngSplitParts(mixed.text).p3.includes('  3. Place the steps in order.\n     ___ Alpha step\n     ___ Beta step')&&X.ngSplitParts(mixed.text).p4.includes('  3. ANSWER: Alpha step → Beta step')&&mixed.text.startsWith(mix.split('PART 3')[0])&&mixed.text.endsWith(mix.slice(mix.indexOf('DISTRIBUTION:'))));
+  const counts={};for(let i=0,r=lcg(42);i<400;i++){const a=view(X.ngShuffleWorksheetOptions(mix,r).text)[0].answer;counts[a]=(counts[a]||0)+1;}
+  t('the key lands on every position at about a quarter of 400 seeded runs',['A','B','C','D'].every(l=>counts[l]>=70&&counts[l]<=130));
+  const wrapped=mixBatch([mixQ(1,'Which action is first?',['Assess the airway and\n        breathing pattern','Give the antiemetic','Call the provider','Document the finding'])],[mixK(1,['A'],4,l=>l==='A'?'Unlike option C, this is urgent.':'reason.')],'Tier [1:1] | Types [MCQ:1]');
+  const wOut=X.ngShuffleWorksheetOptions(wrapped,seq(.1,.1,.1)),wv=view(wOut.text)[0];
+  t('a wrapped choice moves with its continuation line',wv.correct==='Assess the airway and breathing pattern'&&X.ngSplitParts(wOut.text).p3.includes('Assess the airway and\n        breathing pattern')&&wv.answer!=='A');
+  const newC=X.ngParseItem(X.ngSplitNumbered(X.ngSplitParts(wOut.text).p3)[0]).options.find(o=>o.text==='Call the provider').label;
+  t('a singular "option C" is relabelled with the choice it names',X.ngSplitParts(wOut.text).p4.includes('Unlike option '+newC+', this is urgent.')&&newC!=='C');
+  const keep=(why,src='C1')=>{const raw=mixBatch([mixQ(1,'Which action is first?',mcqOpts)],[mixK(1,['A'],4,l=>l==='A'?why:'reason.').replace('reason. (Source: C1)\n     Strategy','reason. (Source: '+src+')\n     Strategy')],'Tier [1:1] | Types [MCQ:1]'),out=X.ngShuffleWorksheetOptions(raw,seq(.1));return out.text===raw&&JSON.stringify(out.kept)==='[1]'&&!out.shuffled.length;};
+  t('choices listed by letter keep the order as written',keep('Better than B and C.')&&keep('Unlike (C), it is urgent.')&&keep('Options B and D delay care.')&&keep('Like B, this is safe.')&&keep('The answer is B, not the others.')&&keep('reason.\n     Why B is incorrect: reason.'));
+  t('position words keep the order as written',keep('The latter is wrong.')&&keep('The first option is unsafe.'));
+  t('a source quotation that names an option keeps the order rather than misquote it',keep('reason.','C1 — "see option D"'));
+  const benign=mixBatch([mixQ(1,'A client with hepatitis B and a D-dimer of 0.4 needs vitamin D. Which action is first?',mcqOpts)],[mixK(1,['A'],4,l=>l==='A'?'A client with type B blood still needs it. (Source: C1 — "Hepatitis B. A 5-day course")':'reason.')],'Tier [1:1] | Types [MCQ:1]');
+  t('an article A, hepatitis B, D-dimer and vitamin D do not block the shuffle',JSON.stringify(X.ngShuffleWorksheetOptions(benign,seq(.1)).shuffled)==='[1]');
+  t('a batch with nothing to shuffle is returned unchanged',X.ngShuffleWorksheetOptions(build({type:'Calculation'}),seq(.1)).text===build({type:'Calculation'})&&X.ngShuffleWorksheetOptions('no parts',seq(.1)).text==='no parts');
+  let bad=false;try{X.ngShuffleWorksheetOptions(mix,()=>1);}catch(e){bad=/Invalid shuffle random value/.test(e.message);}
+  t('an out-of-range random value is rejected rather than biasing the order',bad);
+  t('the generator shuffles after the ordering fix and before splitting or checking the batch',S.indexOf('const ordered=ngCanonicalOrderingAnswers(raw);')<S.indexOf('const mixed=ngShuffleWorksheetOptions(raw);')&&S.indexOf('const mixed=ngShuffleWorksheetOptions(raw);')<S.indexOf('        const P=ngSplitParts(raw);')&&S.includes('if(mixed.shuffled.length){raw=mixed.text;'));
 };

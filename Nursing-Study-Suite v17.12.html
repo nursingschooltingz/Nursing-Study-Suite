@@ -8,7 +8,11 @@
      Babel, so this adds narrow resource directives without a default-src/script-src migration. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net">
 <title>LATTE Study Suite</title>
-<!-- v17.11 (2026-10-09): NCLEX to Anki, one export option and real-world PDFs. The worksheet and Extractor converters
+<!-- v17.12 (2026-10-09): NCLEX Generator answer positions. The worksheet kept each choice where the model wrote it, and the
+     key was A on nearly every item. Each lettered MCQ and SATA item's choices are now shuffled once per batch, before it is
+     checked, audited or exported; the ANSWER labels and Why lines follow their choice. An item whose wording names a choice
+     by letter or position keeps its order and is named in the log. Prompts are unchanged.
+     v17.11 (2026-10-09): NCLEX to Anki, one export option and real-world PDFs. The worksheet and Extractor converters
      are one option that routes each file by its layout. Two real worksheet PDFs failed: their choices were a paragraph of
      their own, a 9pt note set the line pitch, one browser put its footer at the left edge, and a pre-v17.7 export printed
      numbered lines as extra list numbers so questions and answers drifted apart. Questions and answers are now paired in
@@ -6047,7 +6051,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '17.11';}
+function suiteVersion(){return '17.12';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -10264,6 +10268,80 @@ function ngCanonicalOrderingAnswers(raw){
   if(!rewritten.length)return none;
   return{text:ngSpliceSection(text,P.p4,keyLines.filter((_,j)=>!drop.has(j)).join('\n')),rewritten};
 }
+// v17.12: the worksheet kept each choice where the model wrote it, and the model writes the key as A on nearly every
+// item; NCLEX_GEN_PROMPT (frozen) only forbids rank cues, not a fixed position. As the case generator has done since
+// v17.1 (caseShuffleQuestion), each lettered MCQ and SATA item's choices are Fisher–Yates shuffled once, before the batch
+// is split, checked, audited or exported. The ANSWER labels and each "Why X is" line follow their choice; the Why lines
+// are reordered correct first, then by letter, as the prompt prints them. A singular "option B" is relabelled with its
+// choice. Wording that names choices by letter or position any other way ("A and C", "(B)", "the latter", "Like B,")
+// cannot be relabelled safely, so that item keeps its order. An article "A", "hepatitis B" or "vitamin D" is not a
+// choice reference. Ordering and calculation items and PARTs 1-2 (working notes, never printed) are unchanged.
+function ngShuffleWorksheetOptions(raw,random=Math.random){
+  const text=String(raw||''),P=ngSplitParts(text),none={text,shuffled:[],kept:[]};
+  if(!P.p3||!P.p4)return none;
+  const OPT=/^([ \t]*)([A-Z])([.)])(.*)$/,WHY=/^([ \t]*Why[ \t]+)([A-Z])([ \t]+is[ \t]+(correct|wrong)\b)(.*)$/i,REF=/\b([Oo]ption|[Cc]hoice|[Aa]nswer)([ \t]+)([A-Z])\b/g;
+  const letter=i=>String.fromCharCode(65+i),keys=new Map();
+  for(const k of ngSplitNumbered(P.p4))keys.set(k.num,keys.has(k.num)?null:k);
+  const sources=line=>[...(line.match(/\(\s*Sources?\s*:[^)]*\)/gi)||[]),...(line.replace(/\(\s*Sources?\s*:[^)]*\)/gi,'').match(/\bSources?\s*:[\s\S]*$/i)||[])].join(' ');
+  const LISTED=/^(?:like|unlike|than|and|or|nor|both|either|neither|vs|versus|except|is|are|was|why|selects?|selected|selecting|chooses?|chose|choosing|picks?|picked|picking)$/i;
+  const refersByLetter=(s,labels)=>{
+    if(/\b(?:above|below)[ \t]+(?:options?|choices?|answers?)\b|\b(?:options?|choices?|answers?)[ \t]+(?:above|below)\b|\b(?:former|latter)\b|\b(?:first|second|third|fourth|fifth|sixth|last|final)[ \t]+(?:option|choice|answer)\b/i.test(s))return true;
+    const rest=s.replace(REF,(w,k,sp,l)=>labels.includes(l)?k:w),isLabel=l=>labels.includes(l);
+    for(const m of rest.matchAll(/\b(?:options|choices|answers)[ \t]+([A-Z])\b|\b([A-Z])[ \t]*(?:,|\/|&|\band\b|\bor\b)[ \t]*([A-Z])\b|\(([A-Z])\)/g))
+      if([m[1],m[2],m[3],m[4]].filter(Boolean).some(isLabel))return true;
+    for(const m of rest.matchAll(/\b([A-Z])\b/g)){
+      const l=m[1],after=rest.slice(m.index+1),prev=(rest.slice(0,m.index).match(/([A-Za-z]+)[ \t]+$/)||[])[1];
+      if(!isLabel(l)||/^-\w/.test(after)||((l==='A'||l==='I')&&/^(?:[ \t]+[\w"'“‘(]|['’]\w)/.test(after)))continue;
+      if(prev&&!LISTED.test(prev))continue;
+      return true;
+    }
+    return false;
+  };
+  let p3=P.p3,p4=P.p4;const shuffled=[],kept=[];
+  for(const qb of ngSplitNumbered(P.p3)){
+    const item=ngParseItem(qb),kb=keys.get(qb.num);
+    if(!['MCQ','SATA'].includes(item.type)||!kb)continue;
+    const key=ngParseKeyItem(kb),labels=item.options.map(o=>o.label),n=labels.length,answers=ngAnswerLabels(key.answer);
+    if(n<2||labels.some((l,i)=>l!==letter(i))||!answers.length||new Set(answers).size!==answers.length||answers.some(a=>!labels.includes(a))||key.rationales.some(r=>!labels.includes(r.label)))continue;
+    // Choices: each option line, its indented continuation lines, then blank separators that stay in place.
+    const qLines=qb.text.split('\n'),at=qLines.map((l,i)=>i&&OPT.test(l)?i:-1).filter(i=>i>0);
+    let layout=at.length===n;const groups=[];
+    if(layout)at.forEach((s,g)=>{
+      const end=g+1<n?at[g+1]:qLines.length;let e=s+1;
+      while(e<end&&/^[ \t]+\S/.test(qLines[e]))e++;
+      const sep=qLines.slice(e,end);
+      // Between choices only blank lines may follow; after the last one, nothing that would read as its continuation.
+      if(g+1<n?sep.some(l=>l.trim()):sep.some(l=>/^[ \t]+\S/.test(l)))layout=false;
+      groups.push({lines:qLines.slice(s,e),sep});
+    });
+    // Answer key: the ANSWER labels on the header line, then the Why lines up to Strategy/Tags.
+    const kLines=kb.text.split('\n'),am=kLines[0].match(/^(.*?ANSWER:[ \t]*)([A-Z](?:(?:[ \t]*(?:,|;|\/|&|\band\b)[ \t]*|[ \t]+)[A-Z]\b)*)(?=$|[ \t.:—–(-])(.*)$/i);
+    const first=kLines.findIndex(l=>WHY.test(l)),stop=kLines.findIndex((l,i)=>i>first&&/^[ \t]*(?:Strategy|Tags):/i.test(l)),last=stop<0?kLines.length:stop;
+    if(!am||ngAnswerLabels(am[2]).join()!==answers.join()||first<0||kLines.slice(last).some(l=>WHY.test(l)))layout=false;
+    const prose=[item.stem,...item.options.map(o=>o.text),...kLines.map((l,i)=>i?l.replace(WHY,'$5'):am?am[3]:'').filter(l=>!/^[ \t]*Tags:/i.test(l)).map(ngRationaleText)];
+    if(!layout||prose.some(s=>refersByLetter(s,labels))||kLines.some(l=>{REF.lastIndex=0;return REF.test(sources(l));})){kept.push(qb.num);continue;}
+    const order=labels.map((_,i)=>i);
+    for(let i=n-1;i>0;i--){const v=random();if(!Number.isFinite(v)||v<0||v>=1)throw Error('Invalid shuffle random value');const j=Math.floor(v*(i+1));[order[i],order[j]]=[order[j],order[i]];}
+    const map=new Map(order.map((from,to)=>[labels[from],letter(to)]));
+    const remap=s=>s.replace(REF,(w,k,sp,l)=>map.has(l)?k+sp+map.get(l):w);
+    const newQ=qLines.slice(0,at[0]).map(remap);
+    order.forEach((from,to)=>{const [head,...cont]=groups[from].lines;newQ.push(head.replace(OPT,(s,ind,l,p,t)=>ind+letter(to)+p+remap(t)),...cont.map(remap),...groups[to].sep);});
+    const whys=[];
+    for(let i=first;i<last;i++){if(WHY.test(kLines[i]))whys.push({lines:[],sep:[]});const g=whys[whys.length-1];(g.sep.length||!kLines[i].trim()?g.sep:g.lines).push(kLines[i]);}
+    // A non-blank line after a Why group's blank lines still belongs to that rationale; keep it with its text.
+    for(const g of whys)if(g.sep.some(l=>l.trim())){g.lines.push(...g.sep);g.sep=[];}
+    const moved=whys.map(g=>{const m=g.lines[0].match(WHY),to=map.get(m[2].toUpperCase());return {to,correct:m[4].toLowerCase()==='correct',lines:[m[1]+to+m[3]+remap(m[5]),...g.lines.slice(1).map(remap)]};})
+      .sort((a,b)=>(b.correct-a.correct)||a.to.localeCompare(b.to));
+    const keyed=answers.map(a=>map.get(a)).sort();let k=0;
+    const head=am[1]+am[2].replace(/\b[A-Z]\b/gi,()=>keyed[k++])+remap(am[3]);
+    const newK=[head,...kLines.slice(1,first).map(remap),...moved.flatMap((g,i)=>[...g.lines,...whys[i].sep]),...kLines.slice(last).map(l=>/^[ \t]*Tags:/i.test(l)?l:remap(l))];
+    const np3=ngSpliceBlock(p3,qb.num,newQ.join('\n')),np4=ngSpliceBlock(p4,qb.num,newK.join('\n'));
+    if(np3===null||np4===null){kept.push(qb.num);continue;}
+    p3=np3;p4=np4;shuffled.push(qb.num);
+  }
+  if(!shuffled.length)return {...none,kept};
+  return {text:ngSpliceSection(ngSpliceSection(text,P.p3,p3),P.p4,p4),shuffled,kept};
+}
 function ngBuildRepairPrompt({item,criterion,keyBlock}){
   return `═══ REPAIR ONE NCLEX ITEM ═══
 
@@ -10538,6 +10616,10 @@ ${NG_GROUNDING_ADAPTER}
         // v17.8: ordering answers are restated as their step sequence when the entry shows it (ngCanonicalOrderingAnswers).
         const ordered=ngCanonicalOrderingAnswers(raw);
         if(ordered.rewritten.length){raw=ordered.text;owned_log('  ⓘ Batch '+b+': ordering answer for Q'+ordered.rewritten.join(', Q')+' restated as the step sequence.','warn');}
+        // v17.12: choices are shuffled once, after those fixes and before anything splits, checks, audits or exports the batch.
+        const mixed=ngShuffleWorksheetOptions(raw);
+        if(mixed.shuffled.length){raw=mixed.text;owned_log('  Batch '+b+': answer choices shuffled on '+mixed.shuffled.length+' item(s).');}
+        if(mixed.kept.length)owned_log('  ⓘ Batch '+b+': Q'+mixed.kept.join(', Q')+' kept the choice order as written: its wording names a choice by letter or position, or its layout could not be rearranged safely.','warn');
         const P=ngSplitParts(raw);
         const concepts=ngParseConcepts(P.p1);
         const citedIds=ngParseCited(P.p2);

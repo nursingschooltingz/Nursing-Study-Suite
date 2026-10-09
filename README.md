@@ -8,7 +8,7 @@ Turn your lecture PDFs and PowerPoints into a complete, source-cited study syste
 
 The whole suite is **one HTML file**. There is nothing to install, no account to create, and no website collecting your data. You open the file in your web browser, paste in a free Google Gemini API key, upload your study materials, and go.
 
-**Published release: v17.11.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v17.11/Nursing-Study-Suite.v17.11.html) or open the [repository HTML](Nursing-Study-Suite%20v17.11.html).
+**Published release: v17.12.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v17.12/Nursing-Study-Suite.v17.12.html) or open the [repository HTML](Nursing-Study-Suite%20v17.12.html).
 
 The left rail lists the seven tools in the order you use them, grouped by stage. **Source:** *Knowledge Base* builds or imports the cited facts everything else reads from. **Plan:** *Priority* sorts those facts into Tier 1/2/3. **Practice:** *Anki* for recall, *NCLEX Extract* for questions out of a review book you already own, *NCLEX Generate* for new ones written from your facts, *Case Studies* for unfolding cases, and *NCLEX to Anki* to turn NCLEX questions into Anki cards.
 
@@ -270,6 +270,8 @@ This writes **brand-new** NCLEX-style questions from your Knowledge Base — and
 Skeptical of any answer? Click its fact IDs — the source quote is one tap away.
 
 Replacing the KB cancels pending worksheet/case generation from the old source. Completed outputs remain inspectable, but their earlier-source badges cannot open facts in the replacement KB. Worksheet and case exports state source staleness, requested/actual question counts, and incomplete or unresolved item-audit results. A repaired item is explicitly **not re-audited**; deterministic source checks do not establish clinical accuracy.
+
+**Shuffled answer choices (v17.12).** The AI tends to put the correct answer at A, so on older worksheets A was right almost every time. Each multiple-choice and select-all question's choices are now shuffled once when its batch arrives, so the correct answer can be any letter. The answer key, the "Why" lines and the item audit all follow the shuffled order, and the order stays the same in every view and export. If a question's wording points at a choice by letter or position ("B and C", "the latter"), it keeps its original order, and the log names it. Ordering and calculation questions are not shuffled.
 
 **Ordering answers (v17.8).** The model writes ordering answers in many shapes, and a bare list like "4, 1, 5, 2, 3" can mean either the order of the steps or each step's position. When the answer's own step lines show the order, the answer key states it as the steps themselves, for example "Aortic area → Pulmonic area → Erb's point → …". The log says which questions were restated. An answer that doesn't show its order clearly is left as written and flagged.
 

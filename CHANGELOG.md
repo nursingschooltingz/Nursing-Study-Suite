@@ -9,6 +9,20 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [17.12] — 2026-10-09
+
+The user noticed that nearly every NCLEX Generator answer was A. The worksheet kept each choice where the model wrote it; the frozen prompt forbids rank cues but sets no position.
+
+### Changed
+
+- **Shuffled worksheet choices.** `ngShuffleWorksheetOptions` shuffles each lettered MCQ and SATA item's choices once (Fisher–Yates), after the v17.7 relabelling and v17.8 ordering fixes and before the batch is split, checked, audited or exported. The ANSWER labels and each "Why X is" line follow their choice; Why lines print correct first, then by letter, and SATA keys in letter order. A wrapped choice moves with its continuation lines, and a singular "option C" is relabelled with the choice it names. This is the case generator's v17.1 rule applied to the worksheet: no position quota and no new error tier.
+- **Items kept as written.** Wording that names a choice by letter or position any other way ("A and C", "(B)", "Like B,", "the answer is B", "the latter", "first option"), a source quotation that names an option, or a layout that cannot be rearranged safely keeps the item's order, and the log names it. An article "A", "hepatitis B", "vitamin D" and "D-dimer" are not choice references. Ordering and Calculation items, PARTs 1-2 and the DISTRIBUTION line are unchanged. A repaired item keeps the labels the repair returned.
+
+### Verification
+
+- 15 assertions in `tools/worksheet-remediation-tests.js`: content-level answer and rationale mapping, unchanged validation results, Why and SATA key order, untouched ordering items and working parts, an even key spread over 400 seeded runs, wrapped choices, relabelled "option C", kept items for each letter and position pattern and for a quoted option, benign letters, rejection of an out-of-range random value, and the generator's call order.
+- Prompts, model profiles, warning tiers and CDN pins are unchanged. The SRI pins were not re-hashed for this release: the build environment's network policy denied the CDN hosts.
+
 ## [17.11] — 2026-10-09
 
 Two real Generator worksheet PDFs (154 and 62 questions) converted to 66 cards with 196 warnings under v17.10. They now give 153 and 62 cards; the one missing question has no answer in its worksheet.
