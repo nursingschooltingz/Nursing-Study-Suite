@@ -48,9 +48,11 @@ async function runTests({ source, test = (name, value) => assert.ok(value, name)
   t('NEIA rejects positional input', throws(() => neia.parseArgs(['foo.png']), /Unexpected input/));
   t('NEIA rejects empty only selection', throws(() => neia.parseArgs(['--only', ',']), /at least one item ID/));
   t('Historical Davis baseline remains Flash 3.7 low', parseD([]).model === 'gemini-3.7-flash' && parseD([]).level === 'low' && parseD([]).rpm === 15);
-  t('Historical NEIA baseline remains Pro high', neia.parseArgs([]).model === 'gemini-3.1-pro-preview' && neia.parseArgs([]).level === 'high' && neia.parseArgs([]).width === 3);
+  t('NEIA baseline is Argon high since v17.13', neia.parseArgs([]).model === 'gemini-4-argon' && neia.parseArgs([]).level === 'high' && neia.parseArgs([]).width === 3);
+  t('Argon measurement refuses the minimal level it answers with HTTP 400', throws(() => neia.parseArgs(['--level', 'minimal']), /Argon does not accept/) && neia.parseArgs(['--model', 'gemini-3.8-flash', '--level', 'minimal']).level === 'minimal');
   const plan = checks.measurementPlan(parseD(['--runs', '3']), 2, { model: 'gemini-test', level: 'low', profile: 'synthetic' });
   t('Plan separates logical operations and retry ceiling', plan.logicalOperations === 6 && plan.maximumAttempts === 24 && plan.maxAttemptsPerOperation === 4 && plan.maxOutputTokens === 65536);
+  t('Plan uses the same per-model output ceiling as the suite', checks.measurementPlan(parseD([]), 1, { model: 'gemini-4-argon', level: 'high', profile: 'synthetic' }).maxOutputTokens === 32768 && checks.measurementOutputCap('gemini-3.7-flash') === 65536);
   t('Plan rejects zero selected inputs', throws(() => checks.measurementPlan(parseD([]), 0, {}), /No measurement inputs/));
 
   const transcript = { face: 'front', category: 'Synthetic', cardNumber: '1', overallLegibility: 'clean',
@@ -149,6 +151,9 @@ async function runTests({ source, test = (name, value) => assert.ok(value, name)
   const profileN = checks.resolveMeasurementProfile(neia.parseArgs(['--app-profile']), source, 'itemAudit');
   t('App-matching profiles use live Flash default and correct tool levels', profileD.model === profileN.model &&
     source.includes("flashModel:'" + profileD.model + "'") && profileD.level === 'low' && profileN.level === 'high');
+  const argonSource = source.replace(/itemAudit:\{m:'flash',lv:'high'\}/, "itemAudit:{m:'argon',lv:'high'}");
+  const profileArgon = checks.resolveMeasurementProfile(neia.parseArgs(['--app-profile']), argonSource, 'itemAudit');
+  t('An Argon profile row resolves to the shipped Argon default', argonSource !== source && profileArgon.family === 'argon' && profileArgon.model === 'gemini-4-argon' && source.includes("argonModel:'gemini-4-argon'"));
   t('Missing app registry fails explicitly', throws(() => checks.resolveMeasurementProfile(parseD(['--app-profile']), '', 'cardTranscribe'), /App profile registry anchor missing/));
   const liveAudit = neia.extractAudit(source);
   t('Audit extraction includes non-vacuous tail behavior', liveAudit.itemAuditSummary([{ status: 'PASS', warns: [] }]).pass === 1);

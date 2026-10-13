@@ -51,7 +51,7 @@ callGemini=async(apiKey,model,parts,options={})=>{
   return String.fromCharCode(96).repeat(3)+'text\n'+notes.join('\n')+'\n'+String.fromCharCode(96).repeat(3)+'\n'+String.fromCharCode(96).repeat(3)+'text\n'+['fact-1 -> line #1','fact-1 -> line #2','fact-2 -> line #3','fact-3 -> line #4','fact-4 -> line #5'].join('\n')+'\n'+String.fromCharCode(96).repeat(3);
 };`);
   html=once(html,'downloadBlob=async blob=>fixtureExport(await blob.text());',String.raw`downloadBlob=async(blob,name)=>{const text=await blob.text();window.__ankiV166Fixture.exports.push({name,text});fixtureExport(text);};`);
-  html=once(html,"const cfg=useMemo(()=>({apiKey:'synthetic-only',forTool:()=>({model:'synthetic-fixture',level:'low'}),autoProfile:true}),[]);","const cfg=useMemo(()=>({apiKey:'synthetic-only',flashModel:'synthetic-flash',proModel:'synthetic-pro',forTool:id=>({model:TOOL_PROFILE_DEFAULTS[id].m==='pro'?'synthetic-pro':'synthetic-flash',level:TOOL_PROFILE_DEFAULTS[id].lv}),autoProfile:true}),[]);");
+  html=once(html,"const cfg=useMemo(()=>({apiKey:'synthetic-only',forTool:()=>({model:'synthetic-fixture',level:'low'}),autoProfile:true}),[]);","const cfg=useMemo(()=>({apiKey:'synthetic-only',flashModel:'synthetic-flash',argonModel:'synthetic-argon',forTool:id=>({model:TOOL_PROFILE_DEFAULTS[id].m==='argon'?'synthetic-argon':'synthetic-flash',level:TOOL_PROFILE_DEFAULTS[id].lv}),autoProfile:true}),[]);");
   return html;
 }
 

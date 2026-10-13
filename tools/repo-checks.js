@@ -137,12 +137,19 @@ function extractAnchoredRegex(source, anchor, startMarker, endMarker, flags = ''
   return new RegExp(body, flags);
 }
 
+// v17.13: the suite caps Argon requests at 32,768 output tokens (thinking included) and every other model at 65,536.
+// The measurement tools send plain generateContent requests, so they follow the same per-model rule as the app's
+// geminiOutputCap; a 65,536 request to Argon would be refused.
+function measurementOutputCap(model) {
+  return /argon/i.test(String(model || '')) ? 32768 : 65536;
+}
+
 // Manual measurement tools share strict parsing; importing this module does no I/O.
 // Bounds keep typo-driven work lists and timer delays finite and reviewable.
 function parseMeasurementArgs(argv, kind) {
   if (!['davis', 'neia'].includes(kind)) throw new Error('Unknown measurement tool: ' + kind);
   const davis = kind === 'davis';
-  const config = { runs: davis ? 2 : 3, model: davis ? 'gemini-3.7-flash' : 'gemini-3.1-pro-preview',
+  const config = { runs: davis ? 2 : 3, model: davis ? 'gemini-3.7-flash' : 'gemini-4-argon',
     level: davis ? 'low' : 'high', width: davis ? 1 : 3, retryms: 20000, rpm: davis ? 15 : 0,
     out: davis ? 'davis-transcribe-report.json' : 'neia-retest-report.json',
     suite: '', only: [], images: [], dryRun: false, live: false, appProfile: false, help: false };
@@ -183,6 +190,7 @@ function parseMeasurementArgs(argv, kind) {
   number('rpm', 0, 60000, false);
   if (!['minimal', 'low', 'medium', 'high'].includes(config.level)) throw new Error('--level must be minimal, low, medium, or high');
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(config.model)) throw new Error('Invalid model ID');
+  if (config.level === 'minimal' && /argon/i.test(config.model)) throw new Error('Argon does not accept --level minimal; use low, medium, or high');
   if (config.dryRun && config.live) throw new Error('Choose --dry-run or --live, not both');
   if (config.appProfile && (seen.has('--model') || seen.has('--level'))) throw new Error('--app-profile cannot be combined with --model or --level');
   if (davis && !config.images.length && !config.help) throw new Error('Pass at least one image path');
@@ -195,7 +203,7 @@ function resolveMeasurementProfile(config, source, tool) {
   if (!['cardTranscribe', 'itemAudit'].includes(tool)) throw new Error('Unknown app profile: ' + tool);
   const profiles = source.match(/const TOOL_PROFILE_DEFAULTS=\{([\s\S]*?)\n\};/);
   if (!profiles) throw new Error('App profile registry anchor missing');
-  const row = profiles[1].match(new RegExp('\\b' + tool + ":\\{m:'(flash|pro)',lv:'([^']+)'\\}"));
+  const row = profiles[1].match(new RegExp('\\b' + tool + ":\\{m:'(flash|argon)',lv:'([^']+)'\\}"));
   if (!row) throw new Error('App profile row missing: ' + tool);
   const family = row[1];
   // v17.3: the shipped defaults live in MODEL_SETTINGS_DEFAULTS; the App hydrates its state from saved settings.
@@ -210,7 +218,7 @@ function measurementPlan(config, count, profile) {
   return { ...profile, runs: config.runs, logicalOperations: count * config.runs,
     maximumAttempts: count * config.runs * 4, maxAttemptsPerOperation: 4,
     retryPolicy: 'At most 3 retries after HTTP 429 or 5xx; other failures stop that operation.',
-    width: config.width, rpm: config.rpm, retryms: config.retryms, maxOutputTokens: 65536,
+    width: config.width, rpm: config.rpm, retryms: config.retryms, maxOutputTokens: measurementOutputCap(profile && profile.model),
     caveat: 'These are planned operations and an attempt ceiling, not exact HTTP calls or a price estimate.' };
 }
 
@@ -226,6 +234,7 @@ function createMeasurementPacer(rpm, { now = Date.now, sleep = ms => new Promise
 }
 
 module.exports = {
+  measurementOutputCap,
   DOCUMENTED_PROMPTS,
   FROZEN_PROMPTS,
   NAME_CLASH_RE,

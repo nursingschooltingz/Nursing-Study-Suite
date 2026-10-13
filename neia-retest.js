@@ -7,7 +7,7 @@
  * --html <suite.html>, --app-profile, --only <id,id>, --out <report.json>,
  * --retryms 0..600000, --rpm 0..60000 (0 = unthrottled; fractional rates allowed).
  *
- * Historical CLI baseline remains Pro/high. --app-profile resolves the shipped
+ * CLI baseline is Argon/high (v17.13; reports before v17.13 were measured on 3.1 Pro/high). --app-profile resolves the shipped
  * itemAudit model/level, not saved browser overrides. No profile is changed in the app.
  * --dry-run needs no key, sends nothing, and writes no report.
  * --live prevents accidents; per-run human authorization is still required.
@@ -20,7 +20,7 @@
 const fs = require('fs');
 const path = require('path');
 const { resolveSuiteFile, sha256, parseMeasurementArgs, resolveMeasurementProfile,
-  measurementPlan, createMeasurementPacer } = require('./tools/repo-checks');
+  measurementPlan, createMeasurementPacer, measurementOutputCap } = require('./tools/repo-checks');
 const parseArgs = argv => parseMeasurementArgs(argv, 'neia');
 const SAFETY = ['HARM_CATEGORY_HARASSMENT', 'HARM_CATEGORY_HATE_SPEECH',
   'HARM_CATEGORY_SEXUALLY_EXPLICIT', 'HARM_CATEGORY_DANGEROUS_CONTENT']
@@ -71,7 +71,7 @@ function createAuditCaller(config, key, deps = {}) {
   return async function callOnce(prompt, observation) {
     if (!config.live || config.dryRun) throw new Error('Live audit requires --live and per-run human authorization');
     const body = { contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: 65536, thinkingConfig: { thinkingLevel: config.level } }, safetySettings: SAFETY };
+      generationConfig: { maxOutputTokens: measurementOutputCap(config.model), thinkingConfig: { thinkingLevel: config.level } }, safetySettings: SAFETY };
     const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + config.model + ':generateContent';
     const started = now();
     let resp;

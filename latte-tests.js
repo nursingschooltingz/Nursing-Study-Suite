@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 3570;
+const EXPECTED_ASSERTIONS = 3593;
 
 let file;
 try {
@@ -2388,9 +2388,9 @@ section('v15.7 — provenance + Anki lint');
     '\n;return {latteProvenanceStamp,LATTE_STANDARDS_VERSION};'
   )();
   const st = P.latteProvenanceStamp({ genModel: 'gemini-3.7-flash', genLevel: 'high',
-    auditModel: 'gemini-3.1-pro-preview', auditLevel: 'high', promptLabel: 'NCLEX v4.2' });
+    auditModel: 'gemini-4-argon', auditLevel: 'high', promptLabel: 'NCLEX v4.2' });
   t('stamp names the generator model and level', /Generator: gemini-3\.7-flash \[Thinking: high\]/.test(st));
-  t('stamp names the auditor model and level', /Auditor:\s+gemini-3\.1-pro-preview \[Thinking: high\]/.test(st));
+  t('stamp names the auditor model and level', /Auditor:\s+gemini-4-argon \[Thinking: high\]/.test(st));
   t('stamp names the prompt label', /Prompt: NCLEX v4\.2/.test(st));
   t('stamp names the criteria version', /Criteria: LATTE-NEIA v1\.0/.test(st));
   t('stamp names the Test Plan version', /Test Plan: 2026/.test(st));

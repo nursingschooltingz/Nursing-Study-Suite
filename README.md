@@ -8,7 +8,7 @@ Turn your lecture PDFs and PowerPoints into a complete, source-cited study syste
 
 The whole suite is **one HTML file**. There is nothing to install, no account to create, and no website collecting your data. You open the file in your web browser, paste in a free Google Gemini API key, upload your study materials, and go.
 
-**Published release: v17.12.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v17.12/Nursing-Study-Suite.v17.12.html) or open the [repository HTML](Nursing-Study-Suite%20v17.12.html).
+**Published release: v17.13.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v17.13/Nursing-Study-Suite.v17.13.html) or open the [repository HTML](Nursing-Study-Suite%20v17.13.html).
 
 The left rail lists the seven tools in the order you use them, grouped by stage. **Source:** *Knowledge Base* builds or imports the cited facts everything else reads from. **Plan:** *Priority* sorts those facts into Tier 1/2/3. **Practice:** *Anki* for recall, *NCLEX Extract* for questions out of a review book you already own, *NCLEX Generate* for new ones written from your facts, *Case Studies* for unfolding cases, and *NCLEX to Anki* to turn NCLEX questions into Anki cards.
 
@@ -79,15 +79,15 @@ Open **Settings** from the bottom of the left rail. The panel that slides in fro
 
 **Auto profile (recommended — the default).** Toggle showing **✋ Manual / Auto profile**. In Auto mode, each tool uses a tuned model + "thinking level" combination — fast models for bulk extraction, more thinking for rule-heavy work like priority synthesis. There's a **Reset to recommended** button if you experiment and want the defaults back. If you don't know what to pick: leave Auto on and never think about this again.
 
-**Manual.** Flip the toggle and you get one global switch — **⚡ Flash** or **🧠 Pro** — plus **Thinking Level** pills (low / medium / high). Every tool then uses whatever you set.
+**Manual.** Flip the toggle and you get one global switch — **⚡ Flash** or **🧠 Argon** — plus **Thinking Level** pills (low / medium / high). Every tool then uses whatever you set.
 
-**Flash vs. Pro, practically:**
+**Flash vs. Argon, practically:**
 
 - **Flash** (`gemini-3.8-flash` by default) — fast, cheap, generous free-tier limits. It handles extraction, Anki cards, and question generation very well. This should be your default.
-- **Pro** (`gemini-3.1-pro-preview` by default) — deeper reasoning, noticeably slower, much tighter free-tier limits. Worth trying for Case Studies or Priority synthesis if you have quota to spend; overkill for extraction.
+- **Argon** (`gemini-4-argon` by default; it replaced 3.1 Pro in v17.13) — deeper reasoning, noticeably slower, much tighter free-tier limits. Worth trying for Case Studies or Priority synthesis if you have quota to spend; overkill for extraction. Argon defaults to **high** thinking here. Each Argon request has 32,768 output tokens, half of Flash's 65,536, and thinking counts against them.
 - **Thinking level** trades speed for care. "Low" is fine for most work; bump to "medium/high" when output quality matters more than waiting.
 
-The **Flash Model / Pro Model** text boxes exist so the suite doesn't go stale: when Google ships new model names, type them in — no update to the file needed.
+The **Flash Model / Argon Model** text boxes exist so the suite doesn't go stale: when Google ships new model names, type them in — no update to the file needed. If your key rejects `gemini-4-argon`, type the ID Google lists for you. Settings saved before v17.13 carry over: your Pro thinking level becomes the Argon level, and any per-tool row set to Pro becomes Argon.
 
 ---
 
@@ -156,7 +156,7 @@ This tab answers the question every nursing student asks the night before an exa
 
 **How to use it:** feed it your content, adjust **Chunk size / Overlap** only if you have a very long document (defaults are fine), and run. Then work the output: **Filter by Strategy**, **Search Disease/Keyword**, or **Show All**, and export as **.md**, **.txt**, or **Print / Save as PDF**. Study Tier 1 until you're solid before touching Tier 2.
 
-**Large Knowledge Bases (v17.7).** One request has 65,536 output tokens, shared between the model's thinking and the guide it writes. A whole exam's Knowledge Base can use that up in thinking before the guide is written; one 650-fact run stopped after two topics. When the harvest is large, the synthesis pass now runs in parts of about 10,000 input tokens each. The app merges them into one guide with the audit counts added together. Each part is one more request against your quota. The results and every export say how many parts were used. Each condition is kept whole inside one part, and topics that share a heading are combined into one section. If one part fails or is cut off, the notice names that part and the other parts are still shown. The harvest also reads your Knowledge Base whole facts at a time, always under their condition heading, so nothing is filed as "untitled". **Overlap** now only repeats facts within a condition too large for one chunk.
+**Large Knowledge Bases (v17.7).** One request has 65,536 output tokens on Flash (32,768 on Argon), shared between the model's thinking and the guide it writes. A whole exam's Knowledge Base can use that up in thinking before the guide is written; one 650-fact run stopped after two topics. When the harvest is large, the synthesis pass now runs in parts of about 10,000 input tokens each (about 5,000 on Argon, since its budget is half the size). The app merges them into one guide with the audit counts added together. Each part is one more request against your quota. The results and every export say how many parts were used. Each condition is kept whole inside one part, and topics that share a heading are combined into one section. If one part fails or is cut off, the notice names that part and the other parts are still shown. The harvest also reads your Knowledge Base whole facts at a time, always under their condition heading, so nothing is filed as "untitled". **Overlap** now only repeats facts within a condition too large for one chunk.
 
 ## 03 · Practice — LATTE Anki Generator
 
@@ -338,7 +338,7 @@ Use it as your reflexive "wait, is that true?" button. One honest limitation: th
 
 **The page is blank when I open the file.** The suite loads its libraries from the internet on startup — check your connection and reload. If you ever see a message saying the app *stopped because its security component failed to load*, that's deliberate self-protection; reload when you're back online.
 
-**"Rate limit" / 429 errors mid-generation.** You've hit the free tier's speed limit. Wait a minute, use smaller batches, or generate at a less busy time. Flash has far more generous limits than Pro.
+**"Rate limit" / 429 errors mid-generation.** You've hit the free tier's speed limit. Wait a minute, use smaller batches, or generate at a less busy time. Flash has far more generous limits than Argon.
 
 **It forgot my API key.** By design — the key lives only in the browser session. Re-paste it (password manager recommended).
 

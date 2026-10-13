@@ -3,14 +3,18 @@ module.exports=async function transportRegressionTests(S,t){
   const a=S.indexOf('function geminiSSEParser('),b=S.indexOf('\nasync function callGemini(',a);
   if(a<0||b<0)throw Error('Missing transport extraction anchor');
   const code=S.slice(a,b),enc=new TextEncoder();
+  // v17.13: geminiRequest validates thinking levels against the shipped THINKING_LEVELS constant.
+  const ta=S.indexOf('const THINKING_LEVELS='),tb=S.indexOf('const MODEL_ID_RE=',ta);
+  if(ta<0||tb<0)throw Error('Missing THINKING_LEVELS extraction anchor');
+  const THINKING_LEVELS=new Function(S.slice(ta,tb)+';return THINKING_LEVELS;')();
   const ev=(text,finish,thought=false)=>'data: '+JSON.stringify({candidates:[{content:{parts:[{text,thought}]},...(finish?{finishReason:finish}:{})}]})+'\n\n';
   const response=(chunks,options={})=>({ok:true,body:{getReader(){let i=0;return{read:async()=>{if(options.reject&&i===options.rejectAt)throw Error('reader failed');return i<chunks.length?{done:false,value:typeof chunks[i]==='string'?enc.encode(chunks[i++]):chunks[i++]}:{done:true};},cancel:async()=>{options.cancelled=(options.cancelled||0)+1;if(options.cancelReject)throw Error('cancel failed');},releaseLock(){options.released=(options.released||0)+1;if(options.releaseReject)throw Error('release failed');}};}}});
   const make=(responses,{sleep}={})=>{
-    let calls=0,clock=0;const timers=new Map(),updates=[],metas=[],delays=[],requestSignals=[];
-    const fetch=async(_url,opts)=>{requestSignals.push(opts.signal);const r=responses[calls++];return typeof r==='function'?r(opts):r;};
-    const run=new Function('fetch','_sleep','geminiRetryDelayMs','SAFETY_SETTINGS','setTimeout','clearTimeout',code+';return geminiRequest;')(fetch,async(ms,s)=>{delays.push(ms);if(s?.aborted)throw new DOMException('Aborted','AbortError');if(sleep)await sleep(ms,s);},()=>37000,[],fn=>{timers.set(++clock,fn);return clock;},id=>timers.delete(id));
-    const call=opts=>run('synthetic-key','synthetic-model',{contents:[]},{retries:0,onUpdate:s=>updates.push(s),onMeta:m=>metas.push(m),...opts});
-    return{call,updates,metas,delays,timers,requestSignals,calls:()=>calls};
+    let calls=0,clock=0;const timers=new Map(),updates=[],metas=[],delays=[],requestSignals=[],bodies=[];
+    const fetch=async(_url,opts)=>{requestSignals.push(opts.signal);bodies.push(JSON.parse(opts.body));const r=responses[calls++];return typeof r==='function'?r(opts):r;};
+    const [run,halts,cap]=new Function('fetch','_sleep','geminiRetryDelayMs','SAFETY_SETTINGS','setTimeout','clearTimeout','THINKING_LEVELS',code+';return [geminiRequest,geminiHaltsBatch,geminiOutputCap];')(fetch,async(ms,s)=>{delays.push(ms);if(s?.aborted)throw new DOMException('Aborted','AbortError');if(sleep)await sleep(ms,s);},()=>37000,[],fn=>{timers.set(++clock,fn);return clock;},id=>timers.delete(id),THINKING_LEVELS);
+    const call=(opts,{model='synthetic-model',body={contents:[]}}={})=>run('synthetic-key',model,body,{retries:0,onUpdate:s=>updates.push(s),onMeta:m=>metas.push(m),...opts});
+    return{call,updates,metas,delays,timers,requestSignals,bodies,halts,cap,calls:()=>calls};
   };
   const rejected=async p=>{try{await p;return null;}catch(e){return e;}};
   const flags={},bytes=enc.encode(ev('μg ↔ α','STOP')),chunks=[...bytes].map(x=>Uint8Array.of(x));
@@ -86,5 +90,29 @@ module.exports=async function transportRegressionTests(S,t){
   t('known provider blocking reasons retain partial diagnostics without retries',e?.isFatal===true&&e.finishReason==='RECITATION'&&e.partialText==='partial'&&h.calls()===1);
   t('the worksheet pacing uses abortable sleep',S.includes('await _sleep(900,ctl.signal)'));
   t('the worksheet stops on a permanent HTTP failure or a deferred retry through the shared rule',S.includes('if(geminiHaltsBatch(e))throw e;')&&!S.includes('if(e.isFatal&&e.status)throw e;')); // v17.4: geminiHaltsBatch
+  // v17.13: geminiRequest owns the output ceiling and the thinking rules.
+  const argon='gemini-4-argon',json={responseMimeType:'application/json'};
+  h=make([response([ev('ok','STOP')])]);
+  t('the output ceiling follows the model ID: 32,768 for Argon, 65,536 otherwise',h.cap(argon)===32768&&h.cap('gemini-4-argon-preview')===32768&&h.cap('gemini-3.8-flash')===65536&&h.cap('')===65536);
+  let asked={contents:[],generationConfig:{maxOutputTokens:65536,thinkingConfig:{thinkingLevel:'high'}}};await h.call({},{model:argon,body:asked});
+  t('an Argon request is sent with 32,768 even when 65,536 was asked for',h.bodies[0].generationConfig.maxOutputTokens===32768&&h.bodies[0].generationConfig.thinkingConfig.thinkingLevel==='high'&&h.metas.at(-1).maxOutputTokens===32768);
+  t('the caller body is not mutated by the ceiling or the thinking copy',asked.generationConfig.maxOutputTokens===65536&&!('safetySettings' in asked));
+  h=make([response([ev('ok','STOP')])]);asked={contents:[],generationConfig:{thinkingConfig:{thinkingLevel:'low'}}};await h.call({},{body:asked});
+  t('a Flash request with no ceiling is sent with 65,536 and the caller keeps none',h.bodies[0].generationConfig.maxOutputTokens===65536&&h.metas.at(-1).maxOutputTokens===65536&&!('maxOutputTokens' in asked.generationConfig));
+  h=make([response([ev('{"facts":[{"a":','MAX_TOKENS')])]);e=await rejected(h.call({retries:2},{body:{contents:[],generationConfig:{...json,thinkingConfig:{thinkingLevel:'medium'}}}}));
+  t('JSON cut off at the ceiling is a fatal truncated failure, never returned or retried',e?.truncated===true&&e.isFatal===true&&e.finishReason==='MAX_TOKENS'&&e.partialText==='{"facts":[{"a":'&&h.calls()===1&&/65,536-token ceiling/.test(e.message)&&h.metas.at(-1).truncated===true);
+  t('a truncated JSON failure stops only its own chunk, not the batch',!h.halts(e));
+  h=make([response([ev('{"a":','MAX_TOKENS')])]);e=await rejected(h.call({},{model:argon,body:{contents:[],generationConfig:{...json,thinkingConfig:{thinkingLevel:'high'}}}}));
+  t('an Argon truncation names the 32,768 ceiling',e?.truncated===true&&/32,768-token ceiling/.test(e.message));
+  h=make([]);e=await rejected(h.call({},{body:{contents:[],generationConfig:{thinkingConfig:{thinkingLevel:'low',thinkingBudget:1024}}}}));
+  t('a thinkingBudget is refused before any request is sent',e?.status===400&&e.isFatal===true&&h.calls()===0&&/thinkingBudget/.test(e.message));
+  h=make([]);e=await rejected(h.call({},{model:argon,body:{contents:[],generationConfig:{thinkingConfig:{thinkingLevel:'minimal'}}}}));
+  t('a level outside low, medium and high is refused before any request is sent',e?.status===400&&h.calls()===0&&/low, medium or high/.test(e.message));
+  h=make([]);e=await rejected(h.call({},{model:argon,body:{contents:[]}}));
+  t('an Argon request without a thinking level is refused instead of falling back to medium',e?.status===400&&h.calls()===0&&/Argon/.test(e.message)&&h.halts(e));
+  t('no call site sets its own ceiling; geminiRequest is the only place it is chosen',!S.includes('maxOutputTokens:65536')&&S.includes('body.generationConfig=geminiGenerationConfig(model,body.generationConfig||{});'));
+  t('a truncated Knowledge Base chunk is still split, now from the transport failure',S.includes("if(e&&e.truncated){\n            primaryResponse={text:e.partialText||'',meta};\n            const halves=kbSplitChunk(chunk);"));
+  t('a truncated Knowledge Base audit reply is still kept as audit evidence',S.includes("          let vmeta=null;\n          try{\n            const inventory=")&&S.includes("if(e&&e.truncated)auditResponse={text:e.partialText||'',meta:vmeta};"));
+  t('a truncated case keeps its partial text in the invalid-response panel',S.includes("if(!e||!e.truncated)throw e;\n        owned_setInvalidCaseRaw(e.partialText||'');"));
   t('transport extraction reaches finally and post-cleanup backoff',code.includes('reader.releaseLock()')&&code.includes('await _sleep(retryDelay,signal);'));
 };

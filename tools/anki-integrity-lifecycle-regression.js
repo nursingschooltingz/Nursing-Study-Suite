@@ -24,6 +24,8 @@ const helperNames=[...helpersCode.matchAll(/^(?:async )?function (\w+)\(/gm)].ma
 const transportCode=span('function geminiRetryDelayMs(', 'function extractJSON(');
 if(!transportCode.includes('return geminiRequest(apiKey,model,body,{signal,retries,onUpdate,onMeta});'))throw Error('Missing transport tail');
 const safetyCode=span('const SAFETY_SETTINGS=[','// Single core for ALL Gemini traffic.');
+// v17.13: geminiRequest validates thinking levels against the shipped THINKING_LEVELS constant.
+const shippedThinkingLevels=new Function(span('const THINKING_LEVELS=','const MODEL_ID_RE=')+';return THINKING_LEVELS;')();
 const generatorCode=span('function AnkiGenerator(){','  return <Workbench\n    setupLabel="Anki source and focus context"');
 // v17.3: the tools share one capped-log hook; compile the shipped hook against this fixture's scheduler.
 const cappedLogCode=span('function useCappedLog(','// ──── TOOL: Shared LATTE Knowledge Base ────');
@@ -55,12 +57,12 @@ function makeEnv(fixture,source=kb(),mutation=null){
   const H={...base};
   for(const name of ['ankiParseCards','attachCoverageToCards','ankiDedupeCards','ankiNormalizeConditionTags','lintAnkiCard'])H[name]=(...args)=>{const before=clone(args[0]),output=base[name](...args);trace.push({stage:name,before,after:clone(name==='attachCoverageToCards'?args[0]:output)});return output;};
   const fetch=async(url,opts)=>{const streaming=url.includes('streamGenerateContent');const request={streaming,body:JSON.parse(opts.body)};requests.push(request);const item=queue.shift();if(!item)throw Object.assign(Error('Synthetic fetch queue exhausted'),{isFatal:true});if(typeof item==='function')return item({url,opts,streaming});return responseFor(item,streaming);};
-  const T=compile(safetyCode+transportCode,['callGemini','geminiRequest'],{fetch,_sleep:async(ms,signal)=>{sleeps.push(ms);if(signal?.aborted)throw new DOMException('Aborted','AbortError');}});
+  const T=compile(safetyCode+transportCode,['callGemini','geminiRequest'],{fetch,THINKING_LEVELS:shippedThinkingLevels,_sleep:async(ms,signal)=>{sleeps.push(ms);if(signal?.aborted)throw new DOMException('Aborted','AbortError');}});
   const appState={knowledgeBase:source,currentKnowledge:{current:source},kbMutation:{current:0},registry:{schemaVersion:'1.0',ankiNotes:[],nclexQuestions:[],caseStudies:[]},persistenceStatus:'ready',saveRequest:null,inspectedFactId:null};
   const A=compile(registryCode+appSetter+appRegister,['setKnowledgeBase','registerArtifact'],{useCallback:fn=>fn,currentKnowledge:appState.currentKnowledge,kbMutation:appState.kbMutation,publishKnowledgeBase:v=>{appState.knowledgeBase=v;},setSaveRequest:v=>{appState.saveRequest=v;},setPersistenceStatus:v=>{appState.persistenceStatus=v;},setArtifactRegistry:v=>{appState.registry=typeof v==='function'?v(appState.registry):v;},setInspectedFactId:v=>{appState.inspectedFactId=v;}});
   let exposedKB=source;const scheduler=hooks(),downloads=[];
   const cappedLog=compile(cappedLogCode,['useCappedLog'],{useState:scheduler.api.useState,useCallback:scheduler.api.useCallback}).useCappedLog;
-  const config={apiKey:'synthetic-key-not-a-real-credential',autoProfile:true,flashModel:'synthetic-flash',proModel:'synthetic-pro',profiles:{anki:{m:'flash',lv:'medium'}},forTool:()=>({model:'synthetic-flash',level:'medium'})};
+  const config={apiKey:'synthetic-key-not-a-real-credential',autoProfile:true,flashModel:'synthetic-flash',argonModel:'synthetic-argon',profiles:{anki:{m:'flash',lv:'medium'}},forTool:()=>({model:'synthetic-flash',level:'medium'})};
   const exposed=['run','cards','batch','logs','busy','abortCtl','activeRun','interruptedRun','current','coverage','selected','numericAudits','reviewItems','reviewDecisions','sourceAudit','auditBusy','auditInputs','prepareSourceAudit','runSourceAudit','cancelSourceAudit','saveReviewDecision','updateField','updateSourceLinks','toggle','del','mergeExactDuplicates','exportTxt','setTierFilter','setAnkiHeader','setIncludeSources'];
   const G=compile(master+generatorCode+'\nreturn {'+exposed.join(',')+'};\n}', ['AnkiGenerator'], {...H,...T,...scheduler.api,useCappedLog:cappedLog,useConfig:()=>config,useKnowledge:()=>({knowledgeBase:exposedKB,registerArtifact:A.registerArtifact,isCurrentSource:s=>s===appState.currentKnowledge.current}),document:{getElementById:()=>null},downloadBlob:(blob,filename)=>downloads.push({blob,filename})});
   scheduler.mount(G.AnkiGenerator);

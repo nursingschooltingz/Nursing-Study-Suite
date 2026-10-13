@@ -14,7 +14,9 @@ module.exports=async function productionPriorityTests(S,t){
   const parseTiers=new Function(span('function paParseTiers(','\nconst PA_SYNTH_PART_CHARS=')+'\n;return paParseTiers;')();
   assert.equal(typeof parseTiers,'function','paParseTiers extraction');
   const helperSource=span('const PA_SYNTH_PART_CHARS=','function kbForPriority(');
-  const splitHelpers=tierParser=>new Function('paParseTiers',helperSource+';return {PA_SYNTH_PART_CHARS,paSynthGroups,paMergeTopics,paMergeAudits,paMergeSynthesis};')(tierParser);
+  // v17.13: the part size follows the synthesis model's output ceiling, so the shipped cap helpers are compiled in.
+  const capSource=span('const GEMINI_OUTPUT_CAP=','function geminiGenerationConfig(');
+  const splitHelpers=tierParser=>new Function('paParseTiers',capSource+helperSource+';return {PA_SYNTH_PART_CHARS,paSynthPartChars,paSynthGroups,paMergeTopics,paMergeAudits,paMergeSynthesis};')(tierParser);
   const H=splitHelpers(parseTiers),stubTiers=text=>({tier1:text});
   const C=new Function(span('function paChunkText(','// STAGE 1')+'\n;return {paChunkText,paChunkJoins};')();
   const A=syntheticKB('A'),B=syntheticKB('B');
@@ -25,7 +27,7 @@ module.exports=async function productionPriorityTests(S,t){
     const env={cfg:{apiKey:'synthetic',forTool:id=>({model:id,level:'low'})},K:{knowledgeBase:A,isCurrentSource:kb=>kb===activeKB},analysisSlot:{current:createOperationSlot()},analysisSource:{current:null},
       kbTiers:[1,2,3],kbConditionFilter:query,chunkSize:12000,overlapSize:1500,context:'',...sourceHelpers,...P,geminiHaltsBatch,
       paChunkText:text=>chunks||[text],paBuildExtractPrompt:text=>'HARVEST:'+text,paBuildSynthPrompt:rows=>'SYNTHESIZE:'+rows.join('\n'),paParseTiers:tiers,
-      paSynthGroups:(rows,limit,joins)=>split.paSynthGroups(rows,groupLimit,joins),paMergeSynthesis:split.paMergeSynthesis,paChunkJoins:C.paChunkJoins,
+      paSynthPartChars:split.paSynthPartChars,paSynthGroups:(rows,limit,joins)=>{out.partLimit=limit;return split.paSynthGroups(rows,groupLimit,joins);},paMergeSynthesis:split.paMergeSynthesis,paChunkJoins:C.paChunkJoins,
       setAnalysisBusy:value=>set('busy',value),setResultSource:value=>set('source',value),setHarvestState:value=>set('harvest',value),setStep:value=>set('step',value),setError:value=>set('error',value),setOutput:value=>set('output',value),
       setAbortController(){},setIsStreaming(){},setProgress(){},setPhase:value=>set('phase',value),setParsedTiers:value=>set('tiers',value),setMeta:value=>set('meta',value),setChunks:value=>set('chunks',value)};
     env.callGemini=async(...args)=>{out.calls.push(args);return call?call(out.calls.length,args):'Synthetic result';};
@@ -86,6 +88,7 @@ module.exports=async function productionPriorityTests(S,t){
   const guide=(n,audit=true)=>`## TIER 1 — Must Know\n- **Item ${n}a** [§ S${n}] — (R1 ABC) why.\n\n## TIER 2 — Should Know\n- **Item ${n}b** [§ S${n}] — (R9) why.\n\n## TIER 3 — Good to Know\n- **Item ${n}c** [§ S${n}] — (R9) detail.\n\n---\n## Study Strategy\n- Drill part ${n}.\n\n`+(audit?`*Audit: 3 items · ${n-1} unverified · 1 inferred · 1/1 T1 rule-tagged*`:'');
   const order=(text,...marks)=>marks.every((m,i)=>text.includes(m)&&(i===0||text.indexOf(m)>text.indexOf(marks[i-1])));
   t('Priority synthesis keeps an inventory within the part limit as one part',H.PA_SYNTH_PART_CHARS===40000&&JSON.stringify(H.paSynthGroups(['a','b'],10))==='[["a","b"]]'&&H.paSynthGroups(Array(3).fill('x'.repeat(1000))).length===1);
+  t('Priority synthesis parts are half size on Argon and unchanged on Flash',H.paSynthPartChars('gemini-3.8-flash')===40000&&H.paSynthPartChars('gemini-4-argon')===20000&&H.paSynthPartChars('gemini-4-argon-preview')===20000);
   const big=Array.from({length:15},(_,i)=>String(i).padEnd(10000,'.')),bigGroups=H.paSynthGroups(big);
   t('Priority synthesis packs a large inventory into ordered, unsplit parts',JSON.stringify(bigGroups.map(g=>g.length))==='[4,4,4,3]'&&JSON.stringify(bigGroups.flat())===JSON.stringify(big));
   t('Priority synthesis gives an oversized extraction its own part',JSON.stringify(H.paSynthGroups(['a','x'.repeat(50),'b'],10))==='[["a"],["'+'x'.repeat(50)+'"],["b"]]');
@@ -159,4 +162,8 @@ module.exports=async function productionPriorityTests(S,t){
   const restored=N(syntheticKB('A'),{restore:true});
   t('browser synthetic KB satisfies the actual saved-state normalizer',restored.kb.conditions[0].facts[0].text==='Fictional marker A is present.'&&Array.isArray(restored.kb.sources));
   t('Priority extraction reaches notice tail and restored fixture remains usable',typeof P.paResultNotice==='function'&&restored.kb.conditions.length===1);
+  // v17.13: the part limit handed to paSynthGroups comes from the model synthesis will actually call.
+  h=fixture();await h.run();const flashLimit=h.out.partLimit;
+  h=fixture();h.env.cfg={...h.env.cfg,forTool:id=>({model:id==='priority'?'gemini-4-argon':id,level:'high'})};await h.run();
+  t('Priority sizes synthesis parts from the resolved synthesis model',flashLimit===40000&&h.out.partLimit===20000&&h.out.step==='results');
 };

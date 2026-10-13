@@ -36,7 +36,7 @@ window.__ankiQualityFixture={generationCalls:[],auditCalls:[],exports:[]};`);
 };`);
   html=once(html,'downloadBlob=async blob=>fixtureExport(await blob.text());',String.raw`downloadBlob=async(blob,name)=>{const text=await blob.text();window.__ankiQualityFixture.exports.push({name,text});fixtureExport(text);};`);
   html=once(html,"const cfg=useMemo(()=>({apiKey:'synthetic-only',forTool:()=>({model:'synthetic-fixture',level:'low'}),autoProfile:true}),[]);",
-    "const cfg=useMemo(()=>({apiKey:'synthetic-only',flashModel:'synthetic-flash',proModel:'synthetic-pro',forTool:id=>({model:TOOL_PROFILE_DEFAULTS[id].m==='pro'?'synthetic-pro':'synthetic-flash',level:TOOL_PROFILE_DEFAULTS[id].lv}),autoProfile:true}),[]);");
+    "const cfg=useMemo(()=>({apiKey:'synthetic-only',flashModel:'synthetic-flash',argonModel:'synthetic-argon',forTool:id=>({model:TOOL_PROFILE_DEFAULTS[id].m==='argon'?'synthetic-argon':'synthetic-flash',level:TOOL_PROFILE_DEFAULTS[id].lv}),autoProfile:true}),[]);");
   return html;
 }
 

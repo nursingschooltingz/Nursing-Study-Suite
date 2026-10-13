@@ -23,7 +23,7 @@
 const fs = require('fs');
 const path = require('path');
 const { resolveSuiteFile, extractPromptLiteral, sha256, parseMeasurementArgs,
-  resolveMeasurementProfile, measurementPlan, createMeasurementPacer } = require('./tools/repo-checks');
+  resolveMeasurementProfile, measurementPlan, createMeasurementPacer, measurementOutputCap } = require('./tools/repo-checks');
 
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
   '.webp': 'image/webp', '.heic': 'image/heic', '.heif': 'image/heif' };
@@ -105,7 +105,7 @@ function createTranscriber(config, prompt, key, deps = {}) {
     observation.actualPayload = { ...observation.originalPayload, resized: false };
     if (bytes.length > 15 * 1024 * 1024) throw new Error('Image too large for an inline request: ' + (bytes.length / 1048576).toFixed(1) + ' MB');
     const body = { contents: [{ parts: [{ inlineData: { mimeType, data: bytes.toString('base64') } }, { text: prompt }] }],
-      generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 65536, thinkingConfig: { thinkingLevel: config.level } },
+      generationConfig: { responseMimeType: 'application/json', maxOutputTokens: measurementOutputCap(config.model), thinkingConfig: { thinkingLevel: config.level } },
       safetySettings: SAFETY };
     const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + config.model + ':generateContent';
     let resp;

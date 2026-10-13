@@ -8,7 +8,13 @@
      Babel, so this adds narrow resource directives without a default-src/script-src migration. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net">
 <title>LATTE Study Suite</title>
-<!-- v17.12 (2026-10-09): NCLEX Generator answer positions. The worksheet kept each choice where the model wrote it, and the
+<!-- v17.13 (2026-10-13): the Pro model slot is now Argon (gemini-4-argon, thinking high by default). Argon accepts
+     32,768 thinking-plus-output tokens on a non-streaming request, so any model ID containing "argon" is capped there;
+     Flash keeps 65,536. A JSON request that stops at the ceiling is now a failure instead of a parse attempt, a thinking
+     level outside low/medium/high (or none, on Argon) is refused before sending, and Priority synthesis parts are half
+     size on Argon. Saved Pro settings carry over: the Pro thinking level becomes the Argon level and a per-tool Pro row
+     becomes Argon. Prompts are unchanged.
+     v17.12 (2026-10-09): NCLEX Generator answer positions. The worksheet kept each choice where the model wrote it, and the
      key was A on nearly every item. Each lettered MCQ and SATA item's choices are now shuffled once per batch, before it is
      checked, audited or exported; the ANSWER labels and Why lines follow their choice. An item whose wording names a choice
      by letter or position keeps its order and is named in the log. Prompts are unchanged.
@@ -476,7 +482,7 @@ input[aria-invalid="true"],textarea[aria-invalid="true"],select[aria-invalid="tr
 .model-badge{margin-top:var(--space-2);padding:6px 10px;background:var(--blue-tint);border:1px solid var(--blue-line);border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:var(--t-micro);color:var(--blue-deep);display:flex;align-items:center;gap:6px;overflow-wrap:anywhere;}
 .model-badge>span{min-width:0;}
 .model-dot{width:6px;height:6px;border-radius:50%;background:var(--ok);flex-shrink:0;}
-.model-dot.pro{background:var(--orange);}
+.model-dot.argon{background:var(--orange);}
 
 /* ── Source intake ──────────────────────────────────────────────────────── */
 .upload-zone{border:1.5px dashed var(--blue-line);border-radius:var(--radius-lg);padding:var(--space-5) var(--space-4);text-align:center;background:var(--blue-tint);transition:border-color var(--transition),background var(--transition);}
@@ -750,7 +756,7 @@ const {useState,useRef,useCallback,useEffect,useMemo,createContext,useContext}=R
 
 // ── Recommended per-tool profiles (Auto mode) ──
 // Starting points synthesized from the model-routing discussion, NOT measured results.
-// 'flash'/'pro' resolve against whatever is typed in the Flash/Pro model fields, so
+// 'flash'/'argon' resolve against whatever is typed in the Flash/Argon model fields, so
 // these stay correct when model names change. Every value is user-editable.
 const TOOL_PROFILE_DEFAULTS={
   knowledge:{m:'flash',lv:'medium'},      // extraction — completeness-critical; pending A/B
@@ -771,11 +777,12 @@ const TOOL_PROFILE_DEFAULTS={
   // ingestion stages — this does not contradict the earlier finding that high thinking
   // degrades grounded summarization. Both top-performing raters in the June study were
   // reasoning-enhanced configurations.
-  // v15.7: defaulted to FLASH, not Pro. This is a COST decision, not a quality one. The
-  // audit runs once per MCQ, and a real free-tier key exhausted its Pro allowance after
-  // ~26 calls — an audit you cannot afford to run is worth less than a cheaper one you can.
-  // Thinking stays high, which is the part that matters for rubric judgment. Switch this
-  // row to Pro in the per-tool profiles when quota allows; nothing else needs to change.
+  // v15.7: defaulted to FLASH, not the second slot (then 3.1 Pro; Argon since v17.13).
+  // This is a COST decision, not a quality one. The audit runs once per MCQ, and a real
+  // free-tier key exhausted its 3.1 Pro allowance after ~26 calls — an audit you cannot afford
+  // to run is worth less than a cheaper one you can. Thinking stays high, which is the part that
+  // matters for rubric judgment. Switch this row to Argon in the per-tool profiles when quota
+  // allows; nothing else needs to change.
   itemAudit:{m:'flash',lv:'high'},       // NEIA item-quality review of a rendered item
 };
 const PROFILE_ROWS=[
@@ -802,15 +809,20 @@ const PROFILE_ROWS=[
 // field by field and fall back to these defaults. The measurement tools read the shipped defaults
 // from this object (tools/repo-checks.js).
 const MODEL_SETTINGS_KEY='latte_model_settings_v1';
-const MODEL_SETTINGS_DEFAULTS=Object.freeze({flashModel:'gemini-3.8-flash',proModel:'gemini-3.1-pro-preview',thinkingMode:false,flashLevel:'low',proLevel:'high'});
+// v17.13: the second slot is Argon, not Pro. Argon's own default thinking level is medium; the suite keeps sending
+// high explicitly, as it did for Pro, so switching models does not silently reduce reasoning.
+const MODEL_SETTINGS_DEFAULTS=Object.freeze({flashModel:'gemini-3.8-flash',argonModel:'gemini-4-argon',thinkingMode:false,flashLevel:'low',argonLevel:'high'});
 const THINKING_LEVELS=Object.freeze(['low','medium','high']);
 const MODEL_ID_RE=/^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 function loadModelSettings(storage,defaults=MODEL_SETTINGS_DEFAULTS){
   const out={...defaults};let saved=null;
   try{saved=JSON.parse(storage.getItem(MODEL_SETTINGS_KEY)||'null');}catch(e){saved=null;}
   if(!saved||typeof saved!=='object'||Array.isArray(saved))return out;
-  for(const key of ['flashModel','proModel'])if(typeof saved[key]==='string'&&MODEL_ID_RE.test(saved[key]))out[key]=saved[key];
-  for(const key of ['flashLevel','proLevel'])if(THINKING_LEVELS.includes(saved[key]))out[key]=saved[key];
+  for(const key of ['flashModel','argonModel'])if(typeof saved[key]==='string'&&MODEL_ID_RE.test(saved[key]))out[key]=saved[key];
+  // v17.13: a pre-v17.13 save has proModel/proLevel. The saved Pro model ID names a Pro model, so it is not carried into
+  // the Argon slot; the saved Pro thinking level was the user's explicit choice for that slot, so it is. Keep this shim.
+  if(!THINKING_LEVELS.includes(saved.argonLevel)&&THINKING_LEVELS.includes(saved.proLevel))out.argonLevel=saved.proLevel;
+  for(const key of ['flashLevel','argonLevel'])if(THINKING_LEVELS.includes(saved[key]))out[key]=saved[key];
   if(typeof saved.thinkingMode==='boolean')out.thinkingMode=saved.thinkingMode;
   return out;
 }
@@ -1139,11 +1151,36 @@ function geminiSSEParser(onEvent){
   };
   return {feed};
 }
+// v17.13: geminiRequest now owns the output ceiling and the thinking rules, so no call site can send what the model
+// refuses. Every request used to ask for 65,536 tokens. Argon accepts 32,768 thinking-plus-output tokens on a
+// non-streaming request (a browser fetch to generateContent; 65,536 when streamed), and one 32,768 cap for every Argon
+// request keeps the rule simple. Flash keeps 65,536. The cap follows the model ID actually called, not the settings slot
+// it was typed into.
+const GEMINI_OUTPUT_CAP=65536,ARGON_OUTPUT_CAP=32768;
+function geminiIsArgon(model){return /argon/i.test(String(model||''));}
+function geminiOutputCap(model){return geminiIsArgon(model)?ARGON_OUTPUT_CAP:GEMINI_OUTPUT_CAP;}
+// v17.13: Argon answers a thinkingBudget or a MINIMAL level with HTTP 400, and with no level it falls back to medium,
+// less reasoning than the high the old Pro slot ran at, with no error. All three are refused here before anything is
+// sent, as the same permanent HTTP 400 the API would return, so a batch stops instead of failing every chunk in turn.
+function geminiGenerationConfig(model,gc){
+  const out=Object.assign({},gc),cap=geminiOutputCap(model),tc=out.thinkingConfig;
+  const refuse=msg=>Object.assign(new Error(msg),{status:400,isFatal:true,retryable:false});
+  out.maxOutputTokens=Math.min(Number(out.maxOutputTokens)||cap,cap);
+  if(tc!=null){
+    if(typeof tc!=='object'||Array.isArray(tc))throw refuse('thinkingConfig must be an object.');
+    if('thinkingBudget' in tc)throw refuse('thinkingBudget is never sent; set a thinking level of low, medium or high instead.');
+    if(!THINKING_LEVELS.includes(tc.thinkingLevel))throw refuse('Thinking level must be low, medium or high (got '+String(tc.thinkingLevel)+').');
+    out.thinkingConfig={...tc};
+  }else if(geminiIsArgon(model))throw refuse('Argon requests must name a thinking level; without one Argon falls back to medium.');
+  return out;
+}
 async function geminiRequest(apiKey,model,body,{signal,retries=2,onUpdate,onMeta,timeoutMs=600000}={}){
   body=Object.assign({},body,{safetySettings:SAFETY_SETTINGS}); // v15.14: never mutate the caller's body
+  body.generationConfig=geminiGenerationConfig(model,body.generationConfig||{});
+  const cap=body.generationConfig.maxOutputTokens,jsonMode=body.generationConfig.responseMimeType==='application/json';
   const streaming=typeof onUpdate==='function';
   const url=`https://generativelanguage.googleapis.com/v1beta/models/${model}:${streaming?'streamGenerateContent?alt=sse':'generateContent'}`;
-  const meta=m=>{if(typeof onMeta==='function')try{onMeta({...m,model});}catch(e){}};
+  const meta=m=>{if(typeof onMeta==='function')try{onMeta({...m,model,maxOutputTokens:cap});}catch(e){}};
   for(let attempt=0;attempt<=retries;attempt++){
     if(signal?.aborted)throw new DOMException('Aborted','AbortError');
     const wd=new AbortController();let timedOut=false,timer=null,reader=null,readerDone=false;
@@ -1199,6 +1236,13 @@ async function geminiRequest(apiKey,model,body,{signal,retries=2,onUpdate,onMeta
         if(finish==='MAX_TOKENS'){const e=new Error('The model spent its whole output budget on thinking and returned nothing. Lower the Thinking Level for this tool, or reduce the input size.');e.isFatal=true;throw e;}
         throw Object.assign(new Error('Empty response from API.'),{retryDelayMs:2000});
       }
+      // v17.13: JSON cut off at the ceiling was returned as if it were an answer, and each caller then failed to parse
+      // it or, worse, parsed a fragment. It is now a failure, never retried, with the partial text kept as diagnostics.
+      // Thinking tokens count against the same ceiling. Plain-text answers keep the partial return and truncated flag.
+      if(finish==='MAX_TOKENS'&&jsonMode){
+        const think=usage?.thoughtsTokenCount||0;
+        throw Object.assign(new Error('Output hit the '+cap.toLocaleString()+'-token ceiling before the JSON was complete'+(think?' (thinking used '+think.toLocaleString()+' tokens)':'')+'. Lower the Thinking Level for this tool, or reduce the input size.'),{isFatal:true,truncated:true,finishReason:'MAX_TOKENS'});
+      }
       if(streaming)onUpdate(text);
       meta({attempt:attempt+1,status:finish==='MAX_TOKENS'?'truncated':'complete',complete:finish!=='MAX_TOKENS',finishReason:finish,truncated:finish==='MAX_TOKENS',usage});
       result=text;
@@ -1247,8 +1291,9 @@ async function callGemini(apiKey,model,parts,opts={}){
   // generationConfig: optional per-request overrides (e.g. responseMimeType) so a call site
   // can opt in without forking the wrapper. NOTE: never set a JSON mime here globally —
   // Priority/Anki/NCLEXgen consume markdown / code-block / plain-text from this same wrapper.
-  const body={contents:[{parts}],generationConfig:Object.assign({maxOutputTokens:65536},generationConfig||{})};
-  // The level is applied as given — it is no longer forced to 'low' when the Pro toggle is
+  // v17.13: no maxOutputTokens here; geminiRequest sets the called model's ceiling (geminiOutputCap).
+  const body={contents:[{parts}],generationConfig:Object.assign({},generationConfig||{})};
+  // The level is applied as given — it is no longer forced to 'low' when the Argon toggle is
   // off. cfg.thinkingLevel already resolves to the active model's level, so Flash+medium/high
   // is expressible.
   body.generationConfig.thinkingConfig={thinkingLevel:thinkingLevel||'low'};
@@ -1645,7 +1690,7 @@ function TruncationNotice({meta,label}){
       <div style={{fontSize:12,marginTop:5,lineHeight:1.65,color:'var(--text-dim)'}}>
         The response stopped because it ran out of room, not because it finished. Content is missing from the end.
         {(think>0||out>0||inp>0)&&<div style={{fontFamily:'JetBrains Mono',fontSize:12,marginTop:6,color:'var(--text)'}}>
-          input {inp.toLocaleString()} · thinking {think.toLocaleString()} · output {out.toLocaleString()} · ceiling 65,536
+          input {inp.toLocaleString()} · thinking {think.toLocaleString()} · output {out.toLocaleString()} · ceiling {(meta.maxOutputTokens||65536).toLocaleString()}{/* v17.13: Argon's ceiling is 32,768 */}
         </div>}
         {think>0
           ? <div style={{marginTop:6}}>Thinking tokens draw from the same budget as the document. Dropping Thinking Level (or switching to Standard) would free about <b style={{color:'var(--text)'}}>{think.toLocaleString()}</b> tokens for content.</div>
@@ -2990,7 +3035,7 @@ async function cardTranscribe(apiKey,model,level,file,opts){
   const payload=await cardFilePayload(file);
   if(opts&&typeof opts.onPayload==='function'){try{opts.onPayload(payload);}catch(e){}}
   const raw=await geminiRequest(apiKey,model,{contents:[{parts:[{inlineData:{mimeType:payload.mimeType,data:payload.data}},{text:CARD_TRANSCRIBE_PROMPT}]}],
-    generationConfig:{responseMimeType:'application/json',maxOutputTokens:65536,thinkingConfig:{thinkingLevel:level}}},opts);
+    generationConfig:{responseMimeType:'application/json',thinkingConfig:{thinkingLevel:level}}},opts); // v17.13: the ceiling comes from geminiRequest
   const p=extractJSON(raw);
   if(!p||!Array.isArray(p.sections))throw new Error('response was not a card transcript');
   // v16.9: the outer array alone admitted a null section, which threw while reading its heading,
@@ -3404,22 +3449,25 @@ function KnowledgeBaseBuilder(){
         // ---- Pass 1: extraction ----
         try{
           const prompt=KB_EXTRACTION_PROMPT.replace('ONE supplied source file',()=>'ONE supplied source chunk named "'+file.name+'" ('+chunk.label+')')+focusBlock;
-          const raw=await geminiRequest(cfg.apiKey,model,{contents:[{parts:[{text:'SOURCE FILE: '+file.name+'\nSOURCE RANGE: '+chunk.label+'\n'+chunk.text},{text:prompt}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:65536,thinkingConfig:{thinkingLevel:level}}},{signal:controller.signal,retries:2,onMeta:m=>{meta=m;}});
+          const raw=await geminiRequest(cfg.apiKey,model,{contents:[{parts:[{text:'SOURCE FILE: '+file.name+'\nSOURCE RANGE: '+chunk.label+'\n'+chunk.text},{text:prompt}]}],generationConfig:{responseMimeType:'application/json',thinkingConfig:{thinkingLevel:level}}},{signal:controller.signal,retries:2,onMeta:m=>{meta=m;}});
           // v16.7: retain raw model evidence when shape validation quarantines a response.
           primaryResponse={text:raw,meta};
+          parsed=kbValidateExtractionEnvelope(extractJSON(raw));
+        }catch(e){
           // A truncated chunk is split and requeued rather than discarded. On Gemini 3
           // thinking and output share one budget, so a dense chunk at high thinking can
           // hit the ceiling mid-JSON — halving it recovers the content instead of losing it.
-          if(meta?.truncated){
+          // v17.13: geminiRequest now rejects JSON cut off at the ceiling (e.truncated) instead of returning it, so the
+          // split moved here from after the call; the partial text stays as this chunk's evidence.
+          if(e&&e.truncated){
+            primaryResponse={text:e.partialText||'',meta};
             const halves=kbSplitChunk(chunk);
             if(halves&&job.depth<4){
               owned_addLog(`↯ ${tag} hit the token ceiling — splitting into ${halves.map(h=>h.label).join(' + ')} and retrying`,'warn');
               total+=passesPerChunk;queue.unshift(...halves.map((h,i)=>({file,chunk:h,depth:job.depth+1,order:[...result.order,i]})));return;
             }
-            throw new Error('output hit MAX_TOKENS and cannot be split further');
+            e=new Error('output hit MAX_TOKENS and cannot be split further');
           }
-          parsed=kbValidateExtractionEnvelope(extractJSON(raw));
-        }catch(e){
           if(geminiHaltsBatch(e))throw e; // v17.4: a deferred retry, an exhausted quota or a permanent HTTP failure stops the build; kbRunLanes settles the other lane first
           problems.push(tag+': '+(e.message||String(e)));
           result.stat={tag,file:file.name,label:chunk.label,chars:chunk.text.length,facts:0,recovered:0,discarded:0,quoteMiss:0,quoteMissDetail:[],quoteMissByReason:{},discardByReason:{},dehyphSaved:0,opMismatch:0,opDetail:[],primaryResponse,failed:true};finished.push(result);
@@ -3453,10 +3501,10 @@ function KnowledgeBaseBuilder(){
         let recovered=0,discarded=0,auditStatus=verifyPass?'pending':'not-run',auditResponse=null;
         if(verifyPass){
           if(controller.signal.aborted)throw new DOMException('Aborted','AbortError');
+          let vmeta=null;
           try{
             const inventory=(parsed.conditions||[]).map(c=>`# ${c.name}\n`+(c.facts||[]).map(f=>`- [${f.latteBucket}] ${f.text}`).join('\n')).join('\n\n')||'(nothing was extracted from this chunk)';
-            let vmeta=null;
-            const vraw=await geminiRequest(cfg.apiKey,auditCfg.model,{contents:[{parts:[{text:'(A) SOURCE CHUNK — '+file.name+' ('+chunk.label+')\n'+chunk.text},{text:'(B) FACTS ALREADY EXTRACTED FROM THIS CHUNK\n'+inventory},{text:KB_VERIFY_PROMPT+focusBlock}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:65536,thinkingConfig:{thinkingLevel:auditCfg.level}}},{signal:controller.signal,retries:1,onMeta:m=>{vmeta=m;}});
+            const vraw=await geminiRequest(cfg.apiKey,auditCfg.model,{contents:[{parts:[{text:'(A) SOURCE CHUNK — '+file.name+' ('+chunk.label+')\n'+chunk.text},{text:'(B) FACTS ALREADY EXTRACTED FROM THIS CHUNK\n'+inventory},{text:KB_VERIFY_PROMPT+focusBlock}]}],generationConfig:{responseMimeType:'application/json',thinkingConfig:{thinkingLevel:auditCfg.level}}},{signal:controller.signal,retries:1,onMeta:m=>{vmeta=m;}});
             // v16.7: a missing/wrong-shaped omission inventory is unresolved evidence, not zero omissions.
             auditResponse={text:vraw,meta:vmeta};
             const vp=kbValidateExtractionEnvelope(extractJSON(vraw),true),missed=vp.missed;
@@ -3484,6 +3532,9 @@ function KnowledgeBaseBuilder(){
           }catch(e){
             if(e.name==='AbortError')throw e;
             auditStatus='failed';
+            // v17.13: a truncated audit reply is now rejected by geminiRequest before it reaches the line above that kept
+            // it; its partial text stays as this chunk's audit evidence, as an unparseable reply's did.
+            if(e&&e.truncated)auditResponse={text:e.partialText||'',meta:vmeta};
             problems.push(tag+' [audit]: '+(e.message||String(e)));
             owned_addLog(`  ⚠ audit failed for ${tag}: ${e.message||e}`,'warn');
           }
@@ -4099,6 +4150,10 @@ function paParseTiers(text){
 // part needs roughly 16k thinking plus its guide text, about half the ceiling. An inventory at or under the
 // limit is one part: the same single request, prompt and output as before.
 const PA_SYNTH_PART_CHARS=40000;
+// v17.13: Argon's ceiling is 32,768, half of Flash's, so a full 40,000-character part would spend about half of it on
+// thinking alone. The part size scales with the synthesis model's ceiling: 40,000 on Flash, 20,000 on Argon, which
+// keeps the safety margin the v17.7 run established.
+function paSynthPartChars(model){return Math.round(PA_SYNTH_PART_CHARS*geminiOutputCap(model)/GEMINI_OUTPUT_CAP);}
 // joins[i] marks an extraction that continues extraction i-1's condition (paChunkJoins). Joined runs stay in
 // one part so each condition is ranked once; only a run larger than a whole part is divided, by size.
 function paSynthGroups(extractions,limit=PA_SYNTH_PART_CHARS,joins=[]){
@@ -4287,10 +4342,11 @@ function PriorityAnalyzer(){
       // A harvest stays in the previous harvest's part when every chunk from there to it continues one condition
       // (paChunkJoins), so a failed chunk inside a condition does not divide what survived of it.
       const joins=extractionChunks.map((c,j)=>j>0&&chunkJoins.slice(extractionChunks[j-1]+1,c+1).every(Boolean));
-      const groups=paSynthGroups(extractions,undefined,joins),parts=groups.length;
+      // v17.13: the synthesis model is resolved first because the part size depends on its output ceiling.
+      const {model:synthModel,level:synthLevel}=cfg.forTool('priority');
+      const groups=paSynthGroups(extractions,paSynthPartChars(synthModel),joins),parts=groups.length;
       const synthIds=parts>1?groups.map((_,k)=>'synthesis-'+(k+1)):['synthesis'];
       if(parts>1)owned_setChunks(p=>[...p.filter(c=>c.id!=='synthesis'),...synthIds.map((id,k)=>({id,name:'Synthesis '+(k+1)+'/'+parts,phase:'synthesis',status:'pending'}))]);
-      const {model:synthModel,level:synthLevel}=cfg.forTool('priority');
       const texts=[],metas=[],failed=[],SEP='\n\n---\n\n';
       // Published metadata for a split run: the first truncated part's usage for the banner, plus every truncated part.
       const publishSynthMeta=()=>{const cut=[];metas.forEach((m,i)=>{if(m&&m.truncated)cut.push(i+1);});const base=cut.length?metas[cut[0]-1]:metas.filter(Boolean).pop();owned_setMeta({...(base||{}),part:cut[0]||null,parts,truncatedParts:cut});};
@@ -6051,7 +6107,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '17.12';}
+function suiteVersion(){return '17.13';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -6561,7 +6617,7 @@ function AnkiGenerator(){
   // v16.2: source checking has its own explicit settings; changing generation settings is not an audit experiment.
   const [auditFamily,setAuditFamily]=useState('flash'),[auditLevel,setAuditLevel]=useState('medium');
   const [savingEvidence,setSavingEvidence]=useState(false),[evidenceError,setEvidenceError]=useState('');
-  const auditModel=auditFamily==='pro'?cfg.proModel:cfg.flashModel;
+  const auditModel=auditFamily==='argon'?cfg.argonModel:cfg.flashModel;
   const auditRun=useRef(null),auditInputs=useRef(null);
   const [batch,setBatch]=useState(null);
   const [interruptedRun,setInterruptedRun]=useState(null);
@@ -6833,7 +6889,7 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
         if(!runState.promptHashes.adapterRuntimeSha256)runState.promptHashes.adapterRuntimeSha256=await ankiSha256(kbAdapter);
         if(!isCurrent())return;
         parts.push({text:ANKI_MASTER_PROMPT+focusBlock+kbAdapter+'\n\n'+sourceLabel+'\n\n'+(chunks[i]||'')+ctx});
-        const resp=await callGemini(cfg.apiKey,model,parts,{thinkingLevel:toolLevel,signal:ctl.signal,onUpdate:t=>{if(isCurrent()){runState.partialResponse=t;setLiveKB(Math.round(t.length/102.4)/10);}},onMeta:m=>{if(isCurrent()&&m.truncated){runState.truncated=true;const th=m.usage?.thoughtsTokenCount||0;log(`  \u26a0 Chunk ${i+1} hit the 65,536-token ceiling \u2014 cards are missing from the end.`+(th?` Thinking used ${th.toLocaleString()} tok of that budget.`:' Lower the chunk size.'),'err');}}});
+        const resp=await callGemini(cfg.apiKey,model,parts,{thinkingLevel:toolLevel,signal:ctl.signal,onUpdate:t=>{if(isCurrent()){runState.partialResponse=t;setLiveKB(Math.round(t.length/102.4)/10);}},onMeta:m=>{if(isCurrent()&&m.truncated){runState.truncated=true;const th=m.usage?.thoughtsTokenCount||0;log(`  \u26a0 Chunk ${i+1} hit the ${(m.maxOutputTokens||65536).toLocaleString()}-token ceiling \u2014 cards are missing from the end.`+(th?` Thinking used ${th.toLocaleString()} tok of that budget.`:' Lower the chunk size.'),'err');}}});
         if(!isCurrent()){if(activeRun.current===runState)setInterruptedRun(ankiRunEvidence(runState,'cancelled'));return;}
         runState.rawResponses.push(resp);runState.partialResponse='';
         // v16.5: this structured-KB run owns the hierarchical tag contract; generic parser calls do not.
@@ -7000,7 +7056,7 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
           <p>Checks source meaning, missing recall targets, duplicate targets and priority loss. Uses the captured fact text and all note tiers, with Tier {tierFilter==='all'?'1–3':tierFilter} selected for export. Findings are suggestions, not clinical validation. This checks against the captured KB, so a mistake already in that KB can survive the check; compare questionable facts with the original source.</p>
           {/* v16.2: preparation and a completed AI check must not share an ambiguous download label. */}
           <p>Prepare a review packet locally, then run the check explicitly. The checker accounts for source words as targets or context, then compares complete note claims. Valid records survive an incomplete check; unresolved records remain available for review and retry.</p>
-          <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:8}}><label>Checker model <select aria-label="Source checker model" value={auditFamily} disabled={auditBusy} onChange={e=>setAuditFamily(e.target.value)}><option value="flash">Flash</option><option value="pro">Pro</option></select></label><label>Checker thinking <select aria-label="Source checker thinking" value={auditLevel} disabled={auditBusy} onChange={e=>setAuditLevel(e.target.value)}>{['low','medium','high'].map(level=><option key={level} value={level}>{level}</option>)}</select></label></div>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:8}}><label>Checker model <select aria-label="Source checker model" value={auditFamily} disabled={auditBusy} onChange={e=>setAuditFamily(e.target.value)}><option value="flash">Flash</option><option value="argon">Argon</option></select></label><label>Checker thinking <select aria-label="Source checker thinking" value={auditLevel} disabled={auditBusy} onChange={e=>setAuditLevel(e.target.value)}>{['low','medium','high'].map(level=><option key={level} value={level}>{level}</option>)}</select></label></div>
           <button className="btn-secondary" onClick={prepareSourceAudit} disabled={!current||busy||auditBusy}>Prepare review packet — no AI check yet</button>
           {sourceAudit&&<div>
             <p role="status">{ankiSourceAuditLabel(sourceAudit,ankiSourceAuditCurrent(sourceAudit,auditInputsValue))}{!ankiSourceAuditCurrent(sourceAudit,auditInputsValue)&&' · outdated for the current notes or source'}</p>
@@ -7462,7 +7518,8 @@ function NCLEXExtractor(){
   async function nclexCallGemini(prompt,signal){
     // Was 8192 — the legacy ceiling. A dense chunk overflowed it, the JSON came back
     // truncated, the bare parse threw, and the whole chunk was silently skipped.
-    const gc={maxOutputTokens:65536,responseMimeType:'application/json'};gc.thinkingConfig={thinkingLevel:toolLevel};
+    // v17.13: no ceiling here; geminiRequest sets the called model's own (65,536 Flash, 32,768 Argon).
+    const gc={responseMimeType:'application/json'};gc.thinkingConfig={thinkingLevel:toolLevel};
     let cut=false;
     const raw=await geminiRequest(cfg.apiKey,model,{contents:[{parts:[{text:prompt}]}],generationConfig:gc},{signal,onMeta:m=>{cut=!!m.truncated;}});
     const cleaned=raw.replace(/```json\s*/gi,'').replace(/```/g,'').trim();
@@ -10599,7 +10656,7 @@ ${NG_GROUNDING_ADAPTER}
         const parts=allocMode?[{text:groundingAdapter},{text:prompt}]:[...fileParts,{text:prompt}];
 
         let raw;
-        try{raw=await ownedCallGemini(cfg.apiKey,model,parts,{thinkingLevel:toolLevel,signal:ctl.signal,onUpdate:t=>owned_setLiveKB(Math.round(t.length/102.4)/10),onMeta:m=>{if(m.truncated){const th=m.usage?.thoughtsTokenCount||0;owned_log('  \u26a0 Batch '+b+' hit the 65,536-token ceiling \u2014 the answer key is likely cut short.'+(th?' Thinking used '+th.toLocaleString()+' tok of that budget.':' Try a smaller batch size.'),'err');}}});}
+        try{raw=await ownedCallGemini(cfg.apiKey,model,parts,{thinkingLevel:toolLevel,signal:ctl.signal,onUpdate:t=>owned_setLiveKB(Math.round(t.length/102.4)/10),onMeta:m=>{if(m.truncated){const th=m.usage?.thoughtsTokenCount||0;owned_log('  \u26a0 Batch '+b+' hit the '+(m.maxOutputTokens||65536).toLocaleString()+'-token ceiling \u2014 the answer key is likely cut short.'+(th?' Thinking used '+th.toLocaleString()+' tok of that budget.':' Try a smaller batch size.'),'err');}}});}
         catch(e){
           if(e.name==='AbortError')throw e;
           owned_log('  ⚠ Batch '+b+' failed: '+e.message,'err');
@@ -12314,8 +12371,8 @@ const AUDIT_POOL_WIDTH=2,AUDIT_RETRIES=3;
 // June paper's measured 1.7-2.3 min/item for reasoning-enhanced models, serialized audits
 // would run 10-14 minutes and make the feature unusable.
 // Width 2, not 3: free-tier Gemini limits are per-minute, and width 3 at the ~6s latency
-// measured on this build bursts roughly 28 requests/minute, which exhausts a free-tier Pro
-// allowance quickly. Two lanes still overlap the waiting without spiking the rate.
+// measured on this build bursts roughly 28 requests/minute, which exhausted a free-tier 3.1 Pro
+// allowance quickly (the slot is now Argon). Two lanes still overlap the waiting without spiking the rate.
 async function itemRunPool(items,width,worker,signal){
   const out=new Array(items.length);
   let next=0,fatal=null;
@@ -12501,14 +12558,21 @@ function CaseStudyGenerator(){
       const caseContract=Object.freeze({stages,questionsPerStage});
       const prompt=caseBuildPrompt({conditionName:activeCondition.name,facts:selectedFacts,difficulty,stages,questionsPerStage,includeTypes:types});
       owned_log('Generating unfolding case ('+stages+' stages · '+questionsPerStage+' Q/stage)...','warn');
-      let meta=null;
-      const raw=await ownedCallGemini(cfg.apiKey,model,[{text:prompt}],{
+      let meta=null,raw;
+      // v17.13: a case cut off at the ceiling is now rejected by geminiRequest instead of returned. It still lands in
+      // the invalid-response panel with its partial text, as an unparseable truncated case did before.
+      try{
+        raw=await ownedCallGemini(cfg.apiKey,model,[{text:prompt}],{
         thinkingLevel:level,signal:ctl.signal,
         onUpdate:t=>owned_setLiveKB(Math.round(t.length/102.4)/10),
-        onMeta:m=>{meta=m;if(m.truncated)owned_log('  ⚠ Output hit the 65,536-token ceiling — the case may be cut short. Reduce stages or questions per stage.','err');},
+        onMeta:m=>{meta=m;if(m.truncated)owned_log('  ⚠ Output hit the '+(m.maxOutputTokens||65536).toLocaleString()+'-token ceiling — the case may be cut short. Reduce stages or questions per stage.','err');},
         // v15: the case prompt already demands bare JSON; this stops fence/prose wrappers at
-        // the source (extractJSON stays as the truncation fallback).
+        // the source.
         generationConfig:{responseMimeType:'application/json'}});
+      }catch(e){
+        if(!e||!e.truncated)throw e;
+        owned_setInvalidCaseRaw(e.partialText||'');owned_setIssues([{sev:'error',msg:'Response stopped at the output ceiling before the JSON was complete.'}]);owned_log(e.message,'err');return;
+      }
       let parsed;
       try{parsed=extractJSON(raw);}catch(e){owned_setInvalidCaseRaw(raw);owned_setIssues([{sev:'error',msg:'Response JSON could not be parsed.'}]);owned_log('Could not parse JSON from the model output: '+e.message,'err');return;}
       const shapeIssues=caseShapeIssues(parsed);
@@ -12972,7 +13036,7 @@ function ConfigSidebar({onClose,activeTool}){
           <div style={{marginTop:6}}>
             <div className="sb-hint" style={{marginBottom:6}}>Each tool uses its own model and thinking level. The manual toggle is paused.</div>
             {(()=>{const r=cfg.forTool(activeTool);return(
-              <div className="model-badge"><div className={`model-dot ${r.family==='pro'?'pro':''}`}/><span style={{flex:1}}>{r.model}</span><span style={{fontSize:12,color:'var(--text-dim)'}}>{r.level}</span></div>
+              <div className="model-badge"><div className={`model-dot ${r.family==='argon'?'argon':''}`}/><span style={{flex:1}}>{r.model}</span><span style={{fontSize:12,color:'var(--text-dim)'}}>{r.level}</span></div>
             );})()}
             <div style={{fontSize:12,color:'var(--text-dim)',marginTop:3,marginBottom:7}}>↑ what the open tab will use</div>
             <button className="btn-secondary" aria-expanded={showProfiles} aria-controls="suite-profiles" style={{width:'100%'}} onClick={()=>setShowProfiles(s=>!s)}>{showProfiles?'Hide':'Customize'} per-tool profiles</button>
@@ -12981,7 +13045,7 @@ function ConfigSidebar({onClose,activeTool}){
                 <div key={row.id} style={{marginBottom:8}}>
                   <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:3,gap:6}}>
                     <span style={{fontSize:12,color:'var(--text-dim)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{row.label}</span>
-                    <button className="btn-secondary" aria-label={row.label+': use '+(p.m==='pro'?'Flash':'Pro')} onClick={()=>cfg.setProfile(row.id,{m:p.m==='pro'?'flash':'pro'})} style={{flexShrink:0,background:p.m==='pro'?'var(--orange-soft)':'var(--bg-input)',color:p.m==='pro'?'var(--accent2)':'var(--text)'}}>{p.m==='pro'?'Pro':'Flash'}</button>
+                    <button className="btn-secondary" aria-label={row.label+': use '+(p.m==='argon'?'Flash':'Argon')} onClick={()=>cfg.setProfile(row.id,{m:p.m==='argon'?'flash':'argon'})} style={{flexShrink:0,background:p.m==='argon'?'var(--orange-soft)':'var(--bg-input)',color:p.m==='argon'?'var(--accent2)':'var(--text)'}}>{p.m==='argon'?'Argon':'Flash'}</button>
                   </div>
                   <div className="level-pills">
                     {['low','medium','high'].map(lv=><button key={lv} aria-pressed={p.lv===lv} aria-label={row.label+': '+lv+' thinking'} className={`level-pill ${p.lv===lv?'on':''}`} onClick={()=>cfg.setProfile(row.id,{lv})}>{lv}</button>)}
@@ -12995,22 +13059,22 @@ function ConfigSidebar({onClose,activeTool}){
         ):(
           <div style={{marginTop:6}}>
             <div className="toggle-row" style={{marginBottom:6}}>
-              <span>{cfg.thinkingMode?'\uD83E\uDDE0 Pro':'⚡ Flash'}</span>
-              <div role="switch" tabIndex={0} aria-checked={cfg.thinkingMode} aria-label="Use Pro model instead of Flash" className={`toggle-switch ${cfg.thinkingMode?'on':''}`} onClick={()=>cfg.setThinkingMode(t=>!t)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();cfg.setThinkingMode(t=>!t);}}}/>
+              <span>{cfg.thinkingMode?'\uD83E\uDDE0 Argon':'⚡ Flash'}</span>
+              <div role="switch" tabIndex={0} aria-checked={cfg.thinkingMode} aria-label="Use Argon model instead of Flash" className={`toggle-switch ${cfg.thinkingMode?'on':''}`} onClick={()=>cfg.setThinkingMode(t=>!t)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();cfg.setThinkingMode(t=>!t);}}}/>
             </div>
-            <label style={{fontSize:12,color:'var(--text-dim)',display:'block',marginBottom:4,fontWeight:500}}>Thinking Level · {cfg.thinkingMode?'Pro':'Flash'}</label>
+            <label style={{fontSize:12,color:'var(--text-dim)',display:'block',marginBottom:4,fontWeight:500}}>Thinking Level · {cfg.thinkingMode?'Argon':'Flash'}</label>
             <div className="level-pills">
               {['low','medium','high'].map(lv=>(
                 <button key={lv} aria-pressed={cfg.thinkingLevel===lv} aria-label={lv+' thinking level'} className={`level-pill ${cfg.thinkingLevel===lv?'on':''}`} onClick={()=>cfg.setThinkingLevel(lv)}>{lv}</button>
               ))}
             </div>
-            <div className="sb-hint" style={{marginTop:5}}>Set per model — Flash and Pro remember their levels independently. Every tool uses the active one.</div>
-            <div className="model-badge"><div className={`model-dot ${cfg.thinkingMode?'pro':''}`}/><span style={{flex:1}}>{cfg.activeModel}</span><span style={{fontSize:12,color:'var(--text-dim)'}}>{cfg.thinkingLevel}</span></div>
+            <div className="sb-hint" style={{marginTop:5}}>Set per model — Flash and Argon remember their levels independently. Every tool uses the active one.</div>
+            <div className="model-badge"><div className={`model-dot ${cfg.thinkingMode?'argon':''}`}/><span style={{flex:1}}>{cfg.activeModel}</span><span style={{fontSize:12,color:'var(--text-dim)'}}>{cfg.thinkingLevel}</span></div>
           </div>
         )}
         <div style={{marginTop:10}}>
           <div className="sb-field"><label htmlFor="suite-flash-model">Flash model</label><input id="suite-flash-model" type="text" value={cfg.flashModel} onChange={e=>cfg.setFlashModel(e.target.value)} spellCheck="false"/></div>
-          <div className="sb-field"><label htmlFor="suite-pro-model">Pro model</label><input id="suite-pro-model" type="text" value={cfg.proModel} onChange={e=>cfg.setProModel(e.target.value)} spellCheck="false"/></div>
+          <div className="sb-field"><label htmlFor="suite-argon-model">Argon model</label><input id="suite-argon-model" type="text" value={cfg.argonModel} onChange={e=>cfg.setArgonModel(e.target.value)} spellCheck="false"/></div>
         </div>
       </div>
       <div className="sb-section">
@@ -13064,15 +13128,15 @@ function App(){
   // v17.3: hydrate once from the validated snapshot; loadModelSettings holds the defaults and the validation.
   const [savedModels]=useState(()=>{try{return loadModelSettings(localStorage);}catch(e){return {...MODEL_SETTINGS_DEFAULTS};}});
   const [flashModel,setFlashModel]=useState(savedModels.flashModel); // v15.15 model refresh (2026-09-02): 3.8 Flash is stable and keeps the supported low/medium/high thinking levels and 65,536-token output ceiling.
-  const [proModel,setProModel]=useState(savedModels.proModel); // v15 note: this IS the current main Pro path — Google ships Pro as -preview only (gemini-3-pro-preview was shut down and now redirects here); re-verified 2026-08: Google shipped 3.7 Flash with still no Pro successor announced
+  const [argonModel,setArgonModel]=useState(savedModels.argonModel); // v17.13 (2026-10-13): Argon replaces 3.1 Pro (gemini-3.1-pro-preview) in this slot. The ID gemini-4-argon is the one Google's Cloud developer guide uses; if a key rejects it, type the right ID here — no code change is needed.
   const [thinkingMode,setThinkingMode]=useState(savedModels.thinkingMode);
   // Thinking level is tracked per model family so decoupling doesn't silently change
-  // anyone's defaults: Flash keeps running at low and Pro at high until changed.
+  // anyone's defaults: Flash keeps running at low and Argon at high until changed.
   // The old single toggle couldn't express Flash+medium/high at all.
   const [flashLevel,setFlashLevel]=useState(savedModels.flashLevel);
-  const [proLevel,setProLevel]=useState(savedModels.proLevel);
+  const [argonLevel,setArgonLevel]=useState(savedModels.argonLevel);
   // Auto mode: each tool resolves its own model+level from a profile table, overriding
-  // the manual Flash/Pro toggle. Opt-in and persisted, so an untouched build behaves
+  // the manual Flash/Argon toggle. Opt-in and persisted, so an untouched build behaves
   // exactly as before and a customized profile survives reload.
   const [autoProfile,setAutoProfile]=useState(()=>{try{const v=localStorage.getItem('latte_auto_profile_v1');return v===null?true:v==='1';}catch{return true;}});
   // v15.7: `casesAudit` was renamed to `itemAudit`. A saved profile from v15.6 still carries
@@ -13081,10 +13145,12 @@ function App(){
   // resurface later. Keep this shim — removing it re-breaks anyone who has not re-saved.
   const [profiles,setProfiles]=useState(()=>{try{const r=localStorage.getItem('latte_tool_profiles_v1');const p=r?JSON.parse(r):null;if(!p||typeof p!=='object'||Array.isArray(p))return TOOL_PROFILE_DEFAULTS;if(p.casesAudit&&!p.itemAudit){p.itemAudit=p.casesAudit;}delete p.casesAudit;
     // v17.3: only complete, recognized rows are kept; a malformed row falls back to its recommended default so an arbitrary level cannot reach the API.
-    const valid={};for(const id of Object.keys(TOOL_PROFILE_DEFAULTS)){const row=p[id];if(row&&typeof row==='object'&&!Array.isArray(row)&&['flash','pro'].includes(row.m)&&['low','medium','high'].includes(row.lv))valid[id]={m:row.m,lv:row.lv};}
+    // v17.13: a row saved as 'pro' chose the second slot, which is now Argon; it would otherwise be discarded as an
+    // unknown family and quietly fall back to Flash. Keep this shim, as with casesAudit above.
+    const valid={};for(const id of Object.keys(TOOL_PROFILE_DEFAULTS)){const row=p[id];const m=row&&row.m==='pro'?'argon':row&&row.m;if(row&&typeof row==='object'&&!Array.isArray(row)&&['flash','argon'].includes(m)&&['low','medium','high'].includes(row.lv))valid[id]={m,lv:row.lv};}
     return{...TOOL_PROFILE_DEFAULTS,...valid};}catch{return TOOL_PROFILE_DEFAULTS;}});
   useEffect(()=>{try{localStorage.setItem('latte_auto_profile_v1',autoProfile?'1':'0');localStorage.setItem('latte_tool_profiles_v1',JSON.stringify(profiles));}catch(e){}},[autoProfile,profiles]);
-  useEffect(()=>{try{localStorage.setItem(MODEL_SETTINGS_KEY,JSON.stringify({flashModel,proModel,thinkingMode,flashLevel,proLevel}));}catch(e){}},[flashModel,proModel,thinkingMode,flashLevel,proLevel]);
+  useEffect(()=>{try{localStorage.setItem(MODEL_SETTINGS_KEY,JSON.stringify({flashModel,argonModel,thinkingMode,flashLevel,argonLevel}));}catch(e){}},[flashModel,argonModel,thinkingMode,flashLevel,argonLevel]);
   const setProfile=useCallback((id,patch)=>setProfiles(p=>({...p,[id]:{...(p[id]||TOOL_PROFILE_DEFAULTS[id]||{m:'flash',lv:'low'}),...patch}})),[]);
   const resetProfiles=useCallback(()=>setProfiles(TOOL_PROFILE_DEFAULTS),[]);
   const [activeTool,setActiveTool]=useState('knowledge');
@@ -13175,13 +13241,13 @@ function App(){
   const forTool=useCallback(id=>{
     if(autoProfile){
       const p=profiles[id]||TOOL_PROFILE_DEFAULTS[id]||{m:'flash',lv:'low'};
-      return{model:p.m==='pro'?proModel:flashModel,level:p.lv,family:p.m,auto:true};
+      return{model:p.m==='argon'?argonModel:flashModel,level:p.lv,family:p.m,auto:true};
     }
-    return{model:thinkingMode?proModel:flashModel,level:thinkingMode?proLevel:flashLevel,family:thinkingMode?'pro':'flash',auto:false};
-  },[autoProfile,profiles,proModel,flashModel,thinkingMode,proLevel,flashLevel]);
+    return{model:thinkingMode?argonModel:flashModel,level:thinkingMode?argonLevel:flashLevel,family:thinkingMode?'argon':'flash',auto:false};
+  },[autoProfile,profiles,argonModel,flashModel,thinkingMode,argonLevel,flashLevel]);
 
   // v17.3: activeTool left this context; it invalidated every mounted tool on each tab switch and only the settings drawer read it.
-  const cfg=useMemo(()=>({apiKey,setApiKey,flashModel,setFlashModel,proModel,setProModel,thinkingMode,setThinkingMode,flashLevel,proLevel,thinkingLevel:thinkingMode?proLevel:flashLevel,setThinkingLevel:thinkingMode?setProLevel:setFlashLevel,activeModel:thinkingMode?proModel:flashModel,autoProfile,setAutoProfile,profiles,setProfile,resetProfiles,forTool}),[apiKey,flashModel,proModel,thinkingMode,flashLevel,proLevel,autoProfile,profiles,setProfile,resetProfiles,forTool]);
+  const cfg=useMemo(()=>({apiKey,setApiKey,flashModel,setFlashModel,argonModel,setArgonModel,thinkingMode,setThinkingMode,flashLevel,argonLevel,thinkingLevel:thinkingMode?argonLevel:flashLevel,setThinkingLevel:thinkingMode?setArgonLevel:setFlashLevel,activeModel:thinkingMode?argonModel:flashModel,autoProfile,setAutoProfile,profiles,setProfile,resetProfiles,forTool}),[apiKey,flashModel,argonModel,thinkingMode,flashLevel,argonLevel,autoProfile,profiles,setProfile,resetProfiles,forTool]);
 
   // O(1) fact lookup, rebuilt only when the KB changes — powers FactTag and the drawer.
   const factIndex=useMemo(()=>buildFactIndex(knowledgeBase),[knowledgeBase]);

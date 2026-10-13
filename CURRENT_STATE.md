@@ -1,5 +1,23 @@
 # Current maintainer state
 
+## v17.13 Argon replaces the Pro slot (2026-10-13)
+
+The canonical application is `Nursing-Study-Suite v17.13.html`. The user asked to turn the Pro mode into Argon mode and rename every Pro reference.
+- **Defaults.** The second slot defaults to `gemini-4-argon` at high thinking, sent explicitly because Argon's own default is medium.
+- **Output ceiling.** Argon allows 32,768 thinking-plus-output tokens on a non-streaming request, so `geminiRequest` now sets every ceiling: 32,768 for a model ID containing "argon", 65,536 otherwise.
+- **Refused before sending.** A `thinkingBudget`, a level outside low/medium/high, or an Argon request with no level.
+- **Truncated JSON.** JSON cut off at the ceiling is now a failure, not a parse attempt. Knowledge Base chunks still split, and a truncated case still shows its partial text.
+- **Priority.** Synthesis parts are 20,000 characters on Argon and 40,000 on Flash.
+- **Saved settings.** A saved Pro thinking level and any per-tool Pro row carry over to Argon; a saved Pro model ID does not.
+
+Prompts and warning tiers are unchanged. The browser check and SRI recheck passed (details in the release record).
+
+**Still open:**
+- The Argon ID comes from Google's Cloud developer guide; one launch report said it was not yet in the public Gemini API catalog. No live Argon request has been made.
+- Priority's 20,000-character Argon part size is scaled from the v17.7 Flash run, not measured.
+
+Verification: see the [release verification record](docs/reviews/v17.13-release.md).
+
 ## v17.12 NCLEX Generator answer positions (2026-10-09)
 
 The canonical application is `Nursing-Study-Suite v17.12.html`. The user reported that nearly every generated answer was A. Each lettered MCQ and SATA item's choices are now shuffled once per batch, before checking, audit and export, with the key and Why lines following their choice; items whose wording names a choice by letter or position keep their order and are logged. Over 400 seeded runs of a synthetic item the key landed on each letter 70–130 times. No live generation has been run; the share of real items kept as written is unmeasured. The CDN SRI recheck was not possible from the build environment and is still owed. Verification: see the [release verification record](docs/reviews/v17.12-release.md).
@@ -320,8 +338,8 @@ The deterministic gates pass, but these v15.14 paths still need real-material ch
 - **`kbQuoteOperatorsAgree` remains WARN tier.** It can false-positive on column/table spans as `reordered` misses do. A non-zero diagnostic deserves investigation, not automatic pass-2 discard, until a real corpus establishes the false-positive rate.
 - **Card resize constants are prompt-class.** Changing `CARD_MAX_EDGE`, `CARD_JPEG_QUALITY`, or `CARD_RESIZE_ABOVE_BYTES` can change OCR accuracy and therefore requires two runs per card.
 - **`responseSchema` remains deliberately unimplemented.** It changes model output shape even though it does not touch frozen prompt bytes. It needs a real batch before adoption.
-- **Per-operation token budgets are rejected.** `maxOutputTokens` is a ceiling, not a reservation, and Gemini 3 thinking shares the budget. The universal 65,536 remains correct.
-- **All eight SRI pins were verified again on 2026-09-09 for v15.16.** Both DOMPurify CDNs served 29,209 identical bytes. Recheck every pin on an application version bump.
+- **Per-operation token budgets are rejected.** `maxOutputTokens` is a ceiling, not a reservation, and Gemini 3 thinking shares the budget. Since v17.13 the ceiling is per model rather than universal: 65,536 for Flash and 32,768 for Argon, which refuses more on a non-streaming request. `geminiRequest` chooses it from the model ID; no operation sets its own.
+- **All eight SRI pins were verified again on 2026-10-13 for v17.13**, together with both PDF worker copies. Recheck every pin on an application version bump.
 - **`.gitattributes` pins `* -text`.** If the harness fails wholesale after a Git operation, check line endings first; every extraction anchor assumes LF (`\n`).
 
 ## Live-generation evidence

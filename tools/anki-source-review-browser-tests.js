@@ -21,7 +21,7 @@ function page(){
   html=html.replace(sizeLimit,'const ANKI_SOURCE_AUDIT_GROUP_CHARS=2400;');
   const fixtureCfg="const cfg=useMemo(()=>({apiKey:'synthetic-only',forTool:()=>({model:'synthetic-fixture',level:'low'}),autoProfile:true}),[]);";
   if(html.split(fixtureCfg).length!==2)throw Error('Synthetic configuration anchor changed.');
-  html=html.replace(fixtureCfg,"const cfg=useMemo(()=>({apiKey:'synthetic-only',flashModel:'synthetic-flash',proModel:'synthetic-pro',forTool:id=>({model:TOOL_PROFILE_DEFAULTS[id].m==='pro'?'synthetic-pro':'synthetic-flash',level:TOOL_PROFILE_DEFAULTS[id].lv}),autoProfile:true}),[]);");
+  html=html.replace(fixtureCfg,"const cfg=useMemo(()=>({apiKey:'synthetic-only',flashModel:'synthetic-flash',argonModel:'synthetic-argon',forTool:id=>({model:TOOL_PROFILE_DEFAULTS[id].m==='argon'?'synthetic-argon':'synthetic-flash',level:TOOL_PROFILE_DEFAULTS[id].lv}),autoProfile:true}),[]);");
   const old='callGemini=async()=>{';
   if(html.split(old).length!==2)throw Error('Synthetic transport anchor changed.');
   html=html.replace(old,()=>validReceipt.toString()+String.raw`
@@ -89,7 +89,7 @@ async function main(){
     assert.equal(await view.evaluate(()=>window.__ankiReviewFixture.calls.length),0);
     assert.equal(await view.getByLabel('Source checker model',{exact:true}).inputValue(),'flash');
     assert.equal(await view.getByLabel('Source checker thinking',{exact:true}).inputValue(),'medium');
-    await view.getByLabel('Source checker model',{exact:true}).selectOption('pro');
+    await view.getByLabel('Source checker model',{exact:true}).selectOption('argon');
     await view.getByLabel('Source checker thinking',{exact:true}).selectOption('high');
     await prepare();
     assert.equal(await view.evaluate(()=>window.__ankiReviewFixture.calls.length),0,'preparation is local');
@@ -97,7 +97,7 @@ async function main(){
     const packet=await download('prepared',true);
     assert(packet.groups.length>=3,'synthetic packet limit exercises at least three independent groups');
     assert.equal(packet.results.length,0);assert.equal(packet.responses.length,0);assert.equal(packet.metadata.checkComplete,false);assert.equal(packet.metadata.currentAtExport,true);
-    assert.equal(packet.model,'synthetic-pro');assert.equal(packet.thinkingLevel,'high');assert.equal(packet.metadata.generation.thinkingLevel,'medium');
+    assert.equal(packet.model,'synthetic-argon');assert.equal(packet.thinkingLevel,'high');assert.equal(packet.metadata.generation.thinkingLevel,'medium');
     assert.match(packet.metadata.sourceSnapshotSha256,/^[a-f0-9]{64}$/);assert.match(packet.metadata.cardSnapshotSha256,/^[a-f0-9]{64}$/);assert.match(packet.metadata.audit.builderSha256,/^[a-f0-9]{64}$/);
     assert.equal(packet.metadata.startedAt,null);assert.equal(packet.metadata.finishedAt,null);assert(packet.metadata.preparedAt,'local preparation gets its own timestamp');
     await view.getByLabel('Source checker model',{exact:true}).selectOption('flash');
@@ -118,7 +118,7 @@ async function main(){
     assert((await view.getByText(/Ask for the supplied timing without adding a new value/).count())>0,'proposed correction is visible');
     assert.deepEqual(await view.getByLabel('Text for note ',{exact:false}).evaluateAll(fields=>fields.map(f=>f.value)),cardsBeforeAudit,'suggestions preserve original cards');
     assert((await view.evaluate(()=>window.__ankiReviewFixture.calls.length))>0,'explicit run invokes mocked audit');
-    assert((await view.evaluate(()=>window.__ankiReviewFixture.calls)).every(c=>c.model==='synthetic-pro'&&c.level==='high'),'prepared checker choice survives subsequent selector changes');
+    assert((await view.evaluate(()=>window.__ankiReviewFixture.calls)).every(c=>c.model==='synthetic-argon'&&c.level==='high'),'prepared checker choice survives subsequent selector changes');
     const evidence=await download('complete');
     assert.equal(evidence.status,'complete');assert.equal(evidence.responses[0].usage.totalTokenCount,123);assert.equal(evidence.results[0].findings[0].suggestion,'Ask for the supplied timing without adding a new value.');assert(!JSON.stringify(evidence).includes('synthetic-only'),'saved evidence excludes API credential');
     assert.equal(evidence.metadata.checkComplete,true);assert.equal(evidence.metadata.currentAtExport,true);assert(evidence.metadata.startedAt&&evidence.metadata.finishedAt);

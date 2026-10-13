@@ -9,6 +9,32 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [17.13] — 2026-10-13
+
+The user asked to turn Pro mode into Argon mode. A bare model-ID swap would break or quietly change three things: Argon refuses the 65,536-token ceiling every request asked for, rejects a thinking budget or MINIMAL level, and drops to medium thinking when no level is sent.
+
+### Changed
+
+- **Argon replaces Pro.** The second model slot defaults to `gemini-4-argon` at high thinking. Every Pro label is now Argon: the manual toggle, the Thinking Level label, the per-tool Flash/Argon buttons, the Argon model field, the Anki source checker and the badge dot.
+- **Saved settings carry over.** A saved Pro thinking level becomes the Argon level, and a per-tool row saved as Pro becomes Argon. A saved Pro model ID is not carried into the Argon slot.
+- **Per-model output ceiling.** `geminiRequest` sets the ceiling from the model ID: 32,768 for any ID containing "argon", 65,536 otherwise. No call site sets its own. The truncation banner and log lines show the real ceiling.
+- **Thinking settings checked before sending.** A `thinkingBudget`, a level outside low/medium/high, or an Argon request without a level is refused before sending, as the same HTTP 400 the API would return, so a batch stops at once.
+- **Truncated JSON is a failure.** A JSON request that stops at the ceiling throws a fatal truncated error with the partial text, never retried and never stopping the batch on its own. Knowledge Base extraction still splits and requeues the chunk, and a truncated audit reply is kept as that chunk's evidence. A truncated case still shows its partial text in the invalid-response panel. Plain-text answers keep the partial return and warning.
+- **Priority synthesis parts on Argon.** Parts scale with the synthesis model's ceiling: 40,000 characters on Flash, 20,000 on Argon.
+- **Measurement tools.** `neia-retest.js` defaults to `gemini-4-argon` at high; reports before v17.13 were measured on 3.1 Pro and are not directly comparable. Both tools use the same per-model ceiling, NEIA refuses `--level minimal` on Argon, and `--app-profile` resolves Argon rows.
+
+### Verification
+
+- 23 new assertions (3,593 total):
+  - the transport: Argon and Flash ceilings, an unmutated caller body, truncated JSON, refused thinking settings, a refusal that halts a batch, and the call-site contract;
+  - settings and profile migration from Pro;
+  - the Argon UI labels;
+  - Priority part sizing;
+  - the measurement tools.
+- A browser check on saved Pro settings showed the migration, the new drawer labels, and a fresh default of Argon at high.
+- All eight SRI-pinned scripts and both PDF worker copies were re-hashed and match.
+- Prompts and warning tiers are unchanged. No live Gemini request was made.
+
 ## [17.12] — 2026-10-09
 
 The user noticed that nearly every NCLEX Generator answer was A. The worksheet kept each choice where the model wrote it; the frozen prompt forbids rank cues but sets no position.
