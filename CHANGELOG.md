@@ -21,7 +21,7 @@ The user noticed that nearly every NCLEX Generator answer was A. The worksheet k
 ### Verification
 
 - 15 assertions in `tools/worksheet-remediation-tests.js`: content-level answer and rationale mapping, unchanged validation results, Why and SATA key order, untouched ordering items and working parts, an even key spread over 400 seeded runs, wrapped choices, relabelled "option C", kept items for each letter and position pattern and for a quoted option, benign letters, rejection of an out-of-range random value, and the generator's call order.
-- Prompts, model profiles, warning tiers and CDN pins are unchanged. The SRI pins were not re-hashed for this release: the build environment's network policy denied the CDN hosts.
+- Prompts, model profiles, warning tiers and CDN pins are unchanged. The build environment's network policy denied the CDN hosts, so the SRI pins were re-hashed before publishing (2026-10-13): all eight script pins and both PDF worker copies match.
 
 ## [17.11] — 2026-10-09
 
