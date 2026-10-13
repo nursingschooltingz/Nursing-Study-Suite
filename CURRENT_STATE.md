@@ -1,5 +1,22 @@
 # Current maintainer state
 
+## v17.14 Argon Auto-profile defaults (2026-10-13)
+
+The canonical application is `Nursing-Study-Suite v17.14.html`. The user, on a paid key, asked for Argon as the shipped default for the three rows recommended after v17.13:
+- **Priority · synthesis:** Argon · medium. Medium leaves room inside 32,768; the v17.7 run thought for 62,914 tokens.
+- **Case studies:** Argon · high.
+- **Item quality · audit:** Argon · high. The only measured audit configuration was 3.1 Pro/high; Flash had been a free-tier cost choice.
+
+The other seven rows stay on Flash. Saved profile rows still win, so an existing browser needs **Reset to recommended** once.
+
+**Not yet measured on Argon:**
+- verdict stability of the item audit;
+- Priority part counts and truncation;
+- case quality;
+- latency and cost per run. Every generated MCQ is now audited on Argon.
+
+Verification: see the [release verification record](docs/reviews/v17.14-release.md).
+
 ## v17.13 Argon replaces the Pro slot (2026-10-13)
 
 The canonical application is `Nursing-Study-Suite v17.13.html`. The user asked to turn the Pro mode into Argon mode and rename every Pro reference.

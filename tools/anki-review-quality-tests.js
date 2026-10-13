@@ -58,7 +58,7 @@ function runAnkiReviewQualityTests({S,t,section}){
 
   const defaults=new Function(extract('const TOOL_PROFILE_DEFAULTS=','const PROFILE_ROWS=')+';return TOOL_PROFILE_DEFAULTS;')();
   t('Anki recommended Auto profile uses Flash Medium',defaults.anki.m==='flash'&&defaults.anki.lv==='medium');
-  const otherDefaults={knowledge:['flash','medium'],knowledgeAudit:['flash','medium'],cardTranscribe:['flash','low'],priorityHarvest:['flash','low'],priority:['flash','medium'],nclex:['flash','medium'],nclexgen:['flash','high'],cases:['flash','high'],itemAudit:['flash','high']};
+  const otherDefaults={knowledge:['flash','medium'],knowledgeAudit:['flash','medium'],cardTranscribe:['flash','low'],priorityHarvest:['flash','low'],priority:['argon','medium'],nclex:['flash','medium'],nclexgen:['flash','high'],cases:['argon','high'],itemAudit:['argon','high']};
   t('Anki recommendation leaves every other tool default unchanged',Object.entries(otherDefaults).every(([id,[m,lv]])=>defaults[id].m===m&&defaults[id].lv===lv));
   const savedSource=extract('  const [profiles,setProfiles]=useState(','  useEffect(()=>{try{localStorage.setItem(\'latte_auto_profile_v1\'');
   const loadProfiles=stored=>new Function('TOOL_PROFILE_DEFAULTS','localStorage','useState',savedSource+';return profiles;')(defaults,{getItem:()=>stored},fn=>[fn(),()=>{}]);

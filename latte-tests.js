@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 3593;
+const EXPECTED_ASSERTIONS = 3595;
 
 let file;
 try {
@@ -1449,12 +1449,12 @@ section('v15.6 — case audit pass');
   t('repair prompt requires answerability from already-shown data', rp.includes('Do not depend on data the student has not seen'));
 
   // ── Wiring ──
-  // v15.7: Flash, not Pro — a cost decision. Thinking stays high, which is the part that
-  // matters for rubric judgment. A real free-tier key exhausted its Pro allowance at ~26 calls.
-  t('itemAudit profile defaults to flash + high', /itemAudit:\{m:'flash',lv:'high'\}/.test(S));
+  // v15.7: Flash, not Pro — a free-tier cost decision (a free key exhausted 3.1 Pro at ~26 calls).
+  // v17.14: Argon at high is the shipped default; the only measured audit configuration was 3.1 Pro/high.
+  t('itemAudit profile defaults to argon + high', /itemAudit:\{m:'argon',lv:'high'\}/.test(S));
   t('the audit still uses high reasoning', /itemAudit:\{m:'\w+',lv:'high'\}/.test(S));
-  t('the Flash default is documented as a cost decision, not a quality one',
-    S.includes('This is a COST decision, not a quality one'));
+  t('the Argon default documents why the old Flash cost decision no longer applies',
+    S.includes('That was a COST decision, not a quality one') && S.includes('the shipped default is now Argon at high. The cost reason assumed a free-tier key;'));
   t('itemAudit has a profile row', S.includes("{id:'itemAudit',label:'Item quality · audit'}"));
   t('there is exactly ONE audit profile row, not one per source tool',
     (S.match(/label:'[^']*·\s*audit'/g) || []).filter(x => /Item quality/.test(x)).length === 1 && !S.includes("id:'nclexgenAudit'"));

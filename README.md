@@ -8,7 +8,7 @@ Turn your lecture PDFs and PowerPoints into a complete, source-cited study syste
 
 The whole suite is **one HTML file**. There is nothing to install, no account to create, and no website collecting your data. You open the file in your web browser, paste in a free Google Gemini API key, upload your study materials, and go.
 
-**Published release: v17.13.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v17.13/Nursing-Study-Suite.v17.13.html) or open the [repository HTML](Nursing-Study-Suite%20v17.13.html).
+**Published release: v17.14.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v17.14/Nursing-Study-Suite.v17.14.html) or open the [repository HTML](Nursing-Study-Suite%20v17.14.html).
 
 The left rail lists the seven tools in the order you use them, grouped by stage. **Source:** *Knowledge Base* builds or imports the cited facts everything else reads from. **Plan:** *Priority* sorts those facts into Tier 1/2/3. **Practice:** *Anki* for recall, *NCLEX Extract* for questions out of a review book you already own, *NCLEX Generate* for new ones written from your facts, *Case Studies* for unfolding cases, and *NCLEX to Anki* to turn NCLEX questions into Anki cards.
 
@@ -84,10 +84,12 @@ Open **Settings** from the bottom of the left rail. The panel that slides in fro
 **Flash vs. Argon, practically:**
 
 - **Flash** (`gemini-3.8-flash` by default) — fast, cheap, generous free-tier limits. It handles extraction, Anki cards, and question generation very well. This should be your default.
-- **Argon** (`gemini-4-argon` by default; it replaced 3.1 Pro in v17.13) — deeper reasoning, noticeably slower, much tighter free-tier limits. Worth trying for Case Studies or Priority synthesis if you have quota to spend; overkill for extraction. Argon defaults to **high** thinking here. Each Argon request has 32,768 output tokens, half of Flash's 65,536, and thinking counts against them.
+- **Argon** (`gemini-4-argon` by default; it replaced 3.1 Pro in v17.13) — deeper reasoning, noticeably slower, much tighter free-tier limits. Since v17.14 Auto uses it for Priority synthesis, Case Studies and the item-quality audit; it is overkill for extraction. Argon defaults to **high** thinking here. Each Argon request has 32,768 output tokens, half of Flash's 65,536, and thinking counts against them.
 - **Thinking level** trades speed for care. "Low" is fine for most work; bump to "medium/high" when output quality matters more than waiting.
 
 The **Flash Model / Argon Model** text boxes exist so the suite doesn't go stale: when Google ships new model names, type them in — no update to the file needed. If your key rejects `gemini-4-argon`, type the ID Google lists for you. Settings saved before v17.13 carry over: your Pro thinking level becomes the Argon level, and any per-tool row set to Pro becomes Argon.
+
+**Auto profile defaults (v17.14).** Three rows now default to Argon: **Priority · synthesis** (medium), **Case studies** (high) and **Item quality · audit** (high). These are the reasoning-heavy jobs whose answers stay well inside Argon's output limit. Extraction, card reading, the Priority harvest, Anki and both NCLEX rows stay on Flash. Your browser keeps the profile rows it already saved, so click **Reset to recommended** once under **Customize per-tool profiles** to switch to the new defaults. With the audit on Argon, every generated question is checked by the slower, more expensive model. On a free-tier key, set **Item quality · audit** back to Flash. These defaults are reasoned choices and have not yet been measured on Argon.
 
 ---
 

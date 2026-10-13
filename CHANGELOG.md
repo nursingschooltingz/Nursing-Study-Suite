@@ -9,6 +9,31 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [17.14] — 2026-10-13
+
+With Argon in place (v17.13) and a paid key, the user asked for Argon as the shipped default for the three profile rows where deeper reasoning pays off and the output stays well inside Argon's 32,768-token ceiling.
+
+### Changed
+
+- **Auto profile defaults.**
+  - Priority · synthesis is now **Argon / Medium**. The rule cascade is real reasoning, and its parts are already half size on Argon. Medium leaves room: the v17.7 run thought for 62,914 tokens.
+  - Case studies is now **Argon / High**: one request per case, with output bounded at 5 stages × 4 questions.
+  - Item quality · audit is now **Argon / High**. Flash had been a free-tier cost decision (v15.7), and the only measured audit configuration was 3.1 Pro / High.
+- **Unchanged rows.** Knowledge extraction and audit, card OCR, the Priority harvest, Anki and both NCLEX rows stay on Flash with their levels.
+- **Saved profiles are kept.** As in v16.2, a browser keeps the rows it already saved; **Reset to recommended** adopts the new ones. With the audit on Argon, every generated question is checked by the slower, more expensive model. On a free-tier key, set that row back to Flash.
+
+### Verification
+
+- 2 new assertions (3,595 total): the exact shipped profile table, and saved Flash rows surviving the new recommendation.
+- Updated assertions:
+  - the item-audit default and its documented reason;
+  - Anki's "other defaults" table;
+  - the NEIA `--app-profile` resolution, which now gives Argon / High;
+  - a Pro-migration test moved to a row that still defaults to Flash, so it can't pass by accident.
+- A browser check reset an all-Flash v17.13 profile table to exactly the new table. With the Cases tab open, the drawer badge read `gemini-4-argon · high`.
+- All eight SRI-pinned scripts and both PDF worker copies were re-hashed and match.
+- Prompts, warning tiers and the transport are unchanged. No live Gemini request was made.
+
 ## [17.13] — 2026-10-13
 
 The user asked to turn Pro mode into Argon mode. A bare model-ID swap would break or quietly change three things: Argon refuses the 65,536-token ceiling every request asked for, rejects a thinking budget or MINIMAL level, and drops to medium thinking when no level is sent.

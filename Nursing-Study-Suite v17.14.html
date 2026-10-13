@@ -8,7 +8,11 @@
      Babel, so this adds narrow resource directives without a default-src/script-src migration. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net">
 <title>LATTE Study Suite</title>
-<!-- v17.13 (2026-10-13): the Pro model slot is now Argon (gemini-4-argon, thinking high by default). Argon accepts
+<!-- v17.14 (2026-10-13): the Auto profile ships Argon for three rows: Priority synthesis (medium), Case studies (high) and
+     the item-quality audit (high). These are reasoning-heavy and their output stays well inside Argon's 32,768-token
+     ceiling; extraction, Anki, card OCR, the Priority harvest and both NCLEX rows stay on Flash. Saved profile rows still
+     win, so an existing browser keeps its rows until Reset to recommended. Not yet measured on Argon. Prompts are unchanged.
+     v17.13 (2026-10-13): the Pro model slot is now Argon (gemini-4-argon, thinking high by default). Argon accepts
      32,768 thinking-plus-output tokens on a non-streaming request, so any model ID containing "argon" is capped there;
      Flash keeps 65,536. A JSON request that stops at the ceiling is now a failure instead of a parse attempt, a thinking
      level outside low/medium/high (or none, on Argon) is refused before sending, and Priority synthesis parts are half
@@ -766,24 +770,32 @@ const TOOL_PROFILE_DEFAULTS={
   // improve. Raise it only if measured output drifts between identical runs.
   cardTranscribe:{m:'flash',lv:'low'},    // flashcard photo -> verbatim transcript
   priorityHarvest:{m:'flash',lv:'low'},   // stage-1 inventory — same default v14 hardcoded
-  priority:{m:'flash',lv:'medium'},       // stage-2 R1–R9 cascade, needs rule evaluation
+  // v17.14: the R1–R9 cascade is the reasoning-heavy half of Priority, so it moved to Argon; its parts are already half
+  // size there (paSynthPartChars). Medium, not high: the v17.7 run spent 62,914 tokens thinking in one request, and
+  // Argon's whole budget is 32,768. The harvest above stays on Flash: it is a bulk sweep over many chunks.
+  priority:{m:'argon',lv:'medium'},       // stage-2 R1–R9 cascade, needs rule evaluation
   // v16.2: paired exports showed fewer shared-index gap bundles with Medium; saved overrides still win.
   anki:{m:'flash',lv:'medium'},           // recommended Anki Auto profile
   nclex:{m:'flash',lv:'medium'},          // parsing existing Q&A out of messy PDF text
   nclexgen:{m:'flash',lv:'high'},         // distractor plausibility is genuine reasoning
-  cases:{m:'flash',lv:'high'},            // unfolding clinical reasoning + strict grounding
+  // v17.14: one request per case, the most reasoning-heavy task, and bounded output (at most 5 stages x 4 questions),
+  // so it is the safest place for Argon at high within its 32,768-token ceiling.
+  cases:{m:'argon',lv:'high'},            // unfolding clinical reasoning + strict grounding
   // v15.6: applying a rubric to a rendered artifact is a JUDGMENT task, not a grounded
   // extraction task, so high reasoning is appropriate here and specifically NOT in the
   // ingestion stages — this does not contradict the earlier finding that high thinking
   // degrades grounded summarization. Both top-performing raters in the June study were
   // reasoning-enhanced configurations.
-  // v15.7: defaulted to FLASH, not the second slot (then 3.1 Pro; Argon since v17.13).
-  // This is a COST decision, not a quality one. The audit runs once per MCQ, and a real
-  // free-tier key exhausted its 3.1 Pro allowance after ~26 calls — an audit you cannot afford
-  // to run is worth less than a cheaper one you can. Thinking stays high, which is the part that
-  // matters for rubric judgment. Switch this row to Argon in the per-tool profiles when quota
-  // allows; nothing else needs to change.
-  itemAudit:{m:'flash',lv:'high'},       // NEIA item-quality review of a rendered item
+  // v15.7: defaulted to FLASH, not the second slot (then 3.1 Pro).
+  // That was a COST decision, not a quality one: the audit runs once per MCQ, and a real
+  // free-tier key exhausted its 3.1 Pro allowance after ~26 calls.
+  // v17.14: the shipped default is now Argon at high. The cost reason assumed a free-tier key;
+  // on a paid key the quality choice applies, and the only measured audit configuration
+  // (2026-08-20: ten fixture items, three runs, zero verdict flips) was 3.1 Pro at high, which
+  // Argon replaced. Each call judges one rendered item, so output stays far below Argon's
+  // 32,768-token ceiling. Not yet measured on Argon. On a free-tier key, switch this row back
+  // to Flash in the per-tool profiles; nothing else needs to change.
+  itemAudit:{m:'argon',lv:'high'},       // NEIA item-quality review of a rendered item
 };
 const PROFILE_ROWS=[
   {id:'knowledge',label:'Knowledge · extract'},
@@ -6107,7 +6119,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '17.13';}
+function suiteVersion(){return '17.14';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};

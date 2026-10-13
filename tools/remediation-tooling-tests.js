@@ -149,11 +149,12 @@ async function runTests({ source, test = (name, value) => assert.ok(value, name)
   if (typeof source !== 'string') throw new Error('Tooling regressions require the live suite source');
   const profileD = checks.resolveMeasurementProfile(parseD(['--app-profile']), source, 'cardTranscribe');
   const profileN = checks.resolveMeasurementProfile(neia.parseArgs(['--app-profile']), source, 'itemAudit');
-  t('App-matching profiles use live Flash default and correct tool levels', profileD.model === profileN.model &&
-    source.includes("flashModel:'" + profileD.model + "'") && profileD.level === 'low' && profileN.level === 'high');
-  const argonSource = source.replace(/itemAudit:\{m:'flash',lv:'high'\}/, "itemAudit:{m:'argon',lv:'high'}");
-  const profileArgon = checks.resolveMeasurementProfile(neia.parseArgs(['--app-profile']), argonSource, 'itemAudit');
-  t('An Argon profile row resolves to the shipped Argon default', argonSource !== source && profileArgon.family === 'argon' && profileArgon.model === 'gemini-4-argon' && source.includes("argonModel:'gemini-4-argon'"));
+  // v17.14: card OCR ships on Flash and the item audit on Argon, so the two app profiles resolve to different shipped models.
+  t('App-matching profiles use each row\'s shipped model and tool level', profileD.family === 'flash' && profileN.family === 'argon' &&
+    source.includes("flashModel:'" + profileD.model + "'") && source.includes("argonModel:'" + profileN.model + "'") && profileD.level === 'low' && profileN.level === 'high');
+  const flashSource = source.replace(/itemAudit:\{m:'argon',lv:'high'\}/, "itemAudit:{m:'flash',lv:'high'}");
+  const profileFlash = checks.resolveMeasurementProfile(neia.parseArgs(['--app-profile']), flashSource, 'itemAudit');
+  t('A Flash profile row resolves to the shipped Flash default', flashSource !== source && profileFlash.family === 'flash' && profileFlash.model === profileD.model && profileFlash.level === 'high');
   t('Missing app registry fails explicitly', throws(() => checks.resolveMeasurementProfile(parseD(['--app-profile']), '', 'cardTranscribe'), /App profile registry anchor missing/));
   const liveAudit = neia.extractAudit(source);
   t('Audit extraction includes non-vacuous tail behavior', liveAudit.itemAuditSummary([{ status: 'PASS', warns: [] }]).pass === 1);
