@@ -12,7 +12,15 @@
      policy and uses only its own inline style block and system fonts. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com">
 <title>LATTE Study Suite</title>
-<!-- v18.0 (2026-10-13): steps 6-10 of the v17.14 production review. Step 6, false failures that blocked the item audit or hid output.
+<!-- v18.1 (2026-10-13): one exam tier and one priority order across the tabs. The NCLEX Generator re-tiered every
+     concept by its own TIER RULES, so a worksheet's Tier tags (and the Tier::N tags NCLEX to Anki makes from them) could
+     disagree with the Knowledge Base tier that the Anki and Case tabs use for the same fact. Its grounding adapter now
+     says to keep each fact's KB tier. The priority frameworks on a typical test-taking handout (ABCs, Maslow, safety,
+     acute/unstable first) lived only in the Priority Analyzer's cascade; the NCLEX Generator and the case prompt now
+     receive the same order (PRIORITY_ORDER_RULES) for choosing "what comes first" keys and name the rule that decided
+     each one. Priority's tiebreakers add emergent > urgent > nonurgent, and the Case Studies "Tier 3 distractors"
+     button, which contradicted its own help text, now reads "Tier 3 background". The 11 frozen prompts are unchanged.
+     v18.0 (2026-10-13): steps 6-10 of the v17.14 production review. Step 6, false failures that blocked the item audit or hid output.
      A "Why B is incorrect" line and an Oxford-comma SATA key ("A, C, and E") no longer fail a worksheet batch. Case
      validation reads "At 1400 hours" as a clock time, a pain score its cited fact states (or an instantiated N/10 on a
      cited 0-10 scale), "q4h" as "every 4 hours", and "25,000 units" in a calculation; the case prompt now lists time and
@@ -4131,6 +4139,8 @@ ${chunk}`;
 }
 
 // STAGE 2 — Cascade + Grounding (v2.1). Rule-based tiering over the harvested inventory.
+// v18.1: B2 adds emergent > urgent > nonurgent, the one handout priority order the cascade did not name. R1-R8 and B2
+// are restated for the question writers in PRIORITY_ORDER_RULES; a harness assertion keeps the two lists in step.
 function paBuildSynthPrompt(extractions,context){
   const combined=extractions.map((e,i)=>`### Chunk ${i+1}\n${e}`).join('\n\n---\n\n');
   return `You are a nursing priority analyst. You are re-ranking the contents of a FINISHED study guide into a
@@ -4207,8 +4217,8 @@ R9  STABLE/BACKGROUND
 B1. ORGAN HIERARCHY — brain > lung > heart > liver > kidney > pancreas.
     Apply to the organ named in the QUALIFIER, not the organ of the diagnosis.
     (A chronic renal patient with frothy sputum is a LUNG problem.)
-B2. Acute > chronic · unstable > stable · unexpected > expected · actual > potential ·
-    fresh post-op (<12h) > medical or other surgical.
+B2. Acute > chronic · unstable > stable · emergent > urgent > nonurgent · unexpected > expected ·
+    actual > potential · fresh post-op (<12h) > medical or other surgical.
 B3. Still tied? Whichever the guide gives more space and emphasis to.
 
 ## SPECIAL PRECEDENCE
@@ -6327,7 +6337,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '18.0';}
+function suiteVersion(){return '18.1';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -10117,6 +10127,36 @@ one set of correct answers, and a rationale line for every option. Never end mid
 mid-rationale. If you cannot complete a question to this standard, produce fewer questions
 rather than truncating one.`;
 const CASE_QUESTION_RULES=[NCLEX_ANCHOR_RULES,NCLEX_DISTRACTOR_RULES,NCLEX_RATIONALE_RULES,NCLEX_COMPLETENESS_RULES].join('\n\n');
+// v18.1: the priority frameworks students are taught (ABCs, Maslow, safety, acute/unstable before chronic/stable) lived
+// only in the Priority Analyzer's cascade (paBuildSynthPrompt R1-R8 and B2). Neither question writer was told to use
+// them, so the key of a "what does the nurse do first" item rested on unstated judgment. This restates R1-R8 and the B2
+// tiebreakers for choosing keys; a harness assertion fails if the two lists drift apart. The NCLEX Generator gets it
+// after the batch block and the case prompt after CASE_QUESTION_RULES. It is not one of the 11 frozen constants, and the
+// item audit does not get it (the audit stays blind to grounding).
+const PRIORITY_ORDER_RULES=`PRIORITY ORDER — the same order the Priority Analyzer uses. Use it to choose the correct
+answer whenever a stem asks what the nurse does first, which client or finding needs attention
+first, which action is the priority, or which finding requires immediate intervention. Work
+down the list; the first rule that separates the options decides the key.
+  1. ABC .............. airway, then breathing, then circulation. In an ABC or CRISIS situation
+                        the nurse acts first instead of assessing further.
+  2. CRISIS ........... hemorrhage; fever >105°F/40.5°C; hypoglycemia; pulseless or breathless.
+  3. PSYCH-SAFETY ..... suicidal or homicidal ideation, self-harm, violence, elopement.
+  4. CRIT-LAB ......... a value the facts present as critical for THIS client, not an expected
+                        baseline such as a dialysis client's usual potassium.
+  5. UNSTABLE ......... acute; unexpected or changed; worsening; post-op <12h; newly admitted <24h.
+  6. SAFETY / SCOPE ... contraindications, hold parameters, allergies, antidotes, high-alert
+                        medications. An option outside the nurse's scope, or one that needs a
+                        prescription the client does not have, is not the nurse's first action.
+  7. MASLOW ........... physiological > safety > psychosocial > self-actualization.
+  8. NURSING PROCESS .. assess before intervening, except under rules 1 and 2.
+Tiebreakers: acute > chronic · unstable > stable · emergent > urgent > nonurgent ·
+unexpected > expected · actual > potential · fresh post-op (<12h) > medical or other surgical.
+Grounding still governs: the key and every distractor must trace to supplied facts. When a
+supplied fact states its own priority, follow the fact. When this order cannot single out one
+option, do not write the item as a priority question.
+Name the rule that decided the key, in words and without values (for example "ABCs: airway
+before circulation" or "Unstable before stable"), on the Strategy line of a worksheet item, or
+at the end of the correct option's rationale in a case.`;
 
 // ── Parsers ──
 // ── JS-side fact allocation for NCLEX generation ──
@@ -10176,6 +10216,8 @@ function ngAllocateBatch(groups,usedIds,{want,perCondition=4,neighborCap=2}={}){
   return{targets,context};
 }
 // v17.3: this text was duplicated in the legacy and allocation packet builders; both now interpolate it.
+// v18.1: the TIER line. The generator re-tiered every concept by its own TIER RULES, so a worksheet's Tier tags (and the
+// Tier::N tags NCLEX to Anki makes from them) could disagree with the KB, Anki and Case tabs for the same fact.
 const NG_GROUNDING_ADAPTER=`GROUNDING ADAPTER — INPUT FORM ONLY:
 - Preserve the unchanged NCLEX prompt's C1, C2, C3... concept numbering in PART 1.
 - In each concept name, append the supporting stable ID in brackets, for example: "Digoxin hold parameter [fact-42]".
@@ -10183,7 +10225,8 @@ const NG_GROUNDING_ADAPTER=`GROUNDING ADAPTER — INPUT FORM ONLY:
 - Every correct answer and every distractor rationale must trace to one or more KBFACT rows.
 - The concise FACT text may clarify the anchor, but it is not permission to add outside knowledge.
 - SOURCE identifies the original filename and page or slide for auditability.
-- If a row lacks a recoverable verbatim anchor, use its provided ANCHOR fallback exactly and keep the cited fact ID visible.`;
+- If a row lacks a recoverable verbatim anchor, use its provided ANCHOR fallback exactly and keep the cited fact ID visible.
+- TIER is the Knowledge Base's exam tier. Copy it unchanged to the concept's TIER in PART 1 and to the question's PART 4 Tags line; a concept built on several rows takes the lowest tier number among them. Do not re-tier with the TIER RULES: the batch tier mix is a target among the supplied tiers, never a reason to change one.`;
 function ngRenderAllocation(targets,context){
   const L=[];
   L.push('═══ FACTS ALLOCATED TO THIS BATCH ═══');
@@ -10907,6 +10950,7 @@ function NCLEXGenerator(){
   const log=useCallback((msg,t='')=>pushLog({msg,t}),[pushLog]); // v15.14: capped, like the KB builder
   const numBatches=Math.max(1,Math.ceil(targetCount/batchSize));
 
+  // v18.1: focus matches still go first in selection, but their tier tag stays the KB tier (see NG_GROUNDING_ADAPTER).
   function buildFocusBlock(){
     const parts=[];
     if(outcomes.trim())parts.push('OUTCOMES (Learning Objectives the student must master):\n'+outcomes.trim());
@@ -10916,7 +10960,7 @@ function NCLEXGenerator(){
     return'\n\n═══ STUDENT-PROVIDED FOCUS CONTEXT ═══\n'+parts.join('\n\n')+`
 
 INSTRUCTIONS FOR FOCUS CONTEXT:
-- Concepts matching the OUTCOMES or POINTS are automatically Tier 1 priority for selection.
+- Concepts matching the OUTCOMES or POINTS get Tier 1 priority for selection; their PART 1 and Tags tier stays the supplied KB tier.
 - Every listed POINT should receive at least one question across the full run.
 - If a POINT has no support in the source material, say so explicitly in PART 2 —
   do NOT fabricate content to cover it. The ANCHOR RULE still applies to focus items.
@@ -11084,7 +11128,8 @@ Each KBFACT row is source-grounded with a stable fact ID, LATTE bucket, tier, sh
 ${NG_GROUNDING_ADAPTER}
 
 `+ngRenderAllocation(alloc.targets,alloc.context):'';
-        let prompt=NCLEX_GEN_PROMPT+buildBatchBlock(b,numBatches,size)+buildFocusBlock()+(allocMode?buildCarryLite(stems):buildCarry(logged,used,stems));
+        // v18.1: the shared priority order follows the batch block (see PRIORITY_ORDER_RULES).
+        let prompt=NCLEX_GEN_PROMPT+buildBatchBlock(b,numBatches,size)+'\n'+PRIORITY_ORDER_RULES+'\n'+buildFocusBlock()+(allocMode?buildCarryLite(stems):buildCarry(logged,used,stems));
         const parts=allocMode?[{text:groundingAdapter},{text:prompt}]:[...fileParts,{text:prompt}];
 
         let raw;
@@ -11615,6 +11660,7 @@ regardless of how well it is written.
 // than passed off as direct quotes.
 // v17.1: generic disease knowledge cannot establish absent client findings/history or absolute exclusions.
 // v17.1: rejected option quantities were repeated as sourced facts or assigned invented clinical contexts.
+// v18.1: the case prompt also carries PRIORITY_ORDER_RULES, so prioritization keys follow the Priority Analyzer's order.
 function caseBuildPrompt({conditionName,facts,difficulty,stages,questionsPerStage,includeTypes}){
   const typeList=[];
   if(includeTypes.mcq)typeList.push('MCQ (single best answer, 4 options A-D)');
@@ -11723,6 +11769,8 @@ Tag exactly one CJMM skill per question from: Recognize Cues · Analyze Cues ·
 Prioritize Hypotheses · Generate Solutions · Take Action · Evaluate Outcomes.
 
 ${CASE_QUESTION_RULES}
+
+${PRIORITY_ORDER_RULES}
 
 ═══ JSON SHAPE (return EXACTLY this structure) ═══
 {
@@ -13310,7 +13358,7 @@ function CaseStudyGenerator(){
           <span style={{fontSize:12,color:'var(--text-dim)',marginRight:3}}>Fact tiers:</span>
           <span className="tier-btn t1 active" style={{cursor:'default'}}><b>Tier 1</b> always</span>
           <button type="button" className={'tier-btn t2'+(includeTier2?' active':'')} aria-pressed={includeTier2} onClick={()=>setIncludeTier2(v=>!v)}><b>Tier 2</b> context</button>
-          <button type="button" className={'tier-btn t3'+(includeTier3?' active':'')} aria-pressed={includeTier3} onClick={()=>setIncludeTier3(v=>!v)}><b>Tier 3</b> distractors</button>
+          <button type="button" className={'tier-btn t3'+(includeTier3?' active':'')} aria-pressed={includeTier3} onClick={()=>setIncludeTier3(v=>!v)}><b>Tier 3</b> background</button>{/* v18.1: the label said "distractors", but distractors come from any tier (see the help text below) */}
         </div>
         <div style={{fontSize:12,color:'var(--text-dim)',lineHeight:1.5}}>Tier 1 facts drive the critical decisions. Tier 2 adds realistic context; Tier 3 adds lower-priority background detail. Distractors are built from contextually plausible near-misses at any tier, not from Tier 3. <b style={{color:'var(--text)'}}>{selectedFacts.length}</b> fact(s) selected for this case.</div>
         {sufficiency.warnings.length>0&&<div className="tip-banner" style={{marginTop:10,marginBottom:0,fontSize:12,lineHeight:1.5}}>⚠ {sufficiency.warnings.join(' · ')} The generator will not invent to fill these gaps.</div>}

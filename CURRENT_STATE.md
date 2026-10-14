@@ -1,5 +1,27 @@
 # Current maintainer state
 
+## v18.1 One exam tier and one priority order (2026-10-13)
+
+The canonical application is `Nursing-Study-Suite v18.1.html`. The user compared a test-taking handout with the suite and approved three changes. No frozen prompt changed.
+- **`NG_GROUNDING_ADAPTER`.** A TIER line tells the generator to copy each KBFACT row's tier to PART 1 and the Tags line, never re-tiering. The generator focus block keeps that tier for outcome matches.
+- **`PRIORITY_ORDER_RULES`.**
+  - **What it is.** The Priority cascade's R1–R8 and B2, restated for choosing "what comes first" keys.
+  - **Where it goes.** It is appended after `buildBatchBlock` in the NCLEX Generator and after `${CASE_QUESTION_RULES}` in `caseBuildPrompt`. It is not in the case repair prompt or `itemBuildAuditPrompt`.
+  - **What it asks for.** The model names the deciding rule in words on the Strategy line (worksheets) or at the end of the correct option's rationale (cases).
+- **Priority B2** adds emergent > urgent > nonurgent.
+- **Case Studies Tier 3 button** reads "Tier 3 background".
+- **Guards.**
+  - `tools/v18-1-alignment-tests.js` parses both rule lists from the live prompts.
+  - `PRIORITY_ORDER_RULES` is in `DOCUMENTED_PROMPTS`.
+- **Not measured.** No live run yet. To check:
+  - whether worksheet `Tags:` tiers now equal the cited facts' KB tiers;
+  - whether priority items name a rule;
+  - whether the case rationale's rule name trips any numeric or terminology warning. The prompt asks for words without values.
+  - One small NCLEX batch and one exam-difficulty case would answer all three, with the user's authorization for the API calls.
+- **Not done.**
+  - A validator warning when a Tags tier differs from the cited fact's KB tier. A question can cite several facts, so the comparison needs a rule first.
+  - Unifying the tier wording inside the frozen KB, Anki and NCLEX constants.
+
 ## v18.0 Production review steps 6–10 (2026-10-13)
 
 The canonical application is `Nursing-Study-Suite v18.0.html`. It implements steps 6–10 of the [v17.14 production review](docs/reviews/production-review-2026-10-13.md) plan:

@@ -1,7 +1,7 @@
 'use strict';
 const {load,fixture,index}=require('./case-remediation-tests');
 module.exports=function run(S,t){
-  const builder=name=>{const a=S.indexOf('function '+name+'('),b=S.indexOf('`;\n}',a);if(a<0||b<0)throw Error('Missing builder '+name);return new Function('CASE_QUESTION_RULES','caseRenderFactPacket','caseDifficultyBlock',S.slice(a,b+4)+';return '+name+';')('Shared rules',()=> 'Synthetic fact packet',()=> 'Synthetic difficulty');};
+  const builder=name=>{const a=S.indexOf('function '+name+'('),b=S.indexOf('`;\n}',a);if(a<0||b<0)throw Error('Missing builder '+name);return new Function('CASE_QUESTION_RULES','PRIORITY_ORDER_RULES','caseRenderFactPacket','caseDifficultyBlock',S.slice(a,b+4)+';return '+name+';')('Shared rules','Shared priority order',()=> 'Synthetic fact packet',()=> 'Synthetic difficulty');}; // v18.1: the case prompt also interpolates PRIORITY_ORDER_RULES
   const args={conditionName:'Synthetic',facts:[],difficulty:'exam',stages:1,questionsPerStage:1,includeTypes:{mcq:true},stageNumber:1,q:{id:'q1'},criterion:'Stem clarity',visibleContext:'Synthetic context'};
   for(const name of ['caseBuildPrompt','caseBuildRepairPrompt']){
     const prompt=builder(name)(args);

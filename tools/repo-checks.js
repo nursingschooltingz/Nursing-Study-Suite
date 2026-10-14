@@ -27,6 +27,8 @@ const DOCUMENTED_PROMPTS = Object.freeze([
   'CARD_TRANSCRIBE_PROMPT',
   'I2A_TRANSCRIBE_PROMPT',
   'I2A_ANSWER_PROMPT',
+  // v18.1: the shared priority order sent to the NCLEX Generator and the case prompt (not frozen).
+  'PRIORITY_ORDER_RULES',
 ]);
 
 function listSuiteFiles(rootDir = process.cwd()) {

@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 3753;
+const EXPECTED_ASSERTIONS = 3763;
 
 let file;
 try {
@@ -2891,6 +2891,9 @@ section('v15.14 — clamps, backoff, storage');
   await require('./tools/v18-0-low-extractor-tests')(S,t);
   await require('./tools/v18-0-low-converter-tests')(S,t);
   await require('./tools/v18-0-low-cases-tests')(S,t);
+
+  section('v18.1 one exam tier and one priority order across the tabs');
+  require('./tools/v18-1-alignment-tests')(S,t);
 
   console.log('\n════════════════════════════');
   const total = pass + fail;

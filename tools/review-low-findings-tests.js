@@ -70,8 +70,9 @@ async function run(S,t){
   /* ── source contracts ── */
   const kbBuilder=span(S,'function KnowledgeBaseBuilder(){','\n// ──── TOOL: Priority Analyzer ────');
   t('card identity conflicts are keyed by file identity, not basename',kbBuilder.includes('{identityConflicts.map(([id,e])=><details key={id} className="error-banner">')&&kbBuilder.includes('Object.entries(transcripts).filter(([id,entry])=>ids.has(id)&&cardIdentityConflict(entry))'));
+  // v18.1: the adapter gained one line (keep the KB tier), so it is 9 lines, not 8.
   const adapter=new Function(span(S,'const NG_GROUNDING_ADAPTER=','\nfunction ngRenderAllocation(')+';return NG_GROUNDING_ADAPTER;')();
-  t('the NCLEX grounding adapter text exists once and feeds both packet forms',adapter.startsWith('GROUNDING ADAPTER — INPUT FORM ONLY:')&&adapter.split('\n').length===8&&count(S,'GROUNDING ADAPTER — INPUT FORM ONLY:')===1&&count(S,'${NG_GROUNDING_ADAPTER}')===2);
+  t('the NCLEX grounding adapter text exists once and feeds both packet forms',adapter.startsWith('GROUNDING ADAPTER — INPUT FORM ONLY:')&&adapter.split('\n').length===9&&count(S,'GROUNDING ADAPTER — INPUT FORM ONLY:')===1&&count(S,'${NG_GROUNDING_ADAPTER}')===2);
   const body=name=>{const m=S.match(new RegExp('function '+name+'\\(value\\)\\{([\\s\\S]*?)\\n\\}'));return m&&m[1].replace(/\bnormalized\b/g,'normal');};
   t('the Anki and case decimal normalizers stay byte-identical apart from a local name',!!body('ankiDecimal')&&body('ankiDecimal')===body('caseDecimal'));
   t('both unit vocabularies share the same denominator grammar',count(S,'const ANKI_SUPPORTED_UNIT=/^(?:')===1&&count(S,'const CASE_SUPPORTED_UNIT=/^(?:')===1&&count(S,'(?:\\/(?:kg|ml|l|dl|hr|min|sec|day|dose|m2))*$/;')===2);

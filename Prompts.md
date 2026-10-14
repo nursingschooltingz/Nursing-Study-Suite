@@ -1,8 +1,8 @@
 # Nursing Study Suite — Prompt Library
 
-The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, the item-quality auditor, and the NCLEX to Anki image reader, **extracted verbatim from the shipped v18.0 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
+The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, the item-quality auditor, and the NCLEX to Anki image reader, **extracted verbatim from the shipped v18.1 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
 
-> **Coverage.** All 14 named prompt constants are represented from live HTML bytes. Eleven are byte-frozen; `CARD_TRANSCRIBE_PROMPT` is deliberately tunable but requires two transcription runs per card after an edit. `I2A_TRANSCRIBE_PROMPT` and `I2A_ANSWER_PROMPT` (NCLEX to Anki, v17.9) are copied from img2anki.py and are not frozen. The generated appendix is maintained by `node tools/render-prompts.js --write` and checked by `node verify-repo.js`.
+> **Coverage.** All 15 named prompt constants are represented from live HTML bytes. Eleven are byte-frozen; `CARD_TRANSCRIBE_PROMPT` is deliberately tunable but requires two transcription runs per card after an edit. `I2A_TRANSCRIBE_PROMPT` and `I2A_ANSWER_PROMPT` (NCLEX to Anki, v17.9) are copied from img2anki.py and are not frozen. `PRIORITY_ORDER_RULES` (v18.1) is not frozen; a harness assertion keeps it in step with the Priority cascade. The generated appendix is maintained by `node tools/render-prompts.js --write` and checked by `node verify-repo.js`.
 
 How to read them: text inside `${...}` is filled in at runtime by the app (your settings, your Knowledge Base, the current chunk). The Priority, Case, and audit prompts are shown as their complete builder functions because the assembly logic is part of the design.
 
@@ -903,7 +903,7 @@ ${chunk}`;
 }
 ````
 
-### Stage 2 — synthesis (`paBuildSynthPrompt`, 8,669 chars)
+### Stage 2 — synthesis (`paBuildSynthPrompt`, 8,701 chars)
 
 ````js
 function paBuildSynthPrompt(extractions,context){
@@ -982,8 +982,8 @@ R9  STABLE/BACKGROUND
 B1. ORGAN HIERARCHY — brain > lung > heart > liver > kidney > pancreas.
     Apply to the organ named in the QUALIFIER, not the organ of the diagnosis.
     (A chronic renal patient with frothy sputum is a LUNG problem.)
-B2. Acute > chronic · unstable > stable · unexpected > expected · actual > potential ·
-    fresh post-op (<12h) > medical or other surgical.
+B2. Acute > chronic · unstable > stable · emergent > urgent > nonurgent · unexpected > expected ·
+    actual > potential · fresh post-op (<12h) > medical or other surgical.
 B3. Still tied? Whichever the guide gives more space and emphasis to.
 
 ## SPECIAL PRECEDENCE
@@ -1072,13 +1072,14 @@ Produce the ranked analysis now.`;
 **Runtime assembly** — each batch the app sends is:
 
 ````js
-NCLEX_GEN_PROMPT + buildBatchBlock(batch, numBatches, size) + buildFocusBlock()
+NCLEX_GEN_PROMPT + buildBatchBlock(batch, numBatches, size) + '\n' + PRIORITY_ORDER_RULES + '\n'
+  + buildFocusBlock()
   + (allocMode ? buildCarryLite(stems) : buildCarry(logged, used, stems))
 // In allocation mode the request is additionally prefixed with the groundingAdapter
 // and the JS-side fact allocation for this batch.
 ````
 
-`buildBatchBlock` sets batch position and size, `buildFocusBlock` carries your condition filter and Additional Context, and the carry blocks pass forward prior batches’ question stems for dedup. The v4.2 prompt below is self-contained — it embeds its own anchoring, distractor, rationale, and completeness rules.
+`buildBatchBlock` sets batch position and size, `buildFocusBlock` carries your condition filter and Additional Context, and the carry blocks pass forward prior batches’ question stems for dedup. The v4.2 prompt below is self-contained — it embeds its own anchoring, distractor, rationale, and completeness rules. Since v18.1 the batch block is followed by `PRIORITY_ORDER_RULES` (see the Appendix), the Priority Analyzer's R1–R8 order and B2 tiebreakers restated for choosing "what comes first" keys. The grounding adapter also tells the model to copy each fact's Knowledge Base tier to PART 1 and the Tags line instead of re-tiering it, and the focus block keeps that tier for outcome matches.
 
 ### The generator prompt
 
@@ -1533,9 +1534,9 @@ Either way, the ANCHOR RULE is unchanged: every option must trace to verbatim so
 
 ---
 
-## 5 · Clinical Case Study Generator (`caseBuildPrompt`, 9,274 chars)
+## 5 · Clinical Case Study Generator (`caseBuildPrompt`, 9,299 chars)
 
-Returns JSON, not markdown — every field is re-validated in code against the real Knowledge Base after generation. The fact packet is appended by `caseRenderFactPacket`; the shared question rules come from `CASE_QUESTION_RULES` (see the Appendix).
+Returns JSON, not markdown — every field is re-validated in code against the real Knowledge Base after generation. The fact packet is appended by `caseRenderFactPacket`; the shared question rules come from `CASE_QUESTION_RULES`, and since v18.1 the shared priority order from `PRIORITY_ORDER_RULES` (both in the Appendix).
 
 ````js
 function caseBuildPrompt({conditionName,facts,difficulty,stages,questionsPerStage,includeTypes}){
@@ -1646,6 +1647,8 @@ Tag exactly one CJMM skill per question from: Recognize Cues · Analyze Cues ·
 Prioritize Hypotheses · Generate Solutions · Take Action · Evaluate Outcomes.
 
 ${CASE_QUESTION_RULES}
+
+${PRIORITY_ORDER_RULES}
 
 ═══ JSON SHAPE (return EXACTLY this structure) ═══
 {
@@ -1843,6 +1846,37 @@ COMPLETENESS RULE — every question must be fully formed: a complete stem, all 
 one set of correct answers, and a rationale line for every option. Never end mid-question or
 mid-rationale. If you cannot complete a question to this standard, produce fewer questions
 rather than truncating one.
+````
+
+### `PRIORITY_ORDER_RULES` (2,082 chars, v18.1)
+
+Unlike the four above, this one **is** sent to the NCLEX Generator (after the batch block) as well as to the Case Study Generator (after `CASE_QUESTION_RULES`). It is not sent to the case repair prompt or the item audit. It restates the Priority Analyzer's cascade R1–R8 and its B2 tiebreakers for choosing the key of a "what comes first" question; `tools/v18-1-alignment-tests.js` fails if the two lists drift apart.
+
+````text
+PRIORITY ORDER — the same order the Priority Analyzer uses. Use it to choose the correct
+answer whenever a stem asks what the nurse does first, which client or finding needs attention
+first, which action is the priority, or which finding requires immediate intervention. Work
+down the list; the first rule that separates the options decides the key.
+  1. ABC .............. airway, then breathing, then circulation. In an ABC or CRISIS situation
+                        the nurse acts first instead of assessing further.
+  2. CRISIS ........... hemorrhage; fever >105°F/40.5°C; hypoglycemia; pulseless or breathless.
+  3. PSYCH-SAFETY ..... suicidal or homicidal ideation, self-harm, violence, elopement.
+  4. CRIT-LAB ......... a value the facts present as critical for THIS client, not an expected
+                        baseline such as a dialysis client's usual potassium.
+  5. UNSTABLE ......... acute; unexpected or changed; worsening; post-op <12h; newly admitted <24h.
+  6. SAFETY / SCOPE ... contraindications, hold parameters, allergies, antidotes, high-alert
+                        medications. An option outside the nurse's scope, or one that needs a
+                        prescription the client does not have, is not the nurse's first action.
+  7. MASLOW ........... physiological > safety > psychosocial > self-actualization.
+  8. NURSING PROCESS .. assess before intervening, except under rules 1 and 2.
+Tiebreakers: acute > chronic · unstable > stable · emergent > urgent > nonurgent ·
+unexpected > expected · actual > potential · fresh post-op (<12h) > medical or other surgical.
+Grounding still governs: the key and every distractor must trace to supplied facts. When a
+supplied fact states its own priority, follow the fact. When this order cannot single out one
+option, do not write the item as a priority question.
+Name the rule that decided the key, in words and without values (for example "ABCs: airway
+before circulation" or "Unstable before stable"), on the Strategy line of a worksheet item, or
+at the end of the correct option's rationale in a case.
 ````
 
 ---

@@ -9,6 +9,49 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [18.1] — 2026-10-13
+
+The user compared a test-taking strategy handout (ABCs, Maslow, safety, acute/unstable before chronic/stable, the Clinical Judgment Measurement Model) with the suite. Two gaps came out of that:
+- **"Tier 1" meant different things in different tabs.** The Knowledge Base tier, which the Anki and Case tabs use, says how important a fact is for the exam. The NCLEX Generator re-tiered every concept by its own rules. The Priority Analyzer ranks by clinical urgency, which is a deliberately separate view.
+- **The handout's priority frameworks lived only in the Priority Analyzer.** The two tabs that write practice questions were never told to use them when choosing the answer to a "what does the nurse do first" question.
+
+### Changed
+
+- **One exam tier.**
+  - The NCLEX Generator now copies each fact's Knowledge Base tier to its concept and to the question's Tags line instead of re-tiering it. Worksheet tiers, and the `Tier::N` tags NCLEX to Anki makes from them, now match the KB, Anki and Case tabs.
+  - The batch tier mix is a target among the supplied tiers, never a reason to change one.
+  - Outcome and point matches still go first in selection and keep their KB tier.
+- **One priority order.**
+  - **Shared rules.** A new `PRIORITY_ORDER_RULES` block restates the Priority Analyzer's rules R1–R8 (ABC, crisis, psych-safety, critical lab, unstable, safety/scope, Maslow, nursing process) and its tiebreakers.
+  - **Where it goes.** The NCLEX Generator gets it after the batch block, and the case prompt after the shared question rules.
+  - **Grounding.** It is used to choose the key of a "what comes first" question. The key must still trace to supplied facts, and a priority a fact states itself wins. If the order can't single out one option, the item is not written as a priority question.
+  - **Naming the rule.** The rule that decided the key is named in words (for example "ABCs: airway before circulation"): on the Strategy line of a worksheet item, or at the end of the correct option's rationale in a case.
+  - **Not sent to** the case repair prompt or the item audit; the audit stays blind to grounding.
+- **Priority tiebreakers** add emergent > urgent > nonurgent, the one handout priority order the cascade did not name.
+
+### Fixed
+
+- **Case Studies Tier 3 button.** It said "Tier 3 distractors" while its own help text says distractors come from any tier, not from Tier 3. It now reads "Tier 3 background".
+- **README Priority section.** It described filters ("Filter by Strategy", search, "Show All") and a "time-critical interventions" rule that the tab does not have, and said to feed it your content (it reads the Knowledge Base).
+
+### Verification
+
+- **10 new assertions (3,763 total), all in `tools/v18-1-alignment-tests.js`.**
+  - Both rule lists are parsed from the live prompts and must name the same eight rules in the same order. The tiebreakers must equal Priority's B2 line.
+  - Each mutation was caught: swapping two shared rules, renaming Priority's R8, dropping "emergent" from B2, removing the block from either prompt, removing the adapter's tier line, and restoring the old button label.
+- **Updated assertions:**
+  - the grounding adapter is 9 lines, not 8;
+  - one case-builder test passes the new constant;
+  - version literals read 18.1.
+- **Prompt documentation.** `PRIORITY_ORDER_RULES` joins the documented prompt list, so `Prompts.md` must carry its bytes; 15 constants are now documented.
+- **Prompt bytes.** The eleven frozen prompt hashes and `prompt-baseline.json` are unchanged.
+- **Browser check** on the synthetic real-App fixture with mocked generation:
+  - the Case Studies button reads "Tier 3 background";
+  - the live case prompt carries the block between the shared rules and the JSON shape;
+  - an actual NCLEX Generator request carried the adapter's tier line and the block right after the batch block.
+- **SRI.** All eight SRI-pinned scripts and both PDF worker copies were re-hashed and match.
+- **Not measured.** No live Gemini request was made, so whether models follow the KB tier and name the deciding rule is unmeasured.
+
 ## [18.0] — 2026-10-13
 
 Steps 6–10 of the [v17.14 production review](docs/reviews/production-review-2026-10-13.md) plan (the work prepared as v17.16, released as v18.0):
