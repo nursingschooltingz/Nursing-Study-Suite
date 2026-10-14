@@ -1,7 +1,7 @@
 'use strict';
 module.exports=function worksheetRemediationTests(S,t){
   const span=(a,b,base=0)=>{const x=S.indexOf(a,base),y=S.indexOf(b,x+a.length);if(x<0||y<0)throw Error('Missing worksheet extraction anchor '+a);return S.slice(x,y);};
-  const W=new Function('neiaTerminologyScan','itemHeuristics',span('function ngSplitParts(','function ngRenumber(')+';return {validateNCLEXWorksheet,ngParseItem,ngParseKeyItem,ngWorksheetContract,ngExplicitReferences,ngConceptFactMap,ngCitedFactIds,ngWorksheetCompleteness,ngRepairShapeIssues,ngSplitParts,ngSpliceBlock,ngRenderQuestionBlock,ngRenderKeyBlock,ngSpliceSection,ngUpsertWorksheetBatch,ngWorksheetAuditSeed};')(()=>{},()=>{});
+  const W=new Function('neiaTerminologyScan','itemHeuristics',span('function ngSplitParts(','function ngRenumber(')+';return {validateNCLEXWorksheet,ngParseItem,ngParseKeyItem,ngWorksheetContract,ngExplicitReferences,ngConceptFactMap,ngCitedFactIds,ngWorksheetCompleteness,ngRepairShapeIssues,ngSplitParts,ngSpliceBlock,ngRenderQuestionBlock,ngRenderKeyBlock,ngSpliceSection,ngSpliceParts,ngUpsertWorksheetBatch,ngWorksheetAuditSeed};')(()=>{},()=>{});
   const C=new Function(span('const CASE_CLINICAL_TOKEN_RE=','// Every distinct fact id referenced anywhere in the case')+';return {caseCompletenessIssues,validateCaseStudy};')();
   const facts=[{id:'fact-1'},{id:'fact-2'},{id:'fact-3'}],pool=[{condition:'X',facts}],allocation={targets:[facts[0]],context:[facts[1]]};
   const contract=W.ngWorksheetContract({allocation,pool,expectedCount:1,knownFactIds:facts.map(f=>f.id)});
@@ -66,7 +66,7 @@ module.exports=function worksheetRemediationTests(S,t){
   t('the same worksheet can validate against the full legacy supplied packet',!error(run(build(),W.ngWorksheetContract({pool,expectedCount:1,knownFactIds:facts.map(f=>f.id)}))));
   // Exercise the actual candidate-before-assignment closure, rather than a copied model of repair.
   const repairCode=span('const repairShape=ngRepairShapeIssues(fixed);','                  // Same honesty fix as the case generator');
-  const helperNames=['ngRepairShapeIssues','ngSplitParts','ngSpliceBlock','ngRenderQuestionBlock','ngRenderKeyBlock','ngSpliceSection','validateNCLEXWorksheet'];
+  const helperNames=['ngRepairShapeIssues','ngSplitParts','ngSpliceBlock','ngRenderQuestionBlock','ngRenderKeyBlock','ngSpliceSection','ngSpliceParts','validateNCLEXWorksheet'];
   const repair=new Function('initial','fixed','r','keyRaw','size','worksheetContract',...helperNames,'let workRaw=initial;try{'+repairCode+';return{raw:workRaw};}catch(e){return{raw:workRaw,error:e.message};}');
   const original=build(),item=W.ngParseItem({num:1,text:W.ngSplitParts(original).p3}),keyRaw=W.ngSplitParts(original).p4;
   const good={stem:'Which action fits?',options:opts.map((text,i)=>({label:'ABCD'[i],text})),correctLabel:'A',rationales:opts.map((text,i)=>({label:'ABCD'[i],text:'A complete explanation.',source:i?'C2':'C1'}))};
@@ -162,11 +162,18 @@ module.exports=function worksheetRemediationTests(S,t){
   t('step texts separated by commas are matched whole, including a step that contains a comma',oc.p4.includes('1. ANSWER: Weak pulse → Normal pulse → Full pulse, increased')&&!error(oc.after));
   oc=ordCheck('  1. ORDER: 2, 3, 1\n     Reasons follow. (Source: C1)\n     More. (Source: C1)\n     More. (Source: C1)');
   t('an ORDER entry with no confirming step lines keeps its text under an ANSWER header and stays flagged',oc.p4.includes('1. ANSWER: ORDER: 2, 3, 1')&&!has(oc.after,'no matching PART 4 answer entry')&&has(oc.after,'every presented step exactly once','error'));
+  // v17.15 (review H2): rank lines in presented order, or lines that only repeat the presented order, are not the sequence.
+  const ranked=['  1. ANSWER:\n     2. Alpha step\n     3. Beta step\n     1. Gamma step\n     Rationale: Gamma first, Alpha second, Beta last. (Source: C1)',
+    '  1. ANSWER:\n     Step 2: Alpha step\n     Step 3: Beta step\n     Step 1: Gamma step\n     Gamma is urgent; Alpha follows; Beta is last. (Source: C1)',
+    '  1. ANSWER:\n     2) Alpha step — second, after stabilizing. (Source: C1)\n     3) Beta step — last. (Source: C1)\n     1) Gamma step — first, most urgent. (Source: C1)'];
+  t('rank numbers written beside the presented steps are not restated as the sequence, so the entry keeps its errors',ranked.every(k=>{const o=ordCheck(k);return !o.out.rewritten.length&&error(o.after);}));
+  oc=ordCheck('  1. ANSWER:\n     Alpha step: second, after stabilizing. (Source: C1)\n     Beta step: third, last. (Source: C1)\n     Gamma step: first, most urgent. (Source: C1)');
+  t('step lines that only repeat the presented order are not restated as the sequence',!oc.out.rewritten.length&&error(oc.after));
   t('worksheets without ordering items pass through unchanged',L.ngCanonicalOrderingAnswers(build()).text===build()&&L.ngCanonicalOrderingAnswers(sataBatch).text===sataBatch);
   t('the generator restates ordering answers after relabelling and before splitting the batch',S.indexOf('const lettered=ngLetterNumberedOptions(raw);')<S.indexOf('const ordered=ngCanonicalOrderingAnswers(raw);')&&S.indexOf('const ordered=ngCanonicalOrderingAnswers(raw);')<S.indexOf('        const P=ngSplitParts(raw);'));
   t('the printed worksheet escapes inner numbers in questions and answers',S.includes('ws.questions.map(ngMdLiteralNumbers)')&&S.includes('ws.answers.map(ngMdLiteralNumbers)'));
   // v17.12: each lettered MCQ/SATA item's choices are shuffled once, with the ANSWER labels and Why lines following them.
-  const X=new Function('neiaTerminologyScan','itemHeuristics',span('function ngSplitParts(','function ngRenumber(')+';return {ngShuffleWorksheetOptions,ngSplitParts,ngSplitNumbered,ngParseItem,ngParseKeyItem,ngAnswerLabels,validateNCLEXWorksheet};')(()=>{},()=>{});
+  const X=new Function('neiaTerminologyScan','itemHeuristics',span('function ngSplitParts(','function ngRenumber(')+';return {ngShuffleWorksheetOptions,ngSpliceParts,ngSplitParts,ngSplitNumbered,ngParseItem,ngParseKeyItem,ngAnswerLabels,validateNCLEXWorksheet};')(()=>{},()=>{});
   const seq=(...v)=>{let i=0;return ()=>v[i++%v.length];},lcg=seed=>()=>{seed=(seed*16807)%2147483647;return (seed-1)/2147483646;};
   const mixQ=(n,stem,opts)=>'  '+n+'. '+stem+'\n'+opts.map((o,i)=>'     '+'ABCDEF'[i]+'. '+o).join('\n');
   const mixK=(n,right,count,text=()=>'reason.')=>'  '+n+'. ANSWER: '+right.join(', ')+'\n'+[...'ABCDEF'.slice(0,count)].map(l=>'     Why '+l+' is '+(right.includes(l)?'correct':'wrong')+': '+text(l)+' (Source: C1)').join('\n')+'\n     Strategy: s.\n     Tags: Tier 1';
@@ -178,7 +185,7 @@ module.exports=function worksheetRemediationTests(S,t){
         pairs:k.rationales.map(r=>text(r.label)+'='+r.kind+':'+r.text).sort().join('|'),whyOrder:k.rationales.map(r=>r.label+r.kind[0]).join(' ')};});};
   const mcqOpts=['Assess the airway','Give the antiemetic','Call the provider','Document the finding'],sataOpts=['Finding one','Finding two','Finding three','Finding four','Finding five'];
   const mix=mixBatch([mixQ(1,'A client with hepatitis B reports nausea. Which action should the nurse take first?',mcqOpts),mixQ(2,'(Select all that apply) Which findings should the nurse expect?',sataOpts),'  3. Place the steps in order.\n     ___ Alpha step\n     ___ Beta step'],
-    [mixK(1,['A'],4,l=>'reason '+l+'.'),mixK(2,['A','B','C'],5,l=>'reason '+l+'.'),'  3. ANSWER: Alpha step → Beta step\n     1. Alpha first. (Source: C1)\n     2. Beta second. (Source: C1)\n     Strategy: s.\n     Tags: Tier 1'],'Tier [1:3] | Types [MCQ:1 SATA:1 Ordering:1]');
+    [mixK(1,['A'],4,l=>'reason '+l.toLowerCase()+'.'),mixK(2,['A','B','C'],5,l=>'reason '+l.toLowerCase()+'.'),'  3. ANSWER: Alpha step → Beta step\n     1. Alpha first. (Source: C1)\n     2. Beta second. (Source: C1)\n     Strategy: s.\n     Tags: Tier 1'],'Tier [1:3] | Types [MCQ:1 SATA:1 Ordering:1]');
   const mixed=X.ngShuffleWorksheetOptions(mix,seq(.1,.1,.9,.5,.2,.7,.3)),mv=view(mixed.text),ov=view(mix);
   t('worksheet shuffle moves MCQ and SATA choices and reports them',JSON.stringify(mixed.shuffled)==='[1,2]'&&!mixed.kept.length&&mixed.text!==mix&&X.ngSplitParts(mixed.text).p3.split('\n     A. ')[1].split('\n')[0]!=='Assess the airway');
   t('the keyed answers and every rationale follow their choice text',mv.every((v,i)=>v.correct===ov[i].correct&&v.pairs===ov[i].pairs&&v.labels===ov[i].labels));
@@ -201,5 +208,41 @@ module.exports=function worksheetRemediationTests(S,t){
   t('a batch with nothing to shuffle is returned unchanged',X.ngShuffleWorksheetOptions(build({type:'Calculation'}),seq(.1)).text===build({type:'Calculation'})&&X.ngShuffleWorksheetOptions('no parts',seq(.1)).text==='no parts');
   let bad=false;try{X.ngShuffleWorksheetOptions(mix,()=>1);}catch(e){bad=/Invalid shuffle random value/.test(e.message);}
   t('an out-of-range random value is rejected rather than biasing the order',bad);
+  // v17.15 (review C1): a "part 4" before the real PART 4 heading made PART 4 contain PART 3; the shuffle then moved the
+  // choices but could not replace the answer key, so every shuffled item kept its old key with no validation error.
+  const strays=[['PART 2 restating the batch rule',mix.replace('Q1 cites C1','Q1 cites C1\nPART 3 and PART 4 must each contain exactly 3 numbered entries.')],
+    ['a mid-sentence "Part 4" in PART 2',mix.replace('Q1 cites C1','Q1 cites C1. Every Part 4 "Why" line cites its anchor.')],
+    ['a "Part 4" source file in PART 1',mix.replace('C1 | concept [fact-1] |','C1 | concept [fact-1] | ANCHOR: "Resp Care Part 4.pdf" |')]];
+  for(const [label,raw] of strays){
+    const out=X.ngShuffleWorksheetOptions(raw,seq(.1,.1,.9,.5,.2,.7,.3)),after=view(out.text),before=view(raw);
+    t('with '+label+', PART 4 starts at its own heading and every shuffled key and rationale follows its choice',!X.ngSplitParts(raw).p4.includes('Which action should the nurse take first')&&JSON.stringify(out.shuffled)==='[1,2]'&&after.every((v,i)=>v.correct===before[i].correct&&v.pairs===before[i].pairs)&&!error(X.validateNCLEXWorksheet(out.text,3,null)));
+  }
+  const marked=mix.replace('\nPART 3 — QUESTIONS','\n## **PART 3 — QUESTIONS**').replace('\nPART 4 — KEY','\n## **PART 4 — KEY**');
+  t('headings written with Markdown or emphasis still start their parts',X.ngSplitParts(marked).p3===X.ngSplitParts(mix).p3&&X.ngSplitParts(marked).p4===X.ngSplitParts(mix).p4);
+  // Headings that do not start their line fall back to the earlier match; the overlap that leaves must keep every order.
+  const inline=s=>s.replace('\nPART 3 — QUESTIONS','\nNow PART 3 — QUESTIONS').replace('\nPART 4 — KEY','\nNow PART 4 — KEY').replace('Q1 cites C1','Q1 cites C1; the part 4 key follows.');
+  const overlap=inline(mix),OP=X.ngSplitParts(overlap);
+  t('overlapping PART 3 and PART 4 cannot be spliced',OP.p4.includes(OP.p3)&&X.ngSpliceParts(overlap,OP,'x','y')===null);
+  const kept=X.ngShuffleWorksheetOptions(overlap,seq(.1,.1,.9,.5,.2,.7,.3));
+  t('a batch whose sections overlap keeps every item in its written order instead of a half-shuffled key',kept.text===overlap&&!kept.shuffled.length&&JSON.stringify(kept.kept)==='[1,2]');
+  const numbered=inline(sataBatch);
+  t('choice relabelling refuses overlapping sections rather than leaving the key unrelabelled',L.ngLetterNumberedOptions(numbered).text===numbered&&!L.ngLetterNumberedOptions(numbered).relabelled.length&&L.ngLetterNumberedOptions(sataBatch).relabelled.length===1);
+  const strayRepair=build({audit:'Q1 cites [C1, C2]\nPART 3 and PART 4 must each contain exactly 1 numbered entry.'}),SR=W.ngSplitParts(strayRepair);
+  const repaired=repair(strayRepair,good,{num:1,item:W.ngParseItem({num:1,text:SR.p3})},SR.p4,1,contract,...helperNames.map(n=>W[n])),RP=W.ngSplitParts(repaired.raw||'');
+  t('a repair after a restated PART rule rewrites the stem and its answer key together',!repaired.error&&RP.p3.includes('Which action fits?')&&!RP.p4.includes('Which action fits?')&&RP.p4.includes('A complete explanation.'));
+  const overlapRepair=inline(build({audit:'Q1 cites C1'})),OR=W.ngSplitParts(overlapRepair);
+  const refused=repair(overlapRepair,good,{num:1,item:W.ngParseItem({num:1,text:OR.p3})},OR.p4,1,contract,...helperNames.map(n=>W[n]));
+  t('a repair on overlapping sections is refused and leaves the worksheet untouched',/could not locate PART 3 and PART 4 separately/.test(refused.error||'')&&refused.raw===overlapRepair);
+  t('no PART 3 and PART 4 pair is spliced one section after the other any more',!S.includes('ngSpliceSection(ngSpliceSection(')&&S.includes('const candidate=ngSpliceParts(workRaw,parts,newP3,newP4);'));
+  // v17.15 (review H3, M10, M11): one shared letter-reference detector, conservative by default.
+  const aota=['All of the above','None of the above','All of these','Both of the above'].map(last=>mixBatch([mixQ(1,'Which findings are expected with hypokalemia?',['Muscle weakness','U waves on the ECG','Leg cramps',last])],[mixK(1,['D'],4)],'Tier [1:1] | Types [MCQ:1]'));
+  t('a choice that points at the other choices (all/none/both of the above, all of these) keeps the order as written',aota.every(raw=>{const out=X.ngShuffleWorksheetOptions(raw,seq(.1,.1,.1));return out.text===raw&&JSON.stringify(out.kept)==='[1]';}));
+  const missed=['(see C)','Compared with C, it is slower.','Better instead of C.','The same as C.','Letter C is unsafe.','Options B through D delay care.','Options B to D delay care.','Choice c is unsafe.','OPTION C is unsafe.','Response C delays care.','Less urgent than A because it can wait.','The last two options delay care.','The previous option is unsafe.','A is the priority.','B is wrong because it delays care.','D delays oxygenation.','C. This delays care.',"A's rationale is weaker."];
+  t('every letter or position reference the v17.12 detector missed now keeps the order as written',missed.every(why=>keep(why)));
+  const clinical=['The temperature is 38.5 °C.','The temperature is 38.5°C.','The temperature is 38.5 C.','Stool tests show C. difficile.','The client has hepatitis B and C.','The client takes vitamin A and D.','A ≥3 cm wound is present.','A <60 bpm rate needs review.','The client is A&O x3.','Group A strep was cultured.'];
+  t('clinical letters (°C, C. difficile, hepatitis B and C, vitamins A and D, A&O, group A) and an article A still shuffle',clinical.every(why=>{const raw=mixBatch([mixQ(1,'Which action is first?',mcqOpts)],[mixK(1,['A'],4,l=>l==='A'?why:'reason.')],'Tier [1:1] | Types [MCQ:1]');return JSON.stringify(X.ngShuffleWorksheetOptions(raw,seq(.1)).shuffled)==='[1]';}));
+  const slipped=mixBatch([mixQ(1,'Which action is first?',mcqOpts),mixQ(2,'Which action is next?',mcqOpts)],[mixK(1,['A'],4),mixK(3,['B'],4)],'Tier [1:2] | Types [MCQ:2]'),slip=X.ngShuffleWorksheetOptions(slipped,seq(.1,.6,.3));
+  t('a batch whose answer numbers do not run 1..n is not shuffled, so each answer stays with its question',slip.text===slipped&&slip.misnumbered===true&&!slip.shuffled.length);
+  t('both shufflers use the one shared letter-reference detector',(S.match(/itemRefersByLetter\(/g)||[]).length===3&&!S.includes('const LISTED=/^(?:like|unlike')&&S.includes('if(mixed.misnumbered)owned_log('));
   t('the generator shuffles after the ordering fix and before splitting or checking the batch',S.indexOf('const ordered=ngCanonicalOrderingAnswers(raw);')<S.indexOf('const mixed=ngShuffleWorksheetOptions(raw);')&&S.indexOf('const mixed=ngShuffleWorksheetOptions(raw);')<S.indexOf('        const P=ngSplitParts(raw);')&&S.includes('if(mixed.shuffled.length){raw=mixed.text;'));
 };

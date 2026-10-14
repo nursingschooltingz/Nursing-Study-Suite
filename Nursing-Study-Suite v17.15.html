@@ -8,7 +8,31 @@
      Babel, so this adds narrow resource directives without a default-src/script-src migration. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net">
 <title>LATTE Study Suite</title>
-<!-- v17.14 (2026-10-13): the Auto profile ships Argon for three rows: Priority synthesis (medium), Case studies (high) and
+<!-- v17.15 (2026-10-13): NCLEX Generator worksheets could be published with wrong answer keys. A "part 4" mention before the
+     real PART 4 heading (the batch rule restated in PART 2, the prompt's own 'Part 4 "Why" lines', a "...Part 4.pdf" source)
+     started PART 4 early, so it also contained PART 3. The v17.12 shuffle then rewrote the choices but could not find the old
+     answer key to replace, and every shuffled item kept its old ANSWER and Why lines with no validation error; a repair had
+     the same splice since v15.8. Section headings now start their line, and PART 3 and PART 4 are spliced together by
+     position (ngSpliceParts), which refuses overlapping sections: the items keep their written order instead.
+     Both shuffles now share one letter-reference check (itemRefersByLetter): a capital letter that matches a choice
+     label counts as a reference unless it is clearly an article, a clinical term or a unit, so "All of the above", "(see C)" or
+     "less urgent than A" keep the written order, while "A client...", "vitamin D" or "38.5 °C" no longer block the case
+     shuffle. A worksheet batch whose question or answer numbers do not run 1, 2, 3... is not shuffled.
+     Ordering answers whose step lines carry ranks, or only repeat the presented order, are no longer restated as a
+     (wrong) sequence. NCLEX to Anki reads the Generator's own .md layout (it had merged a whole worksheet into one card),
+     checks the export's stated question count, and joins an image continuation to what the previous image ended with.
+     The NCLEX Extractor no longer lets a numbered choice list swallow the next question, and keeps a repeated
+     question number's text, marking the run for review.
+     The Study view no longer prints unclassified treatments as dependent orders or unstaged findings inside the LATE list.
+     Case validation warns about a value written only into the keyed answer and about a datum whose unit it cannot
+     read. A source quote that starts or ends at a decimal point ("5 mg" in "0.5 mg") no longer counts as located. A
+     build leaves out, and names, any fact a later reload would reject.
+     Anki's Generate keeps the current deck, its edits and review decisions until the new deck is complete. Card
+     transcription and the omission audit stop on a quota or key failure instead of sending one doomed request per
+     remaining item. NCLEX Extractor answers that no answer page supplied are marked as model-written, a later copy of a
+     question fills a missing answer, and exports never print "undefined". The invalid-case export keeps the raw
+     response unchanged. Prompts are unchanged.
+     v17.14 (2026-10-13): the Auto profile ships Argon for three rows: Priority synthesis (medium), Case studies (high) and
      the item-quality audit (high). These are reasoning-heavy and their output stays well inside Argon's 32,768-token
      ceiling; extraction, Anki, card OCR, the Priority harvest and both NCLEX rows stay on Flash. Saved profile rows still
      win, so an existing browser keeps its rows until Reset to recommended. Not yet measured on Argon. Prompts are unchanged.
@@ -2205,8 +2229,15 @@ function kbSlug(s){return String(s||'item').toLowerCase().replace(/[^a-z0-9]+/g,
 // direction — a near-duplicate is deletable in the UI, a silently reversed fact is not.
 // v15.17: stripping Unicode, punctuation and unit case merged distinct clinical evidence. Only whitespace is equivalent.
 function kbFactKey(f){return [f.latteBucket||'',f.subtype||'',String(f.text||'').replace(/\s+/g,' ').trim()].join('|');}
+// v17.15 (review H11): the build saved whatever category and field types the model returned, while restoring a saved
+// Knowledge Base requires a known category, text subtype/factType and a nonempty condition id. One fact filed under
+// "Treatment", or a condition named only in Greek (kbSlug gives ''), saved normally and then sent the next reload
+// into recovery mode with every tool empty. Such a fact is now left out of the build and listed (never re-filed under
+// a guessed category), and a condition with no usable slug gets the id "condition". KB_FACT_BUCKETS must equal
+// KB_BUCKETS; a harness assertion pins the two together.
+const KB_FACT_BUCKETS=['BriefPatho','Look','Assess','Tests','Treatments','Educate'];
 function mergeLatteParts(parts,course='',exam=''){
-  const map=new Map();let factN=0;const usedCondIds=new Set(); // v15.14: see below
+  const map=new Map();let factN=0;const usedCondIds=new Set(),dropped=[]; // v15.14: see below
   for(const part of parts){
     for(const c of part.conditions||[]){
       const aliases=(c.aliases||[]).map(x=>String(x).trim()).filter(Boolean);
@@ -2217,7 +2248,7 @@ function mergeLatteParts(parts,course='',exam=''){
       if(!target){
         key=names[0]||('condition-'+map.size);
         // v15.14: was id:kbSlug(c.name) with no uniqueness check.
-        let cid=kbSlug(c.name),cn=2;while(usedCondIds.has(cid))cid=kbSlug(c.name)+'-'+(cn++);
+        const base=kbSlug(c.name)||'condition';let cid=base,cn=2;while(usedCondIds.has(cid))cid=base+'-'+(cn++);
         usedCondIds.add(cid);
         target={id:cid,name:c.name||'Unnamed Condition',aliases:[],facts:[]};map.set(key,target);
       }
@@ -2225,6 +2256,8 @@ function mergeLatteParts(parts,course='',exam=''){
       const existing=new Map(target.facts.map(f=>[kbFactKey(f),f]));
       for(const raw of c.facts||[]){
         if(!raw||!String(raw.text||'').trim())continue;
+        const bad=!KB_FACT_BUCKETS.includes(raw.latteBucket)?'unknown category "'+String(raw.latteBucket)+'"':raw.subtype!=null&&typeof raw.subtype!=='string'?'subtype is not text':raw.factType!=null&&typeof raw.factType!=='string'?'factType is not text':'';
+        if(bad){dropped.push({condition:String(c.name||''),text:String(raw.text).slice(0,160),reason:bad});continue;}
         const k=kbFactKey(raw),src=raw.sourcePointer?[raw.sourcePointer]:[];
         if(existing.has(k)){
           const f=existing.get(k);f.sources=[...new Map([...(f.sources||[]),...src].map(x=>[(x.filename||'')+'|'+(x.location||''),x])).values()];
@@ -2234,7 +2267,9 @@ function mergeLatteParts(parts,course='',exam=''){
       }
     }
   }
-  return {metadata:{course,exam,createdAt:new Date().toISOString(),schemaVersion:'1.1'},sources:parts.map(p=>p.source).filter(Boolean),conditions:[...map.values()],medications:parts.flatMap(p=>p.medications||[]),diagnostics:parts.flatMap(p=>p.diagnostics||[]),scoringTools:parts.flatMap(p=>p.scoringTools||[]),formulas:parts.flatMap(p=>p.formulas||[]),contradictions:parts.flatMap(p=>p.contradictions||[])};
+  const out={metadata:{course,exam,createdAt:new Date().toISOString(),schemaVersion:'1.1'},sources:parts.map(p=>p.source).filter(Boolean),conditions:[...map.values()],medications:parts.flatMap(p=>p.medications||[]),diagnostics:parts.flatMap(p=>p.diagnostics||[]),scoringTools:parts.flatMap(p=>p.scoringTools||[]),formulas:parts.flatMap(p=>p.formulas||[]),contradictions:parts.flatMap(p=>p.contradictions||[])};
+  Object.defineProperty(out,'dropped',{value:dropped}); // not saved: diagnostics for this build only
+  return out;
 }
 // ── Imported-KB sanitizer (structural; runs BEFORE anything enters app state) ──
 // An imported file is untrusted input. Previously only `Array.isArray(conditions)` was
@@ -2519,8 +2554,14 @@ function renderKBMarkdown(kb){
   return (kb.conditions||[]).map(c=>{
     const path=kbBucketFacts(c,'BriefPatho').map(f=>f.text).join(' ');
     const look=kbBucketFacts(c,'Look'),early=look.filter(f=>f.subtype==='early'),late=look.filter(f=>f.subtype==='late'),other=look.filter(f=>!['early','late'].includes(f.subtype));
-    const treatment=kbBucketFacts(c,'Treatments'),ind=treatment.filter(f=>f.subtype==='independent'),dep=treatment.filter(f=>f.subtype!=='independent');
-    return `## ${c.name}\n\n### Brief Patho\n${path||'_No source-supported pathophysiology extracted._'}\n\n### Look\n${early.length?'**EARLY**\n'+early.map(bullet).join('\n')+'\n\n':''}${late.length?'**LATE / EMERGENCY**\n'+late.map(bullet).join('\n')+'\n\n':''}${other.map(bullet).join('\n')||(!early.length&&!late.length?'_No findings extracted._':'')}\n\n### Assess\n${kbBucketFacts(c,'Assess').map(bullet).join('\n')||'_No assessments extracted._'}\n\n### Tests\n${kbBucketFacts(c,'Tests').map(bullet).join('\n')||'_No tests extracted._'}\n\n### Treatments\n\n**Independent Nursing Actions**\n${ind.map(bullet).join('\n')||'_None extracted._'}\n\n**Dependent / Collaborative Orders**\n${dep.map(bullet).join('\n')||'_None extracted._'}\n\n### Educate\n${kbBucketFacts(c,'Educate').map(bullet).join('\n')||'_No teaching extracted._'}`;
+    const treatment=kbBucketFacts(c,'Treatments'),ind=treatment.filter(f=>f.subtype==='independent'),dep=treatment.filter(f=>f.subtype==='dependent'),unk=treatment.filter(f=>!['independent','dependent'].includes(f.subtype));
+    // v17.15 (review H6): the extraction prompt allows subtypes early|late|independent|dependent|acute|discharge|null.
+    // Every Treatments fact that was not "independent" (acute, discharge, none) printed under Dependent / Collaborative
+    // Orders, and Look facts that were neither early nor late followed the LATE bullets after only a blank line, which
+    // Markdown renders as one list, so they read as late/emergency signs. Both now sit under their own heading.
+    const lookBlock=[early.length?'**EARLY**\n'+early.map(bullet).join('\n'):'',late.length?'**LATE / EMERGENCY**\n'+late.map(bullet).join('\n'):'',
+      other.length?((early.length||late.length)?'**OTHER FINDINGS (not staged as early or late)**\n':'')+other.map(bullet).join('\n'):''].filter(Boolean).join('\n\n')||'_No findings extracted._';
+    return `## ${c.name}\n\n### Brief Patho\n${path||'_No source-supported pathophysiology extracted._'}\n\n### Look\n${lookBlock}\n\n### Assess\n${kbBucketFacts(c,'Assess').map(bullet).join('\n')||'_No assessments extracted._'}\n\n### Tests\n${kbBucketFacts(c,'Tests').map(bullet).join('\n')||'_No tests extracted._'}\n\n### Treatments\n\n**Independent Nursing Actions**\n${ind.map(bullet).join('\n')||'_None extracted._'}\n\n**Dependent / Collaborative Orders**\n${dep.map(bullet).join('\n')||'_None extracted._'}${unk.length?'\n\n**Other Treatments (not classified as independent or dependent)**\n'+unk.map(bullet).join('\n'):''}\n\n### Educate\n${kbBucketFacts(c,'Educate').map(bullet).join('\n')||'_No teaching extracted._'}`;
   }).join('\n\n---\n\n');
 }
 function kbForNCLEX(kb,{tiers=[1,2,3],buckets=null,conditionQuery=''}={}){
@@ -2706,7 +2747,14 @@ async function kbRunLanes(queue,width,worker,signal){
 }
 // Verify a model-supplied verbatim quote actually occurs in the source chunk.
 // Normalized comparison because PDF text extraction mangles whitespace and ligatures.
-function kbNormForMatch(s){return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();}
+// v17.15 (review H10): with decimalMarks, a decimal point between two digits becomes "~" instead of a space. The result
+// has exactly the same length and positions as the plain form (the point is a one-character run either way), so it can
+// be read alongside it to see where a normalized space was really a decimal point.
+function kbNormForMatch(s,decimalMarks=false){
+  let t=String(s||'');
+  if(decimalMarks)t=t.replace(/~/g,' ').replace(/(\d)[.,](?=\d)/g,'$1~');
+  return t.toLowerCase().replace(decimalMarks?/[^a-z0-9~]+/g:/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
+}
 // v15.11: de-hyphenation promoted into the matcher, on measured evidence. A real build of
 // a cardiovascular chapter produced 190 failed quotes: 83 line-break hyphenation/ligature,
 // 107 column reading order, and — the number that mattered — ZERO 'partial' and ZERO
@@ -2723,20 +2771,25 @@ function kbNormForMatch(s){return String(s||'').toLowerCase().replace(/[^a-z0-9]
 // The 107 reading-order failures are untouched by design — see kbClassifyQuoteMiss.
 // v16.7: search every occurrence; a partial numeric token cannot prove a source location.
 // Non-numeric substring behavior is unchanged, and later complete occurrences still count.
-function kbQuoteNumericBoundedMatch(needle,source){
+// v17.15 (review H10): normalization turns "0.5" into "0 5", so a quote that dropped the leading "0." ("5 mg PO daily"
+// in "Digoxin 0.5 mg PO daily") or a trailing ".5" ("dose is 2" in "2.5 g") met no adjacent digit and was located,
+// a 10x or 1000x dose error admitted as source evidence. With the decimal marks of the same source (kbNormForMatch(...,
+// true)), a quote that starts or ends at a decimal point is a partial number too. Without marks, behavior is unchanged.
+function kbQuoteNumericBoundedMatch(needle,source,marks){
   const q=String(needle||''),s=String(source||'');if(!q)return false;
+  const m=marks&&marks.length===s.length?marks:null;
   for(let at=s.indexOf(q);at!==-1;at=s.indexOf(q,at+1)){
-    const left=/[0-9]/.test(q[0])&&at>0&&/[0-9]/.test(s[at-1]);
-    const end=at+q.length,right=/[0-9]/.test(q[q.length-1])&&end<s.length&&/[0-9]/.test(s[end]);
+    const left=/[0-9]/.test(q[0])&&at>0&&(/[0-9]/.test(s[at-1])||!!m&&m[at-1]==='~');
+    const end=at+q.length,right=/[0-9]/.test(q[q.length-1])&&end<s.length&&(/[0-9]/.test(s[end])||!!m&&m[end]==='~');
     if(!left&&!right)return true;
   }
   return false;
 }
-function kbQuoteInSource(quote,sourceNorm,sourceDehyphNorm){
+function kbQuoteInSource(quote,sourceNorm,sourceDehyphNorm,marks){
   const q=kbNormForMatch(quote);
   if(q.length<10)return false;
-  if(kbQuoteNumericBoundedMatch(q,sourceNorm))return true;
-  return !!sourceDehyphNorm&&kbQuoteNumericBoundedMatch(kbDehyphNormForMatch(quote),sourceDehyphNorm);
+  if(kbQuoteNumericBoundedMatch(q,sourceNorm,marks&&marks.norm))return true;
+  return !!sourceDehyphNorm&&kbQuoteNumericBoundedMatch(kbDehyphNormForMatch(quote),sourceDehyphNorm,marks&&marks.dehyph);
 }
 // v16.7: validate nested model envelopes before leaving the per-chunk recovery boundary.
 // Quarantine the malformed response; never publish a partly interpreted object as complete.
@@ -2814,7 +2867,7 @@ function kbQuoteOperatorsAgree(quote,sourceOpNorm,sourceOpDehyphNorm){
 // kbDehyphNormForMatch is a CANDIDATE normalizer used ONLY for classification.
 // kbQuoteInSource is deliberately left alone: this release measures what de-hyphenation
 // would buy without changing which facts are kept.
-function kbDehyphNormForMatch(s){
+function kbDehyphNormForMatch(s,decimalMarks=false){
   return kbNormForMatch(String(s||'')
     // soft hyphens and zero-width joiners the typesetter injected mid-token
     .replace(/[­​‌‍⁠﻿]/g,'')
@@ -2823,7 +2876,7 @@ function kbDehyphNormForMatch(s){
     // superscript footnote/reference marks interrupting a token run
     .replace(/[¹²³⁰⁴-⁹†‡∗]/g,'')
     // the actual de-hyphenation: join a hyphen ending a line to the word starting the next
-    .replace(/[-‐‑‒–—][ \t]*\r?\n[ \t]*/g,''));
+    .replace(/[-‐‑‒–—][ \t]*\r?\n[ \t]*/g,''),decimalMarks);
 }
 // Reason codes, ordered cheapest-to-fix first. 'tooShort' exists so the rollup reconciles
 // with quoteMiss: kbQuoteInSource fails a sub-10-char quote outright, and a reason bucket
@@ -3297,7 +3350,7 @@ function KnowledgeBaseBuilder(){
       for(const f of imgs){
         if(controller.signal.aborted)throw new DOMException('Aborted','AbortError');
         txLog('Transcribing '+f.name+(txRuns>1?' ('+txRuns+' runs)':'')+'…','');
-        const runs=[];let err='';
+        const runs=[];let err='',halt=null;
         for(let r=0;r<txRuns;r++){
           try{runs.push(await cardTranscribe(cfg.apiKey,model,level,f,{signal:controller.signal,retries:1,
             onPayload:p=>{if(p.resized&&r===0)txLog('  ⓘ '+f.name+' resized '+p.resized.from+' → '+p.resized.to+' to stay under the request ceiling','');}}));}
@@ -3313,6 +3366,10 @@ function KnowledgeBaseBuilder(){
               throw e;
             }
             err=e.message||String(e);
+            // v17.15 (review M3): a 429 after retries, a provider wait over a minute or a refused key kept sending one doomed
+            // request per remaining card and run, and republished each earlier-good card as blocked. The v17.4 halting rule
+            // now applies here too: this card's result is published and the remaining cards are not sent.
+            if(geminiHaltsBatch(e)){halt=e;break;}
           }
         }
         if(!runs.length){
@@ -3322,7 +3379,9 @@ function KnowledgeBaseBuilder(){
             setTranscripts(previous=>cardPublishTranscript(previous,id,{...previous[id],...out[id],retainedTranscript:previous[id]?.retainedTranscript||previous[id]||null},currentFiles.current));
             setTxErr(f.name+': '+out[id].error+'. This card is blocked until transcription succeeds; any earlier transcript is retained for inspection.');
           }
-          txLog('✕ '+f.name+': '+err,'err');continue;
+          txLog('✕ '+f.name+': '+err,'err');
+          if(halt)throw new Error('Transcription stopped at '+f.name+': '+err+' The remaining cards were not sent and keep their current transcripts.');
+          continue;
         }
         if(txAbortRef.current!==controller||controller.signal.aborted)throw new DOMException('Aborted','AbortError');
         const agreement=runs.length>1?cardCompareRuns(runs):null;
@@ -3332,6 +3391,7 @@ function KnowledgeBaseBuilder(){
           t.overallLegibility==='clean'?'ok':'warn');
         if(agreement&&agreement.numericsUnstable.length)txLog('  ⚠ '+agreement.numericsUnstable.length+' number(s) changed between identical runs — do not trust them','err');
         if(txAbortRef.current===controller&&!controller.signal.aborted)setTranscripts(previous=>cardPublishTranscript(previous,cardFileId(f),out[cardFileId(f)],currentFiles.current));
+        if(halt)throw new Error('Transcription stopped after '+f.name+' (its comparison is incomplete): '+err+' The remaining cards were not sent and keep their current transcripts.');
       }
     }catch(e){if(txAbortRef.current===controller)setTxErr(e.name==='AbortError'?'Transcription cancelled. Completed cards were kept.':e.message||String(e));}
     finally{if(txAbortRef.current===controller){txAbortRef.current=null;setTxBusy(false);}}
@@ -3375,6 +3435,7 @@ function KnowledgeBaseBuilder(){
     const [owned_setBusy,owned_setError,owned_setWarnings,owned_setProg,owned_setDiag,owned_setLogs,owned_setSelected,owned_addLog]=[setBusy,setError,setWarnings,setProg,setDiag,setLogs,setSelected,addLog].map(guard);
     owned_setBusy(true);owned_setError('');owned_setWarnings([]);owned_setProg(0);owned_setDiag(null);owned_setLogs([]);
     const parts=[];const problems=[];const stats=[];abortRef.current=controller;
+    let auditHalt=''; // v17.15 (review M3): set when the omission audit hit a halting failure; later chunks skip it
     // v15.10: build-time QA collectors for the v16 §11 benchmark. Keyed by filename so a
     // multi-file run stays attributable. Never written into the Knowledge Base.
     const quality={},composition={},diagnosticsUnavailable=[];
@@ -3430,6 +3491,8 @@ function KnowledgeBaseBuilder(){
         const srcNorm=kbNormForMatch(chunk.text);
         // v15.11: srcDehyph now feeds kbQuoteInSource as well as the classifier.
         const srcDehyph=kbDehyphNormForMatch(chunk.text),srcToks=new Set(srcNorm.split(' '));
+        // v17.15 (review H10): decimal-point marks for both forms, built once per chunk.
+        const srcMarks={norm:kbNormForMatch(chunk.text,true),dehyph:kbDehyphNormForMatch(chunk.text,true)};
         // v15.14: operator-preserving twins of the two sources above. Built once per chunk;
         // consulted only for quotes kbQuoteInSource has already accepted.
         const srcOpNorm=kbNormForMatch(kbCanonOperators(chunk.text)),srcOpDehyph=kbDehyphNormForMatch(kbCanonOperators(chunk.text));
@@ -3501,8 +3564,8 @@ function KnowledgeBaseBuilder(){
           f.sourcePointer=bound;
           if(!String(f.sourceQuote||'').trim()){quoteMissing++;continue;}
           quoteChecked++;
-          if(!kbQuoteInSource(f.sourceQuote,srcNorm,srcDehyph)){quoteMiss++;noteMiss(1,f);continue;}
-          if(!kbQuoteInSource(f.sourceQuote,srcNorm))dehyphSaved++;
+          if(!kbQuoteInSource(f.sourceQuote,srcNorm,srcDehyph,srcMarks)){quoteMiss++;noteMiss(1,f);continue;}
+          if(!kbQuoteInSource(f.sourceQuote,srcNorm,null,srcMarks))dehyphSaved++;
           if(!kbQuoteOperatorsAgree(f.sourceQuote,srcOpNorm,srcOpDehyph))noteOp(1,f);
         }
         result.parts.push(Object.assign(parsed,{source:Object.assign({},parsed.source,{filename:file.name,range:chunk.label})}));
@@ -3511,7 +3574,8 @@ function KnowledgeBaseBuilder(){
 
         // ---- Pass 2: omission audit (optional) ----
         let recovered=0,discarded=0,auditStatus=verifyPass?'pending':'not-run',auditResponse=null;
-        if(verifyPass){
+        if(verifyPass&&auditHalt){auditStatus='skipped';bump(1);}
+        else if(verifyPass){
           if(controller.signal.aborted)throw new DOMException('Aborted','AbortError');
           let vmeta=null;
           try{
@@ -3527,8 +3591,8 @@ function KnowledgeBaseBuilder(){
               const byCond=new Map();
               for(const f of missed){
                 if(!String(f.text||'').trim())continue;
-                if(!kbQuoteInSource(f.sourceQuote,srcNorm,srcDehyph)){discarded++;noteMiss(2,f);continue;}
-                if(!kbQuoteInSource(f.sourceQuote,srcNorm))dehyphSaved++;
+                if(!kbQuoteInSource(f.sourceQuote,srcNorm,srcDehyph,srcMarks)){discarded++;noteMiss(2,f);continue;}
+                if(!kbQuoteInSource(f.sourceQuote,srcNorm,null,srcMarks))dehyphSaved++;
                 if(!kbQuoteOperatorsAgree(f.sourceQuote,srcOpNorm,srcOpDehyph))noteOp(2,f);
                 const cn=String(f.conditionName||'').trim()||'Unsorted';
                 if(!byCond.has(cn))byCond.set(cn,[]);
@@ -3549,6 +3613,9 @@ function KnowledgeBaseBuilder(){
             if(e&&e.truncated)auditResponse={text:e.partialText||'',meta:vmeta};
             problems.push(tag+' [audit]: '+(e.message||String(e)));
             owned_addLog(`  ⚠ audit failed for ${tag}: ${e.message||e}`,'warn');
+            // v17.15 (review M3): the audit pass ignored the halting rule, so with a separate audit model every remaining
+            // chunk sent a doomed audit request. It now stops for the remaining chunks; their extracted facts are kept.
+            if(geminiHaltsBatch(e)&&!auditHalt){auditHalt=e.message||String(e);owned_addLog('  ⚠ The omission audit stopped: it was not sent for the remaining chunks, whose extracted facts are kept without an audit.','warn');problems.push('omission audit stopped after '+tag+': '+auditHalt);}
           }
           bump(1);
         }
@@ -3567,6 +3634,12 @@ function KnowledgeBaseBuilder(){
       for(const entry of finished.sort((a,b)=>kbCompareOrder(a.order,b.order))){parts.push(...entry.parts);stats.push(entry.stat);}
       // v16.7: publish diagnostics even when every chunk failed; a failed build never replaces the KB.
       const kb=parts.length?mergeLatteParts(parts,course,exam):null;
+      // v17.15 (review H11): facts the restore check would reject are left out and named, so the saved copy reloads.
+      if(kb&&kb.dropped&&kb.dropped.length){
+        const sample=kb.dropped.slice(0,5).map(d=>d.condition+': '+d.reason+' — "'+d.text+'"').join('; ');
+        owned_addLog('  ⚠ '+kb.dropped.length+' extracted fact(s) were left out because they could not be saved and reloaded: '+sample+(kb.dropped.length>5?'; …':''),'warn');
+        problems.push(kb.dropped.length+' fact(s) left out (unknown category or non-text field): '+sample);
+      }
       const flagged=kbFlagUnderextraction(stats,scoped);
       // v15.11: two independent rollups. byReason sums to quoteMiss and discardByReason
       // sums to discarded — each reconciles against the number printed next to it, which
@@ -6119,7 +6192,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '17.14';}
+function suiteVersion(){return '17.15';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -6845,8 +6918,11 @@ function AnkiGenerator(){
     // v17.4: the guard counted conditions, not facts, so a Knowledge Base whose conditions carry no facts cleared
     // the current deck and sent a header-only packet to the model. Nothing is cleared or sent now.
     if(!kbUsableFactCount(K.knowledgeBase)){log('The Knowledge Base has no facts to convert; the current cards were kept and nothing was sent to the model. Build or import a Knowledge Base with facts first.','err');return;}
-    cancelSourceAudit();setSourceAudit(null);setInspectNote(null);
-    setBusy(true);setProg(0);setLogs([]);setCards([]);setLedger('');setBatch(null);setInterruptedRun(null);setShowUncovered(false);setNotePage(0);setEditBlocked(null);
+    // v17.15 (review M17): the deck, its edits, Keep choices, review decisions and source-check report were cleared here,
+    // before anything was generated, so a failed or cancelled run (429, bad key, network) left the tool empty. They now
+    // stay until the new deck is complete; a running source check is still stopped.
+    cancelSourceAudit();
+    setBusy(true);setProg(0);setLogs([]);setInterruptedRun(null);
     // v15.17: capture identity before awaiting; a replaced KB or superseded run cannot publish.
     activeRun.current?.ctl.abort();
     const ctl=new AbortController();setAbortCtl(ctl);
@@ -6937,12 +7013,13 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
       const completed={sourceKB,snapshot,chunkIds,context:runState.context,parsedNotes:all.length,rawCards:all,postDedupeNotes:deduped.length,rawResponses:runState.rawResponses,mappingIssues,truncated:runState.truncated,chunkIssues:runState.chunkIssues||[],model,thinkingLevel:toolLevel,startedAt:runState.startedAt,completedAt:new Date().toISOString(),promptHashes:runState.promptHashes,conditionTagChanges:normalized.changes,conditionTagOutcomes:normalized.outcomes};
       const summary=ankiBatchSummary(deduped,completed,true);
       completed.outcome=ankiGenerationOutcome(deduped,summary,completed);
+      setSourceAudit(null);setInspectNote(null);setShowUncovered(false);setNotePage(0);setEditBlocked(null);
       setBatch(completed);setCards(deduped);setLedger(allLedg);
       log(completed.outcome.label+'! '+all.length+' received notes; '+deduped.length+' after dedupe; '+summary.kept.length+' kept notes → '+summary.reviews+' review cards.',completed.outcome.level);
       log('Facts linked to kept notes: '+summary.coveredCount+'/'+summary.total+'.','ok');
       if(mappingIssues.length)log(mappingIssues.length+' mapping diagnostics; inspect the Fact Coverage Map.','warn');
       if(lintCount)log(lintCount+' structurally invalid note(s) excluded from export; correct them in Table.','warn');
-    }catch(e){if(isCurrent()||activeRun.current===runState){setInterruptedRun(ankiRunEvidence(runState,e.name==='AbortError'?'cancelled':'failed'));if(e.name==='AbortError')log('Cancelled.','warn');else log('Error: '+e.message,'err');}}
+    }catch(e){if(isCurrent()||activeRun.current===runState){setInterruptedRun(ankiRunEvidence(runState,e.name==='AbortError'?'cancelled':'failed'));if(e.name==='AbortError')log('Cancelled. The previous deck, if any, is unchanged.','warn');else log('Error: '+e.message+' The previous deck, if any, is unchanged.','err');}}
     finally{if(activeRun.current===runState){activeRun.current=null;setBusy(false);setAbortCtl(null);setLiveKB(0);}}
   },[cfg,model,toolLevel,log,K.knowledgeBase,focusContext,outcomes,points]);
 
@@ -7182,6 +7259,7 @@ function nclexAdmitRecord(q){
   out.diseases_conditions=nclexConditions(q.diseases_conditions);
   const num=Number(q.question_number);if(q.question_number!==undefined&&q.question_number!==null&&q.question_number!==''&&Number.isFinite(num))out.question_number=num;
   if(q.options_repaired===true)out.options_repaired=true;
+  if(q.answer_unmatched===true)out.answer_unmatched=true; // v17.15 (review M14)
   if(typeof q.id==='string'&&q.id)out.id=q.id;
   return out;
 }
@@ -7190,7 +7268,11 @@ function nclexAccumulate(seen,allQ,incoming,track){
     const rec=nclexAdmitRecord(q);
     if(!rec){if(track){track.malformed=(track.malformed||0)+1;let sample;try{sample=JSON.stringify(q);}catch(e){sample=String(q);}if((track.samples||(track.samples=[])).length<3)track.samples.push(String(sample).slice(0,200));}continue;}
     const k=nclexKey(rec);
-    if(seen.has(k))continue;
+    // v17.15 (review M15): chunk overlap extracts a boundary question twice, and the first copy can lack its answer; the
+    // complete later copy was discarded and the exports printed "undefined". Missing fields are now filled from the later
+    // copy; a field the first copy has is never overwritten.
+    if(seen.has(k)){const at=allQ.findIndex(x=>x&&nclexKey(x)===k),prev=at<0?null:allQ[at],fill=prev?NCLEX_RECORD_TEXT_FIELDS.filter(fl=>!prev[fl]&&rec[fl]):[];
+      if(fill.length){const next={...prev};for(const fl of fill)next[fl]=rec[fl];if(next.answer_unmatched&&fill.includes('correct_answer')&&!rec.answer_unmatched)delete next.answer_unmatched;allQ[at]=next;}continue;}
     seen.add(k);allQ.push(rec);
   }
   if(track)track.questions=allQ.length;
@@ -7199,10 +7281,10 @@ function nclexAccumulate(seen,allQ,incoming,track){
 // v17.4: the extractor reported "Done" after swallowed chunk failures and after a cancel, and its exports
 // carried no trace of either. The tracker records what was attempted; the summary is derived from it, shown
 // in the results view and written into every export.
-function nclexNewTrack(){return {attempted:0,succeeded:0,failed:[],malformed:0,samples:[],notes:[],questions:0,cancelled:false,stopped:''};}
+function nclexNewTrack(){return {attempted:0,succeeded:0,failed:[],malformed:0,samples:[],notes:[],questions:0,cancelled:false,stopped:'',review:0};}
 function nclexRunSummary(track){
   const t=track||{},failed=Array.isArray(t.failed)?t.failed.map(String):[],attempted=Math.max(0,t.attempted|0),succeeded=Math.max(0,t.succeeded|0),malformed=Math.max(0,t.malformed|0);
-  const status=t.cancelled?'cancelled':t.stopped?'stopped':attempted&&!succeeded?'failed':failed.length?'partial':attempted?'complete':'empty';
+  const status=t.cancelled?'cancelled':t.stopped?'stopped':attempted&&!succeeded?'failed':failed.length||t.review>0?'partial':attempted?'complete':'empty'; // v17.15: a pairing that needs review is not complete
   const label={complete:'Complete',partial:'Incomplete',failed:'Failed',cancelled:'Cancelled',stopped:'Stopped',empty:'Nothing extracted'}[status];
   const parts=[attempted?`${succeeded} of ${attempted} extraction request${attempted===1?'':'s'} succeeded`:'no extraction request was sent'];
   if(failed.length)parts.push(`failed: ${failed.join(', ')}`);
@@ -7244,6 +7326,8 @@ async function nclexExtractPageRange(file,startPage,endPage,signal){
 const NCLEX_OPTION_GAP=400;    // max chars between two entries of one choice run
 const NCLEX_OPTION_RUN_MIN=3;  // shortest choice list worth trusting
 const NCLEX_OPTION_RUN_MAX=6;  // longest realistic choice list (select-all tops out near 6)
+// v17.15 (review H4): true when a new choice run (1, 2, 3...) starts at position k.
+function nclexStartsRun(p,k){let n=0;while(k+n<p.length&&n<NCLEX_OPTION_RUN_MIN&&p[k+n].num===n+1&&(n===0||p[k+n].index-p[k+n-1].index<=NCLEX_OPTION_GAP))n++;return n>=NCLEX_OPTION_RUN_MIN;}
 function nclexDropOptionRuns(positions){
   if(positions.length<NCLEX_OPTION_RUN_MIN+1)return positions;
   const runs=[];
@@ -7251,6 +7335,11 @@ function nclexDropOptionRuns(positions){
     if(positions[i].num!==1)continue;
     let j=i;
     while(j+1<positions.length&&j-i+1<NCLEX_OPTION_RUN_MAX&&positions[j+1].num===positions[j].num+1&&positions[j+1].index-positions[j].index<=NCLEX_OPTION_GAP)j++;
+    // v17.15 (review H4): a run keeps growing while the numbers rise by one, so in a book that numbers choices 1-4
+    // the next question, numbered 5, joined question 4's choices and vanished; every pair still "matched", so the
+    // AI fallback never ran and the run reported Complete. A run that ends on the question number the sequence
+    // expects next, with a new choice run right after it, stops before that number.
+    if(j-i>=NCLEX_OPTION_RUN_MIN&&positions[j].num===positions[i-1].num+1&&nclexStartsRun(positions,j+1))j--;
     if(j-i+1>=NCLEX_OPTION_RUN_MIN){runs.push({i,j});i=j;}
   }
   if(!runs.length)return positions;
@@ -7262,9 +7351,17 @@ function nclexDropOptionRuns(positions){
 }
 // v15.15: the slice loop was duplicated between the pattern sweep and the loose fallback, so
 // the fix above would otherwise have had to be written twice to hold in both.
+// v17.15 (review H5): a slice whose number was already used was thrown away, so a second chapter whose numbering
+// restarts at 1 vanished (the run still said Complete) and a wrapped line starting "7." cut a question short with
+// its real text lost. A repeated number's text now stays with the item before it, and the repeats are reported
+// (the non-enumerable "repeated" list) so the run is marked for review instead of complete.
 function nclexSliceByQNum(text,positions){
-  const items={};
-  for(let i=0;i<positions.length;i++){const start=positions[i].index;const end=i+1<positions.length?positions[i+1].index:text.length;if(!items[positions[i].num])items[positions[i].num]=text.slice(start,end).trim();}
+  const items={},repeated=[];let last=null;
+  for(let i=0;i<positions.length;i++){
+    const start=positions[i].index,end=i+1<positions.length?positions[i+1].index:text.length,num=positions[i].num,slice=text.slice(start,end).trim();
+    if(!items[num]){items[num]=slice;last=num;}else{repeated.push(num);if(last!==null)items[last]+='\n'+slice;}
+  }
+  Object.defineProperty(items,'repeated',{value:repeated});
   return items;
 }
 function nclexSplitByQNum(text){
@@ -7366,7 +7463,9 @@ function nclexRepairOptions(item,sourceText){
 
 function nclexPairQA(qText,aText){
   const questions=nclexSplitByQNum(qText),answers=nclexSplitByQNum(aText);
-  return Object.keys(questions).map(Number).sort((a,b)=>a-b).map(num=>({number:num,question:questions[num]||'',answer:answers[num]||'',matched:!!answers[num]}));
+  const pairs=Object.keys(questions).map(Number).sort((a,b)=>a-b).map(num=>({number:num,question:questions[num]||'',answer:answers[num]||'',matched:!!answers[num]}));
+  pairs.repeated=[...new Set([...(questions.repeated||[]),...(answers.repeated||[])])].sort((a,b)=>a-b); // v17.15 (H5)
+  return pairs;
 }
 // v17.4: the AI pairing fallback replaced the regex pairing outright when it found more questions and only
 // filled answers when it found the same number or fewer, so questions found by one pass and not the other
@@ -7443,8 +7542,9 @@ function NCLEXQuestionCard({q,index}){
         {q.options_repaired&&<div style={{margin:'0 0 10px',fontSize:12,color:'var(--text-dim)'}}>Choices restored verbatim from the source page.</div>}
         <div style={{background:'var(--success-bg)',borderLeft:'3px solid var(--accent-green)',padding:'8px 12px',borderRadius:'0 6px 6px 0',marginBottom:8}}>
           <span style={{fontWeight:700,color:'var(--accent-green)',fontSize:12}}>✔ CORRECT</span>
-          <div style={{color:'var(--text-dim)',fontSize:14,marginTop:3}}>{q.correct_answer}</div>
+          <div style={{color:'var(--text-dim)',fontSize:14,marginTop:3}}>{q.correct_answer||'(not extracted)'}</div>
         </div>
+        {q.answer_unmatched&&<div style={{margin:'0 0 8px',padding:'6px 10px',background:'var(--warning-bg)',borderLeft:'3px solid var(--accent-warm)',borderRadius:'0 6px 6px 0',fontSize:12,color:'var(--accent-warm)'}}>⚠ This question had no answer on the book's answer pages. The answer and rationale above were written by the model; check them against the book.</div>}
         <div style={{marginBottom:8}}><div style={{fontWeight:600,color:'var(--text-dim)',fontSize:12,textTransform:'uppercase',letterSpacing:.4,marginBottom:3}}>Rationale</div><div style={{color:'var(--text-dim)',fontSize:14,lineHeight:1.6}}>{q.rationale}</div></div>
         {q.priority_nursing_tip&&<div style={{background:'var(--warning-bg)',borderLeft:'3px solid var(--accent-warm)',padding:'8px 12px',borderRadius:'0 6px 6px 0',marginBottom:8,fontSize:14}}><strong style={{color:'var(--accent-warm)'}}>⚡ TIP:</strong> <span style={{color:'var(--text-dim)'}}>{q.priority_nursing_tip}</span></div>}
         {q.test_taking_strategy&&<div style={{background:'var(--info-bg)',borderLeft:'3px solid var(--accent)',padding:'8px 12px',borderRadius:'0 6px 6px 0',marginBottom:8,fontSize:14}}><strong style={{color:'var(--accent)'}}>🎯 STRATEGY:</strong> <span style={{color:'var(--text-dim)'}}>{q.test_taking_strategy}</span></div>}
@@ -7589,6 +7689,14 @@ function NCLEXExtractor(){
     let pairs=nclexPairQA(qText,aText);
     const matched=pairs.filter(p=>p.matched).length;
     addLog(`  → Regex found ${pairs.length} questions, ${matched} matched, ${pairs.length-matched} unmatched`);
+    // v17.15 (review H5): a question number that appears twice means the numbering restarted (two chapters in one
+    // range list) or a wrapped line began with a number. Its text is kept with the question before it, but pairing
+    // by number cannot be trusted there, so the run is marked for review rather than complete.
+    if(pairs.repeated&&pairs.repeated.length){
+      track.review++;
+      track.notes.push('question number'+(pairs.repeated.length===1?' ':'s ')+pairs.repeated.join(', ')+' appeared more than once; check those questions, and run each chapter whose numbering restarts as its own range');
+      addLog(`  ⚠ Question number${pairs.repeated.length===1?'':'s'} ${pairs.repeated.join(', ')} appeared more than once. Their text was kept with the question before them; if a chapter restarts its numbering, extract each chapter separately.`);
+    }
     // AI fallback if regex found too few
     if(pairs.length<3||(pairs.length>0&&matched/pairs.length<0.3)){
       addLog('🤖 Regex found too few — using AI to pair...');
@@ -7634,6 +7742,10 @@ function NCLEXExtractor(){
       }catch(e){if(geminiHaltsBatch(e))throw e;track.notes.push('AI pairing failed: '+e.message);addLog(`  ⚠ AI pairing failed: ${e.message}`);}
     }
     if(!pairs.length){track.notes.push('no numbered questions were detected in the page ranges');addLog('⚠ No numbered questions detected. Try adjusting page ranges or Inline mode.');return existingQ;}
+    // v17.15 (review M14): a question with no matched answer is still sent, and the split prompt asks for an answer anyway,
+    // so the model writes one. Those records are marked, the card and exports say so, and the run is not reported complete.
+    const unmatchedNums=new Set(pairs.filter(p=>!p.matched).map(p=>Number(p.number)));
+    if(unmatchedNums.size){track.review++;track.notes.push(unmatchedNums.size+' question(s) had no answer on the answer pages; any answer shown for them was written by the model and is marked');addLog(`  ⚠ ${unmatchedNums.size} question(s) had no answer on the answer pages; answers for them will come from the model and are marked on their cards.`);}
     const batches=nclexBatchPairs(pairs,batchSize);
     addLog(`Sending ${batches.length} batches of ~${batchSize} to ${model}...`);
     setProgress({current:0,total:batches.length});
@@ -7650,7 +7762,7 @@ function NCLEXExtractor(){
           // The batch still holds each question's verbatim source text, so this costs nothing
           // and invents nothing.
           const srcByNum=new Map(batch.map(p=>[Number(p.number),p.question]));
-          const fixed=result.map(q=>nclexRepairOptions(q,srcByNum.get(Number(q&&q.question_number))));
+          const fixed=result.map(q=>nclexRepairOptions(q,srcByNum.get(Number(q&&q.question_number)))).map(q=>q&&typeof q==='object'&&unmatchedNums.has(Number(q.question_number))?{...q,answer_unmatched:true}:q);
           const nRepaired=fixed.filter(q=>q&&q.options_repaired).length;
           admit(seen,allQ,fixed.map(q=>({...q,id:uid()})),track);
           addLog(`    ✓ ${result.length} → ${allQ.length} unique${nRepaired?` (${nRepaired} choice list${nRepaired!==1?'s':''} restored from the page)`:''}`);
@@ -7700,7 +7812,7 @@ function NCLEXExtractor(){
     let out='NCLEX PRACTICE QUESTIONS\n\n'+filtered.length+' questions\n\n'+(runSummary?nclexSummaryLine(runSummary)+'\n\n':''); // v17.4
     filtered.forEach((q,i)=>{out+=`${i+1}. ${nclexQText(q)}\n\n`;});
     out+='\n============================\nANSWER KEY\n============================\n\n';
-    filtered.forEach((q,i)=>{out+=`${i+1}. Answer: ${q.correct_answer}\nRationale: ${q.rationale}\n${q.priority_nursing_tip?'Tip: '+q.priority_nursing_tip+'\n':''}${q.test_taking_strategy?'Strategy: '+q.test_taking_strategy+'\n':''}${q.clinical_judgment_skill?'CJ: '+q.clinical_judgment_skill+'\n':''}${q.diseases_conditions?.length?'Conditions: '+q.diseases_conditions.join(', ')+'\n':''}\n---\n\n`;});
+    filtered.forEach((q,i)=>{out+=`${i+1}. Answer: ${q.correct_answer||'(not extracted)'}\nRationale: ${q.rationale||'(not extracted)'}${(q.answer_unmatched?' ⚠ No answer for this question was found on the answer pages; this answer was written by the model. Check it against the book.':'')}\n${q.priority_nursing_tip?'Tip: '+q.priority_nursing_tip+'\n':''}${q.test_taking_strategy?'Strategy: '+q.test_taking_strategy+'\n':''}${q.clinical_judgment_skill?'CJ: '+q.clinical_judgment_skill+'\n':''}${q.diseases_conditions?.length?'Conditions: '+q.diseases_conditions.join(', ')+'\n':''}\n---\n\n`;});
     downloadBlob(new Blob([out],{type:'text/plain'}),'nclex_questions.txt');
   };
 
@@ -7715,8 +7827,8 @@ function NCLEXExtractor(){
     // rule in plaintext — the same one the generator worksheet uses.
     out+='<div class="pagebreak"></div>\n\n## Answer Key\n\n';
     filtered.forEach((q,i)=>{
-      out+=`**${i+1}.** ${q.correct_answer}\n\n`;
-      out+=`${q.rationale}\n\n`;
+      out+=`**${i+1}.** ${q.correct_answer||'(not extracted)'}\n\n`;
+      out+=`${q.rationale||'(not extracted)'}${(q.answer_unmatched?' ⚠ No answer for this question was found on the answer pages; this answer was written by the model. Check it against the book.':'')}\n\n`; // v17.15 (M14, M15): kept inside the rationale paragraph so NCLEX to Anki still reads the answer line
       if(q.priority_nursing_tip)out+=`> ⚡ **Tip:** ${q.priority_nursing_tip}\n\n`;
       if(q.test_taking_strategy)out+=`> 🎯 **Strategy:** ${q.test_taking_strategy}\n\n`;
       if(q.clinical_judgment_skill)out+=`> 🧠 **CJ:** ${q.clinical_judgment_skill}\n\n`;
@@ -7937,12 +8049,17 @@ function n2aSplitBlocks(text){
   if(lines.some(l=>N2A_BOLD_HEAD.test(l)))head=l=>{const m=l.match(N2A_BOLD_HEAD);return m?parseInt(m[1],10):null;};
   else if(lines.some(l=>N2A_ANS_HEAD.test(l))){answers=true;head=l=>{const m=l.match(N2A_ANS_HEAD);return m?parseInt(m[1],10):null;};}
   else{
+    // v17.15 (review H1): a header counted only at the first question's indentation. The Generator's own export mixes
+    // them: the prompt indents questions "  1.", each batch's first question loses that indent when PART 3 is
+    // trimmed, and a repaired item is written back indented. One mismatch folded the rest of the worksheet into one
+    // card (a real two-batch export gave 1 card for 10 questions). A numbered line after a blank line now also
+    // starts a question; numbered lines inside a question are escaped in .md and are not preceded by a blank line.
     const first=lines.map(l=>l.match(N2A_NUM_HEAD)).find(Boolean),indent=first?first[1]:'';
-    head=l=>{const m=l.match(N2A_NUM_HEAD);return m&&m[1]===indent?parseInt(m[2],10):null;};
+    head=(l,afterBlank)=>{const m=l.match(N2A_NUM_HEAD);return m&&(m[1]===indent||afterBlank)?parseInt(m[2],10):null;};
   }
-  const blocks=[];let cur=null,last=null;
+  const blocks=[];let cur=null,last=null,afterBlank=true;
   for(const line of lines){
-    const n=head(line);
+    const n=head(line,afterBlank);afterBlank=!line.trim();
     if(n!==null&&(last===null||n===last+1||(answers&&n>last))){cur=[n,[line.replace(N2A_HEAD_STRIP,'')],false];blocks.push(cur);last=n;}
     else if(n!==null&&answers&&n===last){cur=[n,[line.replace(N2A_HEAD_STRIP,'')],true];blocks.push(cur);}
     else if(cur)cur[1].push(line);
@@ -8137,6 +8254,10 @@ function n2aConvertText(text,sourceName,extraTags=[]){
     if(dup){if(!copies.has(n))copies.set(n,[answers.get(n)]);copies.get(n).push(k);}else answers.set(n,k);
   }
   if(!questions.size)return {cards:[],warnings:[...warnings,sourceName+': no numbered questions found.']};
+  // v17.15 (review H1): the export states its own question count; a different count means questions were merged or
+  // lost while splitting, so every card is marked for review rather than trusted.
+  const declared=(before.match(/^[ \t]*(?:\*\*)?(\d+) questions?(?:\*\*)? (?:generated|extracted)\b/im)||[])[1],countOff=!!declared&&parseInt(declared,10)!==questions.size;
+  if(countOff)warnings.push(sourceName+': the export says '+declared+' questions but '+questions.size+' were found; every card is marked for review.');
   // Another entry that fits this question clearly better than its own, or null.
   const better=(q,n,fit)=>{
     if(fit===null||fit>=0.5)return null;
@@ -8145,7 +8266,7 @@ function n2aConvertText(text,sourceName,extraTags=[]){
   };
   const cards=[];
   for(const n of [...questions.keys()].sort((a,b)=>a-b)){
-    const q=questions.get(n),where=sourceName+' Q'+n;let key=answers.get(n),flag=needsReview||shifted.has(n);
+    const q=questions.get(n),where=sourceName+' Q'+n;let key=answers.get(n),flag=needsReview||countOff||shifted.has(n);
     // v17.10/v17.11: an entry the worksheet printed twice under one number. A "not parsed" copy is
     // never used over a real one; of the rest, the copy whose rationale lines fit this question's
     // choices, or the last copy when none can be compared.
@@ -8799,27 +8920,40 @@ function i2aMergeAnswer(q,src,image){
 // transcripts: [[imageName, items]] in page order. Returns {questions, warnings}.
 function i2aAssemble(transcripts){
   const questions=[],keys=[],warnings=[];
+  // v17.15 (review H9): a continuation at the top of an image was always merged into the last QUESTION read in the
+  // run. When an answer page's explanation ran onto the next answer page, its text landed on the last question of
+  // the question pages (one card got another question's rationale, unflagged). It now joins whatever the previous
+  // image ended with: that answer-key entry, or that question; anything else is handled as before.
+  let tail=null;
   for(const [img,items] of transcripts){
+    const before=tail;tail=null;
     items.forEach((src,idx)=>{
       const it={...src},where=img+' item '+(idx+1);
       if(it.kind==='continuation'){
-        const prev=questions.length?questions[questions.length-1]:null;
+        if(idx===0&&before&&before.key&&!(it.number&&before.key.number&&it.number!==before.key.number)){
+          if(i2aMergeAnswer(before.key,it,img))warnings.push(where+': continuation gives answer '+it.answer+' but answer-key entry '+before.key.number+' ('+before.key.image+') already said '+before.key.answer+'.');
+          before.key.cut_off=it.cut_off;tail=before;return;
+        }
+        const prev=before&&before.q?before.q:null;
         const renumbered=it.number&&prev&&prev.number&&it.number!==prev.number;
         if(idx===0&&prev&&prev.images[prev.images.length-1]!==img&&!renumbered){
+          // A complete question followed by a page that is not in the run cannot be told apart from a real
+          // continuation, so a join onto a question not marked cut off is kept but marked for review.
+          if(!prev.cut_off)prev.flags.push('text from '+img+' was joined to it although it was not marked cut off on '+prev.images[prev.images.length-1]);
           if(it.stem&&!prev.options.length)prev.stem=(prev.stem+' '+it.stem).trim();
           const have=new Set(prev.options.map(([l])=>l));
           prev.options=[...prev.options,...it.options.filter(o=>!have.has(o[0]))];
           if(i2aMergeAnswer(prev,it,img)){warnings.push(where+': continuation gives answer '+it.answer+' but '+prev.images[0]+' already said '+prev.answer+'.');prev.flags.push('conflicting answers across images');}
-          prev.images.push(img);prev.cut_off=it.cut_off;return;
+          prev.images.push(img);prev.cut_off=it.cut_off;tail=before;return;
         }
         if(!it.number){warnings.push(where+': text continued from an earlier image that is not in this run - ignored.');return;}
         it.kind='answer_only';
       }
       if(it.kind==='answer_only'){
         if(!it.number){warnings.push(where+': answer-key entry with no question number - ignored.');return;}
-        keys.push({...it,image:img,after:questions.length,used:false});return;
+        const key={...it,image:img,after:questions.length,used:false};keys.push(key);tail={key};return;
       }
-      questions.push({...it,images:[img],answer_image:it.answer?img:'',flags:[],ai:null});
+      const q={...it,images:[img],answer_image:it.answer?img:'',flags:[],ai:null};questions.push(q);tail={q};
     });
   }
   questions.forEach((q,qi)=>{
@@ -9856,12 +9990,17 @@ function ngParseFactIds(text){
 }
 
 function ngSplitParts(raw){
-  const grab=(a,b)=>{const m=raw.match(new RegExp('PART\\s*'+a+'\\b[^\\n]*\\n([\\s\\S]*?)(?=PART\\s*'+b+'\\b|$)','i'));return m?m[1].trim():'';};
+  // v17.15: headings were matched anywhere, case-insensitively, so a "part 4" in PART 1 or 2 started PART 4 early and
+  // PART 4 then contained PART 3. A heading now starts its line (after any markdown or rule characters) and is not a
+  // "PART 3 and PART 4" list; a response without line-start headings falls back to the earlier match, and any overlap
+  // that remains is refused by ngSpliceParts.
+  const head=n=>'^[^\\w\\n]*PART[ \\t]*'+n+'\\b(?![ \\t]*(?:and\\b|or\\b|&|,|\\/|[-–][ \\t]*\\d))';
+  const grab=(a,b)=>{const m=raw.match(new RegExp(head(a)+'[^\\n]*\\n([\\s\\S]*?)(?='+head(b)+')','im'))||raw.match(new RegExp('PART\\s*'+a+'\\b[^\\n]*\\n([\\s\\S]*?)(?=PART\\s*'+b+'\\b|$)','i'));return m?m[1].trim():'';};
   const p1=grab(1,2),p2=grab(2,3),p3=grab(3,4);
   // v17.7: the prompt's FINAL VERIFY step prints a "Q1: topic=... gate=..." list between the key and the
   // DISTRIBUTION line; it was read as part of the last answer and printed in every batch's answer key.
   // Only the uppercase heading or the list's own "Qn: topic=" shape ends the key, never rationale prose.
-  const p4m=raw.match(/PART\s*4\b[^\n]*\n([\s\S]*?)(?=DISTRIBUTION:|$)/i);
+  const p4m=raw.match(new RegExp(head(4)+'[^\\n]*\\n([\\s\\S]*?)(?=DISTRIBUTION:|(?![\\s\\S]))','im'))||raw.match(/PART\s*4\b[^\n]*\n([\s\S]*?)(?=DISTRIBUTION:|$)/i);
   let p4=p4m?p4m[1]:'';const verify=p4.search(/\n[^\S\n]*[^\w\n]*[^\S\n]*FINAL[^\S\n]*[—–-]?[^\S\n]*VERIFY\b|\n[^\S\n]*Q\d{1,3}[^\S\n]*:[^\S\n]*topic[^\S\n]*=/);
   if(verify>=0)p4=p4.slice(0,verify).replace(/(?:\n[^\S\n]*[═=─━*#_-]{3,}[^\S\n]*)+\s*$/,'');
   const dm=raw.match(/DISTRIBUTION:([^\n]*)/i);
@@ -10235,6 +10374,17 @@ function ngSpliceSection(doc,oldSec,newSec){
   const at=String(doc).indexOf(oldSec);
   return at<0?doc:doc.slice(0,at)+newSec+doc.slice(at+oldSec.length);
 }
+// v17.15: PART 3 and PART 4 were spliced one after the other with ngSpliceSection, which returns the document unchanged
+// when it cannot find the old text. When PART 4 had started early and contained PART 3, the first splice rewrote PART 3
+// inside it, the second found nothing, and the choices moved while the answer key stayed. Both sections are now located
+// in the original text and replaced in one pass; a missing section or overlapping sections return null, never a
+// half-spliced worksheet.
+function ngSpliceParts(doc,P,np3,np4){
+  const s=String(doc),i3=P.p3?s.indexOf(P.p3):-1,i4=P.p4?s.indexOf(P.p4):-1;
+  if(i3<0||i4<0||(i3<i4+P.p4.length&&i4<i3+P.p3.length))return null;
+  const [a,b]=i3<i4?[[i3,P.p3,np3],[i4,P.p4,np4]]:[[i4,P.p4,np4],[i3,P.p3,np3]];
+  return s.slice(0,a[0])+a[2]+s.slice(a[0]+a[1].length,b[0])+b[2]+s.slice(b[0]+b[1].length);
+}
 // v17.7: NCLEX_GEN_PROMPT asks for "A. text" choices, but the model sometimes numbers a question's choices
 // "1." to "6." and keys it "ANSWER: 1, 2, 3". ngSplitNumbered then read each choice numbered above the question's
 // own number as a new question, the answer key attached to the wrong blocks, and the printed worksheet showed the
@@ -10278,7 +10428,8 @@ function ngLetterNumberedOptions(raw){
     relabelled.push(q.num);
   }
   if(!relabelled.length)return none;
-  return{text:ngSpliceSection(ngSpliceSection(text,P.p3,lines.join('\n')),P.p4,keyLines.join('\n')),relabelled};
+  const spliced=ngSpliceParts(text,P,lines.join('\n'),keyLines.join('\n')); // v17.15: never a half-relabelled batch
+  return spliced===null?none:{text:spliced,relabelled};
 }
 // v17.8: NCLEX_GEN_PROMPT asks ordering items for "the correct sequence and one line per step" with no format, and
 // the model writes it many ways. In a real 70-question run, 6 of 7 ordering answers failed the worksheet check
@@ -10320,7 +10471,13 @@ function ngCanonicalOrderingAnswers(raw){
     const hits=body.map(j=>lineStep(keyLines[j])).filter(Boolean),seen=[];hits.forEach(s=>{if(!seen.includes(s))seen.push(s);});
     // Step lines may list the order more than once (a list, then one reason per step); every listing must agree.
     const fromLines=seen.length===n&&hits.every((s,i)=>!i||s===seen[0]||s===seen[seen.indexOf(hits[i-1])+1])?seen.map(s=>s.label):null;
-    const evidence=fromText||fromLines;
+    // v17.15 (review H2): step lines that list each presented step's RANK in presented order ("2. Alpha / 3. Beta /
+    // 1. Gamma", "Step 2: Alpha") or that simply repeat the presented order were read as the sequence itself, and a
+    // failing entry became a passing one with the wrong order printed as its key. Such lines are no longer evidence;
+    // the entry keeps its validation errors instead. (The prompt never presents steps in their correct order.)
+    const nums=body.filter(j=>lineStep(keyLines[j])).map(j=>(keyLines[j].match(/^[ \t]*(?:why[ \t]+)?(?:step[ \t]*)?(\d{1,2})[ \t]*[:.)]/i)||[])[1]).filter(Boolean).map(Number).slice(0,n);
+    const ranked=nums.length===n&&nums.some((x,i)=>x!==i+1),identity=a=>!!a&&a.every((l,i)=>l===steps[i].label);
+    const evidence=fromText||(fromLines&&!ranked&&!identity(fromLines)?fromLines:null);
     const blankLines=body.filter(j=>/^[ \t]*_{2,}[ \t]*\d{1,2}[ \t]*$/.test(keyLines[j])),blanks=blankLines.map(j=>Number(keyLines[j].match(/\d+/)[0]));
     const dm=norm(ngRationaleText(rest)).match(/^(\d{1,2}(?:[ \t]*(?:,|→|->|>|\bthen\b|[-–—])[ \t]*\d{1,2})+)\.?$/),digits=dm?dm[1].match(/\d+/g).map(Number):null;
     const perm=a=>!!a&&a.length===n&&new Set(a).size===n&&a.every(x=>x>=1&&x<=n);
@@ -10337,6 +10494,42 @@ function ngCanonicalOrderingAnswers(raw){
   if(!rewritten.length)return none;
   return{text:ngSpliceSection(text,P.p4,keyLines.filter((_,j)=>!drop.has(j)).join('\n')),rewritten};
 }
+// v17.15: one letter-reference detector for both shufflers (review findings H3, M8, M10). The case shuffle (v17.1)
+// treated every capital letter that matched a label, and every "above" or "below", as a reference, so "A client...",
+// "vitamin D", "38.5 °C" and "below 60" kept many case items in the model's order. The worksheet shuffle (v17.12)
+// treated a letter after any word outside a short list as plain prose, so "(see C)", "instead of C" and "less urgent
+// than A" were shuffled while the text still named the old letter, and it moved "All of the above". Here a capital
+// letter that matches a label is a reference unless it is clearly something else: a sentence-opening article A, a
+// letter after a clinical noun (vitamin D, hepatitis B, type A), a temperature unit (38.5 °C, 101 F), a hyphenated
+// term (D-dimer), an abbreviated organism (C. difficile), or A&O / I&O. Anything uncertain keeps the written order,
+// which costs a log line; a missed reference would leave a rationale naming the wrong choice.
+const ITEM_LETTER_NOUN=/^(?:vitamins?|hepatitis|hep|types?|groups?|class(?:es)?|factors?|stages?|grades?|schedules?|categor(?:y|ies)|phases?|steps?|parts?|levels?|zones?|plans?|leads?|blood|strep)$/i;
+const ITEM_NOT_ARTICLE=/^[ \t]+(?:is|was|are|were|and|or|nor|vs\.?|versus|would|should|could|will|may|might|can|cannot|has|had|does|did|also|alone|only)\b/i;
+function itemRefersByLetter(s,labels){
+  const text=String(s||'');
+  if(/\b(?:former|latter)\b|\b(?:first|second|third|fourth|fifth|sixth|last|final|previous|next|preceding|following|other)[ \t]+(?:(?:two|three|four)[ \t]+)?(?:options?|choices?|answers?|responses?)\b|\b(?:above|below)[ \t]+(?:options?|choices?|answers?|responses?)\b|\b(?:options?|choices?|answers?|responses?)[ \t]+(?:listed[ \t]+)?(?:above|below)\b|\b(?:listed|shown|given|mentioned)[ \t]+(?:above|below)\b|\b(?:all|none|both|neither|either|any)[ \t]+of[ \t]+(?:these|them|those|the[ \t]+(?:above|below|following|others?|options|choices|answers))\b/i.test(text))return true;
+  // The caller relabels a singular "option/choice/answer B" itself; any other naming of a label is a reference.
+  const rest=text.replace(/\b([Oo]ption|[Cc]hoice|[Aa]nswer)([ \t]+)([A-Z])\b/g,(w,k,sp,l)=>labels.includes(l)?k:w);
+  if(/\b(?:[Oo]ptions?|[Cc]hoices?)[ \t]+(?:[b-z]\b|a(?=[ \t]*(?:[,.;:)]|$)))/.test(rest))return true;
+  const exempt=new Set();
+  for(const m of rest.matchAll(/\b([A-Z])[ \t]*(?:,|\/|&|\band\b|\bor\b|\bthrough\b|\bto\b|[-–—](?=[ \t]*[A-Z]\b))[ \t]*([A-Z])\b|\(([A-Z])\)/g)){
+    if(m[3]){if(labels.includes(m[3]))return true;continue;}
+    const prev=(rest.slice(0,m.index).match(/([A-Za-z]+)[ \t]*$/)||[])[1];
+    if((prev&&ITEM_LETTER_NOUN.test(prev))||/^[AI]&O$/.test(m[0].replace(/[ \t]/g,''))){exempt.add(m.index);exempt.add(m.index+m[0].length-1);continue;}
+    if(labels.includes(m[1])||labels.includes(m[2]))return true;
+  }
+  for(const m of rest.matchAll(/(?<![\w°])([A-Z])\b/g)){
+    const l=m[1],i=m.index,after=rest.slice(i+1),before=rest.slice(0,i),prev=(before.match(/([A-Za-z]+)[ \t]*$/)||[])[1];
+    if(!labels.includes(l)||exempt.has(i))continue;
+    if(/^-\w|^\.[ \t]*[a-z]|^&[OI]\b/.test(after))continue;
+    if((l==='C'||l==='F')&&/\d[ \t]*°?[ \t]*$/.test(before))continue;
+    if(prev&&ITEM_LETTER_NOUN.test(prev))continue;
+    if(l==='A'&&/(?:^|[.!?:;—–(\[{"“‘'>*•-]|\n)[ \t]*$/.test(before)&&/^[ \t]+\S/.test(after)&&!ITEM_NOT_ARTICLE.test(after))continue;
+    if(l==='I'&&/^['’]\w|^[ \t]+\S/.test(after))continue;
+    return true;
+  }
+  return false;
+}
 // v17.12: the worksheet kept each choice where the model wrote it, and the model writes the key as A on nearly every
 // item; NCLEX_GEN_PROMPT (frozen) only forbids rank cues, not a fixed position. As the case generator has done since
 // v17.1 (caseShuffleQuestion), each lettered MCQ and SATA item's choices are Fisher–Yates shuffled once, before the batch
@@ -10352,20 +10545,11 @@ function ngShuffleWorksheetOptions(raw,random=Math.random){
   const letter=i=>String.fromCharCode(65+i),keys=new Map();
   for(const k of ngSplitNumbered(P.p4))keys.set(k.num,keys.has(k.num)?null:k);
   const sources=line=>[...(line.match(/\(\s*Sources?\s*:[^)]*\)/gi)||[]),...(line.replace(/\(\s*Sources?\s*:[^)]*\)/gi,'').match(/\bSources?\s*:[\s\S]*$/i)||[])].join(' ');
-  const LISTED=/^(?:like|unlike|than|and|or|nor|both|either|neither|vs|versus|except|is|are|was|why|selects?|selected|selecting|chooses?|chose|choosing|picks?|picked|picking)$/i;
-  const refersByLetter=(s,labels)=>{
-    if(/\b(?:above|below)[ \t]+(?:options?|choices?|answers?)\b|\b(?:options?|choices?|answers?)[ \t]+(?:above|below)\b|\b(?:former|latter)\b|\b(?:first|second|third|fourth|fifth|sixth|last|final)[ \t]+(?:option|choice|answer)\b/i.test(s))return true;
-    const rest=s.replace(REF,(w,k,sp,l)=>labels.includes(l)?k:w),isLabel=l=>labels.includes(l);
-    for(const m of rest.matchAll(/\b(?:options|choices|answers)[ \t]+([A-Z])\b|\b([A-Z])[ \t]*(?:,|\/|&|\band\b|\bor\b)[ \t]*([A-Z])\b|\(([A-Z])\)/g))
-      if([m[1],m[2],m[3],m[4]].filter(Boolean).some(isLabel))return true;
-    for(const m of rest.matchAll(/\b([A-Z])\b/g)){
-      const l=m[1],after=rest.slice(m.index+1),prev=(rest.slice(0,m.index).match(/([A-Za-z]+)[ \t]+$/)||[])[1];
-      if(!isLabel(l)||/^-\w/.test(after)||((l==='A'||l==='I')&&/^(?:[ \t]+[\w"'“‘(]|['’]\w)/.test(after)))continue;
-      if(prev&&!LISTED.test(prev))continue;
-      return true;
-    }
-    return false;
-  };
+  // v17.15 (review M11): with a misnumbered key (the v17.11 Generator slip) each entry was permuted by the wrong
+  // question, and NCLEX to Anki could no longer realign it. Only a batch whose questions and ANSWER entries both run
+  // 1..n is shuffled.
+  const inOrder=a=>a.length>0&&a.every((n,i)=>n===i+1),qNums=ngSplitNumbered(P.p3).map(b=>b.num),kNums=ngSplitNumbered(P.p4).map(b=>b.num);
+  if(!inOrder(qNums)||!inOrder(kNums)||qNums.length!==kNums.length)return {...none,misnumbered:true};
   let p3=P.p3,p4=P.p4;const shuffled=[],kept=[];
   for(const qb of ngSplitNumbered(P.p3)){
     const item=ngParseItem(qb),kb=keys.get(qb.num);
@@ -10388,7 +10572,7 @@ function ngShuffleWorksheetOptions(raw,random=Math.random){
     const first=kLines.findIndex(l=>WHY.test(l)),stop=kLines.findIndex((l,i)=>i>first&&/^[ \t]*(?:Strategy|Tags):/i.test(l)),last=stop<0?kLines.length:stop;
     if(!am||ngAnswerLabels(am[2]).join()!==answers.join()||first<0||kLines.slice(last).some(l=>WHY.test(l)))layout=false;
     const prose=[item.stem,...item.options.map(o=>o.text),...kLines.map((l,i)=>i?l.replace(WHY,'$5'):am?am[3]:'').filter(l=>!/^[ \t]*Tags:/i.test(l)).map(ngRationaleText)];
-    if(!layout||prose.some(s=>refersByLetter(s,labels))||kLines.some(l=>{REF.lastIndex=0;return REF.test(sources(l));})){kept.push(qb.num);continue;}
+    if(!layout||prose.some(s=>itemRefersByLetter(s,labels))||kLines.some(l=>{REF.lastIndex=0;return REF.test(sources(l));})){kept.push(qb.num);continue;}
     const order=labels.map((_,i)=>i);
     for(let i=n-1;i>0;i--){const v=random();if(!Number.isFinite(v)||v<0||v>=1)throw Error('Invalid shuffle random value');const j=Math.floor(v*(i+1));[order[i],order[j]]=[order[j],order[i]];}
     const map=new Map(order.map((from,to)=>[labels[from],letter(to)]));
@@ -10409,7 +10593,10 @@ function ngShuffleWorksheetOptions(raw,random=Math.random){
     p3=np3;p4=np4;shuffled.push(qb.num);
   }
   if(!shuffled.length)return {...none,kept};
-  return {text:ngSpliceSection(ngSpliceSection(text,P.p3,p3),P.p4,p4),shuffled,kept};
+  // v17.15: if PART 3 and PART 4 cannot both be replaced, every item keeps its written order.
+  const spliced=ngSpliceParts(text,P,p3,p4);
+  if(spliced===null)return {...none,kept:[...kept,...shuffled].sort((x,y)=>x-y)};
+  return {text:spliced,shuffled,kept};
 }
 function ngBuildRepairPrompt({item,criterion,keyBlock}){
   return `═══ REPAIR ONE NCLEX ITEM ═══
@@ -10688,6 +10875,7 @@ ${NG_GROUNDING_ADAPTER}
         // v17.12: choices are shuffled once, after those fixes and before anything splits, checks, audits or exports the batch.
         const mixed=ngShuffleWorksheetOptions(raw);
         if(mixed.shuffled.length){raw=mixed.text;owned_log('  Batch '+b+': answer choices shuffled on '+mixed.shuffled.length+' item(s).');}
+        if(mixed.misnumbered)owned_log('  ⓘ Batch '+b+': its question and answer numbers do not both run 1, 2, 3…, so no choices were shuffled; each answer stays with the question it was written for.','warn');
         if(mixed.kept.length)owned_log('  ⓘ Batch '+b+': Q'+mixed.kept.join(', Q')+' kept the choice order as written: its wording names a choice by letter or position, or its layout could not be rearranged safely.','warn');
         const P=ngSplitParts(raw);
         const concepts=ngParseConcepts(P.p1);
@@ -10810,7 +10998,10 @@ ${NG_GROUNDING_ADAPTER}
                   const newP4=ngSpliceBlock(parts.p4,r.num,ngRenderKeyBlock(r.num,fixed,strat,tags));
                   if(newP3===null||newP4===null)throw new Error('could not locate the item unambiguously — worksheet left untouched');
                   // v15.17: validate the candidate before replacing a usable worksheet; failed repair keeps the original.
-                  const candidate=ngSpliceSection(ngSpliceSection(workRaw,parts.p3,newP3),parts.p4,newP4);
+                  // v17.15: a repair spliced the same way as the shuffle and could write the new stem and choices over the
+                  // old answer key; overlapping or missing sections now leave the worksheet untouched.
+                  const candidate=ngSpliceParts(workRaw,parts,newP3,newP4);
+                  if(candidate===null)throw new Error('could not locate PART 3 and PART 4 separately — worksheet left untouched');
                   if(validateNCLEXWorksheet(candidate,size,worksheetContract).some(i=>i.sev==='error'))throw new Error('repair failed the captured worksheet contract');
                   workRaw=candidate;
                   // Same honesty fix as the case generator: the stored FAIL described the
@@ -11609,6 +11800,13 @@ function caseAuditDatumValues(d,factIndex,where,issues,neutralValues){
   // A wholly unknown unit in an explicit datum cannot silently pass by avoiding the clinical token vocabulary.
   if((d.supportType==='neutral-framing'||(d.factIds||[]).length)&&/^[+−-]?(?:\d[\d,.]*|\.\d+)\s*[\p{L}°%]+(?:\s*\/\s*[\p{L}0-9²^]+)*$/u.test(raw)&&!parsed.tokens.length&&!parsed.unsupported.length)
     issues.push({sev:'error',msg:where+' datum "'+(d.label||'')+'": unsupported clinical unit or notation "'+raw+'" requires source review'});
+  // v17.15 (review H8): only listed units are compared with the cited facts, so pH 7.21, INR 4.8, "39.4°C (102.9°F)", a
+  // cell count or a ng/mL value passed as grounded with no comparison at all. Such a value is now disclosed as unchecked
+  // (a warning; the units themselves are not added here).
+  else if(d.supportType!=='neutral-framing'&&/\d/.test(raw)&&!/^(?:age|room|bed|time|date|day)\b/i.test(String(d.label||'').trim())){
+    const all=caseNumericTokens((d.label||'')+' '+raw);
+    if(!all.tokens.length&&!all.unsupported.length)issues.push({sev:'warn',msg:where+' datum "'+(d.label||'')+'": value "'+raw+'" was not compared with its cited facts (its unit is not one the checker reads); verify it against the source'});
+  }
 }
 // v15.17: the prompt permits an assumed body weight only for a packet-supported weight-based calculation.
 // It remains visibly neutral framing; no clinical weight cutoff or numerical conversion is invented here.
@@ -11967,6 +12165,16 @@ function validateCaseStudy(caseStudy,factIndex,allowedFactIds,expectedCondition)
       }
       neiaTerminologyScan(q.stem,`${qn} stem`,issues);
       for(const o of q.options||[])neiaTerminologyScan(o.text,`${qn} option ${o.label||'?'}`,issues);
+      // v17.15 (review H7): stems and rationales were compared with their cited facts, but option text never was, so a
+      // dose or rate written only into the KEYED answer passed with no finding. Keyed options are now checked against
+      // their own rationale's citations; distractors stay exempt (their values are meant to be wrong). Findings are
+      // warnings, not errors: a new error tier is an owner decision (DECISIONS.md, warn-tier validators).
+      if(q.type!=='Calculation'){const keyed=new Set((q.correctAnswers||[]).map(String));for(const o of q.options||[]){
+        if(!keyed.has(String(o.label)))continue;
+        const r=(q.rationales||[]).find(x=>String(x.option)===String(o.label)),ids=r&&(r.factIds||[]).length?r.factIds:(questionIds.length?questionIds:['']),found=[];
+        caseAuditTextValues(o.text,ids,factIndex,qn+' keyed option '+(o.label||'?'),found,r&&r.supportType==='instantiated'?'instantiated':'direct',explanationValues,neutralValues);
+        for(const i of found)issues.push({sev:'warn',msg:i.msg+' (this is the answer shown as correct; check it against the source)'});
+      }}
       itemHeuristics(q,issues,qn); // v15.6: MCQ-only telemetry, self-guarded on q.type
       // v15.3: per-type structural contracts. The SATA range is not a convention — the
       // prompt's typeList states it verbatim: "5-6 options, 2-4 correct". v15.2 shipped
@@ -12188,21 +12396,16 @@ function caseShuffleQuestion(q,random=Math.random){
   // v17.1: numeric/lowercase labels have ambiguous prose references; preserve them explicitly.
   if(labels.some(l=>!/^[A-Z]$/.test(l)))return {...q,shuffleNotice:'Answer options retained in original order: nonstandard labels require review.'};
   const strings=[q.stem,...opts.map(o=>o.text),...rats.map(r=>r.text)].map(String);
-  // Only singular "option/choice/answer A" is unambiguous. Lists, bare labels and
-  // ordinal/location references stay intact with an advisory rather than guessing.
+  // Only singular "option/choice/answer A" is relabelled. Any other naming of a label or position keeps the written
+  // order with an advisory (v17.15: the shared itemRefersByLetter, also used by the worksheet shuffle).
   const ref=/\b([Oo]ption|[Cc]hoice|[Aa]nswer)\s+([A-Z])\b/g;
-  const unsafe=strings.some(text=>{
-    if(/\b(?:above|below|former|latter|first option|last option|second option|third option|fourth option)\b/i.test(text))return true;
-    const rest=text.replace(ref,(whole,kind,label)=>labels.includes(label)?'':whole);
-    if((rest.match(/\b[A-Z]\b/g)||[]).some(label=>labels.includes(label)))return true;
-    return /\b(?:options|choices|answers)\s+[A-Z]\b|\b[A-Z]\s*(?:,|\/|&|and|or)\s*[A-Z]\b|\([A-Z]\)|\b[A-Z][.)](?:\s|$)|\b(?:option|choice|answer)\s+[A-Z]\b/.test(rest);
-  });
+  const unsafe=strings.some(text=>itemRefersByLetter(text,labels));
   if(unsafe)return {...q,shuffleNotice:'Answer options retained in original order: label/order-dependent wording requires review.'};
   const shuffled=opts.map(o=>({...o}));
   for(let i=shuffled.length-1;i>0;i--){const value=random();if(!Number.isFinite(value)||value<0||value>=1)throw Error('Invalid shuffle random value');const j=Math.floor(value*(i+1));[shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]];}
   const mapping=new Map(shuffled.map((o,i)=>[o.label,String.fromCharCode(65+i)]));
   const remap=text=>String(text).replace(ref,(whole,kind,label)=>kind+' '+mapping.get(label));
-  const result={...q,stem:remap(q.stem),options:shuffled.map(o=>({...o,label:mapping.get(o.label),text:remap(o.text)})),correctAnswers:answers.map(a=>mapping.get(a)),rationales:rats.map(r=>({...r,option:mapping.get(r.option),text:remap(r.text),factIds:[...(r.factIds||[])]})).sort((a,b)=>a.option.localeCompare(b.option))};
+  const result={...q,stem:remap(q.stem),options:shuffled.map(o=>({...o,label:mapping.get(o.label),text:remap(o.text)})),correctAnswers:answers.map(a=>mapping.get(a)).sort(),rationales:rats.map(r=>({...r,option:mapping.get(r.option),text:remap(r.text),factIds:[...(r.factIds||[])]})).sort((a,b)=>a.option.localeCompare(b.option))};
   delete result.shuffleNotice;return result;
 }
 function caseShuffleIssues(cs){return (cs.stages||[]).flatMap(s=>(s.questions||[]).filter(q=>q.shuffleNotice).map(q=>({sev:'warn',msg:'Stage '+s.stageNumber+' '+q.id+': '+q.shuffleNotice})));}
@@ -12888,7 +13091,7 @@ function CaseStudyGenerator(){
     </>}
   >
     {artifactSource&&!artifactSourceCurrent(artifactSource,K.knowledgeBase)&&<div className="error-banner">Earlier Knowledge Base: this output and its coverage belong to the original source. Current fact links are disabled.</div>}
-    {invalidCaseRaw&&<div className="error-banner"><div><strong>Invalid case response</strong><ul>{issues.map((x,i)=><li key={i}>{x.msg}</li>)}</ul><button className="btn-secondary" onClick={()=>exportAsTxt('VALIDATION FAILED\n'+invalidCaseRaw,'LATTE-Case-Study-invalid.txt')}>Export invalid response</button><pre style={{whiteSpace:'pre-wrap',maxHeight:400,overflow:'auto'}}>{invalidCaseRaw}</pre></div></div>}
+    {invalidCaseRaw&&<div className="error-banner"><div><strong>Invalid case response</strong><ul>{issues.map((x,i)=><li key={i}>{x.msg}</li>)}</ul><button className="btn-secondary" onClick={()=>downloadBlob(new Blob(['VALIDATION FAILED\n'+invalidCaseRaw],{type:'text/plain'}),'LATTE-Case-Study-invalid.txt')/* v17.15 (review M7): exportAsTxt stripped Markdown and broke the raw JSON */}>Export invalid response</button><pre style={{whiteSpace:'pre-wrap',maxHeight:400,overflow:'auto'}}>{invalidCaseRaw}</pre></div></div>}
     {!conditions.length&&!caseStudy&&<div className="tip-banner" style={{color:'var(--accent-warm)'}}>No Knowledge Base loaded. Open <strong>Knowledge&nbsp;Base</strong> and build it from your source files first — the case generator reads facts, never PDFs.</div>}
     <div className="note-info">Reuses the NCLEX Generator's item-quality rules (distractor plausibility, per-option rationales, anchor grounding, completeness) plus a strict source-boundary policy so the model cannot invent labs, doses, comorbidities, or diagnoses.</div>
     {logs.length>0&&<Disclose summary="Generation log" open={logs.some(l=>l.t==='err')} note={logs.length+' line(s)'+(logs.filter(l=>l.t==='err').length?' · '+logs.filter(l=>l.t==='err').length+' error(s)':'')}>

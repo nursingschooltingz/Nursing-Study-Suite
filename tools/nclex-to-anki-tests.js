@@ -302,6 +302,30 @@ async function run(S,t){
   t('the tab offers one export option beside the image option, and reads PDFs through the shared page walk',
     /const N2A_MODES=\[\n  \{id:'export',/.test(ui.slice(0,0)+S)&&!S.includes("{id:'extract',icon:")&&ui.includes('accept=".md,.txt,.markdown,.pdf"')&&ui.includes('n2aConvertExports(sources,extraTags)')&&
     ui.includes("if(/\\.pdf$/i.test(f.name||'')){")&&core.includes('await pdfWalkPages(file,{onPage:async(text,i,pg)=>')&&core.includes('finally{destroyPdfDoc(file);}'));
+  // v17.15 (review H1): a Generator worksheet in the prompt's own layout ("  1." questions, each batch's first one
+  // trimmed flush-left by PART 3 parsing) converts to one card per question through the Generator's real assembly.
+  const NG=new Function('neiaTerminologyScan','itemHeuristics',span(S,'function ngSplitParts(','function ngRenumber(')+span(S,'function ngRenumber(','function ngStem(')+';return {ngSplitParts,ngSplitNumbered,ngRenumber,ngMdLiteralNumbers};')(()=>[],()=>[]);
+  const genBatch=(from,count)=>{let p3='',p4='';for(let i=0;i<count;i++){const n=i+1,g=from+n,k='ABCD'[(g-1)%4];
+    p3+='  '+n+'. Stem '+g+' asks which action is first?\n'+['Assess the airway','Give the antiemetic','Call the provider','Document the finding'].map((o,j)=>'     '+'ABCD'[j]+'. '+o+' '+g).join('\n')+'\n\n';
+    p4+='  '+n+'. ANSWER: '+k+'\n'+'ABCD'.split('').map(l=>'     Why '+l+' is '+(l===k?'correct':'wrong')+': reason. (Source: C1)').join('\n')+'\n     Strategy: s.\n     Tags: Tier 1\n';}
+    return 'PART 1 — INVENTORY\nC1 | concept [fact-1] |\nPART 2 — AUDIT\nQ1 cites C1\nPART 3 — QUESTIONS (printable)\n\n'+p3+'PART 4 — ANSWER KEY (printable)\n\n'+p4+'DISTRIBUTION: Tier [1:'+count+']';};
+  let gn=1;const gq=[],gk=[];
+  for(const raw of [genBatch(0,5),genBatch(5,5)]){const P=NG.ngSplitParts(raw),bk=NG.ngSplitNumbered(P.p4);for(const q of NG.ngSplitNumbered(P.p3)){const k=bk.find(x=>x.num===q.num);gq.push(NG.ngRenumber(q.text,gn));gk.push(NG.ngRenumber(k.text,gn));gn++;}}
+  const genMd=n=>'# NCLEX Practice Questions\n\n**'+n+' questions** generated from source material.\n\n---\n\n## Questions\n\n'+gq.map(NG.ngMdLiteralNumbers).join('\n\n')+'\n\n<div class="pagebreak"></div>\n\n## Answer Key\n\n'+gk.map(NG.ngMdLiteralNumbers).join('\n\n');
+  const gen=M.n2aConvertText(genMd(10),'gen');
+  t('a two-batch Generator worksheet in the prompt\'s own layout gives one card per question with its own choices',gen.cards.length===10&&gen.cards.every((c,i)=>(c.front.match(/Assess the airway/g)||[]).length===1&&c.front.includes('Stem '+(i+1)+' asks')&&!c.tags.includes('NeedsReview')));
+  const off=M.n2aConvertText(genMd(11),'gen');
+  t('a worksheet whose stated question count disagrees with the questions found marks every card for review',off.cards.length===10&&off.cards.every(c=>c.tags.includes('NeedsReview'))&&off.warnings.some(w=>/says 11 questions but 10/.test(w)));
+  // v17.15 (review H9): a continuation joins what the previous image ended with.
+  const T=items=>M.i2aNormalizeTranscript({items});
+  const qItem=(n,stem)=>({kind:'question',number:String(n),format:'multiple_choice',stem,options:[{label:'A',text:'one '+n},{label:'B',text:'two '+n}],answer:null,cut_off:false,legibility:'clean'});
+  const keyItem=(n,ans,why)=>({kind:'answer_only',number:String(n),answer:ans,answer_evidence:'printed',option_rationales:[{label:ans,verdict:'correct',text:why}],rationale:'',legibility:'clean',cut_off:false});
+  const pages=M.i2aAssemble([['p1.png',T([qItem(1,'First stem?'),qItem(2,'Second stem?'),qItem(3,'Third stem?')])],['p2.png',T([keyItem(1,'A','one is right'),keyItem(2,'B','two is right')])],['p3.png',T([{kind:'continuation',number:null,rationale:'The calcium explanation continues.',legibility:'clean',cut_off:false},keyItem(3,'A','three is right')])]]);
+  const qn=n=>pages.questions.find(q=>q.number===String(n));
+  t('an answer-page explanation that runs onto the next page stays with that answer, not with the last question',/calcium explanation continues/.test(qn(2).rationale)&&!/calcium/.test(qn(3).rationale||''));
+  const joined=M.i2aAssemble([['s1.png',T([qItem(5,'Complete stem?')])],['s3.png',T([{kind:'continuation',number:null,answer:'B',answer_evidence:'printed',option_rationales:[{label:'B',verdict:'correct',text:'x'}],rationale:'Another question.',legibility:'clean',cut_off:false}])]]);
+  const jc=M.i2aBuildCards(joined.questions,'');
+  t('text joined onto a question that was not marked cut off is kept but marked for review',jc.cards.length===1&&jc.cards[0].tags.includes('NeedsReview'));
 }
 
 module.exports=run;

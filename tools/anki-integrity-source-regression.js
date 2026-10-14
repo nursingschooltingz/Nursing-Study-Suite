@@ -38,6 +38,14 @@ module.exports=async function ankiIntegritySourceRegression(S,t){
     await load(buildCode,['build'],env).build();return state;
   }
   const throws=fn=>{try{fn();return false;}catch{return true;}};
+  // v17.15 (review M3): a halting audit failure stops the omission audit for the remaining chunks; their facts are kept.
+  {
+    const pa='The synthetic signal lamp remains green during readiness.',pb='The indicator is observed before the synthetic procedure.';
+    const sent=[];
+    const st=await build({pages:[pa,pb],chunkChars:80,verifyPass:true,respond:(body,i)=>{const audit=JSON.stringify(body).includes('FACTS ALREADY EXTRACTED');sent.push(audit?'audit':'primary');
+      if(audit)return Object.assign(Error('Quota exhausted'),{status:429});const text=sent.filter(x=>x==='primary').length===1?pa:pb;return primary([fact({text,sourceQuote:text})]);}});
+    t('an audit quota stop skips the audit for later chunks while every chunk is still extracted and published',sent.join(',')==='primary,audit,primary'&&st.published.length===1&&st.published[0].conditions[0].facts.length===2&&st.warnings.some(w=>/omission audit stopped/.test(w)));
+  }
   t('source envelope accepts complete empty primary and omission inventories',H.kbValidateExtractionEnvelope({conditions:[]}).conditions.length===0&&H.kbValidateExtractionEnvelope({missed:[]},true).missed.length===0);
   for(const bad of [{conditions:[null]},{conditions:[{name:'Signal',facts:'bad'}]},{conditions:[{name:'Signal',facts:[null]}]},{conditions:[{name:'Signal',facts:[fact()],aliases:'bad'}]}]){
     t('source envelope rejects malformed nested primary structure '+JSON.stringify(bad).slice(0,75),throws(()=>H.kbValidateExtractionEnvelope(bad)));

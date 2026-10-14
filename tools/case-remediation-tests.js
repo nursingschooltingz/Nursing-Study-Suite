@@ -2,7 +2,7 @@
 // Synthetic cases only. Extract the shipped implementation, including its validation tail.
 function load(S,transform=code=>code) {
   const span=(a,b)=>{const x=S.indexOf(a),y=S.indexOf(b,x+a.length);if(x<0||y<0)throw Error('Missing case anchor '+a);return S.slice(x,y);};
-  return new Function(transform(span('const CASE_CLINICAL_TOKEN_RE=','function CaseStudyGenerator()')+
+  return new Function(transform(span('const ITEM_LETTER_NOUN=','// v17.12: the worksheet kept each choice')+span('const CASE_CLINICAL_TOKEN_RE=','function CaseStudyGenerator()')+
     ';return {caseNumericTokens,caseAuditTextValues,validateCaseStudy,validateStageTiming,caseToMarkdown,caseAuditPayload,caseValidationStamp,caseShapeIssues,caseCompletenessIssues,caseAllFactIds,caseGateItems,itemRunPool,itemParseAuditVerdict,itemAuditSummary,itemAuditIsAnswerAccuracy,itemBuildAuditPrompt,AUDIT_POOL_WIDTH,AUDIT_RETRIES,'+
     'repairContract:typeof caseRepairContract==="function"?caseRepairContract:null,shuffle:typeof caseShuffleQuestion==="function"?caseShuffleQuestion:null,rows:typeof caseReviewRows==="function"?caseReviewRows:null,appendix:typeof caseReviewAppendix==="function"?caseReviewAppendix:null,shuffleIssues:typeof caseShuffleIssues==="function"?caseShuffleIssues:null,progress:typeof caseAuditProgress==="function"?caseAuditProgress:null};'))();
 }
@@ -12,6 +12,20 @@ const fixture=(q=question())=>({title:'Synthetic case',condition:'Synthetic',dif
 const index=text=>new Map([['f1',{fact:{text,sourceQuote:''}}]]);
 async function run(S,t){
   const C=load(S),errors=cs=>C.validateCaseStudy(cs,index('Monitor the synthetic marker.'),new Set(['f1']),'Synthetic').filter(i=>i.sev==='error');
+  // v17.15 (review H7): a value written only into the KEYED option is checked against its rationale's facts, as a warning.
+  {
+    const all=cs=>C.validateCaseStudy(cs,index('Monitor the synthetic marker.'),new Set(['f1']),'Synthetic');
+    const keyed=question();keyed.options[0].text='Potassium chloride 40 mEq/L over 4 hours';
+    const ki=all(fixture(keyed));
+    t('a keyed option value its cited facts do not state is disclosed as a warning, never an error',ki.some(i=>i.sev==='warn'&&/keyed option A/.test(i.msg)&&/40 mEq\/L/.test(i.msg))&&!ki.some(i=>i.sev==='error'&&/keyed option/.test(i.msg)));
+    const distractor=question();distractor.options[1].text='Potassium chloride 40 mEq/L over 4 hours';
+    t('distractor values stay exempt from the keyed-option check',!all(fixture(distractor)).some(i=>/option B/.test(i.msg)&&/40 mEq/.test(i.msg)));
+    // v17.15 (review H8): a datum whose unit the checker cannot read is disclosed as unchecked; a readable one is not.
+    const withData=data=>{const cs=fixture();cs.stages[0].data=data;return all(cs);};
+    const unchecked=v=>withData([{label:v[0],value:v[1],factIds:['f1'],supportType:'direct'}]).some(i=>i.sev==='warn'&&/was not compared with its cited facts/.test(i.msg));
+    t('pH, INR, a temperature with its conversion and a ng/mL troponin are disclosed as unchecked',[['pH','7.21'],['INR','4.8'],['Temperature','39.4°C (102.9°F)'],['Troponin','2.3 ng/mL (elevated)']].every(unchecked));
+    t('a value the checker does compare, and an age, raise no unchecked-value warning',!unchecked(['SpO2','86%'])&&!unchecked(['Age','72']));
+  }
   t('case remediation extraction reaches timing tail',C.validateStageTiming(fixture()).some(i=>i.msg.includes('never presented')));
   for(const [value,source,ok] of [['3.5 mEq/L','3.5–5 mEq/L',true],['5 mEq/L','3.5–5 mEq/L',true],['3.5–5 mEq/L','3.5–5 mEq/L',true],['2–5 mEq/L','3.5–5 mEq/L',false],['4 mEq/L','3.5–5 mEq/L',false],['5 mg','5 mg per protocol',true],['12 breaths/min','12 breaths per minute per shift',true],['5 mg','5 mg per banana',false],['5 mg/dose','5 mg per dose',true],['5 mcg/kg/min','5 mcg/kg/min',true],['5 mg','5 mg/(kg min)',false],['5 mg','5 mg²',false]]){
     const found=[];C.caseAuditTextValues(value,['f1'],index(source),'Synthetic',found,'direct');t('numeric pair '+value+' from '+source,found.every(i=>i.sev!=='error')===ok);
@@ -70,6 +84,13 @@ async function run(S,t){
     const sata={...clone(q),type:'SATA',correctAnswers:['A','C']};const shuffled=C.shuffle(sata,()=>0);t('SATA preserves correct content set',shuffled.options.filter(o=>shuffled.correctAnswers.includes(o.label)).map(o=>o.text).sort().join()===['Assess','Document'].sort().join());
     const ref=clone(q);ref.stem='Compare option A with option B.';t('explicit label reference remapped',C.shuffle(ref,()=>0).stem!==ref.stem);
     const unsafe=clone(q);unsafe.options[3].text='All of the above';const kept=C.shuffle(unsafe,()=>0);t('unsafe ordering retained with advisory',JSON.stringify(kept.options)===JSON.stringify(unsafe.options)&&!!kept.shuffleNotice);
+    // v17.15 (review M8): the shared detector no longer keeps ordinary clinical prose in the model's order.
+    const benignCase=['A client with heart failure reports dyspnea. Which action is first?','The client has a temperature of 38.5 °C. Which action is first?','The client takes vitamin D daily. Which action is first?','Hold the dose if the pulse is below 60/min. Which action is first?','The client needs vitamin K. Which action is first?','A 72-year-old has hepatitis B. Which action is first?'];
+    t('ordinary clinical prose (an article A, °C, vitamin D, a threshold below 60, hepatitis B) no longer blocks the case shuffle',benignCase.every(stem=>{const x=C.shuffle({...clone(q),stem},()=>0);return !x.shuffleNotice&&x.correctAnswers[0]!=='A';}));
+    const refCase=['B is wrong because it delays care.','(see C)','Less urgent than A because it can wait.','Options B through D delay care.','A is the priority.'];
+    t('a bare or listed letter in a rationale still keeps the case order with an advisory',refCase.every(text=>{const r=clone(q);r.rationales[0].text=text;const x=C.shuffle(r,()=>0);return !!x.shuffleNotice&&JSON.stringify(x.options)===JSON.stringify(r.options);}));
+    const sataKeys=C.shuffle({...clone(q),type:'SATA',correctAnswers:['A','C']},()=>0);
+    t('a shuffled SATA key is listed in letter order',sataKeys.correctAnswers.length===2&&sataKeys.correctAnswers.join()===[...sataKeys.correctAnswers].sort().join());
     const broken=clone(q);broken.correctAnswers=['Z'];t('malformed item stays malformed',JSON.stringify(C.shuffle(broken,()=>0))===JSON.stringify(broken));
     const numbered=clone(q);numbered.options.forEach((o,i)=>o.label=String(i+1));numbered.rationales.forEach((r,i)=>r.option=String(i+1));numbered.correctAnswers=['1'];numbered.stem='Compare option 1 with option 2.';const numericLabels=C.shuffle(numbered,()=>0);t('nonstandard option references retain original labels with advisory',JSON.stringify(numericLabels.options)===JSON.stringify(numbered.options)&&numericLabels.stem===numbered.stem&&!!numericLabels.shuffleNotice);
   }

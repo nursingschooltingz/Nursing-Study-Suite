@@ -1,5 +1,7 @@
 # Production review — v17.14 (2026-10-13)
 
+**Follow-up:** C1, all eleven High findings (H1–H11), and M3, M7, M8, M10, M11, M14, M15 and M17 are fixed in v17.15 (steps 1–5 of the plan). Two are partial: H5 keeps and reports the text rather than splitting chapters, and H7/H8 are disclosed as warnings, with no new units or error tier; see the [release verification record](v17.15-release.md). Every other finding is open.
+
 Reviewed `Nursing-Study-Suite v17.14.html` (13,344 lines) at commit `6388ef6`, clean tree, together with `verify-repo.js`, `latte-tests.js`, `tools/` and the two live measurement tools (read only).
 
 **How it was done**

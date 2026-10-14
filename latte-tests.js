@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 3595;
+const EXPECTED_ASSERTIONS = 3642;
 
 let file;
 try {
@@ -185,6 +185,90 @@ section('nclexSplitByQNum — choice runs');
                 {num:4,index:620},{num:5,index:660}];
   t('a five-choice select-all run is dropped, leaving two questions',
     NXO.nclexDropOptionRuns(sata).map(p => p.num).join(',') === '1,2');
+}
+// v17.15 (review H4): a choice run 1..k may not swallow the question numbered k+1.
+{
+  const davis = (n, k) => Array.from({ length: n }, (_, i) => (i + 1) + '. Davis stem ' + (i + 1) + ' asks what the nurse does?\n' +
+    Array.from({ length: k }, (_, c) => (c + 1) + '. Choice ' + (c + 1) + ' for question ' + (i + 1)).join('\n')).join('\n\n');
+  t('v17.15: a Davis section with 3, 4 or 5 numbered choices keeps every question, including the one numbered after the last choice',
+    [3, 4, 5].every(k => { const items = NXO.nclexSplitByQNum(davis(10, k));
+      return Object.keys(items).length === 10 && Object.keys(items).every(n => items[n].includes('Davis stem ' + n + ' ') && !items[n].includes('Davis stem ' + (Number(n) + 1) + ' ')); }));
+}
+// v17.15 (review H5): a repeated question number never discards text, and the run is not reported complete.
+{
+  const NPAIR = new Function('nclexSplitByQNum', spanFrom('function nclexPairQA', '\n}') + ';return nclexPairQA;')(NXO.nclexSplitByQNum);
+  const chap = (tag, n) => Array.from({ length: n }, (_, i) => (i + 1) + '. [' + tag + '] Stem ' + (i + 1) + '?\nA. one\nB. two\nC. three\nD. four').join('\n\n');
+  const keys = n => Array.from({ length: n }, (_, i) => (i + 1) + '. B').join('\n');
+  const two = NPAIR(chap('Cardiac', 20) + '\n\n' + chap('Respiratory', 25), keys(20) + '\n' + keys(25));
+  t('v17.15: a second chapter whose numbering restarts is kept and its repeated numbers are reported',
+    two.repeated.length === 20 && two.some(p => p.question.includes('[Respiratory] Stem 1?')) && two.some(p => p.question.includes('[Respiratory] Stem 21?')));
+  const q = i => (i + 1) + '. Stem of question ' + (i + 1) + '?\nA. one\nB. two\nC. three\nD. four';
+  const wrapped = NXO.nclexSplitByQNum(Array.from({ length: 19 }, (_, i) => q(i)).join('\n\n') +
+    '\n\n20. A client 2 days after surgery rates incisional pain at\n7. Which action should the nurse take first?\nA. Reposition\nB. Give the PRN opioid\n\n' + q(20));
+  t('v17.15: a wrapped line that starts with a number keeps its text with the question it belongs to',
+    wrapped[20].includes('Which action should the nurse take first') && wrapped.repeated.includes(7));
+  const NSUM = new Function(spanFrom('function nclexNewTrack', 'function nclexSummaryLine').replace(/function nclexSummaryLine$/, '') + ';return {nclexNewTrack,nclexRunSummary};')();
+  const tr = NSUM.nclexNewTrack(); tr.attempted = 2; tr.succeeded = 2; tr.review = 1; tr.notes.push('question number 1 appeared more than once');
+  t('v17.15: a run whose pairing needs review is reported incomplete, not complete',
+    NSUM.nclexRunSummary(tr).status === 'partial' && NSUM.nclexRunSummary({ ...tr, review: 0 }).status === 'complete');
+}
+// v17.15 (review H6): the Study view keeps unclassified treatments and unstaged findings under their own headings.
+{
+  const RENDER = new Function(spanFrom('function kbBucketFacts(', 'function kbForNCLEX(').replace(/function kbForNCLEX\($/, '') + '\n;return renderKBMarkdown;')();
+  const fact = (text, latteBucket, subtype) => ({ text, latteBucket, subtype, sources: [] });
+  const md = RENDER({ conditions: [{ name: 'ICP', facts: [fact('Restless.', 'Look', 'early'), fact('Cushing triad.', 'Look', 'late'), fact('Nausea.', 'Look', null),
+    fact('Float heels.', 'Treatments', 'independent'), fact('Give mannitol.', 'Treatments', 'dependent'), fact('Reposition q2h.', 'Treatments', null), fact('Teach at discharge.', 'Treatments', 'discharge')] }] });
+  const section = (head, next) => md.slice(md.indexOf(head), md.indexOf(next, md.indexOf(head) + head.length));
+  t('v17.15: only dependent treatments print under Dependent / Collaborative Orders; acute, discharge and unlabelled ones get their own heading',
+    section('**Dependent / Collaborative Orders**', '**Other Treatments').includes('Give mannitol.') && !section('**Dependent / Collaborative Orders**', '**Other Treatments').includes('Reposition') &&
+    section('**Other Treatments', '### Educate').includes('Reposition q2h.') && section('**Other Treatments', '### Educate').includes('Teach at discharge.'));
+  t('v17.15: findings staged neither early nor late sit under their own heading, not inside the LATE / EMERGENCY list',
+    !section('**LATE / EMERGENCY**', '**OTHER FINDINGS').includes('Nausea.') && section('**OTHER FINDINGS', '### Assess').includes('Nausea.'));
+}
+// v17.15 (review H10): a quote that starts or ends at a decimal point is a partial number.
+{
+  const QK = new Function(spanFrom('function kbNormForMatch(', '// v16.7: validate nested model envelopes') + '\n' + spanFrom('function kbDehyphNormForMatch(', '\n}') + '\n;return {kbNormForMatch,kbDehyphNormForMatch,kbQuoteInSource};')();
+  const located = (quote, src) => QK.kbQuoteInSource(quote, QK.kbNormForMatch(src), QK.kbDehyphNormForMatch(src), { norm: QK.kbNormForMatch(src, true), dehyph: QK.kbDehyphNormForMatch(src, true) });
+  t('v17.15: a quote that dropped the leading "0." or a trailing ".5" of a dose is not located in the source',
+    !located('5 mg PO daily', 'Digoxin 0.5 mg PO daily') && !located('125 mg PO daily', 'Digoxin 0.125 mg PO daily') && !located('maximum daily dose is 2', 'The maximum daily dose is 2.5 g'));
+  t('v17.15: exact decimals, a 1,5 / 1.5 spelling and a PDF-spaced decimal are still located',
+    located('0.5 mg PO daily', 'Give 0.5 mg PO daily') && located('Dose is 1,5 mg today', 'Dose is 1.5 mg today') && located('give 0. 5 mg slowly', 'give 0. 5 mg slowly'));
+  t('v17.15: the decimal-marked form keeps every position of the plain form',
+    ['Give 0.5 mg ~ q4h', 'İnflammation — K⁺ 3.5 and 1,000 mL', '2.5.3 a~b'].every(x => QK.kbNormForMatch(x, true).length === QK.kbNormForMatch(x).length));
+}
+// v17.15 (review H11): a build never saves a Knowledge Base that the restore check rejects.
+{
+  const MERGE = new Function(spanFrom('function kbSlug(', '// ── Imported-KB sanitizer') + '\n;return {mergeLatteParts,KB_FACT_BUCKETS};')();
+  const NORM = new Function(spanFrom('function kbSlug(', '// v15.14: the class kept ASCII') + '\n' + spanFrom('const KB_IMPORT_MAX_BYTES=', '// ── Durable Knowledge Base persistence') + '\n;return {kbNormalizeImported,KB_BUCKETS};')();
+  t('v17.15: the build and restore category lists are identical', JSON.stringify(MERGE.KB_FACT_BUCKETS) === JSON.stringify(NORM.KB_BUCKETS));
+  const f = (text, latteBucket, extra = {}) => ({ text, latteBucket, tier: 1, sourceQuote: text, sourcePointer: { filename: 'x.pdf', location: 'page 1' }, ...extra });
+  const kb = MERGE.mergeLatteParts([{ source: { filename: 'x.pdf', range: 'page 1' }, conditions: [
+    { name: 'Sepsis', aliases: [], facts: [f('Lactate above 2 mmol/L.', 'Tests'), f('Give 30 mL/kg crystalloid.', 'Treatment'), f('Hold the dose.', 'Treatments', { subtype: ['dependent'] })] },
+    { name: 'Σήψη', aliases: [], facts: [f('Αιμοκαλλιέργειες.', 'Tests')] }] }], 'Course', 'Exam');
+  let restored = false; try { NORM.kbNormalizeImported(JSON.parse(JSON.stringify(kb)), { restore: true }); restored = true; } catch (e) {}
+  t('v17.15: facts the restore check would reject are left out and listed, and the built Knowledge Base restores',
+    restored && kb.dropped.length === 2 && kb.conditions[0].facts.length === 1 && kb.conditions[1].id === 'condition' && !JSON.stringify(kb).includes('dropped'));
+  // (H11 above.) v17.15 (review M15, M14): NCLEX answer provenance.
+  {
+    const NA = new Function(spanFrom('function nclexKey', 'return allQ;\n}') + ';return {nclexAccumulate};')();
+    const all = NA.nclexAccumulate(new Set(), [], [{ question: 'A client has chest pain. Which action is first?\nA. one\nB. two' }, { question: 'A client has chest pain. Which action is first?\nA. one\nB. two', correct_answer: 'B', rationale: 'Because two.' }]);
+    t('v17.15: a later copy of an overlapping question fills the answer and rationale the first copy lacked', all.length === 1 && all[0].correct_answer === 'B' && all[0].rationale === 'Because two.');
+    const md = new Function('filtered', 'nclexSplitStemOptions', 'runSummary', 'nclexSummaryLine', spanFrom('  const nclexToMd=()=>{', '    return out;\n  };') + ';return nclexToMd();')(
+      [{ question: 'Q one?\nA. x\nB. y', correct_answer: 'A', rationale: 'R one.', answer_unmatched: true }, { question: 'Q two?\nA. x\nB. y' }], q => ({ stem: q.split('\n')[0], options: [] }), null, () => '');
+    t('v17.15: a model-written answer is marked inside its rationale, and a missing answer prints "(not extracted)", never "undefined"',
+      md.includes('**1.** A\n\nR one. ⚠ No answer for this question was found on the answer pages') && md.includes('**2.** (not extracted)') && !md.includes('undefined'));
+    t('v17.15: split mode marks records whose question had no matched answer and does not report the run complete',
+      S.includes('unmatchedNums.has(Number(q.question_number))?{...q,answer_unmatched:true}:q') && S.includes('if(unmatchedNums.size){track.review++;') && S.includes('if(q.answer_unmatched===true)out.answer_unmatched=true;'));
+  }
+  // v17.15 (review M17, M7)
+  {
+    const anki = spanFrom('function AnkiGenerator(){', '// ──── TOOL: NCLEX Extractor ────'), runAt = anki.indexOf('  const run=useCallback(async()=>{'), publishAt = anki.indexOf('setBatch(completed);setCards(deduped);setLedger(allLedg);', runAt), runEnd = anki.indexOf('},[cfg,model,toolLevel', runAt);
+    t('v17.15: Generate keeps the current deck, its review decisions and source check until the new deck is complete',
+      runAt > 0 && publishAt > runAt && !anki.slice(runAt, publishAt).includes('setCards([])') && !anki.slice(runAt, publishAt).includes('setBatch(null)') && anki.slice(runAt, publishAt).includes('setSourceAudit(null);setInspectNote(null);') && anki.slice(publishAt, runEnd).includes('The previous deck, if any, is unchanged.'));
+    t('v17.15: the invalid-case export writes the raw response unchanged',
+      S.includes("downloadBlob(new Blob(['VALIDATION FAILED\\n'+invalidCaseRaw],{type:'text/plain'}),'LATTE-Case-Study-invalid.txt')") && !S.includes("exportAsTxt('VALIDATION FAILED"));
+  }
+  t('v17.15: the build names left-out facts in its log and warnings', S.includes("extracted fact(s) were left out because they could not be saved and reloaded") && S.includes("problems.push(kb.dropped.length+' fact(s) left out"));
 }
 
 /* ── 6c. v15.15: stem / choice parsing ── */
@@ -458,10 +542,10 @@ const classify = (quote, source) => QM.kbClassifyQuoteMiss(quote, QM.kbNormForMa
     QM.kbQuoteInSource('digoxin 0.125 mg furosemide 20 mg', tn, td) === false);
 }
 t('pass 1 checks with the fallback, then re-tests the plain matcher to count rescues',
-  S.includes('if(!kbQuoteInSource(f.sourceQuote,srcNorm,srcDehyph)){quoteMiss++;noteMiss(1,f);continue;}') &&
-  S.includes('if(!kbQuoteInSource(f.sourceQuote,srcNorm))dehyphSaved++;'));
+  S.includes('if(!kbQuoteInSource(f.sourceQuote,srcNorm,srcDehyph,srcMarks)){quoteMiss++;noteMiss(1,f);continue;}') &&
+  S.includes('if(!kbQuoteInSource(f.sourceQuote,srcNorm,null,srcMarks))dehyphSaved++;')); // v17.15: decimal marks (H10)
 t('pass 2 still discards on a failed match, now including the fallback',
-  S.includes('if(!kbQuoteInSource(f.sourceQuote,srcNorm,srcDehyph)){discarded++;noteMiss(2,f);continue;}'));
+  S.includes('if(!kbQuoteInSource(f.sourceQuote,srcNorm,srcDehyph,srcMarks)){discarded++;noteMiss(2,f);continue;}'));
 // v15.10 merged pass-1 misses and pass-2 discards into one rollup printed under a sentence
 // about the first-pass count. A real build read "182 first-pass" then a breakdown summing
 // to 190 — the extra 8 were that run's audit discards.
@@ -603,7 +687,7 @@ section('v15.14 — operator agreement');
 
   // The safety property: this can only ever ADD a finding beside a quote that already passed.
   t('pass 1 reaches the operator check only after kbQuoteInSource has accepted the quote',
-    S.includes("if(!kbQuoteInSource(f.sourceQuote,srcNorm))dehyphSaved++;\n          if(!kbQuoteOperatorsAgree(f.sourceQuote,srcOpNorm,srcOpDehyph))noteOp(1,f);"));
+    S.includes("if(!kbQuoteInSource(f.sourceQuote,srcNorm,null,srcMarks))dehyphSaved++;\n          if(!kbQuoteOperatorsAgree(f.sourceQuote,srcOpNorm,srcOpDehyph))noteOp(1,f);"));
   t('pass 2 records an operator mismatch but does NOT discard on it (warn tier, measure first)',
     S.includes('if(!kbQuoteOperatorsAgree(f.sourceQuote,srcOpNorm,srcOpDehyph))noteOp(2,f);') &&
     !S.includes('noteOp(2,f);continue;'));
@@ -612,8 +696,11 @@ section('v15.14 — operator agreement');
     S.includes('const opDetail=[];let opMismatch=0;'));
   t('a non-zero count is surfaced without opening the Details pane',
     S.includes('{diag.opMismatch>0&&<span'));
-  t('kbNormForMatch itself is untouched, so no existing quote changes verdict',
-    S.includes(String.raw`function kbNormForMatch(s){return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();}`));
+  // v17.15: kbNormForMatch gained an opt-in decimal-mark form (H10); without it, its output must be exactly the old one.
+  t('kbNormForMatch without decimal marks is unchanged, so no existing quote changes verdict',(()=>{
+    const N=new Function(spanFrom('function kbNormForMatch(','\n}')+';return kbNormForMatch;')();
+    const old=x=>String(x||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
+    return ['Give 0.5 mg PO daily','≥ 1,000 mL ~ q4h; 2.5 g','İnflammation — K⁺ 3.5','  A  b  ','',null,'0. 5 and 1..5'].every(x=>N(x)===old(x));})());
 }
 
 /* ── 10e. v15.12: flashcard transcription (pass 1) ── */

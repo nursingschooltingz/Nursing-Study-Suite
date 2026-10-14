@@ -1,5 +1,48 @@
 # Current maintainer state
 
+## v17.15 Answer keys, letter references and lost questions (2026-10-13)
+
+The canonical application is `Nursing-Study-Suite v17.15.html`. It implements steps 1–5 of the [v17.14 production review](docs/reviews/production-review-2026-10-13.md) plan:
+- C1, H3, M8, M10, M11, H2, H1, H9, H4 and H5;
+- H6, H7, H8, H10 and H11;
+- M3, M7, M14, M15 and M17.
+
+The semester freeze allows them as wrong-answer, lost-question and wrong-content fixes. H10 narrows pass-2 admission and was implemented on the owner's request for step 4; it is recorded in `DECISIONS.md`.
+
+- **What was wrong.** `ngSplitParts` matched "PART 4" anywhere, in any case, so a mention before the real heading made PART 4 contain PART 3. The shuffle and the repair spliced PART 3 and then PART 4 with `ngSpliceSection`, which returns the document unchanged when it cannot find the old text. The choices moved and the answer key did not, with zero validation errors.
+- **Change.** Headings count only at a line start (falling back to the old match when none do). `ngSpliceParts` replaces both sections by position and returns null on overlap or a missing section; the shuffle then keeps every item's order, relabelling leaves the batch as written, and a repair is refused.
+- **Step 2: one letter-reference check.** `itemRefersByLetter` replaces the v17.1 case check and the v17.12 worksheet check.
+  - **Default.** A capital letter that matches a choice label is a reference, unless it is a sentence-opening article A, follows a clinical noun, is a temperature unit, is hyphenated (D-dimer), is an abbreviated organism (C. difficile), or is A&O/I&O.
+  - **Position words.** "All/None/Both of the above", "All of these" and position words also keep the order.
+  - **Misnumbered batches.** A worksheet batch whose question or ANSWER numbers do not run 1..n is not shuffled.
+  - **Case SATA keys.** These are listed in letter order.
+- **Step 3.**
+  - **Ordering rewrite (`ngCanonicalOrderingAnswers`).** Rank-numbered or presented-order step lines are no longer evidence.
+  - **Question splitting (`n2aSplitBlocks`).** A number after a blank line starts a question, and `n2aConvertText` checks the export's stated question count.
+  - **Image continuations (`i2aAssemble`).** A continuation joins the previous image's last item.
+  - **Choice runs (`nclexDropOptionRuns`).** A run stops before the expected next question.
+  - **Repeated numbers (`nclexSliceByQNum`).** Their text is kept and reported; `track.review` makes the run summary Incomplete.
+  - **Not done.** Splitting chapters with restarted numbering automatically is an owner decision; the run now says to extract each chapter separately.
+- **Step 4.**
+  - **Study view headings (`renderKBMarkdown`).** New Other Findings and Other Treatments headings.
+  - **Case validation (`validateCaseStudy`, `caseAuditDatumValues`).** Keyed-option values and unreadable-unit data become warnings.
+  - **Quote location (`kbNormForMatch(s,true)` decimal marks, `kbQuoteNumericBoundedMatch`).** A quote at a decimal point no longer counts as located.
+  - **Knowledge Base build (`mergeLatteParts`).** Unrestorable facts are dropped and listed (`KB_FACT_BUCKETS`, pinned to `KB_BUCKETS`), with a slug fallback.
+  - **Not done.** The units themselves (°C/°F, ng, pg, counts) are not added to the case tokenizer; that needs paired regressions.
+- **Step 5.**
+  - **Anki deck (M17).** `AnkiGenerator.run` clears nothing at the start; the deck, review decisions and source check are replaced only when the new batch publishes.
+  - **Halting (M3).** `transcribeCards` uses `geminiHaltsBatch`. The KB omission audit stops (`auditHalt`, status `skipped`) after a halting failure while extraction continues.
+  - **NCLEX provenance (M14, M15).** `answer_unmatched` is set by `runSplit` and kept by `nclexAdmitRecord`; it is shown on the card and in exports, and sets `track.review`. `nclexAccumulate` fills missing fields from a later copy.
+  - **Invalid-case export (M7).** It uses `downloadBlob` with the raw text.
+- **Not measured.**
+  - How often real model output mentions "part 4" before the heading.
+  - How many real items the stricter worksheet check keeps in written order. Each one is named in the log.
+  - No live generation was run.
+
+Steps 6–11 of the review's plan are open; their findings are listed in the review.
+
+Verification: see the [release verification record](docs/reviews/v17.15-release.md).
+
 ## v17.14 Argon Auto-profile defaults (2026-10-13)
 
 The canonical application is `Nursing-Study-Suite v17.14.html`. The user, on a paid key, asked for Argon as the shipped default for the three rows recommended after v17.13:

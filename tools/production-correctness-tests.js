@@ -62,12 +62,18 @@ async function runTests(source,t){
   const file={name:'synthetic-card.png'},old={file:file.name,transcript:{face:'front',title:'Synthetic',category:'Synthetic',cardNumber:'1',sections:[],numerics:[],overallLegibility:'clean'},runs:[{kind:'old successful run'}],agreement:null,comparisonIncomplete:false};
   let transcripts={[file.name]:old},error='',calls=0;
   const transcribeSource=span('  const transcribeCards=async()=>{','  // v15.14: tag each transcript');
-  const bind=impl=>new Function('files','cardIsImage','cfg','txAbortRef','setTxBusy','setTxErr','setTxReviewed','addLog','txRuns','cardTranscribe','cardFileId','cardCompareRuns','cardKey','setTranscripts','cardPublishTranscript','currentFiles',transcribeSource+';return transcribeCards;')([file],()=>true,{apiKey:'synthetic',forTool:()=>({model:'mock',level:'low'})},{current:null},()=>{},v=>{error=v;},()=>{},()=>{},2,impl,f=>f.name,()=>({runs:2,numericsUnstable:[],bulletsUnstable:[],facesDisagree:false,idsDisagree:false}),card.cardKey,fn=>{transcripts=fn(transcripts);},card.cardPublishTranscript,{current:[file]});
+  const haltsBatch=new Function(span('function geminiHaltsBatch(','\nasync function callGemini(')+';return geminiHaltsBatch;')(); // v17.15 (M3)
+  const bind=(impl,cardFiles=[file])=>new Function('files','cardIsImage','cfg','txAbortRef','setTxBusy','setTxErr','setTxReviewed','addLog','txRuns','cardTranscribe','cardFileId','cardCompareRuns','cardKey','setTranscripts','cardPublishTranscript','currentFiles','geminiHaltsBatch',transcribeSource+';return transcribeCards;')(cardFiles,()=>true,{apiKey:'synthetic',forTool:()=>({model:'mock',level:'low'})},{current:null},()=>{},v=>{error=v;},()=>{},()=>{},2,impl,f=>f.name,()=>({runs:2,numericsUnstable:[],bulletsUnstable:[],facesDisagree:false,idsDisagree:false}),card.cardKey,fn=>{transcripts=fn(transcripts);},card.cardPublishTranscript,{current:cardFiles},haltsBatch);
   const fail=bind(async()=>{calls++;throw Error('Synthetic unavailable');});await fail();
   const failed=transcripts[file.name];
   t('failed retranscription publishes each requested failed attempt',calls===2&&failed.runs.length===0&&failed.requestedRuns===2);
   t('failed retranscription preserves prior evidence for inspection',failed.retainedTranscript===old&&failed.transcript===old.transcript);
   t('failed requested comparison blocks current transcript',failed.comparisonIncomplete&&card.cardIdentityConflict(failed));
+  // v17.15 (review M3): a quota stop on the first card publishes that card's failure and sends nothing more.
+  {const a={name:'first-card.png'},b={name:'second-card.png'};let quotaCalls=0;const before=transcripts,beforeError=error;error='';
+    await bind(async()=>{quotaCalls++;throw Object.assign(Error('Quota exhausted'),{status:429});},[a,b])();
+    t('a quota stop during card transcription publishes that card and sends no request for the remaining cards',quotaCalls===1&&!!transcripts[a.name]&&transcripts[a.name].comparisonIncomplete&&!transcripts[b.name]&&/Transcription stopped at first-card\.png/.test(error));
+    transcripts=before;error=beforeError;}
   const merged=card.cardMergeFaces([failed.transcript])[0];
   t('failed retranscription reaches the actual card build blocker',card.cardChunkBlockers(merged,card.cardIdentityConflict(failed)?1:0).length>0);
   t('failed retranscription appears outside the shared log',error.includes('Synthetic unavailable')&&error.includes('blocked'));

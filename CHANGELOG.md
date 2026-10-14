@@ -9,6 +9,109 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [17.15] — 2026-10-13
+
+Steps 1–5 of the [v17.14 production review](docs/reviews/production-review-2026-10-13.md) plan. These cover answer keys and rationales that the NCLEX Generator and case shuffles could leave pointing at the wrong choice (findings C1, H3, M8, M10, M11), questions that the converters and the NCLEX Extractor could merge, lose or mis-key (H1, H2, H4, H5, H9), study content shown as checked or correct when it was not (H6, H7, H8, H10, H11), and work lost or quota spent after a failure (M3, M7, M14, M15, M17).
+
+### Fixed
+
+- **Answer keys after the shuffle.** A "part 4" written anywhere before the real PART 4 heading started PART 4 early, so it also held PART 3. The v17.12 shuffle then rewrote the choices but could not find the old answer key to replace, and every shuffled item kept its old ANSWER and Why lines. Triggers include PART 2 restating the batch rule the app sends ("PART 3 and PART 4 must each contain exactly N numbered entries"), the prompt's own phrase 'Part 4 "Why" lines', and a source file named "…Part 4.pdf".
+  - Section headings now count only at the start of a line, after any Markdown or rule characters, and a "PART 3 and PART 4" list is not a heading. A response with no line-start headings is read as before.
+  - PART 3 and PART 4 are replaced together, by position (`ngSpliceParts`). When they overlap or one is missing, nothing is replaced: the shuffle keeps every item in its written order, and choice relabelling leaves the batch as written.
+- **Repairs.** A repaired item was spliced the same way (since v15.8), so its new stem and choices could sit over the old answer key. A repair on overlapping sections is now refused and the worksheet is left as it was.
+- **One letter-reference check for both shuffles** (`itemRefersByLetter`). Unless it is clearly something else, a capital letter that matches a choice label is now treated as a reference to that choice, so the item keeps its written order and the log says why. "Clearly something else" means:
+  - a sentence-opening article "A";
+  - a letter after a clinical noun ("vitamin D", "hepatitis B and C", "group A");
+  - a temperature ("38.5 °C", "101 F");
+  - "D-dimer", "C. difficile", "A&O".
+  - **Worksheet.** "All of the above", "None of the above", "All of these" and "Both of the above" no longer move: shuffling them made the keyed "All of the above" leave a true finding below it. Some 18 phrasings the v17.12 check missed now also keep the order, among them "(see C)", "instead of C", "less urgent than A", "Options B through D", "choice c", "A is the priority", "B is wrong because…" and "the previous option".
+  - **Cases.** The v17.1 check kept many case items in the model's order because of "A client…", "vitamin D", "38.5 °C", "below 60/min" or "vitamin K."; those items are now shuffled. A shuffled SATA key is listed in letter order.
+- **Ordering answers (step 3, H2).** v17.8's rewrite read step lines that list each presented step's rank ("2. Alpha / 3. Beta / 1. Gamma", "Step 2: Alpha") as the order itself. It did the same with lines that only repeat the presented order, and printed a wrong sequence that then passed validation. Those entries are now left as written, with their validation errors.
+- **NCLEX to Anki, Generator .md, .txt and Copy input (step 3, H1).** A question number counted only at the first question's indentation. The Generator's own export mixes indentations: the prompt indents questions "  1.", each batch's first question is trimmed flush-left, and repaired items are written back indented. So a real two-batch worksheet became one card holding all ten questions, not marked for review. A numbered line after a blank line now also starts a question. If the export's stated "N questions" disagrees with what was found, every card is marked NeedsReview.
+- **NCLEX to Anki, question images (step 3, H9).** A continuation at the top of an image was merged into the last question read. An answer page's explanation that ran onto the next page therefore landed on another question's card. It now joins whatever the previous image ended with, whether that was an answer-key entry or a question. Joining a question that was not marked cut off is kept but marked for review.
+- **NCLEX Extractor (step 3, H4, H5).**
+  - In books that number choices 1–4, question 5 was swallowed into question 4's choices and the run still said Complete. A choice run now stops before the question number the sequence expects next.
+  - A repeated question number threw its text away: a second chapter whose numbering restarts, or a wrapped line starting "7.". The text is now kept with the question before it, the repeat is logged, and the run summary reads Incomplete.
+- **Study view headings (step 4, H6).** The extraction prompt allows treatment subtypes acute, discharge or none. Every Treatments fact that was not "independent" printed under **Dependent / Collaborative Orders**. Look findings that were neither early nor late followed the LATE bullets and rendered as part of that list. Both now have their own heading (**Other Treatments**, **Other Findings**) in the Study view and its .md and PDF exports.
+- **Case validation (step 4, H7, H8).** Both are warnings, not errors.
+  - A value written only into the keyed option ("Potassium chloride 40 mEq/L over 4 hours") was never compared with any fact. It is now checked against its rationale's cited facts. Distractors stay exempt.
+  - A datum value whose unit the checker does not read (pH 7.21, INR 4.8, "39.4°C (102.9°F)", ng/mL, cell counts) passed as grounded. It is now marked as not compared.
+- **Decimal doses in source quotes (step 4, H10).** Matching ignores punctuation, so "0.5" reads as "0 5", and a quote that dropped the leading "0." ("5 mg PO daily" in "Digoxin 0.5 mg PO daily") was located. The omission audit then admitted the fact as source-supported. A quote that starts or ends at a decimal point is now a partial number, like "60" inside "600". Exact decimals, "1,5" for "1.5", and PDF-spaced decimals still match.
+- **Knowledge Base saves that would not reload (step 4, H11).** One fact filed under "Treatment", a non-text subtype, or a condition named only in non-Latin script saved normally and then put the next reload into recovery mode. Such a fact is now left out of the build and named in the log and the build warnings. A condition with no usable slug gets the id "condition".
+- **Anki: Generate keeps the current deck (step 5, M17).** Before, the deck, its Text/Extra/tag edits, Keep choices, review decisions and source-check report were cleared before anything was generated, so a failed or cancelled run (quota, bad key, network) left the tool empty. They now stay until the new deck is complete.
+- **Stopping on quota or key failures (step 5, M3).**
+  - **Card transcription.** It now follows the v17.4 halting rule. Before, it sent one doomed request per remaining card and run, and marked earlier good cards as blocked. Now it publishes the current card and stops.
+  - **Omission audit.** After a quota, provider-wait or key failure it is not sent for the remaining chunks, and the build warnings say so. Those chunks' facts are still extracted and kept.
+- **NCLEX Extractor answer provenance (step 5, M14, M15).**
+  - **Model-written answers.** When split mode found no answer for a question on the answer pages, the model wrote one, and it was shown as the book's. Such answers are now marked on the card, in the .md/.txt/PDF/Copy exports (inside the rationale, so NCLEX to Anki still reads the answer), and in the run summary, which reads Incomplete.
+  - **Overlapping copies.** A question extracted twice from overlapping chunks now takes its answer and rationale from the later copy when the first lacked them.
+  - **Missing fields.** Exports print "(not extracted)" instead of "undefined".
+- **Case "Export invalid response" (step 5, M7).** It ran the raw model output through the Markdown-to-text converter, which broke the JSON it exists to preserve. It is now saved unchanged.
+- **Misnumbered worksheet batches are not shuffled.** When a batch's question numbers or ANSWER numbers do not run 1, 2, 3…, each answer entry would have been permuted by the wrong question, and NCLEX to Anki could no longer realign it. Such a batch keeps its order, and the log says so.
+
+### Verification
+
+- 47 new assertions (3,642 total). In `tools/worksheet-remediation-tests.js`:
+  - three stray-"part 4" layouts, each checking that every shuffled key and rationale follows its choice and the batch validates;
+  - Markdown-styled headings;
+  - an overlapping layout that keeps every item's order;
+  - choice relabelling refused on overlap;
+  - a repair after a restated rule, and a refused repair on overlap;
+  - no remaining one-after-the-other PART 3/PART 4 splice;
+  - "All/None/Both of the above" and "All of these" kept;
+  - the 18 missed phrasings kept;
+  - ten clinical-letter phrasings still shuffled;
+  - a misnumbered batch left unshuffled;
+  - both shuffles on the one shared check;
+  - ranked and presented-order ordering answers left as written.
+
+  In `tools/case-remediation-tests.js`:
+  - ordinary clinical prose no longer blocks the case shuffle;
+  - letter references still keep the order;
+  - SATA keys are listed in letter order.
+
+  In `tools/nclex-to-anki-tests.js`:
+  - a two-batch Generator worksheet in the prompt's layout gives ten cards;
+  - a count mismatch marks every card;
+  - an answer-page continuation stays with its answer;
+  - a join onto a question not marked cut off is flagged.
+
+  In `latte-tests.js`:
+  - Davis sections with 3–5 numbered choices keep every question;
+  - a restarted chapter is kept and reported;
+  - a wrapped number keeps its text;
+  - a run needing review reads Incomplete;
+  - Study view headings;
+  - dropped-decimal quotes rejected while exact, comma and spaced decimals still match;
+  - marks that keep positions;
+  - matching build and restore category lists;
+  - a build that leaves out unrestorable facts and restores;
+  - the build log names them;
+  - NCLEX duplicates fill missing answers;
+  - model-written answers are marked and "undefined" is never printed;
+  - split mode marks unmatched answers;
+  - Generate keeps the deck until success;
+  - the raw invalid-case export.
+
+  In `tools/production-correctness-tests.js`: a card quota stop.
+
+  In `tools/anki-integrity-source-regression.js`: an audit quota stop through the shipped build handler.
+
+  In `tools/case-remediation-tests.js` (step 4):
+  - keyed-option values are warned about;
+  - distractors stay exempt;
+  - unreadable-unit data is disclosed;
+  - no warning for compared values or ages.
+- Changed assertions:
+  - three source pins now carry the decimal marks;
+  - "kbNormForMatch is untouched" is now a behavioural check that its default output equals the old function's;
+  - the card-transcription harness injects the shared halting rule;
+  - R07 now checks that the factless guard precedes the only deck replacement;
+  - the source-replacement race now checks that the earlier deck is kept unchanged rather than cleared.
+- Changed fixture: the worksheet shuffle fixture's placeholder rationales read "reason a." instead of "reason A.", because a bare capital label is now treated as a reference.
+- All eight SRI-pinned scripts and both PDF worker copies were re-hashed and match.
+- Prompts, model profiles and warning tiers are unchanged. No live Gemini request was made.
+
 ## [17.14] — 2026-10-13
 
 With Argon in place (v17.13) and a paid key, the user asked for Argon as the shipped default for the three profile rows where deeper reasoning pays off and the output stays well inside Argon's 32,768-token ceiling.
