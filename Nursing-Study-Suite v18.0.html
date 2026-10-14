@@ -5,10 +5,33 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <!-- v15.17: generated study output admits text markup only. Images/media cannot fetch;
      workers execute verified Blob bytes. The app still needs inline scripts and in-browser
-     Babel, so this adds narrow resource directives without a default-src/script-src migration. -->
-<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net">
+     Babel, so this adds narrow resource directives without a default-src/script-src migration.
+     v18.0 (review L44): styles and fonts had no directive (defence in depth only). style-src allows the inline style
+     blocks, style attributes in sanitized output and the boot-error fallback, plus the Google Fonts stylesheet; font-src
+     allows only the font files that stylesheet names. The print preview (about:blank window or srcdoc frame) inherits this
+     policy and uses only its own inline style block and system fonts. -->
+<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com">
 <title>LATTE Study Suite</title>
-<!-- v17.15 (2026-10-13): NCLEX Generator worksheets could be published with wrong answer keys. A "part 4" mention before the
+<!-- v18.0 (2026-10-13): steps 6-10 of the v17.14 production review. Step 6, false failures that blocked the item audit or hid output.
+     A "Why B is incorrect" line and an Oxford-comma SATA key ("A, C, and E") no longer fail a worksheet batch. Case
+     validation reads "At 1400 hours" as a clock time, a pain score its cited fact states (or an instantiated N/10 on a
+     cited 0-10 scale), "q4h" as "every 4 hours", and "25,000 units" in a calculation; the case prompt now lists time and
+     size units. Priority keeps text streamed before a failed retry, and merging its parts keeps sub-bullets repeated
+     under different items. Step 7, NCLEX to Anki and plain-text exports: a PDF line starting with a blood pressure or
+     pain score is no longer dropped as a browser footer; "1.5 mL" is no longer read as choice 1; prose "sources:" keeps
+     its text; a choice ending "vitamin D." is not cut short; a bare ordering digit list is marked for review; a PDF whose
+     counts disagree gives one card per question; and .txt exports keep "*" multiplication signs. Step 9, speed: the
+     page asks Babel for the react preset only (about 4 s less at every start); long runs of spaces or ranges in model
+     output no longer freeze the tab; Anki edits reuse each note's lint and review rows; NCLEX to Anki sanitizes its
+     preview once per list and reads each PDF page once. Step 10, the review's Low findings: PPTX decks with absolute
+     part paths keep their slides and notes; a mid-stream 429 keeps its status and halts the batch; an invalid model ID
+     is not used; number fields clamp when you leave them, not while you type; the KB tool survives malformed card
+     transcripts, rejoins soft-hyphenated words, merges aliases in any order and stops its other lane on a halt; Priority
+     reads bold or other-emoji tier headings; the Extractor keeps answered rows, splits "101.3 F." choices and treats a
+     non-array reply as failed; printed choices sit on their own lines; NCLEX to Anki GUIDs match the Python scripts for
+     text containing U+FEFF; cancelled generator runs say so; and the CSP now also limits styles and fonts. Prompts are
+     unchanged (the case prompt builder is not frozen).
+     v17.15 (2026-10-13): NCLEX Generator worksheets could be published with wrong answer keys. A "part 4" mention before the
      real PART 4 heading (the batch rule restated in PART 2, the prompt's own 'Part 4 "Why" lines', a "...Part 4.pdf" source)
      started PART 4 early, so it also contained PART 3. The v17.12 shuffle then rewrote the choices but could not find the old
      answer key to replace, and every shuffled item kept its old ANSWER and Why lines with no validation error; a repair had
@@ -779,7 +802,9 @@ input[aria-invalid="true"],textarea[aria-invalid="true"],select[aria-invalid="tr
   setTimeout(function(){if(!window.__latteMounted)bootFail('Startup timed out. One or more CDN dependencies may have failed to load.');},12000);
 })();
 </script>
-<script type="text/babel">
+<!-- v18.0 (review M1): data-presets="react" stops @babel/standalone from also running preset-env, which compiled
+     the app to ES5 with regenerator on every load (about 4 s) and ran code the verifier never tested. -->
+<script type="text/babel" data-presets="react">
 const {useState,useRef,useCallback,useEffect,useMemo,createContext,useContext}=React;
 
 // ── Recommended per-tool profiles (Auto mode) ──
@@ -993,8 +1018,12 @@ function _pptxRunText(xml,maxChars=PPTX_LIMITS.textChars) {
   return out;
 }
 function _zipNormalizePath(basePath,target){
-  const base=basePath.split('/');base.pop();
-  for(const part of String(target||'').replace(/\\/g,'/').split('/')){
+  // v18.0 (review L1): an absolute OPC target ("/ppt/slides/slide1.xml") was appended to the source part's folder,
+  // so its slide or speaker notes were not found and later slides were renumbered. A leading "/" now starts at the
+  // package root; relative targets resolve exactly as before.
+  const t=String(target||'').replace(/\\/g,'/');
+  const base=t.startsWith('/')?[]:basePath.split('/');if(base.length)base.pop();
+  for(const part of t.split('/')){
     if(!part||part==='.')continue;
     if(part==='..')base.pop();else base.push(part);
   }
@@ -1215,7 +1244,9 @@ async function geminiRequest(apiKey,model,body,{signal,retries=2,onUpdate,onMeta
   body.generationConfig=geminiGenerationConfig(model,body.generationConfig||{});
   const cap=body.generationConfig.maxOutputTokens,jsonMode=body.generationConfig.responseMimeType==='application/json';
   const streaming=typeof onUpdate==='function';
-  const url=`https://generativelanguage.googleapis.com/v1beta/models/${model}:${streaming?'streamGenerateContent?alt=sse':'generateContent'}`;
+  // v18.0 (review L5): the model ID went into the URL unencoded. Settings now admit only MODEL_ID_RE IDs, which
+  // encoding leaves unchanged; anything else can no longer alter the request path.
+  const url=`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(String(model))}:${streaming?'streamGenerateContent?alt=sse':'generateContent'}`;
   const meta=m=>{if(typeof onMeta==='function')try{onMeta({...m,model,maxOutputTokens:cap});}catch(e){}};
   for(let attempt=0;attempt<=retries;attempt++){
     if(signal?.aborted)throw new DOMException('Aborted','AbortError');
@@ -1238,6 +1269,17 @@ async function geminiRequest(apiKey,model,body,{signal,retries=2,onUpdate,onMeta
       }
       const accept=d=>{
         if(!d||typeof d!=='object'||Array.isArray(d))throw Object.assign(new Error('Malformed SSE data object.'),{incomplete:true});
+        // v18.0 (review L3): an {"error":...} object sent after the HTTP 200 (mid-stream) was ignored, so a 429 or 5xx
+        // ended as a statusless "incomplete" response: no RetryInfo pacing, and geminiHaltsBatch could not stop the run.
+        // It now fails with the same status, retryable and isFatal fields as an HTTP error; one without a code stays incomplete.
+        if(d.error&&typeof d.error==='object'){
+          const code=Number(d.error.code),status=Number.isInteger(code)&&code>=400?code:0,msg=d.error.message||'API error '+(status||'in stream');
+          if(!status)throw Object.assign(new Error(msg),{incomplete:true});
+          const retryable=status===429||status===408||status>=500;
+          const e=Object.assign(new Error(msg),{status,retryable,isFatal:!retryable});
+          if(retryable)e.retryDelayMs=geminiRetryDelayMs(d,resp.headers,attempt);
+          throw e;
+        }
         if(d.promptFeedback?.blockReason)blocked=d.promptFeedback.blockReason;
         if(d.usageMetadata)usage=d.usageMetadata;
         const c=d.candidates?.[0];
@@ -1332,7 +1374,10 @@ async function callGemini(apiKey,model,parts,opts={}){
   // The level is applied as given — it is no longer forced to 'low' when the Argon toggle is
   // off. cfg.thinkingLevel already resolves to the active model's level, so Flash+medium/high
   // is expressible.
-  body.generationConfig.thinkingConfig={thinkingLevel:thinkingLevel||'low'};
+  // v18.0 (review L2): a missing level was sent as 'low', so an Argon call without one ran at low instead of being
+  // refused by geminiGenerationConfig. The level is now set only when given. Every caller passes one from a validated
+  // profile row, settings value or tab control, so no current request changes.
+  if(thinkingLevel!=null)body.generationConfig.thinkingConfig={thinkingLevel};
   return geminiRequest(apiKey,model,body,{signal,retries,onUpdate,onMeta});
 }
 
@@ -1510,8 +1555,9 @@ async function pdfWalkPages(file,{signal,from=1,to=Infinity,onPage}={}){
     if(signal&&signal.aborted)throw new DOMException('Aborted','AbortError');
     const pg=await pdf.getPage(i);
     try{
-      const text=pdfLayoutText(await pg.getTextContent());
-      if(onPage)await onPage(text,i,pg,pdf.numPages);
+      // v18.0 (review L27): the text content is passed on, so a caller that needs item positions does not read it twice.
+      const tc=await pg.getTextContent(),text=pdfLayoutText(tc);
+      if(onPage)await onPage(text,i,pg,pdf.numPages,tc);
     }finally{
       try{pg.cleanup();}catch(e){}
     }
@@ -1530,7 +1576,11 @@ async function getPdfPageCount(file){const pdf=await getPdfDoc(file);return pdf.
 function markdownToPlainText(md){
   // The print-only page-break marker must not leak into plaintext exports; render it as a rule.
   // v17.7: a line-leading number escaped for Markdown ("12\." in the NCLEX worksheet) reads as written.
-  return String(md||'').replace(/^([ \t]*\d{1,9})\\([.)])/gm,'$1$2').replace(/<div class="pagebreak"><\/div>/g,'\n---\n').replace(/^#{1,6}\s+/gm,'').replace(/\*\*(.+?)\*\*/g,'$1').replace(/\*(.+?)\*/g,'$1').replace(/`(.+?)`/g,'$1').replace(/```[\s\S]*?```/g,'').replace(/^\|.*\|$/gm,line=>{if(/^[\|\s:-]+$/.test(line))return'';return line.replace(/^\||\|$/g,'').split('|').map(c=>c.trim()).join('\t');}).replace(/^[-*+]\s+/gm,'\u2022 ').replace(/^>\s+/gm,'  ').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1').replace(/---+/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+  // v18.0 (review M33): any two asterisks on a line were treated as emphasis, so "2 mg/kg * 70 kg * 2 doses" lost its
+  // operators in every .txt export (and on the Anki cards built from them), and the code-fence rule ran after the
+  // inline-code rule and never matched. Emphasis now needs non-space text inside and no word character outside, and
+  // fence marker lines are removed with their content kept.
+  return String(md||'').replace(/^([ \t]*\d{1,9})\\([.)])/gm,'$1$2').replace(/<div class="pagebreak"><\/div>/g,'\n---\n').replace(/^#{1,6}\s+/gm,'').replace(/^[ \t]*```[^\n]*$/gm,'').replace(/(^|[^\w*])\*\*(?=\S)([^\n]*?\S)\*\*(?![\w*])/gm,'$1$2').replace(/(^|[^\w*])\*(?=\S)([^*\n]*?\S)\*(?![\w*])/gm,'$1$2').replace(/`(.+?)`/g,'$1').replace(/^\|.*\|$/gm,line=>{if(/^[\|\s:-]+$/.test(line))return'';return line.replace(/^\||\|$/g,'').split('|').map(c=>c.trim()).join('\t');}).replace(/^[-*+]\s+/gm,'\u2022 ').replace(/^>\s+/gm,'  ').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1').replace(/---+/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
 }
 
 // Shared export helpers
@@ -1630,6 +1680,8 @@ img{max-width:100%;height:auto;}
 .toolbar button:hover{background:#3a6ce4;}
 .toolbar .hint{opacity:0.72;font-size:11.5px;line-height:1.35;}
 @media screen{
+  /* v18.0 (review L44): links matched body text in the preview, so a retained source link was invisible. They are underlined on screen; print keeps plain text. */
+  a{text-decoration:underline;}
   body{background:#e9ecf3;padding-bottom:40px;}
   .sheet{background:#fff;max-width:8.5in;margin:0 auto;padding:0.5in 0.6in 0.7in;
          box-shadow:0 1px 14px rgba(20,30,60,0.14);}
@@ -2252,7 +2304,11 @@ function mergeLatteParts(parts,course='',exam=''){
         usedCondIds.add(cid);
         target={id:cid,name:c.name||'Unnamed Condition',aliases:[],facts:[]};map.set(key,target);
       }
-      target.aliases=[...new Set([...target.aliases,...aliases])];
+      // v18.0 (review L8): a condition that joined an existing entry through one of its aliases kept its aliases but not
+      // its own name, so a later chunk using that name started a second entry and the result depended on chunk order.
+      // The incoming name is now recorded as an alias whenever it differs from the entry's name.
+      const ownName=String(c.name||'').replace(/\s+/g,' ').trim(),targetName=String(target.name||'').replace(/\s+/g,' ').trim();
+      target.aliases=[...new Set([...target.aliases,...aliases,...(ownName&&ownName!==targetName?[String(c.name).trim()]:[])])];
       const existing=new Map(target.facts.map(f=>[kbFactKey(f),f]));
       for(const raw of c.facts||[]){
         if(!raw||!String(raw.text||'').trim())continue;
@@ -2270,6 +2326,11 @@ function mergeLatteParts(parts,course='',exam=''){
   const out={metadata:{course,exam,createdAt:new Date().toISOString(),schemaVersion:'1.1'},sources:parts.map(p=>p.source).filter(Boolean),conditions:[...map.values()],medications:parts.flatMap(p=>p.medications||[]),diagnostics:parts.flatMap(p=>p.diagnostics||[]),scoringTools:parts.flatMap(p=>p.scoringTools||[]),formulas:parts.flatMap(p=>p.formulas||[]),contradictions:parts.flatMap(p=>p.contradictions||[])};
   Object.defineProperty(out,'dropped',{value:dropped}); // not saved: diagnostics for this build only
   return out;
+}
+// v18.0 (review L11): the "Chunks" stat showed kb.sources.length, and a chunk whose omission audit recovered facts has
+// a second source entry ("… (recovered)"), so it counted twice. Chunks are now counted once each by file and range.
+function kbDistinctChunkCount(sources){
+  return new Set((Array.isArray(sources)?sources:[]).map((s,i)=>s&&typeof s==='object'?String(s.filename||'')+'|'+String(s.range||'').replace(/ \(recovered\)$/,''):'#'+i)).size;
 }
 // ── Imported-KB sanitizer (structural; runs BEFORE anything enters app state) ──
 // An imported file is untrusted input. Previously only `Array.isArray(conditions)` was
@@ -2540,7 +2601,9 @@ function validateLatteKnowledgeBase(kb){
       if(![1,2,3].includes(Number(f.tier)))issues.push({severity:'error',condition:c.name,factId:f.id,message:'Fact does not have exactly one valid tier.'});
       if(!String(f.text||'').trim())issues.push({severity:'error',condition:c.name,factId:f.id,message:'Fact text is empty.'});
       if(!String(f.sourceQuote||'').trim())issues.push({severity:'warning',condition:c.name,factId:f.id,message:'Fact has no short verbatim source anchor; NCLEX grounding will fall back to the concise fact text.'});
-      const critical=!!f.safetyCritical||f.factType==='threshold'||f.factType==='contraindication'||/(?:\b(?:mg|mcg|mEq|mm\s*Hg|bpm|mL|hours?|minutes?|days?|hold|notify|emergency|rapid response)\b|contraindicat|\d\s*%)/i.test(f.text||''); // v15: "%" and "contraindicat" sat before a \b that a non-word/continuing char can never satisfy — neither alternative had ever matched
+      // v18.0 (review L13): "5mg" never matched, because the \b before a unit cannot sit between a digit and a letter. A
+      // unit written straight after a digit is now its own alternative; everything the old pattern matched still matches.
+      const critical=!!f.safetyCritical||f.factType==='threshold'||f.factType==='contraindication'||/(?:\b(?:mg|mcg|mEq|mm\s*Hg|bpm|mL|hours?|minutes?|days?|hold|notify|emergency|rapid response)\b|\d(?:mg|mcg|mEq|mm\s*Hg|bpm|mL|hours?|minutes?|days?)\b|contraindicat|\d\s*%)/i.test(f.text||''); // v15: "%" and "contraindicat" sat before a \b that a non-word/continuing char can never satisfy — neither alternative had ever matched
       if(critical&&!(f.sources||[]).some(x=>String(x.filename||'').trim()))issues.push({severity:'error',condition:c.name,factId:f.id,message:'Safety-critical or numerical fact lacks an actual filename source pointer.'});
     }
   }
@@ -2698,7 +2761,10 @@ function kbSplitChunk(chunk){
   })();
   const halves=[text.slice(0,cutAt),text.slice(cutAt)].map(t=>t.trim()).filter(Boolean);
   if(halves.length<2)return null;
-  const base=only?kbUnitLabel([only]):String((chunk&&chunk.label)||'chunk');
+  // v18.0 (review L9): the label was rebuilt from the page alone, so the halves of a half were labelled as halves of
+  // the whole page. It now extends the chunk's own label ("page 3 (first half) (second half)"); a chunk without a
+  // label falls back to the page or "chunk" as before.
+  const base=String((chunk&&chunk.label)||'')||(only?kbUnitLabel([only]):'chunk');
   return halves.map((t,i)=>({text:t,label:base+' ('+(i?'second':'first')+' half)',
     units:only?[{...only,text:t}]:[]}));
 }
@@ -2730,6 +2796,11 @@ function kbCompareOrder(a,b){
 }
 async function kbRunLanes(queue,width,worker,signal){
   let fatal=null,active=0,waiters=[];
+  // v18.0 (review L12): a halting failure stopped new jobs, but the other lane's request already in flight ran to the
+  // end and spent quota on a build that could no longer be committed. Every job now also gets a shared lane signal,
+  // aborted by the first failure or by the caller's cancel, so the sibling request is cancelled with it.
+  const stop=new AbortController(),relay=()=>stop.abort();
+  if(signal?.aborted)stop.abort();else signal?.addEventListener?.('abort',relay,{once:true});
   const wake=()=>{const list=waiters;waiters=[];for(const resume of list)resume();};
   const lane=async()=>{
     for(;;){
@@ -2738,11 +2809,12 @@ async function kbRunLanes(queue,width,worker,signal){
       const job=queue.shift();
       if(!job){if(!active)return;await new Promise(resume=>waiters.push(resume));continue;}
       active++;
-      try{await worker(job);}catch(error){fatal=fatal||error;}
+      try{await worker(job,stop.signal);}catch(error){fatal=fatal||error;stop.abort();}
       finally{active--;wake();}
     }
   };
-  await Promise.all(Array.from({length:Math.max(1,Math.min(Math.floor(Number(width))||1,queue.length||1))},lane));
+  try{await Promise.all(Array.from({length:Math.max(1,Math.min(Math.floor(Number(width))||1,queue.length||1))},lane));}
+  finally{signal?.removeEventListener?.('abort',relay);}
   if(fatal)throw fatal;
 }
 // Verify a model-supplied verbatim quote actually occurs in the source chunk.
@@ -2869,6 +2941,10 @@ function kbQuoteOperatorsAgree(quote,sourceOpNorm,sourceOpDehyphNorm){
 // would buy without changing which facts are kept.
 function kbDehyphNormForMatch(s,decimalMarks=false){
   return kbNormForMatch(String(s||'')
+    // v18.0 (review L7): a soft hyphen ending a line was deleted by the next step and the line break then became a
+    // space, so the word stayed split in two. A soft hyphen with its line break is now removed first and the word
+    // rejoins. Text with no U+00AD before a line break normalizes exactly as before.
+    .replace(/\u00AD[ \t]*\r?\n[ \t]*/g,'')
     // soft hyphens and zero-width joiners the typesetter injected mid-token
     .replace(/[­​‌‍⁠﻿]/g,'')
     // ligatures: pdf.js emits these as single glyphs, so "inflammation" arrives as "in<fl>ammation"
@@ -3107,6 +3183,14 @@ async function cardTranscribe(apiKey,model,level,file,opts){
   // and string bullets, which turned one sentence into one bullet per character in the source text.
   if(p.sections.some(x=>!x||typeof x!=='object'||Array.isArray(x)||(x.bullets!=null&&!Array.isArray(x.bullets))))
     throw new Error('card transcript sections are malformed');
+  // v18.0 (review L6): numerics and title were not shape-checked, so "numerics":[null] or an object title passed here
+  // and then threw in the run comparison or the transcript review, taking the Knowledge Base tool down. They are now
+  // checked like sections: numerics is absent or a list of objects whose value, context and legibility are not
+  // objects, and title is absent or text.
+  const cardNested=v=>v!=null&&typeof v==='object';
+  if((p.numerics!=null&&(!Array.isArray(p.numerics)||p.numerics.some(n=>!n||typeof n!=='object'||Array.isArray(n)||cardNested(n.value)||cardNested(n.context)||cardNested(n.legibility))))
+    ||(p.title!=null&&typeof p.title!=='string'))
+    throw new Error('card transcript numerics or title are malformed');
   return p;
 }
 // Pairing key. A BACK face does not carry the condition name — only the running header and
@@ -3169,14 +3253,20 @@ function cardMergeFaces(transcripts){
 // verdicts. Those are structural, so they block. A front-only card is incomplete but sound —
 // it has its condition name — so it warns and still builds. Returning reasons rather than a
 // boolean is deliberate: 'blocked' with no cause is not actionable at the sink.
-function cardChunkBlockers(c,unstableNumerics){
+// v18.0 (review L10): the second argument was one count that also held changed bullets and failed or disagreeing
+// comparisons, and all of it was reported as changed numbers. It is now {numerics,bullets,comparisons} from
+// cardRunInstability, each with its own reason; a plain number still means changed numbers. What blocks is unchanged.
+function cardChunkBlockers(c,unstable){
   if(!c)return['no transcript'];
   const out=[];
   if(c.fronts===0)out.push('no front face — a back carries the card number but no condition name, so its facts have nothing to attach to');
   else if(c.fronts>1)out.push(c.fronts+' front faces share this card number — two different cards have been merged into one');
   if(c.backs>1)out.push(c.backs+' back faces share this card number — two different cards have been merged into one');
   if(c.legibility==='unreadable')out.push('a face was transcribed as unreadable');
-  if(unstableNumerics>0)out.push(unstableNumerics+' number(s) changed between identical transcription runs');
+  const u=typeof unstable==='number'?{numerics:unstable}:(unstable||{});
+  if(u.numerics>0)out.push(u.numerics+' number(s) changed between identical transcription runs');
+  if(u.bullets>0)out.push(u.bullets+' line(s) of card text changed between identical transcription runs');
+  if(u.comparisons>0)out.push(u.comparisons+' transcription comparison(s) incomplete, failed or disagreeing on the face or card number — transcribe this card again');
   return out;
 }
 // Sound but incomplete. Kept separate from the blockers so an honest gap does not read as a defect.
@@ -3253,6 +3343,17 @@ function createOperationSlot(){
 function cardCurrentEntries(transcripts,files){const ids=new Set(files.filter(cardIsImage).map(cardFileId));return Object.entries(transcripts).filter(([id])=>ids.has(id)).map(([,entry])=>entry);}
 function cardPublishTranscript(previous,id,entry,files){const ids=new Set(files.map(cardFileId));return Object.fromEntries(Object.entries({...previous,...(ids.has(id)?{[id]:entry}:{})}).filter(([key])=>ids.has(key)));}
 function cardIdentityConflict(entry){return !!(entry?.agreement?.facesDisagree||entry?.agreement?.idsDisagree||entry?.comparisonIncomplete);}
+// v18.0 (review L10): per card key, changed numbers, changed bullets and incomplete or disagreeing comparisons, counted
+// apart so cardChunkBlockers can name each one. Moved out of KnowledgeBaseBuilder's cardUnstable memo, which summed them.
+function cardRunInstability(entries){
+  const m=new Map();
+  for(const e of entries||[]){
+    if(!e||!e.transcript)continue;
+    const numerics=(e.agreement?.numericsUnstable||[]).length,bullets=(e.agreement?.bulletsUnstable||[]).length,comparisons=cardIdentityConflict(e)?1:0;
+    if(numerics+bullets+comparisons){const k=cardKey(e.transcript),o=m.get(k)||{numerics:0,bullets:0,comparisons:0};m.set(k,{numerics:o.numerics+numerics,bullets:o.bullets+bullets,comparisons:o.comparisons+comparisons});}
+  }
+  return m;
+}
 function KnowledgeBaseBuilder(){
   // v16.0: full-opacity text preserves contrast; background and checkboxes convey exclusions.
   // v16.0: named controls, visible selection states, and reflowing groups replace inaccessible fixed layouts.
@@ -3403,15 +3504,8 @@ function KnowledgeBaseBuilder(){
   ),[transcripts,files]);
   // Instability is a property of the RUN, not of the transcript, so it is joined here on the
   // card key rather than threaded through cardMergeFaces.
-  const cardUnstable=useMemo(()=>{
-    const m=new Map();
-    for(const e of cardCurrentEntries(transcripts,files)){
-      if(!e||!e.transcript)continue;
-      const n=(e.agreement?.numericsUnstable||[]).length+(e.agreement?.bulletsUnstable||[]).length+(cardIdentityConflict(e)?1:0);
-      if(n){const k=cardKey(e.transcript);m.set(k,(m.get(k)||0)+n);}
-    }
-    return m;
-  },[transcripts,files]);
+  // v18.0 (review L10): the counts are kept apart (cardRunInstability) so the blocker names what actually happened.
+  const cardUnstable=useMemo(()=>cardRunInstability(cardCurrentEntries(transcripts,files)),[transcripts,files]);
   // Partition ONCE. The review list, the Build gate and build()'s queue all read this, so the
   // panel can never disagree with what is actually extracted.
   const cardGate=useMemo(()=>{
@@ -3485,7 +3579,8 @@ function KnowledgeBaseBuilder(){
       // v17.3: the loop body became a job function so an opt-in second lane can run it. kbRunLanes
       // keeps the per-job cancellation check; results are assembled in chunk order below.
       const finished=[];
-      const processJob=async job=>{
+      // v18.0 (review L12): requests use kbRunLanes' shared lane signal, which also follows the Cancel controller.
+      const processJob=async(job,laneSignal=controller.signal)=>{
         const result={order:job.order||[0],parts:[],stat:null};
         const{file,chunk}=job;const tag=file.name+' ('+chunk.label+')';
         const srcNorm=kbNormForMatch(chunk.text);
@@ -3524,7 +3619,7 @@ function KnowledgeBaseBuilder(){
         // ---- Pass 1: extraction ----
         try{
           const prompt=KB_EXTRACTION_PROMPT.replace('ONE supplied source file',()=>'ONE supplied source chunk named "'+file.name+'" ('+chunk.label+')')+focusBlock;
-          const raw=await geminiRequest(cfg.apiKey,model,{contents:[{parts:[{text:'SOURCE FILE: '+file.name+'\nSOURCE RANGE: '+chunk.label+'\n'+chunk.text},{text:prompt}]}],generationConfig:{responseMimeType:'application/json',thinkingConfig:{thinkingLevel:level}}},{signal:controller.signal,retries:2,onMeta:m=>{meta=m;}});
+          const raw=await geminiRequest(cfg.apiKey,model,{contents:[{parts:[{text:'SOURCE FILE: '+file.name+'\nSOURCE RANGE: '+chunk.label+'\n'+chunk.text},{text:prompt}]}],generationConfig:{responseMimeType:'application/json',thinkingConfig:{thinkingLevel:level}}},{signal:laneSignal,retries:2,onMeta:m=>{meta=m;}});
           // v16.7: retain raw model evidence when shape validation quarantines a response.
           primaryResponse={text:raw,meta};
           parsed=kbValidateExtractionEnvelope(extractJSON(raw));
@@ -3576,11 +3671,11 @@ function KnowledgeBaseBuilder(){
         let recovered=0,discarded=0,auditStatus=verifyPass?'pending':'not-run',auditResponse=null;
         if(verifyPass&&auditHalt){auditStatus='skipped';bump(1);}
         else if(verifyPass){
-          if(controller.signal.aborted)throw new DOMException('Aborted','AbortError');
+          if(laneSignal.aborted)throw new DOMException('Aborted','AbortError');
           let vmeta=null;
           try{
             const inventory=(parsed.conditions||[]).map(c=>`# ${c.name}\n`+(c.facts||[]).map(f=>`- [${f.latteBucket}] ${f.text}`).join('\n')).join('\n\n')||'(nothing was extracted from this chunk)';
-            const vraw=await geminiRequest(cfg.apiKey,auditCfg.model,{contents:[{parts:[{text:'(A) SOURCE CHUNK — '+file.name+' ('+chunk.label+')\n'+chunk.text},{text:'(B) FACTS ALREADY EXTRACTED FROM THIS CHUNK\n'+inventory},{text:KB_VERIFY_PROMPT+focusBlock}]}],generationConfig:{responseMimeType:'application/json',thinkingConfig:{thinkingLevel:auditCfg.level}}},{signal:controller.signal,retries:1,onMeta:m=>{vmeta=m;}});
+            const vraw=await geminiRequest(cfg.apiKey,auditCfg.model,{contents:[{parts:[{text:'(A) SOURCE CHUNK — '+file.name+' ('+chunk.label+')\n'+chunk.text},{text:'(B) FACTS ALREADY EXTRACTED FROM THIS CHUNK\n'+inventory},{text:KB_VERIFY_PROMPT+focusBlock}]}],generationConfig:{responseMimeType:'application/json',thinkingConfig:{thinkingLevel:auditCfg.level}}},{signal:laneSignal,retries:1,onMeta:m=>{vmeta=m;}});
             // v16.7: a missing/wrong-shaped omission inventory is unresolved evidence, not zero omissions.
             auditResponse={text:vraw,meta:vmeta};
             const vp=kbValidateExtractionEnvelope(extractJSON(vraw),true),missed=vp.missed;
@@ -3602,8 +3697,9 @@ function KnowledgeBaseBuilder(){
               }
               if(recovered)result.parts.push({source:{filename:file.name,range:chunk.label+' (recovered)'},conditions:[...byCond.entries()].map(([name,facts])=>({name,aliases:[],facts}))});
             }
-            auditStatus=vmeta?.truncated?'truncated':'complete';
-            if(vmeta?.truncated)owned_addLog(`  ⚠ audit output truncated for ${tag} — some omissions may be unreported`,'warn');
+            // v18.0 (review L12): a 'truncated' status and warning followed here, but since v17.13 geminiRequest rejects a
+            // JSON reply cut off at the ceiling (the catch below keeps its partial text), so a returned audit is complete.
+            auditStatus='complete';
             owned_addLog(`  ↳ audit: +${recovered} recovered${discarded?`, ${discarded} discarded (quote not found in source)`:''}`,recovered?'ok':'');
           }catch(e){
             if(e.name==='AbortError')throw e;
@@ -3719,7 +3815,7 @@ function KnowledgeBaseBuilder(){
       <div style={{display:'flex',gap:8,alignItems:'flex-end',flexWrap:'wrap',marginBottom:10}}>
         <div className="field-block" style={{marginBottom:0}}>
           <label htmlFor="kb-runs" style={{fontSize:12}}>Runs per card</label>
-          <input id="kb-runs" type="number" min={1} max={3} step={1} value={txRuns} onChange={e=>setTxRuns(Math.max(1,Math.min(3,Number(e.target.value)||1)))} style={{width:80}}/>
+          <NumberInput id="kb-runs" type="number" min={1} max={3} step={1} value={txRuns} onChange={e=>setTxRuns(Math.max(1,Math.min(3,Number(e.target.value)||1)))} style={{width:80}}/>
           <div style={{fontSize:12,color:'var(--text-dim)',marginTop:3}}>2+ transcribes each card twice and flags anything that changed between identical runs. Costs a call per run.</div>
         </div>
         <button className="btn-primary" style={{flex:1,minWidth:160}} disabled={txBusy||!cfg.apiKey} onClick={transcribeCards}>
@@ -3774,8 +3870,8 @@ function KnowledgeBaseBuilder(){
         </span>
       </label>
       <div className="form-grid">
-        <div className="field-block"><label htmlFor="kb-chunk-size" style={{fontSize:12}}>Chunk size (characters)</label><input id="kb-chunk-size" type="number" min={6000} max={120000} step={1000} value={chunkChars} onChange={e=>setChunkChars(Math.max(6000,Math.min(120000,Number(e.target.value)||30000)))}/><div style={{fontSize:12,color:'var(--text-dim)',marginTop:3}}>Smaller = more thorough per page, more calls. Oversized chunks split automatically on truncation.</div></div>
-        <div className="field-block"><label htmlFor="kb-overlap" style={{fontSize:12}}>Overlap (pages/slides)</label><input id="kb-overlap" type="number" min={0} max={5} step={1} value={overlapUnits} onChange={e=>setOverlapUnits(Math.max(0,Math.min(5,Number(e.target.value)||0)))}/><div style={{fontSize:12,color:'var(--text-dim)',marginTop:3}}>Carries trailing pages into the next chunk so content on a seam keeps its context. Duplicates are merged.</div></div>
+        <div className="field-block"><label htmlFor="kb-chunk-size" style={{fontSize:12}}>Chunk size (characters)</label><NumberInput id="kb-chunk-size" type="number" min={6000} max={120000} step={1000} value={chunkChars} onChange={e=>setChunkChars(Math.max(6000,Math.min(120000,Number(e.target.value)||30000)))}/><div style={{fontSize:12,color:'var(--text-dim)',marginTop:3}}>Smaller = more thorough per page, more calls. Oversized chunks split automatically on truncation.</div></div>
+        <div className="field-block"><label htmlFor="kb-overlap" style={{fontSize:12}}>Overlap (pages/slides)</label><NumberInput id="kb-overlap" type="number" min={0} max={5} step={1} value={overlapUnits} onChange={e=>setOverlapUnits(Math.max(0,Math.min(5,Number(e.target.value)||0)))}/><div style={{fontSize:12,color:'var(--text-dim)',marginTop:3}}>Carries trailing pages into the next chunk so content on a seam keeps its context. Duplicates are merged.</div></div>
       </div>
       </Disclose>
     </>}
@@ -3850,7 +3946,7 @@ function KnowledgeBaseBuilder(){
       {logs.map((l,i)=><div key={i} style={{color:l.t==='ok'?'var(--accent-green)':l.t==='err'?'var(--accent-red)':l.t==='warn'?'var(--accent-warm)':'var(--text-dim)'}}>[{l.ts}] {l.m}</div>)}
       </div>
     </Disclose>}
-    {(kb.conditions||[]).length>0&&<><div className="stats-grid" style={{margin:'16px 0'}}><div className="stat-box"><div className="stat-val">{kb.conditions.length}</div><div className="stat-lbl">Conditions</div></div><div className="stat-box"><div className="stat-val">{facts}</div><div className="stat-lbl">Facts</div></div><div className="stat-box"><div className="stat-val">{kb.sources.length}</div><div className="stat-lbl">Chunks</div></div><div className="stat-box"><div className="stat-val" style={{color:validation.some(x=>x.severity==='error')?'var(--accent-red)':'var(--accent-green)'}}>{validation.filter(x=>x.severity==='error').length}</div><div className="stat-lbl">Validation Errors</div></div></div>
+    {(kb.conditions||[]).length>0&&<><div className="stats-grid" style={{margin:'16px 0'}}><div className="stat-box"><div className="stat-val">{kb.conditions.length}</div><div className="stat-lbl">Conditions</div></div><div className="stat-box"><div className="stat-val">{facts}</div><div className="stat-lbl">Facts</div></div><div className="stat-box">{/* v18.0 (review L11): distinct chunks; a recovered part is not a second chunk. */}<div className="stat-val">{kbDistinctChunkCount(kb.sources)}</div><div className="stat-lbl">Chunks</div></div><div className="stat-box"><div className="stat-val" style={{color:validation.some(x=>x.severity==='error')?'var(--accent-red)':'var(--accent-green)'}}>{validation.filter(x=>x.severity==='error').length}</div><div className="stat-lbl">Validation Errors</div></div></div>
       {validation.length>0&&<div className={validation.some(x=>x.severity==='error')?'error-banner':'tip-banner'} style={{marginBottom:10}}>Knowledge-base validation: {validation.filter(x=>x.severity==='error').length} error(s), {validation.filter(x=>x.severity==='warning').length} warning(s).</div>}
       {diag&&<div style={{marginBottom:12,padding:'11px 13px',borderRadius:8,border:'1px solid '+(diag.chunks.some(c=>c.flag)?'var(--warning-border)':'var(--success-border)'),background:diag.chunks.some(c=>c.flag)?'var(--warning-bg)':'var(--success-bg)'}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap'}}>
@@ -4199,19 +4295,21 @@ Produce the ranked analysis now.`;
 // entire analysis while Tier 2 and 3 also matched separately, duplicating the content.
 // A single line scan cannot over-run: a section ends where the next heading begins, and
 // the heading test accepts 1-4 hashes and an optional emoji.
-// v15.8: was four independent regexes, each bounded by a lookahead for the NEXT heading.
-// `##?` matched one or two hashes only, so a model emitting `### TIER 2` failed the
-// lookahead and TIER 1's lazy (.*?) ran to end-of-string under /s — Tier 1 rendered the
-// whole analysis while Tier 2 and 3 also matched separately, duplicating content.
-// A single line scan cannot over-run: a section ends where the next heading begins.
 function paParseTiers(text){
   const src=String(text||'');
   const sec={tier1:[],tier2:[],tier3:[],strategy:[]};
+  // v18.0 (review L15): a heading was recognised only as 1-4 hashes plus one fixed emoji per tier, so a bold
+  // ("## **TIER 2**", "**Tier 2**") or other-emoji ("## 🟠 TIER 2") heading was read as body text and Tier 2 landed
+  // inside Tier 1. Up to three runs of symbols (emoji, "**") may now precede the label after the hashes, and a wholly
+  // bold line holding only the label and an optional short title also counts. Plain hashed headings match exactly as
+  // before; "#" is not a symbol here, so five hashes are still not a heading.
+  const headMark='(?:[^\\w\\s#]+\\s*){0,3}',headTitle='(?:\\s*[—–:-]\\s*[A-Za-z][A-Za-z\' -]{0,30})?';
+  const head=label=>new RegExp('^(?:#{1,4}\\s*'+headMark+label+'\\b|\\*\\*\\s*'+headMark+label+'\\b'+headTitle+'\\s*\\*\\*'+headTitle+'\\s*:?\\s*$)','i');
   const HEAD=[
-    [/^#{1,4}\s*(?:🔴\s*)?TIER\s*1\b/i,'tier1'],
-    [/^#{1,4}\s*(?:🟡\s*)?TIER\s*2\b/i,'tier2'],
-    [/^#{1,4}\s*(?:🔵\s*)?TIER\s*3\b/i,'tier3'],
-    [/^#{1,4}\s*Study\s*Strategy\b/i,'strategy'],
+    [head('TIER\\s*1'),'tier1'],
+    [head('TIER\\s*2'),'tier2'],
+    [head('TIER\\s*3'),'tier3'],
+    [head('Study\\s*Strategy'),'strategy'],
   ];
   let cur=null,audit='';
   for(const line of src.split('\n')){
@@ -4257,22 +4355,29 @@ function paSynthGroups(extractions,limit=PA_SYNTH_PART_CHARS,joins=[]){
 // Parts were concatenated, so a topic ranked in two parts appeared twice under the same heading. Each tier's
 // ### topics are keyed by heading (case and spacing ignored) and combined in first-appearance order, and an
 // item repeated word for word is kept once. Items worded differently are both kept.
+// v18.0 (review M22): duplicates were dropped line by line, indented sub-bullets included, so a sub-line repeated under
+// two different items (a "→ Testable angle: …" clause, "Notify the provider") survived only once. An item is now its
+// top-level bullet with its indented lines, and only a whole item repeated word for word is dropped.
 function paMergeTopics(bodies){
   const norm=s=>s.toLowerCase().replace(/\s+/g,' ').trim(),sections=[],byKey=new Map();
   for(const body of bodies){
-    let sec=null;
+    let sec=null,item=null;
+    const flush=()=>{if(item){const k=norm(item.join('\n'));if(!sec.seen.has(k)){sec.seen.add(k);sec.lines.push(...item);}item=null;}};
     for(const raw of String(body||'').split('\n')){
       const line=raw.replace(/\s+$/,''),h=line.match(/^#{3,6}\s+(.+)$/);
       if(!h&&!line.trim())continue;
       const key=h?norm(h[1]):(sec?null:'');
       if(key!==null){
+        flush();
         sec=byKey.get(key);
         if(!sec){sec={heading:h?line:'',lines:[],seen:new Set()};byKey.set(key,sec);sections.push(sec);}
         if(h)continue;
       }
-      if(/^\s*[-*]\s/.test(line)){const k=norm(line);if(sec.seen.has(k))continue;sec.seen.add(k);}
-      sec.lines.push(line);
+      if(/^[-*]\s/.test(line)){flush();item=[line];continue;}
+      if(item&&/^\s/.test(line)){item.push(line);continue;}
+      flush();sec.lines.push(line);
     }
+    flush();
   }
   return sections.map(s=>(s.heading?s.heading+'\n':'')+s.lines.join('\n')).join('\n\n');
 }
@@ -4440,9 +4545,13 @@ function PriorityAnalyzer(){
         if(!current())throw new DOMException('Aborted','AbortError');
         owned_setChunks(p=>p.map(c=>c.id===synthIds[k]?{...c,status:'running'}:c));owned_setPhase(parts>1?'Synthesizing part '+(k+1)+' of '+parts+'...':'Synthesizing...');
         const synthPrompt=paBuildSynthPrompt(groups[k],context),before=texts.filter(t=>String(t||'').trim()).join(SEP);
+        // v18.0 (review M21): each retry starts with onUpdate(''), which replaced the text already streamed, so a run whose
+        // retries all failed showed an empty results view (or lost a part's partial text) despite v17.4's rule that streamed
+        // text survives any failure. The last nonempty text is kept, and the results view opens only once there is text.
+        let lastText='';
         owned_setIsStreaming(true);
         try{
-          const full=await callGemini(cfg.apiKey,synthModel,[{text:synthPrompt}],{thinkingLevel:synthLevel,signal:controller.signal,onUpdate:t=>{if(!current())return;gotOutput=true;owned_setOutput(before?before+SEP+t:t);owned_setStep('results');},onMeta:m=>{metas[k]=m;if(parts>1)publishSynthMeta();else owned_setMeta(m);}});
+          const full=await callGemini(cfg.apiKey,synthModel,[{text:synthPrompt}],{thinkingLevel:synthLevel,signal:controller.signal,onUpdate:t=>{if(!current())return;if(t)lastText=t;const shown=before?before+SEP+lastText:lastText;gotOutput=!!shown.trim();owned_setOutput(shown);if(gotOutput)owned_setStep('results');},onMeta:m=>{metas[k]=m;if(parts>1)publishSynthMeta();else owned_setMeta(m);}});
           owned_setIsStreaming(false);
           if(!current())throw new DOMException('Aborted','AbortError');
           texts[k]=full;owned_setChunks(p=>p.map(c=>c.id===synthIds[k]?{...c,status:'done'}:c));
@@ -4451,7 +4560,7 @@ function PriorityAnalyzer(){
           // the outer handler keeps whatever streamed. Any other failure costs only its own part.
           if(parts===1||err.name==='AbortError'||!current())throw err;
           if(geminiHaltsBatch(err))throw new Error('Synthesis stopped at part '+(k+1)+' of '+parts+'; the remaining parts were not sent. '+(err.message||String(err)));
-          texts[k]=err.partialText||'';failed.push({part:k+1,message:err.message||String(err)});
+          texts[k]=err.partialText||lastText;failed.push({part:k+1,message:err.message||String(err)});
           owned_setChunks(p=>p.map(c=>c.id===synthIds[k]?{...c,status:'error'}:c));
         }
       }
@@ -4508,8 +4617,8 @@ function PriorityAnalyzer(){
             <textarea id="priority-context" value={context} onChange={e=>setContext(e.target.value)} placeholder="e.g. 'Exam is on cardiac meds only'" rows={3}/>
       </Disclose>
       <Disclose summary="Chunking" note={Math.round(chunkSize/1000)+'k · '+overlapSize+' overlap'}>
-            <div className="sb-field"><label htmlFor="priority-chunk-size">Chunk size</label><input id="priority-chunk-size" type="number" value={chunkSize} onChange={e=>setChunkSize(Math.max(2000,parseInt(e.target.value)||12000))}/></div>
-            <div className="sb-field"><label htmlFor="priority-overlap">Overlap</label><input id="priority-overlap" type="number" value={overlapSize} onChange={e=>setOverlapSize(paParseOverlap(e.target.value))}/></div>
+            <div className="sb-field"><label htmlFor="priority-chunk-size">Chunk size</label><NumberInput id="priority-chunk-size" type="number" value={chunkSize} onChange={e=>setChunkSize(Math.max(2000,parseInt(e.target.value)||12000))}/></div>
+            <div className="sb-field"><label htmlFor="priority-overlap">Overlap</label><NumberInput id="priority-overlap" type="number" value={overlapSize} onChange={e=>setOverlapSize(paParseOverlap(e.target.value))}/></div>
       </Disclose>
     </>}
     action={<>
@@ -5400,7 +5509,18 @@ function ankiTagFormatIssues(card){
   if(card.tagFormatContract!=='hierarchical-v1')return [];
   return (String(card.tags||'').match(/\S+/g)||[]).filter(token=>!/^[^:\s]+(?:::[^:\s]+)+$/u.test(token));
 }
+// v18.0 (review M18): each edit re-linted the whole deck about seven times (7,000 calls at 1,000 notes). A note's
+// result is reused only while every field the lint reads is unchanged, so an edit, even one made in place, re-lints it.
+const ANKI_LINT_CACHE=new WeakMap();
 function lintAnkiCard(c){
+  if(!c||typeof c!=='object')return lintAnkiCardUncached(c);
+  const hit=ANKI_LINT_CACHE.get(c),parseIssueCount=(c.parseIssues||[]).length;
+  if(hit&&hit.text===c.text&&hit.extra===c.extra&&hit.tags===c.tags&&hit.pipeCount===c.pipeCount&&hit.parseIssueCount===parseIssueCount&&hit.tagFormatContract===c.tagFormatContract)return hit.issues.slice();
+  const issues=lintAnkiCardUncached(c);
+  ANKI_LINT_CACHE.set(c,{text:c.text,extra:c.extra,tags:c.tags,pipeCount:c.pipeCount,parseIssueCount,tagFormatContract:c.tagFormatContract,issues:issues.slice()});
+  return issues;
+}
+function lintAnkiCardUncached(c){
   const p=parseAnkiClozes(c.text),issues=[];
   // v16.7: a structurally plausible remainder cannot bypass a missing generated qualifier.
   if((c.parseIssues||[]).length)issues.push('parse-boundary');
@@ -5624,18 +5744,28 @@ function ankiSourceConflicts(snapshot){
 }
 // v16.0: exact-front checks miss repeated recall targets with lightly reworded context.
 // These are review candidates, never dedupe instructions or proof of semantic equivalence.
+const ANKI_REVIEW_ROW_CACHE=new WeakMap();
 function ankiReviewCandidates(cards){
   const buckets=new Map(),normalize=s=>String(s||'').replace(/\s+/g,' ').trim();
   const tokens=s=>s.toLowerCase().match(/[\p{L}\p{N}]+(?:[.\/,][\p{L}\p{N}]+)*|[<>≤≥=+±−%°\/-]+/gu)||[];
   const guards=parts=>parts.filter(x=>/\d|[<>≤≥=+±−%°\/-]/.test(x)||/^(?:not|no|never|without|before|after|above|below|over|under|within|least|most|may|can|should|must|only|except|unless|until|always|usually|typically|first|initial|last|then|mg|mcg|g|kg|ml|l|dl|mmol|meq|units?|seconds?|minutes?|hours?|days?|weeks?|months?|years?|iv|im|sq|sc|po)$/.test(x));
   for(const card of cards||[]){
-    const parsed=parseAnkiClozes(card.text);if(parsed.issues.length||lintAnkiCard(card).length||(card.mappingIssues||[]).length)continue;
+    if(lintAnkiCard(card).length||(card.mappingIssues||[]).length)continue;
     const factIds=[...new Set((card.factIds||[]).map(String).filter(id=>/^fact-\d+$/.test(id)))];if(!factIds.length)continue;
-    for(const index of parsed.indices){
-      const front=normalize(ankiRenderClozes(parsed,index)),answers=parsed.spans.filter(s=>s.index===index).map(s=>normalize(s.answer));
-      const parts=tokens(front),words=new Set(parts.filter(x=>/[\p{L}]/u.test(x))),bigrams=new Set(parts.slice(1).map((x,i)=>parts[i]+' '+x));
-      const review={noteId:card.id,index,answers,front,words,bigrams,guard:JSON.stringify(guards(parts))};
-      for(const factId of factIds){const key=JSON.stringify([factId,answers]);if(!buckets.has(key))buckets.set(key,{factId,rows:[]});buckets.get(key).rows.push(review);}
+    // v18.0 (review M18): a note's rows depend only on its text and id, and were rebuilt for the whole deck on every
+    // edit. They are reused while both are unchanged; the rows are never modified.
+    let cached=ANKI_REVIEW_ROW_CACHE.get(card);
+    if(!cached||cached.text!==card.text||cached.id!==card.id){
+      const parsed=parseAnkiClozes(card.text);
+      cached={text:card.text,id:card.id,rows:parsed.issues.length?[]:parsed.indices.map(index=>{
+        const front=normalize(ankiRenderClozes(parsed,index)),answers=parsed.spans.filter(s=>s.index===index).map(s=>normalize(s.answer));
+        const parts=tokens(front),words=new Set(parts.filter(x=>/[\p{L}]/u.test(x))),bigrams=new Set(parts.slice(1).map((x,i)=>parts[i]+' '+x));
+        return {noteId:card.id,index,answers,front,words,bigrams,guard:JSON.stringify(guards(parts))};
+      })};
+      ANKI_REVIEW_ROW_CACHE.set(card,cached);
+    }
+    for(const review of cached.rows){
+      for(const factId of factIds){const key=JSON.stringify([factId,review.answers]);if(!buckets.has(key))buckets.set(key,{factId,rows:[]});buckets.get(key).rows.push(review);}
     }
   }
   const similar=(a,b)=>{
@@ -6118,7 +6248,12 @@ function ankiParseSourceAuditV4(raw,group){
           if(status!==target.status||fields.size>1)referenceRecoveries.push({groupId:group.id,path:targetPath+'.contextRefs',factId:id,noteId:null,method:'mixed-context-status',before:{status:target.status,contextRefs:target.contextRefs.map(ref=>({...ref}))},after:{status,contextRefs:contextRefs.map(ref=>({...ref}))}});
         }
         const legacyRefs=refs.map(r=>({...r,clozeIndices:[...r.clozeIndices]}));
-        if(status!=='tested')for(const ref of contextRefs)if(!legacyRefs.some(r=>r.noteId===ref.noteId))legacyRefs.push({noteId:ref.noteId,clozeIndices:[]});
+        // v18.0 (review L14): every contextRef of a non-tested target was added to the legacy check as a note reference,
+        // so the hidden-coverage rules (manual-excluded needs an unchecked note, out-of-tier a kept note outside the tier,
+        // invalid-note a structurally invalid note) also judged the other mentions the prompt allows in contextRefs. The
+        // valid receipt stayed unresolved and the group was retried. When hidden references exist the rules now judge
+        // those only; a target with no hidden reference still has its contextRefs checked as its cited coverage.
+        if(status!=='tested'&&!refs.length)for(const ref of contextRefs)if(!legacyRefs.some(r=>r.noteId===ref.noteId))legacyRefs.push({noteId:ref.noteId,clozeIndices:[]});
         targets.push({...span,status,noteRefs:refs,contextRefs});legacyTargets.push({sourceSpan:span.sourceSpan,status,noteRefs:legacyRefs});
       }
       if(seenRanges.size!==targetRanges.size)fail(path+'.targets','target inventory ranges require exactly one coverage receipt each.',context);
@@ -6192,7 +6327,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '17.15';}
+function suiteVersion(){return '18.0';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -7365,8 +7500,10 @@ function nclexSliceByQNum(text,positions){
   return items;
 }
 function nclexSplitByQNum(text){
-  const BARE=[/(?:^|\n)\s*(\d{1,4})\s*\.\s/g,/(?:^|\n)\s*(\d{1,4})\)\s/g];
-  const EXPLICIT=[/(?:^|\n)\s*Q(?:uestion)?\s*#?\s*(\d{1,4})[.):;\s]/gi,/(?:^|\n)\s*#\s*(\d{1,4})[.):;\s]/g,/(?:^|\n)\s*\[(\d{1,4})\]/g];
+  // v18.0 (review L17): the line prefix was \s*, which crosses newlines, so every blank line re-scanned the whole
+  // whitespace run after it (100k blank characters took 14 s). The prefix now stays on its own line.
+  const BARE=[/(?:^|\n)[^\S\n]*(\d{1,4})\s*\.\s/g,/(?:^|\n)[^\S\n]*(\d{1,4})\)\s/g];
+  const EXPLICIT=[/(?:^|\n)[^\S\n]*Q(?:uestion)?\s*#?\s*(\d{1,4})[.):;\s]/gi,/(?:^|\n)[^\S\n]*#\s*(\d{1,4})[.):;\s]/g,/(?:^|\n)[^\S\n]*\[(\d{1,4})\]/g];
   const scan=bp=>{const pattern=new RegExp(bp.source,bp.flags);const positions=[];let m;
     while((m=pattern.exec(text))!==null){const num=parseInt(m[1]);if(num>0&&num<5000)positions.push({num,index:m.index});}
     return positions;};
@@ -7424,7 +7561,9 @@ function nclexSplitStemOptions(text){
     // indented option ("\n  B. ") still counts as starting its line.
     const from=m.index+(/^[\n\s]/.test(m[0])?1:0),nl=s.lastIndexOf('\n',from-1);
     marks.push({label:m[1],rank:nclexOptionRank(m[1]),numeric:/[0-9]/.test(m[1]),at:m.index+m[0].length,from,lineStart:from===0||/^[ \t]*$/.test(s.slice(nl+1,from))});
-    re.lastIndex=m.index+m[0].length; // adjacent marks must not swallow one another
+    // v18.0 (review L20): m[0] ends with the whitespace after the label, which is also the boundary the next mark
+    // needs, so a choice ending "101.3 F." hid the "B." right after it. The scan now resumes just after the "." or ")".
+    re.lastIndex=m.index+m[0].replace(/\s+$/,'').length; // adjacent marks must not swallow one another
   }
   // v16.9: widening the marker to A-F made "101.2 F." inside an option body a rank-6 mark,
   // which either broke the ascending run (losing every choice) or extended it (fabricating a
@@ -7434,18 +7573,25 @@ function nclexSplitStemOptions(text){
   for(const pool of [marks.filter(x=>x.lineStart),marks.filter(x=>!x.lineStart)]){
     for(let i=0;i<pool.length;i++){
       if(pool[i].rank!==1)continue;
-      let j=i;
-      while(j+1<pool.length&&pool[j+1].rank===pool[j].rank+1&&pool[j+1].numeric===pool[i].numeric)j++;
-      const len=j-i+1;
-      if(len>=NCLEX_OPTION_RUN_MIN&&(!best||len>best.len||(len===best.len&&pool[i].from>best.start))){best={i,j,len,start:pool[i].from};bestPool=pool;}
+      // v18.0 (review L20): the run had to continue at the very next mark, so an inline "101.3 F." inside an inline
+      // choice ended an A-D list after B and every choice was lost. A mark ranked above the label expected next can
+      // neither continue this run nor start a new one, so the scan now looks past it for that label; a mark ranked at
+      // or below it still ends the run, exactly as before.
+      const run=[i];
+      for(let k=i+1;k<pool.length;k++){
+        const want=pool[run[run.length-1]].rank+1;
+        if(pool[k].rank===want&&pool[k].numeric===pool[i].numeric)run.push(k);
+        else if(pool[k].rank<=want)break;
+      }
+      const len=run.length;
+      if(len>=NCLEX_OPTION_RUN_MIN&&(!best||len>best.len||(len===best.len&&pool[i].from>best.start))){best={run,len,start:pool[i].from};bestPool=pool;}
     }
   }
   if(!best)return{stem:s.trim(),options:[]};
-  const options=[];
-  for(let k=best.i;k<=best.j;k++){
-    const end=k<best.j?bestPool[k+1].from:s.length;
-    options.push({label:bestPool[k].label,text:s.slice(bestPool[k].at,end).trim().replace(/\s+/g,' ')});
-  }
+  const options=best.run.map((k,n)=>{
+    const end=n+1<best.run.length?bestPool[best.run[n+1]].from:s.length;
+    return{label:bestPool[k].label,text:s.slice(bestPool[k].at,end).trim().replace(/\s+/g,' ')};
+  });
   return{stem:s.slice(0,best.start).trim(),options};
 }
 // v15.15: split-mode repair. `pairs` still holds the VERBATIM page text for each question,
@@ -7458,6 +7604,12 @@ function nclexRepairOptions(item,sourceText){
   if(nclexSplitStemOptions(item.question).options.length)return item;
   const src=nclexSplitStemOptions(String(sourceText||''));
   if(!src.options.length)return item;
+  // v18.0 (review L21): the page text was picked by the model's question_number alone, so a misnumbered record got
+  // another question's choices attached as its own. Choices are restored only when the item's stem and the page stem
+  // share their opening (printed question numbers aside); otherwise the item keeps its bare stem and its warning.
+  const key=v=>String(v||'').replace(/\s+/g,' ').trim().toLowerCase().replace(/^(?:(?:question|q)\s*#?\s*\d{1,4}\s*[.):;]|question\s+\d{1,4}(?=\s)|#\s*\d{1,4}\s*[.):;]?|\[\d{1,4}\]|\d{1,4}\s*[.)](?=\s|$))\s*/,'');
+  const a=key(item.question),b=key(src.stem);
+  if(!a||!b||(!a.startsWith(b.slice(0,40))&&!b.startsWith(a.slice(0,40))))return item;
   return{...item,question:item.question.trim()+'\n'+src.options.map(o=>o.label+'. '+o.text).join('\n'),options_repaired:true};
 }
 
@@ -7473,7 +7625,9 @@ function nclexPairQA(qText,aText){
 // missing answers are filled from the model, questions only the model found are appended, and a number whose
 // two texts clearly differ is counted so the log can ask for a numbering check rather than choosing silently.
 function nclexMergePairs(regexPairs,aiRows){
-  const byNum=new Map(),norm=v=>String(v||'').replace(/\s+/g,' ').trim().toLowerCase();
+  // v18.0 (review L19): the page text keeps its printed number ("12. A client...") and the model's text usually does
+  // not, so nearly every pair was counted as a numbering collision. The leading number is stripped before comparing.
+  const byNum=new Map(),norm=v=>String(v||'').replace(/\s+/g,' ').trim().toLowerCase().replace(/^(?:(?:question|q)\s*#?\s*\d{1,4}\s*[.):;]|question\s+\d{1,4}(?=\s)|#\s*\d{1,4}\s*[.):;]?|\[\d{1,4}\]|\d{1,4}\s*[.)](?=\s|$))\s*/,'');
   let filled=0,added=0,collisions=0;
   for(const p of regexPairs||[])if(p&&p.question)byNum.set(Number(p.number)||0,{...p});
   for(const r of aiRows||[]){
@@ -7513,13 +7667,23 @@ function PageRangeSection({label:sLabel,ranges,onChange,maxPages}){
     {ranges.map((r,i)=><div key={i} className="page-range-row" style={{display:'flex',flexWrap:'wrap',alignItems:'center',gap:5,marginBottom:3}}>
       <span style={{fontSize:12,color:'var(--text-dim)',width:14}}>{i+1}.</span>
       <span style={{fontSize:12,color:'var(--text-dim)'}}>Pages</span>
-      <input aria-label={sLabel+' range '+(i+1)+' start page'} aria-invalid={r.start>r.end} type="number" min={1} max={maxPages||9999} value={r.start} onChange={e=>updateRange(i,'start',e.target.value)} style={{width:65,textAlign:'center',padding:'5px 6px'}}/>
+      <NumberInput aria-label={sLabel+' range '+(i+1)+' start page'} aria-invalid={r.start>r.end} type="number" min={1} max={maxPages||9999} value={r.start} onChange={e=>updateRange(i,'start',e.target.value)} style={{width:65,textAlign:'center',padding:'5px 6px'}}/>
       <span style={{fontSize:12,color:'var(--text-dim)'}}>to</span>
-      <input aria-label={sLabel+' range '+(i+1)+' end page'} aria-invalid={r.start>r.end} type="number" min={1} max={maxPages||9999} value={r.end} onChange={e=>updateRange(i,'end',e.target.value)} style={{width:65,textAlign:'center',padding:'5px 6px'}}/>
+      <NumberInput aria-label={sLabel+' range '+(i+1)+' end page'} aria-invalid={r.start>r.end} type="number" min={1} max={maxPages||9999} value={r.end} onChange={e=>updateRange(i,'end',e.target.value)} style={{width:65,textAlign:'center',padding:'5px 6px'}}/>
       {ranges.length>1&&<button type="button" className="f-rm" aria-label={'Remove '+sLabel+' range '+(i+1)} onClick={()=>removeRange(i)}>×</button>}
       {r.start>r.end&&<span style={{fontSize:12,color:'var(--accent-warm)'}}>start is after end — this range yields nothing</span>}
     </div>)}
   </div>;
+}
+
+// v18.0 (review L16): every number field clamped on each keystroke, so typing 12 into a field with a minimum of 5
+// became 5 at the first digit, and clearing a field to retype it snapped back to its default. NumberInput shows the raw
+// text while it is typed and passes each change to the field's own onChange, so the tool's state always holds the
+// clamped value it will use; leaving the field shows that value. Used by the Knowledge Base, Priority, NCLEX Extractor
+// (settings and page ranges) and NCLEX Generator number fields.
+function NumberInput({value,onChange,onBlur,...props}){
+  const [draft,setDraft]=useState(null);
+  return <input {...props} value={draft??value} onChange={e=>{setDraft(e.target.value);onChange(e);}} onBlur={e=>{setDraft(null);if(onBlur)onBlur(e);}}/>;
 }
 
 function NCLEXQuestionCard({q,index}){
@@ -7580,6 +7744,9 @@ function NCLEXExtractor(){
   const [filterDisease,setFilterDisease]=useState('');
   const abortRef=useRef(null); // v15: holds the run's AbortController — the old boolean only skipped FUTURE chunks; in-flight requests and retries could not be cancelled
   const fRef=useRef(null);
+  // v18.0 (review L22): an extraction kept sending requests after the tool unmounted (a ToolBoundary reset remounts
+  // it), with no way left to cancel it. Unmounting now aborts the run, as the KB and Anki tools already do.
+  useEffect(()=>()=>{abortRef.current?.abort();abortRef.current=null;},[]);
 
   const {model,level:toolLevel}=cfg.forTool('nclex');
   // v15.14: one intake path, filtering and de-duplicating on the same rule as the KB builder.
@@ -7632,14 +7799,16 @@ function NCLEXExtractor(){
     // truncated, the bare parse threw, and the whole chunk was silently skipped.
     // v17.13: no ceiling here; geminiRequest sets the called model's own (65,536 Flash, 32,768 Argon).
     const gc={responseMimeType:'application/json'};gc.thinkingConfig={thinkingLevel:toolLevel};
-    let cut=false;
-    const raw=await geminiRequest(cfg.apiKey,model,{contents:[{parts:[{text:prompt}]}],generationConfig:gc},{signal,onMeta:m=>{cut=!!m.truncated;}});
+    // v18.0 (review dead code): a "cut" flag copied onMeta's truncated field for the parse error below. Since v17.13
+    // geminiRequest rejects JSON cut off at the ceiling (e.truncated) before returning, and the last meta of a returned
+    // reply always says truncated:false, so the flag was always false here. The rejection itself names the ceiling.
+    const raw=await geminiRequest(cfg.apiKey,model,{contents:[{parts:[{text:prompt}]}],generationConfig:gc},{signal});
     const cleaned=raw.replace(/```json\s*/gi,'').replace(/```/g,'').trim();
     try{return JSON.parse(cleaned);}
     catch(e){
       // Fall back to the depth-scanning extractor before writing off the chunk.
       try{return extractJSON(cleaned);}catch(e2){}
-      throw new Error(cut?'Output hit the token ceiling mid-JSON \u2014 reduce chunk size or questions per batch.':'Model returned unparseable JSON (chunk skipped)');
+      throw new Error('Model returned unparseable JSON (chunk skipped)');
     }
   }
 
@@ -7669,6 +7838,9 @@ function NCLEXExtractor(){
       try{
         track.attempted++;
         const result=await nclexCallGemini(NCLEX_INLINE_PROMPT+chunks[i],signal);
+        // v18.0 (review L23): JSON that is not an array (an object, a string, a number) was counted as a successful
+        // request that found no questions, so the run could still report Complete. It is a failed chunk now.
+        if(!Array.isArray(result))throw new Error('Model returned JSON that is not a list of questions (chunk skipped)');
         track.succeeded++;
         if(Array.isArray(result)&&result.length>0){admit(seen,allQ,result.map(q=>({...q,id:uid()})),track);addLog(`    ✓ ${result.length} found → ${allQ.length} unique`);}else addLog(`    — No questions.`);
       }catch(e){if(geminiHaltsBatch(e))throw e;track.failed.push(`Chunk ${i+1}`);addLog(`    ⚠ ${e.message}`);} // v17.4: a halting transport error stops the run; ordinary chunk failures are counted
@@ -7729,7 +7901,9 @@ function NCLEXExtractor(){
             if(!row.question.trim())continue;
             const prev=byNum.get(row.number);
             // An overlapping seam can yield the same number twice; keep the fuller record.
-            if(!prev||(!prev.matched&&row.matched)||row.question.length>prev.question.length)byNum.set(row.number,row);
+            // v18.0 (review L18): length alone decided, so a longer copy with no answer replaced a matched copy and its
+            // answer was lost. Length now decides only between copies that are equally matched.
+            if(!prev||(!prev.matched&&row.matched)||(row.matched===prev.matched&&row.question.length>prev.question.length))byNum.set(row.number,row);
           }
           if(w<W-1)await _sleep(500,signal);
         }
@@ -7756,6 +7930,7 @@ function NCLEXExtractor(){
       try{
         track.attempted++;
         const result=await nclexCallGemini(NCLEX_SPLIT_PROMPT+nclexPairsToText(batch),signal);
+        if(!Array.isArray(result))throw new Error('Model returned JSON that is not a list of questions (batch skipped)'); // v18.0 (review L23): as in inline mode
         track.succeeded++;
         if(Array.isArray(result)&&result.length>0){
           // v15.15: put the choices back from the page when the model returned a bare stem.
@@ -7821,7 +7996,9 @@ function NCLEXExtractor(){
     filtered.forEach((q,i)=>{
       const {stem,options}=nclexSplitStemOptions(q.question);
       out+=`**${i+1}.** ${options.length?stem:String(q.question||'')}\n\n`;
-      if(options.length)out+=options.map(o=>`${o.label}. ${o.text}`).join('\n')+'\n\n';
+      // v18.0 (review L24): Markdown has no lettered lists, so "A. ...\nB. ..." printed as one run-on paragraph. Two
+      // trailing spaces make each line end a hard break; NCLEX to Anki trims them, so its cards and GUIDs are unchanged.
+      if(options.length)out+=options.map(o=>`${o.label}. ${o.text}`).join('  \n')+'\n\n';
     });
     // The pagebreak marker starts the answer key on its own printed page and degrades to a
     // rule in plaintext — the same one the generator worksheet uses.
@@ -7868,12 +8045,12 @@ function NCLEXExtractor(){
           <div style={{fontSize:28,marginBottom:4,opacity:.6}}>📋</div>
           <p style={{fontSize:12,color:'var(--text)'}}>Drop PDFs or <strong style={{color:'var(--accent)'}}>click to browse</strong></p>
         </div>
-        {files.map((f,i)=><div className="file-chip" key={f.name+f.size+f.lastModified}><div className="f-icon pdf">PDF</div><span className="f-name">{f.name}</span><span className="f-size">{formatSize(f.size)}</span><button className="f-rm" aria-label={'Remove PDF '+f.name} onClick={()=>{destroyPdfDoc(f);setFiles(p=>p.filter((_,j)=>j!==i));}}>×</button></div>)}
+        {files.map((f,i)=><div className="file-chip" key={f.name+f.size+f.lastModified}><div className="f-icon pdf">PDF</div><span className="f-name">{f.name}</span><span className="f-size">{formatSize(f.size)}</span>{/* v18.0 (review L22): removing a file mid-run destroyed the PDF the run was still reading; × waits for the run. */}<button className="f-rm" aria-label={'Remove PDF '+f.name} disabled={isProcessing} onClick={()=>{destroyPdfDoc(f);setFiles(p=>p.filter((_,j)=>j!==i));}}>×</button></div>)}
       </Step>
       {mode==='inline'&&<Disclose summary="Inline settings" note={Math.round(chunkSize/1000)+'k'+(iRangeOn?' · page range':'')}>
 <div className="form-grid" style={{marginBottom:10}}>
-          <div className="sb-field"><label htmlFor="extract-chunk-size">Chunk Size (chars)</label><input id="extract-chunk-size" type="number" min={500} max={15000} value={chunkSize} onChange={e=>setChunkSize(Math.max(500,Math.min(15000,Number(e.target.value)||3000)))}/></div>
-          <div className="sb-field"><label htmlFor="extract-overlap">Overlap (chars)</label><input id="extract-overlap" type="number" min={0} max={5000} value={overlap} onChange={e=>setOverlap(Math.max(0,Math.min(5000,Number(e.target.value)||0)))}/><div style={{fontSize:12,color:'var(--text-dim)',marginTop:2}}>~800 = 1-2 pages. Duplicates auto-removed.</div></div>
+          <div className="sb-field"><label htmlFor="extract-chunk-size">Chunk Size (chars)</label><NumberInput id="extract-chunk-size" type="number" min={500} max={15000} value={chunkSize} onChange={e=>setChunkSize(Math.max(500,Math.min(15000,Number(e.target.value)||3000)))}/></div>
+          <div className="sb-field"><label htmlFor="extract-overlap">Overlap (chars)</label><NumberInput id="extract-overlap" type="number" min={0} max={5000} value={overlap} onChange={e=>setOverlap(Math.max(0,Math.min(5000,Number(e.target.value)||0)))}/><div style={{fontSize:12,color:'var(--text-dim)',marginTop:2}}>~800 = 1-2 pages. Duplicates auto-removed.</div></div>
         </div>
         {/* v15.15: page ranges for inline mode, the same picker split mode uses. Opt-in, so
             the default is still the whole document. */}
@@ -7900,7 +8077,7 @@ function NCLEXExtractor(){
               <div style={{padding:8,background:'var(--bg-card)',borderRadius:6,border:'1px solid var(--border)'}}><PageRangeSection label="✅ Answer Pages" ranges={aRanges} onChange={setARanges} maxPages={pageCount}/></div>
             </div>
             <div style={{marginTop:8}}>
-              <div className="sb-field"><label htmlFor="extract-batch-size">Questions per batch</label><input id="extract-batch-size" type="number" min={2} max={25} value={batchSize} onChange={e=>setBatchSize(Math.max(2,Math.min(25,Math.floor(Number(e.target.value))||8)))} style={{width:90}}/><span style={{fontSize:12,color:'var(--text-dim)',marginLeft:6}}>Lower = more reliable</span></div>
+              <div className="sb-field"><label htmlFor="extract-batch-size">Questions per batch</label><NumberInput id="extract-batch-size" type="number" min={2} max={25} value={batchSize} onChange={e=>setBatchSize(Math.max(2,Math.min(25,Math.floor(Number(e.target.value))||8)))} style={{width:90}}/><span style={{fontSize:12,color:'var(--text-dim)',marginLeft:6}}>Lower = more reliable</span></div>
               <div style={{fontSize:12,color:'var(--accent-warm)',marginTop:6}}>Split mode processes one PDF per run — these page ranges describe a single file.</div>
             </div>
           </div>
@@ -7955,6 +8132,10 @@ const N2A_PY_WS='\\t\\n\\v\\f\\r \\x1c-\\x1f\\x85\\xa0\\u1680\\u2000-\\u200a\\u2
 const N2A_PY_WS_RUN=new RegExp('['+N2A_PY_WS+']+','g');
 const N2A_PY_WS_EDGE=new RegExp('^['+N2A_PY_WS+']+|['+N2A_PY_WS+']+$','g');
 function n2aPyStrip(s){return String(s).replace(N2A_PY_WS_EDGE,'');}
+// v18.0 (review L26): JavaScript's trim() and \s also remove U+FEFF, which Python's str.strip() and re \s keep, so
+// a stem or choice holding one hashed to a different GUID than the scripts'. Text that feeds a GUID is now trimmed
+// with JavaScript's whitespace less U+FEFF; everything else about the trim is unchanged.
+function n2aTrim(s){s=String(s);let a=0,b=s.length;const ws=c=>c!=='\uFEFF'&&/\s/.test(c);while(a<b&&ws(s[a]))a++;while(b>a&&ws(s[b-1]))b--;return s.slice(a,b);}
 // Python str.strip(chars).
 function n2aStripChars(s,chars){let a=0,b=s.length;while(a<b&&chars.includes(s[a]))a++;while(b>a&&chars.includes(s[b-1]))b--;return s.slice(a,b);}
 // Python repr() of a short string, for the warning text the scripts print.
@@ -7982,7 +8163,9 @@ function n2aSha1Hex(str){
 }
 function n2aGuidBasis(basis){return n2aPyStrip(basis.toLowerCase().replace(N2A_PY_WS_RUN,' '));}
 // html.escape(quote=True), then the scripts' newline and tab handling.
-function n2aEsc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#x27;').replace(/\n/g,'<br>').replace(/\t/g,' ');}
+// v18.0 (review L25): only \n became <br>, so a \r from a Gemini transcript stayed in the field and Anki's importer
+// could read it as a row break. \r\n and a bare \r are now line breaks like \n.
+function n2aEsc(s){return String(s).replace(/\r\n?/g,'\n').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#x27;').replace(/\n/g,'<br>').replace(/\t/g,' ');}
 function n2aTagSafe(t){return String(t).trim().replace(/"/g,'').replace(/\s+/g,'_').replace(/^_+|_+$/g,'');}
 const N2A_ANKI_HEADER=deck=>['#separator:tab','#html:true','#notetype:Basic','#deck:'+deck,'#tags column:3','#guid column:4'];
 // quoteFix: nclex2anki/img2anki turn the (attribute-only) raw " into ', extract2anki does not.
@@ -8020,10 +8203,11 @@ function n2aSplitStemOptions(s,lookbehind){
       if(n>=3&&(!best||n>best[2]||(n===best[2]&&mk.from>best[3]))){best=[i,j,n,mk.from];bestPool=pool;}
     });
   }
-  if(!best)return [s.trim(),[]];
+  // v18.0 (review L26): stem and choices keep U+FEFF, as the scripts do (n2aTrim).
+  if(!best)return [n2aTrim(s),[]];
   const [i,j,,start]=best,options=[];
-  for(let k=i;k<=j;k++){const end=k<j?bestPool[k+1].from:s.length;options.push([bestPool[k].label.toUpperCase(),s.slice(bestPool[k].at,end).replace(/\s+/g,' ').trim()]);}
-  return [s.slice(0,start).trim(),options];
+  for(let k=i;k<=j;k++){const end=k<j?bestPool[k+1].from:s.length;options.push([bestPool[k].label.toUpperCase(),n2aTrim(s.slice(bestPool[k].at,end).replace(/[^\S\uFEFF]+/g,' '))]);}
+  return [n2aTrim(s.slice(0,start)),options];
 }
 const N2A_OK_STYLE='margin:.45em 0;padding:.4em .6em;border-left:4px solid #2e9e48;background:rgba(46,158,72,.13);border-radius:4px';
 const N2A_NO_STYLE='margin:.45em 0;padding:.4em .6em;border-left:4px solid #c94040;background:rgba(201,64,64,.07);border-radius:4px';
@@ -8067,22 +8251,22 @@ function n2aSplitBlocks(text){
   return blocks.map(([n,b,dup])=>[n,b.join('\n'),dup]);
 }
 function n2aCleanBlock(s){return s.replace(/^([ \t]*\d{1,9})\\([.)])/gm,'$1$2').replace(/^[ \t]*>[ \t]?/gm,'').split('**').join('');}
-function n2aTidy(text){
+function n2aTidy(text){ // v18.0 (review L26): n2aTrim keeps U+FEFF in the stem, as the script does
   const out=[];
-  for(const line of text.split('\n').map(l=>l.trim())){
+  for(const line of text.split('\n').map(n2aTrim)){
     if(out.length&&out[out.length-1]&&n2aIsLowerStart(line))out[out.length-1]+=' '+line;else out.push(line);
   }
-  return out.join('\n').replace(/\n{3,}/g,'\n\n').trim();
+  return n2aTrim(out.join('\n').replace(/\n{3,}/g,'\n\n'));
 }
 function n2aParseQuestion(block){
   const steps=[],keep=[];let calc=false,unit='';
   for(const line of block.split('\n')){
     if(/^[ \t]*[-=_*─═]{3,}[ \t]*$/.test(line))continue;
     let m=line.match(/^[ \t]*_{2,}[ \t]*(.*)$/);
-    if(m){steps.push(m[1].trim());continue;}
+    if(m){steps.push(n2aTrim(m[1]));continue;} // v18.0 (review L26): steps feed the GUID; keep U+FEFF
     m=line.match(/^[ \t]*Answer:[ \t]*_{2,}(.*)$/i);
     if(m){calc=true;unit=m[1].trim();continue;}
-    if(steps.length&&/^[ \t]+\S/.test(line)){steps[steps.length-1]=(steps[steps.length-1]+' '+line.trim()).trim();continue;}
+    if(steps.length&&/^[ \t]+\S/.test(line)){steps[steps.length-1]=n2aTrim(steps[steps.length-1]+' '+n2aTrim(line));continue;}
     keep.push(line);
   }
   const body=keep.join('\n');
@@ -8128,11 +8312,13 @@ function n2aParseKey(block){
 function n2aStripSources(text){
   let quote='';const m=text.match(/\(\s*Sources?\s*:\s*(.*)\)\s*$/i);
   if(m){const q=m[1].match(/["“](.+)["”]/);quote=q?q[1].trim():'';text=text.slice(0,m.index);}
-  return [text.replace(/\(\s*Sources?\s*:[^)]*\)|\bSources?\s*:.*$/gi,'').trim(),quote];
+  // v18.0 (review M25): any "source(s):" in prose was taken for a citation and everything after it deleted ("good
+  // sources: bananas, oranges…" became "good"). A trailing citation names a concept, C-number first.
+  return [text.replace(/\(\s*Sources?\s*:[^)]*\)|\bSources?\s*:\s*C\d+\b.*$/gi,'').trim(),quote];
 }
 function n2aAnswerLabels(answer,options){
   const [value]=n2aStripSources(answer);
-  const m=value.match(/^([A-Z1-9])((?:(?:[ \t]*[,;/&][ \t]*(?:and[ \t]+)?|[ \t]+and[ \t]+|[ \t]+)[A-Z1-9]\b)*)(?=$|[ \t.:—–(\-])/i);
+  const m=value.match(/^([A-Z1-9])((?:(?:[ \t]*[,;/&][ \t]*(?:and[ \t]+)?|[ \t]+and[ \t]+|[ \t]+)[A-Z1-9]\b)*)(?=$|[ \t:—–(\-]|\.(?!\d))/i);
   const valid=new Set(options.map(([l])=>l));
   const labels=m?(m[0].match(/\b[A-Z1-9]\b/gi)||[]).map(x=>x.toUpperCase()):[];
   if(labels.length&&(!valid.size||labels.every(l=>valid.has(l))))return labels;
@@ -8288,10 +8474,15 @@ function n2aConvertText(text,sourceName,extraTags=[]){
     // passes every label check when both have choices A-D. The card is kept and marked for review.
     const other=better(q,n,n2aKeyFit(q,key));
     if(other!==null){warnings.push(where+': its rationale lines describe the choices of answer entry '+other+', not its own; the answer key looks misnumbered here. Check this card.');flag=true;}
-    let labels=q.options.length?n2aAnswerLabels(key.answer,q.options):[];
+    // v18.0 (review M24): a Calculation item's numbered lab list is not a set of choices, so its value answer is never
+    // matched to a label (it showed a fake ✓ against a lab line, or a false "could not tell which choice").
+    const keyed=q.type!=='Calculation'&&q.options.length>0;
+    let labels=keyed?n2aAnswerLabels(key.answer,q.options):[];
     if(!labels.length&&key.why.size)labels=[...key.why].filter(([,[k]])=>k==='correct').map(([l])=>l);
     if(q.type==='Unknown'){warnings.push(where+': no answer choices detected; card made from the stem only.');flag=true;}
-    if(q.options.length){
+    // v18.0 (review M27): an ordering answer written only as numbers ("2, 4, 3, 1") can mean step numbers or positions.
+    if(q.type==='Ordering'&&/^\d{1,2}(?:\s*(?:,|→|->|>|then|[-–—])\s*\d{1,2})+\.?$/i.test(n2aStripSources(key.answer)[0].trim())){warnings.push(where+': the ordering answer is only a list of numbers, which can mean step numbers or positions; check it against the rationale.');flag=true;}
+    if(keyed){
       const valid=new Set(q.options.map(([l])=>l));
       if(!labels.length){warnings.push(where+': could not tell which choice is correct (answer: '+n2aRepr(key.answer.slice(0,60))+').');flag=true;}
       else if(labels.some(l=>!valid.has(l))){warnings.push(where+': answer '+labels.join(',')+' is not among the choices '+[...valid].sort().join('')+'.');flag=true;}
@@ -8395,7 +8586,7 @@ function x2aParseExport(text){
   }
   const records=[];
   for(const [n,b] of qBlocks){
-    let body=b.split('\n').filter(l=>!X2A_RULE.test(l)).join('\n').trim();
+    let body=n2aTrim(b.split('\n').filter(l=>!X2A_RULE.test(l)).join('\n')); // v18.0 (review L26): keep U+FEFF
     if(info.format==='md')body=body.split('**').join('');
     records.push(Object.assign({num:n,question:body},answers.get(n)||{}));
   }
@@ -8406,7 +8597,9 @@ function x2aParseExport(text){
 }
 const X2A_ANS_PREFIX=/^(?:(?:the\s+)?correct\s+)?(?:answers?|options?|choices?|key)(?:\s+is)?\s*[:#\-–—]?\s*|^the\s+correct\s+answer\s+is\s*:?\s*/i;
 const X2A_LABEL_LIST=/^([A-Z1-9])((?:(?:[ \t]*[,;/&][ \t]*(?:and[ \t]+)?|[ \t]+and[ \t]+|[ \t]+)[A-Z1-9](?![A-Za-z0-9]))+)/i;
-const X2A_LABEL_ONE=/^([A-Z1-9])(?:[.):]|[ \t]+[-–—][ \t]|$)/i;
+// v18.0 (review M24): "1.5 mL" (and "2.5 mL/min") read as choice 1 (2) because a label may be followed by "."; a decimal
+// point is not a label separator. The same holds in n2aAnswerLabels and i2aAnswerLabels.
+const X2A_LABEL_ONE=/^([A-Z1-9])(?:\.(?!\d)|[):]|[ \t]+[-–—][ \t]|$)/i;
 function x2aNorm(s){return s.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();}
 function x2aTextHits(text,options){
   const t=x2aNorm(text);if(t.length<3)return [];
@@ -8534,7 +8727,7 @@ function x2aBuildCard(rec,source,extraTags){
   const guid='x2a'+n2aSha1Hex(n2aGuidBasis(stem+'\x1f'+options.map(([,o])=>o).join('\x1f'))).slice(0,20);
   return [{front:x2aRenderFront(stem,options,qtype),back:x2aRenderBack(answer,labels,options,qtype,preface,perChoice,trailer,rec),tags:n2aDedupeTags(tags),guid,type:qtype},warnings];
 }
-function n2aTidyPlain(text){return text.split('\n').map(l=>l.trim()).join('\n').replace(/\n{3,}/g,'\n\n').trim();}
+function n2aTidyPlain(text){return n2aTrim(text.split('\n').map(n2aTrim).join('\n').replace(/\n{3,}/g,'\n\n'));} // v18.0 (review L26): keeps U+FEFF
 function x2aConvertText(text,source,extraTags=[]){
   const {records,info}=x2aParseExport(text),warnings=info.problems.map(p=>source+': '+p),cards=[];
   if(info.status&&!info.status.toLowerCase().startsWith('complete'))warnings.push(source+': the extraction itself was not complete - '+info.status);
@@ -8584,7 +8777,10 @@ function n2aPdfPageLines(items){
 }
 // Browser header/footer text: a date and time, a page counter ("1/2", "5 of 28"), a web or file
 // address, or the print title as a hyphenated slug ("NCLEX-Practice-Questions-62-questions").
-const N2A_PDF_CHROME=/^\d{1,2}\/\d{1,2}\/\d{2,4},?\s+\d{1,2}:\d{2}|(?:https?|file|about|blob):\/\/|^(?:page\s+)?\d+\s*(?:\/|of)\s*\d+(?:\s|$)|\d{1,2}\/\d{1,2}\/\d{2,4},?\s+\d{1,2}:\d{2}(?:\s*[AP]M)?\s*$|^[A-Za-z0-9]+(?:-[A-Za-z0-9]+){2,}$/i;
+// v18.0 (review M23): the page-counter alternative matched any line starting "88/50 mm Hg…", "8/10 and…" or "1/2 tablet",
+// so such a line was deleted as browser chrome when it was the first or last line on a page. A counter now stands alone or
+// is followed by a date; the date, URL and title-slug alternatives still catch every browser footer.
+const N2A_PDF_CHROME=/^\d{1,2}\/\d{1,2}\/\d{2,4},?\s+\d{1,2}:\d{2}|(?:https?|file|about|blob):\/\/|^(?:page\s+)?\d+\s*(?:\/|of)\s*\d+\s*(?:$|\d{1,2}\/\d{1,2}\/\d{2,4})|\d{1,2}\/\d{1,2}\/\d{2,4},?\s+\d{1,2}:\d{2}(?:\s*[AP]M)?\s*$|^[A-Za-z0-9]+(?:-[A-Za-z0-9]+){2,}$/i;
 const N2A_PDF_NUM=/^\(?(\d{1,3})[.)]\s+/;
 // pages: [[line]] -> blocks {text, x, fs, page, indent, heading}. A block is one paragraph, list
 // item, heading or quote: a new one starts at a font-size change, at an outdent, after a gap wider
@@ -8636,7 +8832,10 @@ function n2aPdfChoiceLines(text){
   const numeric=first[1]==='1',out=[];let label=first[1].toUpperCase(),from=first[0].length;
   for(let i=0;i<8;i++){
     const next=numeric?String(i+2):String.fromCharCode(66+i),cls=numeric?next:next+next.toLowerCase();
-    const m=new RegExp('\\s\\(?['+cls+'][.)]\\s+').exec(text.slice(from));
+    // v18.0 (review M26): the first " D." after choice C was taken as choice D, so "…with vitamin D. D. Take…" cut C
+    // short (an unflagged wrong key, and a GUID that differed from the .md import). A mark that follows sentence
+    // punctuation is preferred; with none, the first mark is used as before.
+    const rest=text.slice(from),all=[...rest.matchAll(new RegExp('\\s\\(?['+cls+'][.)](?=\\s)','g'))],m=all.find(x=>/[.?!)\]"”']$/.test(rest.slice(0,x.index)))||all[0];
     if(!m||(numeric&&i+2>9)){out.push([label,text.slice(from).trim()]);break;}
     out.push([label,text.slice(from,from+m.index).trim()]);label=next;from+=m.index+m[0].length;
   }
@@ -8711,8 +8910,12 @@ function n2aPdfToWorksheetText(blocks,name){
   });
   keys.forEach((k,i)=>{k.dup=i>0&&k.printed===keys[i-1].printed;});
   const answered=keys.filter(k=>!k.dup).length,inOrder=qs.length===answered;
-  let n=0;for(const k of keys){if(!k.dup)n++;k.n=inOrder?n:k.printed;}
-  qs.forEach((q,i)=>{q.n=inOrder?i+1:q.printed;});
+  // v18.0 (review M28): with question and answer counts that disagree, questions kept their printed numbers, and the
+  // first gap in them folded every later question into one card (6 cards from 11). Questions are now numbered in order
+  // and each answer takes the number of the question that printed its number; an answer with no such question becomes
+  // an orphan the converter names. Every card is still marked NeedsReview.
+  const seqOf=new Map();qs.forEach((q,i)=>{q.n=i+1;if(!seqOf.has(q.printed))seqOf.set(q.printed,i+1);});
+  let n=0,extra=qs.length,prevN=0;for(const k of keys){if(!k.dup)n++;k.n=inOrder?n:k.dup?prevN:(seqOf.get(k.printed)??++extra);prevN=k.n;}
   const drift=qs.some(q=>q.n!==q.printed)||keys.some(k=>k.n!==k.printed);
   const expected=n2aPdfExpected(blocks),reviewAll=!inOrder||(expected!==null&&qs.length!==expected);
   if(!inOrder)warnings.push(name+': '+qs.length+' questions and '+answered+' answers were found, so they could not be lined up in order and were paired by their printed numbers. Every card is marked NeedsReview; check each one against the PDF.');
@@ -8727,7 +8930,9 @@ function n2aPdfToWorksheetText(blocks,name){
     lines.push('');
   }
   lines.push('## Answer Key','');
-  for(const k of keys){
+  // v18.0 (review M28): answers are written in their new number order, so an answer with no question (an orphan,
+  // numbered after the last question) cannot sit between two others and fold the answers after it into itself.
+  for(const k of keys.slice().sort((x,y)=>x.n-y.n)){
     lines.push(...n2aPdfKeyLines(k.n+k.text,calcUnits,''));
     k.list.forEach((t,j)=>{const parts=t.split(N2A_PDF_LABEL_SPLIT);lines.push('  '+(j+1)+'. '+parts[0].trim(),...parts.slice(1).map(p=>'  '+p.trim()));});
     // The rest of an entry that ran past a page break keeps its labels on their own lines.
@@ -8940,7 +9145,7 @@ function i2aAssemble(transcripts){
           // A complete question followed by a page that is not in the run cannot be told apart from a real
           // continuation, so a join onto a question not marked cut off is kept but marked for review.
           if(!prev.cut_off)prev.flags.push('text from '+img+' was joined to it although it was not marked cut off on '+prev.images[prev.images.length-1]);
-          if(it.stem&&!prev.options.length)prev.stem=(prev.stem+' '+it.stem).trim();
+          if(it.stem&&!prev.options.length)prev.stem=n2aPyStrip(prev.stem+' '+it.stem); // v18.0 (review L26): Python strip; trim() dropped U+FEFF
           const have=new Set(prev.options.map(([l])=>l));
           prev.options=[...prev.options,...it.options.filter(o=>!have.has(o[0]))];
           if(i2aMergeAnswer(prev,it,img)){warnings.push(where+': continuation gives answer '+it.answer+' but '+prev.images[0]+' already said '+prev.answer+'.');prev.flags.push('conflicting answers across images');}
@@ -8960,7 +9165,15 @@ function i2aAssemble(transcripts){
     if(q.answer||!q.number)return;
     const cands=keys.filter(k=>!k.used&&k.number===q.number),later=cands.filter(k=>k.after>qi),pick=(later.length?later:cands)[0];
     if(pick){
-      if(later.length>1)warnings.push('Q'+q.number+' ('+q.images[0]+'): '+later.length+' answer-key entries carry this number; used the one in '+pick.image+'.');
+      // v18.0 (review L29): a repeated key number only warned, so a card keyed from the wrong entry looked clean. When
+      // the entries outnumber the questions still waiting for that number, the pick is a guess and the card is marked
+      // for review (same text, now as a card flag). A later chapter whose numbering restarts claims its own entry, so it
+      // only warns as before.
+      if(later.length>1){
+        const msg=later.length+' answer-key entries carry this number; used the one in '+pick.image;
+        const waiting=questions.filter((o,oi)=>oi>=qi&&!o.answer&&o.number===q.number).length;
+        if(later.length>waiting)q.flags.push(msg);else warnings.push('Q'+q.number+' ('+q.images[0]+'): '+msg+'.');
+      }
       pick.used=true;i2aMergeAnswer(q,pick,pick.image);
     }
   });
@@ -8970,7 +9183,7 @@ function i2aAssemble(transcripts){
 }
 // 'B' / 'A, C, and E' / '1 and 4' -> labels; falls back to matching the choice text.
 function i2aAnswerLabels(answer,options){
-  const m=answer.trim().match(/^\(?([A-Z1-9])\)?((?:(?:[ \t]*[,;/&][ \t]*(?:and[ \t]+)?|[ \t]+and[ \t]+|[ \t]+)\(?[A-Z1-9]\b\)?)*)(?=$|[ \t.:—–(\-])/i);
+  const m=answer.trim().match(/^\(?([A-Z1-9])\)?((?:(?:[ \t]*[,;/&][ \t]*(?:and[ \t]+)?|[ \t]+and[ \t]+|[ \t]+)\(?[A-Z1-9]\b\)?)*)(?=$|[ \t:—–(\-]|\.(?!\d))/i);
   const valid=new Set(options.map(([l])=>l)),labels=m?(m[0].match(/\b[A-Z1-9]\b/gi)||[]).map(x=>x.toUpperCase()):[];
   if(labels.length&&(!valid.size||labels.every(l=>valid.has(l))))return labels;
   const norm=s=>s.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
@@ -9089,7 +9302,13 @@ function i2aBuildCards(questions,sourceTag,extraTags=[]){
   }
   return {cards,warnings};
 }
-function i2aNaturalKey(name){return String(name).toLowerCase().split(/(\d+)/).map(t=>/^\d+$/.test(t)?parseInt(t,10):t);}
+// v18.0 (review L28): macOS names screenshots "… at 9.05.12 AM" / "… at 1.02.03 PM", so 1 PM sorted before 9 AM and
+// 12 AM after 11 AM. A 12-hour clock time is read as 24-hour (12 AM = 0) before the natural sort. The port kept
+// img2anki.py's plain natural sort, so for such names the suite's image order now differs from the script's.
+function i2aNaturalKey(name){
+  const s=String(name).toLowerCase().replace(/(?<!\d)(\d{1,2})([.:])(\d{2})(\2\d{2})?\s*([ap])m(?![a-z])/g,(all,h,sep,mm,ss,ap)=>{const n=parseInt(h,10);return n<1||n>12?all:(n%12+(ap==='p'?12:0))+sep+mm+(ss||'');});
+  return s.split(/(\d+)/).map(t=>/^\d+$/.test(t)?parseInt(t,10):t);
+}
 function i2aNaturalCompare(a,b){ // "shot 2" before "shot 10"
   const x=i2aNaturalKey(a),y=i2aNaturalKey(b);
   for(let i=0;i<Math.min(x.length,y.length);i++){if(x[i]===y[i])continue;if(typeof x[i]===typeof y[i])return x[i]<y[i]?-1:1;return typeof x[i]==='number'?-1:1;}
@@ -9157,7 +9376,7 @@ async function i2aConvert({images,gemini,halts,model,cache,deck,extraTags=[],sou
 // v17.10: one pass of the suite's own page walk; each page's text items keep their positions for n2aPdfBlocks.
 async function n2aReadPdfPages(file){
   const pages=[];
-  try{await pdfWalkPages(file,{onPage:async(text,i,pg)=>{pages.push(n2aPdfPageLines((await pg.getTextContent()).items));}});}
+  try{await pdfWalkPages(file,{onPage:(text,i,pg,total,tc)=>{pages.push(n2aPdfPageLines(tc.items));}});}
   finally{destroyPdfDoc(file);}
   return pages;
 }
@@ -9205,6 +9424,9 @@ function NCLEXToAnki(){
   const cacheRef=useRef(i2aEmptyCache());
   const [cacheCount,setCacheCount]=useState(0);
   const abortRef=useRef(null),fileRef=useRef(null),imgRef=useRef(null),cacheFileRef=useRef(null);
+  // v18.0 (review L22): an image run kept calling Gemini after the tab unmounted (a ToolBoundary reset remounts it).
+  // Unmounting now aborts it.
+  useEffect(()=>()=>{abortRef.current?.abort();abortRef.current=null;},[]);
   const meta=N2A_MODES.find(m=>m.id===mode),deck=decks[mode].trim()||meta.deck,result=results[mode];
   const files=mode==='images'?images:textFiles[mode];
   const extraTags=tagText.split(/\s+/).filter(Boolean);
@@ -9258,9 +9480,9 @@ function NCLEXToAnki(){
       const ordered=[...images].sort((a,b)=>i2aNaturalCompare(a.name,b.name)),prepared=[];
       for(const f of ordered)prepared.push({name:f.name,key:await i2aFileKey(f),payload:()=>i2aImagePayload(f)});
       const gemini=async(parts,level)=>{
-        let last=null;
-        const text=await callGemini(cfg.apiKey,model,parts,{thinkingLevel:level,signal:ac.signal,retries:4,onMeta:m=>{last=m;},generationConfig:{responseMimeType:'application/json'}});
-        if(last&&last.truncated)throw new Error('response cut off at the output limit');
+        // v18.0 (review dead code): a post-call "last.truncated" check could never fire. Since v17.13 geminiRequest rejects
+        // JSON cut off at the output limit before returning, so the last meta of a returned reply is never truncated.
+        const text=await callGemini(cfg.apiKey,model,parts,{thinkingLevel:level,signal:ac.signal,retries:4,generationConfig:{responseMimeType:'application/json'}});
         try{return extractJSON(text);}catch(e){throw new Error(/No JSON/.test(e.message)?"no JSON in Gemini's reply":"malformed JSON in Gemini's reply");}
       };
       const r=await i2aConvert({images:prepared,gemini,halts:geminiHaltsBatch,model,cache:cacheRef.current,deck,extraTags,sourceTag:sourceTag.trim(),aiAnswers,thinking,log:m=>pushLog(m),onProgress:(current,total)=>setProgress({current,total})});
@@ -9281,6 +9503,9 @@ function NCLEXToAnki(){
   const canConvert=canRun&&!reading;
   const shown=useMemo(()=>{const list=result?result.cards:[];return (reviewOnly?list.filter(c=>c.tags.includes('NeedsReview')):list);},[result,reviewOnly]);
   const types=useMemo(()=>{const t={};for(const c of result?result.cards:[])t[c.type]=(t[c.type]||0)+1;return Object.entries(t).sort(([a],[b])=>a<b?-1:1);},[result]);
+  // v18.0 (review M18): the preview sanitized up to 80 cards on every render, including each keystroke in the deck and
+  // tag fields. It is sanitized once per shown list.
+  const previews=useMemo(()=>shown.slice(0,N2A_PREVIEW_LIMIT).map(c=>({c,front:DOMPurify.sanitize(c.front,N2A_CARD_POLICY),back:DOMPurify.sanitize(c.back,N2A_CARD_POLICY)})),[shown]);
 
   return <Workbench
     setupLabel="NCLEX to Anki converter and inputs"
@@ -9365,10 +9590,10 @@ function NCLEXToAnki(){
         <div className="log-stream" style={{maxHeight:260,overflowY:'auto'}}>{result.warnings.map((w,i)=><div key={i}>- {w}</div>)}</div>
       </Panel>}
       {result.cards.length>0&&<Panel title="Card preview" className="flat" actions={result.needsReview>0&&<label style={{display:'flex',gap:6,alignItems:'center',fontSize:12,cursor:'pointer'}}><input type="checkbox" checked={reviewOnly} onChange={e=>setReviewOnly(e.target.checked)}/>NeedsReview only</label>}>
-        {shown.slice(0,N2A_PREVIEW_LIMIT).map(c=><div key={c.guid} style={{border:'1px solid var(--border)',borderRadius:8,padding:12,marginBottom:10,background:'var(--bg-card)'}}>
-          <div style={{fontSize:13,lineHeight:1.55}} dangerouslySetInnerHTML={{__html:DOMPurify.sanitize(c.front,N2A_CARD_POLICY)}}/>
+        {previews.map(({c,front,back})=><div key={c.guid} style={{border:'1px solid var(--border)',borderRadius:8,padding:12,marginBottom:10,background:'var(--bg-card)'}}>
+          <div style={{fontSize:13,lineHeight:1.55}} dangerouslySetInnerHTML={{__html:front}}/>
           <div style={{borderTop:'1px dashed var(--border)',margin:'10px 0'}}/>
-          <div style={{fontSize:13,lineHeight:1.55}} dangerouslySetInnerHTML={{__html:DOMPurify.sanitize(c.back,N2A_CARD_POLICY)}}/>
+          <div style={{fontSize:13,lineHeight:1.55}} dangerouslySetInnerHTML={{__html:back}}/>
           <div style={{fontFamily:'JetBrains Mono',fontSize:11,color:c.tags.includes('NeedsReview')?'var(--accent-warm)':'var(--text-dim)',marginTop:8,overflowWrap:'anywhere'}}>{c.tags.join(' ')}</div>
         </div>)}
         {shown.length>N2A_PREVIEW_LIMIT&&<div style={{fontSize:12,color:'var(--text-dim)'}}>Showing the first {N2A_PREVIEW_LIMIT} of {shown.length}. The download has every card.</div>}
@@ -9981,13 +10206,8 @@ function ngRenderAllocation(targets,context){
   L.push('- If the allocated facts cannot support the full question count, produce fewer questions and say so in PART 2. Never pad with outside knowledge.');
   return L.join('\n');
 }
-// Every fact id mentioned anywhere in a batch response. Used to diff what the model
-// actually grounded against what the application handed it.
-function ngParseFactIds(text){
-  const s=new Set();
-  for(const m of String(text||'').matchAll(/fact-\d+/gi))s.add(m[0].toLowerCase());
-  return s;
-}
+// v18.0 (review, dead code): ngParseFactIds (every fact id anywhere in a response) had no callers and was removed;
+// ngCitedFactIds reads the citations that count.
 
 function ngSplitParts(raw){
   // v17.15: headings were matched anywhere, case-insensitively, so a "part 4" in PART 1 or 2 started PART 4 early and
@@ -10001,9 +10221,13 @@ function ngSplitParts(raw){
   // DISTRIBUTION line; it was read as part of the last answer and printed in every batch's answer key.
   // Only the uppercase heading or the list's own "Qn: topic=" shape ends the key, never rationale prose.
   const p4m=raw.match(new RegExp(head(4)+'[^\\n]*\\n([\\s\\S]*?)(?=DISTRIBUTION:|(?![\\s\\S]))','im'))||raw.match(/PART\s*4\b[^\n]*\n([\s\S]*?)(?=DISTRIBUTION:|$)/i);
-  let p4=p4m?p4m[1]:'';const verify=p4.search(/\n[^\S\n]*[^\w\n]*[^\S\n]*FINAL[^\S\n]*[—–-]?[^\S\n]*VERIFY\b|\n[^\S\n]*Q\d{1,3}[^\S\n]*:[^\S\n]*topic[^\S\n]*=/);
+  // v18.0 (review M12): the heading prefix was three overlapping runs ([^\S\n]*[^\w\n]*[^\S\n]*), so a long run of
+  // spaces in the key took seconds to minutes per scan. Each prefix step now starts with a symbol; same matches.
+  let p4=p4m?p4m[1]:'';const verify=p4.search(/\n[^\S\n]*(?:[^\w\s][^\S\n]*)*FINAL[^\S\n]*(?:[—–-][^\S\n]*)?VERIFY\b|\n[^\S\n]*Q\d{1,3}[^\S\n]*:[^\S\n]*topic[^\S\n]*=/);
   if(verify>=0)p4=p4.slice(0,verify).replace(/(?:\n[^\S\n]*[═=─━*#_-]{3,}[^\S\n]*)+\s*$/,'');
-  const dm=raw.match(/DISTRIBUTION:([^\n]*)/i);
+  // v18.0 (review L32): the first "Distribution:" anywhere was read, so a pharmacology "Distribution:" line in PART 1 or 4
+  // replaced the real line and its count mismatch became a format warning. The last line-start match is read now.
+  const dm=[...raw.matchAll(/^[^\w\n]*DISTRIBUTION:([^\n]*)/gim)].pop()||raw.match(/DISTRIBUTION:([^\n]*)/i);
   return{p1,p2,p3,p4:p4.trim(),dist:dm?dm[1].trim():''};
 }
 // v15.7: resolve PART 3/4 citations back to fact IDs.
@@ -10124,8 +10348,10 @@ function ngParseKeyItem(block){
   const raw=String(block?.text||''),body=raw.replace(/^(\s{0,4})(?:Q)?\d{1,3}[.)][ \t]*/,''),am=body.match(/^[ \t]*ANSWER:[ \t]*([^\n]*)/im);
   const rationales=[],answerLines=[];let current=null,inAnswer=false;
   for(const line of body.split('\n')){
-    const why=line.match(/^[ \t]*Why[ \t]+([A-Z])[ \t]+is[ \t]+(correct|wrong)[ \t]*:?[ \t]*(.*)$/i);
-    if(why){current={label:why[1].toUpperCase(),kind:why[2].toLowerCase(),text:why[3].trim()};rationales.push(current);inAnswer=false;continue;}
+    // v18.0 (review M9): the prompt asks for "Why X is wrong", but a model that wrote "Why X is incorrect" had those lines
+    // folded into the previous rationale, failed the batch and skipped its item audit. "incorrect" now reads as "wrong".
+    const why=line.match(/^[ \t]*Why[ \t]+([A-Z])[ \t]+is[ \t]+(correct|wrong|incorrect)[ \t]*:?[ \t]*(.*)$/i);
+    if(why){current={label:why[1].toUpperCase(),kind:why[2].toLowerCase()==='correct'?'correct':'wrong',text:why[3].trim()};rationales.push(current);inAnswer=false;continue;}
     if(/^[ \t]*(?:Strategy|Tags):/i.test(line)){current=null;inAnswer=false;continue;}
     if(/^[ \t]*ANSWER:/i.test(line)){inAnswer=true;answerLines.push(line.replace(/^[ \t]*ANSWER:[ \t]*/i,''));continue;}
     if(current)current.text+=(current.text?'\n':'')+line.trim();else if(inAnswer)answerLines.push(line);
@@ -10140,8 +10366,10 @@ function ngWorksheetContract({allocation=null,pool=[],expectedCount=0,knownFactI
   const all=pool.flatMap(g=>g.facts||[]),targets=allocation?allocation.targets:all,context=allocation?allocation.context:[];
   return Object.freeze({allocation:!!allocation,expectedCount:Number(expectedCount)||0,targetFactIds:ids(targets),allowedFactIds:ids([...targets,...context]),knownFactIds:ids(knownFactIds)});
 }
+// v18.0 (review L31): an Oxford-comma SATA key ("A, C, and E") parsed as no answer and failed the whole batch; the same
+// separator grammar is used by ngLetterNumberedOptions and ngShuffleWorksheetOptions and was widened there too.
 function ngAnswerLabels(answer){
-  const value=String(answer||'').trim(),m=value.match(/^([A-Z])((?:(?:[ \t]*(?:,|;|\/|&|\band\b)[ \t]*|[ \t]+)[A-Z]\b)*)(?=$|[ \t.:—–(-])/i);
+  const value=String(answer||'').trim(),m=value.match(/^([A-Z])((?:(?:[ \t]*(?:,[ \t]*(?:and\b|&)?|;|\/|&|\band\b)[ \t]*|[ \t]+)[A-Z]\b)*)(?=$|[ \t.:—–(-])/i);
   return m?[...m[0].matchAll(/\b[A-Z]\b/gi)].map(x=>x[0].toUpperCase()):[];
 }
 function ngRationaleText(text){return String(text||'').replace(/\(\s*Sources?\s*:[^)]*\)/gi,'').replace(/\bSources?\s*:[\s\S]*$/i,'').trim();}
@@ -10417,14 +10645,14 @@ function ngLetterNumberedOptions(raw){
     const k=q.run.length,head=heads.filter(h=>h.num===q.num);
     if(k<2||k>8||q.lettered||head.length!==1||/\b(?:order|sequence|chronolog|rank)/i.test(q.stem.join(' ')))continue;
     const from=head[0].at,to=(heads.find(h=>h.at>from)||{at:keyLines.length}).at,entry=keyLines.slice(from,to).join('\n');
-    const am=keyLines[from].match(/^(.*?ANSWER:[ \t]*)(\d{1,2}(?:(?:[ \t]*(?:,|;|\/|&|\band\b)[ \t]*|[ \t]+)\d{1,2})*)(?=$|[ \t.:—–(-])(.*)$/i);
+    const am=keyLines[from].match(/^(.*?ANSWER:[ \t]*)(\d{1,2}(?:(?:[ \t]*(?:,[ \t]*(?:and\b|&)?|;|\/|&|\band\b)[ \t]*|[ \t]+)\d{1,2})*)(?=$|[ \t.:—–(-])(.*)$/i);
     const picks=am?am[2].match(/\d+/g).map(Number):[];
-    const whys=[...entry.matchAll(/\bWhy[ \t]+(\d{1,2})[ \t]+is[ \t]+(?:correct|wrong)\b/gi)].map(x=>Number(x[1]));
+    const whys=[...entry.matchAll(/\bWhy[ \t]+(\d{1,2})[ \t]+is[ \t]+(?:correct|wrong|incorrect)\b/gi)].map(x=>Number(x[1]));
     if(!picks.length||picks.length===k||new Set(picks).size!==picks.length||[...picks,...whys].some(x=>x<1||x>k))continue;
-    if(/\bWhy[ \t]+[A-Z][ \t]+is[ \t]+(?:correct|wrong)\b/.test(entry))continue;
+    if(/\bWhy[ \t]+[A-Z][ \t]+is[ \t]+(?:correct|wrong|incorrect)\b/.test(entry))continue;
     q.run.forEach((at,idx)=>{const m=lines[at].match(NUM);lines[at]=m[1]+letter(idx+1)+'.'+m[4];});
     keyLines[from]=am[1]+picks.map(letter).join(', ')+am[3];
-    for(let i=from;i<to;i++)keyLines[i]=keyLines[i].replace(/\b(Why[ \t]+)(\d{1,2})([ \t]+is[ \t]+(?:correct|wrong)\b)/gi,(s,a,d,b)=>a+letter(Number(d))+b);
+    for(let i=from;i<to;i++)keyLines[i]=keyLines[i].replace(/\b(Why[ \t]+)(\d{1,2})([ \t]+is[ \t]+(?:correct|wrong|incorrect)\b)/gi,(s,a,d,b)=>a+letter(Number(d))+b);
     relabelled.push(q.num);
   }
   if(!relabelled.length)return none;
@@ -10482,9 +10710,12 @@ function ngCanonicalOrderingAnswers(raw){
     const dm=norm(ngRationaleText(rest)).match(/^(\d{1,2}(?:[ \t]*(?:,|→|->|>|\bthen\b|[-–—])[ \t]*\d{1,2})+)\.?$/),digits=dm?dm[1].match(/\d+/g).map(Number):null;
     const perm=a=>!!a&&a.length===n&&new Set(a).size===n&&a.every(x=>x>=1&&x<=n);
     const fromRanks=r=>{const seq=[];r.forEach((rank,i)=>{seq[rank-1]=steps[i].label;});return seq;};
+    // v18.0 (review L35): the restated ANSWER joins step texts with arrows and the check splits it on arrows, so a step whose
+    // own text contains an arrow turned a valid entry (digits "3, 1, 2") into an invalid one. Such entries are left as written.
+    const arrowStep=steps.some(s=>/→|->/.test(s.text));
     let seq=null;
-    if(blankLines.length&&perm(blanks)){const r=fromRanks(blanks);if(!evidence||r.join()===evidence.join()){seq=r;blankLines.forEach(j=>drop.add(j));}}
-    else if(evidence&&(!digits||(perm(digits)&&[digits.join(),fromRanks(digits).join()].includes(evidence.join()))))seq=evidence;
+    if(!arrowStep&&blankLines.length&&perm(blanks)){const r=fromRanks(blanks);if(!evidence||r.join()===evidence.join()){seq=r;blankLines.forEach(j=>drop.add(j));}}
+    else if(!arrowStep&&evidence&&(!digits||(perm(digits)&&[digits.join(),fromRanks(digits).join()].includes(evidence.join()))))seq=evidence;
     if(seq){
       const src=(rest.match(/\(\s*Sources?\s*:[^)]*\)/gi)||[]).join(' ');
       keyLines[at]=lead+'ANSWER: '+seq.map(l=>steps.find(s=>s.label===l).text).join(' → ')+(src?' '+src:'');
@@ -10541,7 +10772,7 @@ function itemRefersByLetter(s,labels){
 function ngShuffleWorksheetOptions(raw,random=Math.random){
   const text=String(raw||''),P=ngSplitParts(text),none={text,shuffled:[],kept:[]};
   if(!P.p3||!P.p4)return none;
-  const OPT=/^([ \t]*)([A-Z])([.)])(.*)$/,WHY=/^([ \t]*Why[ \t]+)([A-Z])([ \t]+is[ \t]+(correct|wrong)\b)(.*)$/i,REF=/\b([Oo]ption|[Cc]hoice|[Aa]nswer)([ \t]+)([A-Z])\b/g;
+  const OPT=/^([ \t]*)([A-Z])([.)])(.*)$/,WHY=/^([ \t]*Why[ \t]+)([A-Z])([ \t]+is[ \t]+(correct|wrong|incorrect)\b)(.*)$/i,REF=/\b([Oo]ption|[Cc]hoice|[Aa]nswer)([ \t]+)([A-Z])\b/g;
   const letter=i=>String.fromCharCode(65+i),keys=new Map();
   for(const k of ngSplitNumbered(P.p4))keys.set(k.num,keys.has(k.num)?null:k);
   const sources=line=>[...(line.match(/\(\s*Sources?\s*:[^)]*\)/gi)||[]),...(line.replace(/\(\s*Sources?\s*:[^)]*\)/gi,'').match(/\bSources?\s*:[\s\S]*$/i)||[])].join(' ');
@@ -10568,7 +10799,7 @@ function ngShuffleWorksheetOptions(raw,random=Math.random){
       groups.push({lines:qLines.slice(s,e),sep});
     });
     // Answer key: the ANSWER labels on the header line, then the Why lines up to Strategy/Tags.
-    const kLines=kb.text.split('\n'),am=kLines[0].match(/^(.*?ANSWER:[ \t]*)([A-Z](?:(?:[ \t]*(?:,|;|\/|&|\band\b)[ \t]*|[ \t]+)[A-Z]\b)*)(?=$|[ \t.:—–(-])(.*)$/i);
+    const kLines=kb.text.split('\n'),am=kLines[0].match(/^(.*?ANSWER:[ \t]*)([A-Z](?:(?:[ \t]*(?:,[ \t]*(?:and\b|&)?|;|\/|&|\band\b)[ \t]*|[ \t]+)[A-Z]\b)*)(?=$|[ \t.:—–(-])(.*)$/i);
     const first=kLines.findIndex(l=>WHY.test(l)),stop=kLines.findIndex((l,i)=>i>first&&/^[ \t]*(?:Strategy|Tags):/i.test(l)),last=stop<0?kLines.length:stop;
     if(!am||ngAnswerLabels(am[2]).join()!==answers.join()||first<0||kLines.slice(last).some(l=>WHY.test(l)))layout=false;
     const prose=[item.stem,...item.options.map(o=>o.text),...kLines.map((l,i)=>i?l.replace(WHY,'$5'):am?am[3]:'').filter(l=>!/^[ \t]*Tags:/i.test(l)).map(ngRationaleText)];
@@ -10821,7 +11052,9 @@ ${kbPacket}`});
 
         let alloc=null;
         if(allocMode){
-          alloc=ngAllocateBatch(pool,usedFactIds,{want:wantPerBatch,perCondition:4,neighborCap:2});
+          // v18.0 (review L33): a short last batch was allocated (and reserved) a full batch of target facts, most of which
+          // it could not cite. The number of target facts now scales with this batch's size.
+          alloc=ngAllocateBatch(pool,usedFactIds,{want:Math.max(1,Math.round(size*factsPerQ)),perCondition:4,neighborCap:2});
           if(!alloc.targets.length){
             owned_log('  ⓘ No unused facts remain — stopping early rather than repeating content.','warn');
             owned_setTrackers(p=>p.map(t=>t.id===b?{...t,status:'pending'}:t));
@@ -10956,7 +11189,9 @@ ${NG_GROUNDING_ADAPTER}
                 // remaining item. geminiRequest already backed off and retried; a further
                 // 429 means the allowance is gone and each attempt costs real time.
                 if(isQuotaError(e)&&++quotaFails>=2)throw Object.assign(new Error('API quota exhausted'),{name:'QuotaStop'});
-                v={status:'ERROR',criterion:'',detail:e.message||String(e),warns:[],autoRepairable:false};
+                // v18.0 (review L41): the worksheet audit detail is exported too; the API key is removed the same way.
+                const auditError=e.message||String(e);
+                v={status:'ERROR',criterion:'',detail:cfg.apiKey?auditError.split(cfg.apiKey).join('[redacted]'):auditError,warns:[],autoRepairable:false};
               }
               adone++;
               owned_log('    '+(v.status==='PASS'?'✓':v.status==='FAIL'?'✗':v.status==='REVIEW'?'?':'!')+' Q'+g.num+' '+v.status+(v.criterion?' — '+v.criterion:'')+'  ('+adone+'/'+eligible.length+')',
@@ -11055,7 +11290,9 @@ ${NG_GROUNDING_ADAPTER}
       if(generatorSlot.current.current(operation))setAuditState(runAudit?(auditInterrupted?'interrupted':'complete'):'disabled');
     }catch(e){
       if(generatorSlot.current.owns(operation))setAuditState(e.name==='AbortError'?'interrupted':'failed');
-      if(e.name==='AbortError')owned_log('Cancelled.','warn');else owned_log('Error: '+e.message,'err');
+      // v18.0 (review L34): Cancel aborts the run's signal and owned_log drops every line once it is aborted, so "Cancelled."
+      // never appeared and a cancelled run looked complete. It is logged while this run still owns the slot.
+      if(e.name==='AbortError'){if(generatorSlot.current.owns(operation))log('Cancelled.','warn');}else owned_log('Error: '+e.message,'err');
     }finally{if(generatorSlot.current.finish(operation)){setBusy(false);setAbortCtl(null);setProg(100);setLiveKB(0);}}
   },[cfg,targetCount,batchSize,numBatches,outcomes,points,focusContext,K.knowledgeBase,kbTiers,kbConditionFilter,log,allocMode,factsPerQ,runAudit]);
 
@@ -11131,7 +11368,7 @@ ${NG_GROUNDING_ADAPTER}
       <Step n="02" title="Batch settings" note={targetCount+' questions · '+numBatches+' call(s)'}>
         <div className="form-grid" style={{marginBottom:10}}>
           <div className="field-block" style={{margin:0}}><label htmlFor="nclex-total">Total Questions</label>
-            <input id="nclex-total" type="number" min={5} max={200} step={5} value={targetCount} onChange={e=>setTargetCount(Math.max(5,Math.min(200,parseInt(e.target.value)||50)))}/></div>
+            <NumberInput id="nclex-total" type="number" min={5} max={200} step={5} value={targetCount} onChange={e=>setTargetCount(Math.max(5,Math.min(200,parseInt(e.target.value)||50)))}/></div>
           <div className="field-block" style={{margin:0}}><label htmlFor="nclex-batch-size">Questions per Batch</label>
             <select id="nclex-batch-size" value={batchSize} onChange={e=>setBatchSize(parseInt(e.target.value))}>
               <option value={5}>5 — highest accuracy</option>
@@ -11162,7 +11399,7 @@ ${NG_GROUNDING_ADAPTER}
         </label>
         {allocMode&&<div className="field-block" style={{marginTop:10,marginBottom:0}}>
           <label htmlFor="nclex-facts-per-question" style={{fontSize:12}}>Target facts per question</label>
-          <input id="nclex-facts-per-question" type="number" min={1} max={8} step={1} value={factsPerQ} onChange={e=>setFactsPerQ(Math.max(1,Math.min(8,Number(e.target.value)||3)))} style={{width:90}}/>
+          <NumberInput id="nclex-facts-per-question" type="number" min={1} max={8} step={1} value={factsPerQ} onChange={e=>setFactsPerQ(Math.max(1,Math.min(8,Number(e.target.value)||3)))} style={{width:90}}/>
           <div style={{fontSize:12,color:'var(--text-dim)',marginTop:3}}>{Math.max(1,Math.round(batchSize*factsPerQ))} target facts per batch, plus same-condition context facts for realistic distractors. Higher = more material per question; lower = deeper coverage of a small pool.</div>
         </div>}
       </Step>
@@ -11275,7 +11512,9 @@ function selectCaseFacts(condition,{includeTier2=true,includeTier3=false,include
   ];
   if(includeCalculation){
     const numeric=eligible.filter(f=>/\d/.test(`${f.text||''} ${f.sourceQuote||''}`));
-    for(const f of numeric.slice(0,4))if(!selected.some(x=>x.id===f.id))selected.push(f);
+    // v18.0 (review L42): the first four numeric facts were taken before removing those already selected, so the top-up
+    // usually added nothing. Already-selected facts are skipped first, then up to four more numeric facts are added.
+    for(const f of numeric.filter(f=>!selected.some(x=>x.id===f.id)).slice(0,4))selected.push(f);
   }
   return[...new Map(selected.map(f=>[f.id,f])).values()];
 }
@@ -11433,8 +11672,9 @@ it can be cited. Narrative may set the scene only.
   FORBIDDEN in narrative: "BP is 82/50." · "Potassium fell to 2.8 mEq/L." · "She takes
                           furosemide 80 mg daily." · "Oxygen saturation dropped to 88%."
 This is checked automatically: any number carrying a clinical unit (mg, mcg, mL, mEq/L, mm Hg,
-bpm, %, units) or a blood-pressure pair found in these fields FAILS validation. Ages, room
-numbers, and clock times are fine.
+bpm, %, units, cm, mm, kg, lb) or a time span (hours, minutes, days) or a blood-pressure pair
+found in these fields FAILS validation. Write elapsed time in words ("Two hours later") or put it
+in "data". Ages, room numbers, and clock times (0800, 1400) are fine.
 
 ═══ SUPPORT TYPE (label honesty) ═══
 Each data item and rationale carries a supportType describing how it relates to the facts:
@@ -11543,7 +11783,10 @@ const CASE_CLINICAL_TOKEN_RE=/(?<![\w.,])(?:[+−-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?
 // false-positive on genuinely neutral phrasing; the numeric scan above stays error-tier.
 const CASE_CLINICAL_TERM_RE=/\b(?:hypotensi\w*|hypertensi\w*|tachycard\w*|bradycard\w*|tachypne\w*|bradypne\w*|hypoxi\w*|hypoxem\w*|dyspne\w*|cyanosis|cyanotic|diaphore\w*|letharg\w*|obtunded|unresponsive|confus\w*|disoriented|edema\w*|crackles|wheez\w*|stridor|seizure\w*|hemorrhag\w*|infect\w*|febrile|fever\w*|nausea\w*|vomit\w*|hypoglycem\w*|hyperglycem\w*|oligur\w*|anuri\w*|jaundice\w*|pallor|mottl\w*|deteriorat\w*|decompensat\w*|unstable|distress\w*|anxious|restless\w*|agitat\w*|pain|painful)\b/gi;
 function scanUncitedProse(text,where,issues){
-  const source=String(text||'');
+  // v18.0 (review M4): "At 1400 hours" read as an uncited 1400-hour duration and failed a good case; a 24-hour clock
+  // time followed by hours/hrs is a clock time. Elapsed time in prose ("2 hours later") is still checked, as since v17.1;
+  // the prompt now says so.
+  const source=String(text||'').replace(/\b((?:[01]\d|2[0-3])[0-5]\d)\s*(?:hours|hrs?)\b/gi,'$1');
   const hits=source.match(CASE_CLINICAL_TOKEN_RE);
   if(hits&&hits.length)issues.push({sev:'error',msg:`${where}: contains uncited clinical value(s) ${[...new Set(hits.map(h=>h.trim()))].join(', ')} \u2014 clinical data must go in the cited data array`});
   const terms=source.match(CASE_CLINICAL_TERM_RE);
@@ -11644,16 +11887,22 @@ function caseDecimal(value){
 function caseNormalizeClinical(t){
   return caseNumericText(t).replace(/[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|[+-]?\.\d+/g,caseDecimal).replace(/\s+/g,'');
 }
+const CASE_CLINICAL_TOKEN_AT=new RegExp(CASE_CLINICAL_TOKEN_RE.source,'iuy');
 const CASE_SUPPORTED_UNIT=/^(?:mcg|mg|g|kg|lb|ml|l|meq|mmol|unit|bpm|mmhg|cm|mm|sec|min|hr|day|week|%|\/min)(?:\/(?:kg|ml|l|dl|hr|min|sec|day|dose|m2))*$/;
 function caseNumericTokens(text){
-  const tokens=[],unsupported=[],blocked=[],input=String(text||'');
+  // v18.0 (review M5): "q4h" was never read, so a source saying "Turn q4h" could not support "every 4 hours" (and a
+  // generated "q4h" was never checked). It is read as the same interval; this is an alias, not a conversion.
+  const tokens=[],unsupported=[],blocked=[],input=String(text||'').replace(/\bq\s*(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b/gi,'every $1 hours').replace(/\bq\s*(\d+)\s*min(?:utes?)?\b/gi,'every $1 minutes');
   // v17.1: consume shared-unit ranges once; the old token scan lost the lower endpoint.
   const number='[+−-]?(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d+)?|[+−-]?\\.\\d+';
   const range=new RegExp('(?<![\\w.,])('+number+')\\s*(?:[-–—]|to)\\s*('+number+')\\s*','giu');
   for(const m of input.matchAll(range)){
+    // v18.0 (review L40): only a unit token starting at the upper endpoint counts. Collecting every later token for
+    // each range was quadratic (a 64k-character field took 4-7 s); a sticky match at position 0 gives the same token.
     const at=m.index+m[0].lastIndexOf(m[2]),rest=input.slice(at);
-    const unitToken=[...rest.matchAll(CASE_CLINICAL_TOKEN_RE)][0];
-    if(!unitToken||unitToken.index!==0)continue;
+    CASE_CLINICAL_TOKEN_AT.lastIndex=0;
+    const unitToken=CASE_CLINICAL_TOKEN_AT.exec(rest);
+    if(!unitToken)continue;
     const end=at+unitToken[0].length;
     const tail=input.slice(end).match(/^(?:\s*\/\s*(?:\([^\r\n)]*\)?|[^\s,;!?]+)|[·⋅⁄^%°⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻][^\s,;!?]*|[ \t]*[·⋅*×][ \t]*[\p{L}µμ][^\s,;!?]*|[+−-][\p{L}µμ][^\s,;!?]*)/u);
     const upper=caseNumericTokens(unitToken[0]+(tail?tail[0]:''));
@@ -11734,8 +11983,10 @@ function caseParseThresholds(factText){
     const lo=Number(caseDecimal(m[1])),hi=Number(caseDecimal(m[3])),first=(m[2]||'').replace(/\s+/g,''),unit=(m[4]||'').replace(/\s+/g,'');
     if(isFinite(lo)&&isFinite(hi)&&hi>lo&&(!first||first===unit)&&validUnit(unit,m))out.push({op:'range',lo,hi,unit});
   }
-  for(const[src,op]of[['(?:<=|≤|no\\s+more\\s+than|at\\s+most)','<='],['(?:>=|≥|at\\s+least)','>='],
-                      ['(?:<|less\\s+than|below|under)','<'],['(?:>|greater\\s+than|above|over)','>']]){
+  // v18.0 (review L43): "no less than 90%" matched "less than" and became <90, the opposite bound. A "no"/"not" before
+  // "less than" now reads as >=, before "more than" or "greater than" as <=, and the plain comparators skip negated ones.
+  for(const[src,op]of[['(?:<=|≤|not?\\s+(?:more|greater)\\s+than|at\\s+most)','<='],['(?:>=|≥|not?\\s+less\\s+than|at\\s+least)','>='],
+                      ['(?:<|(?<!\\bnot?\\s+)less\\s+than|below|under)','<'],['(?:>|(?<!\\bnot?\\s+)greater\\s+than|above|over)','>']]){
     for(const m of t.matchAll(new RegExp(src+'\\s*'+NUM+UNIT,'g'))){
       // A comparator preceding a range must not establish a second, partial bound.
       if(ranges.some(([a,b])=>m.index<b&&m.index+m[0].length>a))continue;
@@ -11770,9 +12021,17 @@ function caseThresholdSatisfied(num,th){
 function caseAuditTextValues(text,factIds,factIndex,where,issues,supportType,presentedValues,neutralValues){
   const st=String(supportType||''),values=caseNumericTokens(text);
   if(st!=='neutral-framing'&&!(factIds||[]).length)return; // Existing missing-citation severity stays at its own caller.
-  for(const raw of values.unsupported)issues.push({sev:'error',msg:where+': unsupported clinical unit or notation "'+raw+'" requires source review'});
   // v15.17: never concatenate records (or text with quote) into synthetic numeric evidence.
   const cited=(factIds||[]).flatMap(id=>{const e=factIndex.get(String(id||'').toLowerCase());return e?[e.fact.text||'',e.fact.sourceQuote||'']:[];});
+  for(const raw of values.unsupported){
+    // v18.0 (review M5): every fraction was an error, so "Pain 8/10" failed even when the cited fact said 8/10. A plain
+    // fraction is supported by the same fraction in a cited fact, and an instantiated N/10 by a cited 0-10 scale; no
+    // number is taken out of a fraction, so the v16 no-donation rule is unchanged.
+    const frac=String(raw).replace(/\s+/g,'').match(/^(\d+)\/(\d+)$/);
+    if(frac&&cited.some(c=>new RegExp('(?<!\\d|\\d\\.)'+frac[1]+'\\s*/\\s*'+frac[2]+'(?!\\d|\\.\\d)').test(c)))continue;
+    if(frac&&st==='instantiated'&&frac[2]==='10'&&Number(frac[1])<=10&&cited.some(c=>/(?<!\d|\d\.)0\s*(?:-|–|—|to)\s*10(?!\d|\.\d)/.test(c)))continue;
+    issues.push({sev:'error',msg:where+': unsupported clinical unit or notation "'+raw+'" requires source review'});
+  }
   const support=new Set(cited.flatMap(s=>caseNumericTokens(s).tokens.map(t=>t.key)));
   for(const {raw:v,key} of values.tokens){
     if(st==='neutral-framing'){
@@ -11814,10 +12073,11 @@ function caseAuditDatumValues(d,factIndex,where,issues,neutralValues){
 // Decimal scales use BigInt strings: in-browser Babel lowers exponentiation to Math.pow, which rejects BigInt.
 // No unit conversions, chained formulas, implicit operands or rounding inference. Results
 // belong only to this question; neither another rationale nor the proposed result supplies operands.
+// v18.0 (review M6): operands and a bare answer may use thousands separators ("25,000 units", "7,000").
 function caseCalculationEvidence(q,factIndex,ids,presentedValues){
   const support=new Set(presentedValues||[]);
   for(const id of ids){const f=factIndex.get(String(id).toLowerCase())?.fact;if(f)for(const text of [f.text,f.sourceQuote])for(const t of caseNumericTokens(text).tokens)support.add(t.key);}
-  const derived=new Set(),num='[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)',unit='(?:mcg|mg|g|kg|ml|l|meq|mmol|unit)(?:\\s*/\\s*(?:kg|ml|l|dl|hr|min|sec|day|dose|m2))*';
+  const derived=new Set(),num='[+-]?(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d+)?|[+-]?\\.\\d+',unit='(?:mcg|mg|g|kg|ml|l|meq|mmol|unit)(?:\\s*/\\s*(?:kg|ml|l|dl|hr|min|sec|day|dose|m2))*';
   const quantity='('+num+')\\s*('+unit+')';
   const expression=new RegExp('(?<![\\w.,/])'+quantity+'\\s*(×|\\*|multiplied by|divided by|÷)\\s*'+quantity+'\\s*(?:=|gives|equals)\\s*'+quantity+'(?![\\w/²³^])','g');
   const decimal=x=>{const v=caseDecimal(x),places=(v.split('.')[1]||'').length;return [BigInt(v.replace('.','')),BigInt('1'+'0'.repeat(places))];};
@@ -12154,7 +12414,7 @@ function validateCaseStudy(caseStudy,factIndex,allowedFactIds,expectedCondition)
         const answer=(q.correctAnswers||[])[0]||'';
         caseAuditTextValues(answer,questionIds.length?questionIds:[''],factIndex,qn+' answer',issues,'calculation',explanationValues,neutralValues);
         const answerTokens=caseNumericTokens(answer);
-        const answerMatches=/^[+−-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(answer)?[...derived].some(key=>key.match(/^[+-]?[\d.]+/)[0]===caseDecimal(answer)):answerTokens.tokens.length===1&&!answerTokens.unsupported.length&&derived.has(answerTokens.tokens[0].key);
+        const answerMatches=/^[+−-]?(?:(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|\.\d+)$/.test(answer)?[...derived].some(key=>key.match(/^[+-]?[\d.]+/)[0]===caseDecimal(answer)):answerTokens.tokens.length===1&&!answerTokens.unsupported.length&&derived.has(answerTokens.tokens[0].key);
         if(!answerMatches)
           issues.push({sev:'error',msg:qn+': numeric answer disagrees with the verified calculation result'});
       }else if(q.type==='Calculation'){
@@ -12291,7 +12551,7 @@ function caseAllFactIds(caseStudy){
 // `worksheetFactIds:false` strips [fact-n] tags from the STUDENT-FACING half only. On screen a
 // fact tag is a clickable audit affordance; on paper it is noise a student cannot act on. The
 // answer key always keeps them, since that is the half being spot-checked against the source.
-function caseToMarkdown(cs,{worksheetFactIds=true}={}){
+function caseToMarkdown(cs,{worksheetFactIds=true,hardBreaks=true}={}){
   const L=[];
   L.push('# '+(cs.title||'Clinical Case Study'));
   const p=cs.patient||{};
@@ -12307,8 +12567,12 @@ function caseToMarkdown(cs,{worksheetFactIds=true}={}){
       L.push('');
     }
     (stage.questions||[]).forEach((q,i)=>{
-      L.push('**Q'+stage.stageNumber+'.'+(i+1)+' ('+(q.type||'MCQ')+')** '+(q.stem||''));
-      for(const o of q.options||[])L.push('   '+(o.label||'')+'. '+(o.text||''));
+      // v18.0 (review L24): the stem and its lettered choices formed one Markdown paragraph, so the printed case ran
+      // them together on one line. Two trailing spaces end each line with a hard break. The auditor's payload passes
+      // hardBreaks:false, so the text the item auditor reads is unchanged.
+      const opts=[...(q.options||[])],br=hardBreaks?'  ':'';
+      L.push('**Q'+stage.stageNumber+'.'+(i+1)+' ('+(q.type||'MCQ')+')** '+(q.stem||'')+(opts.length?br:''));
+      opts.forEach((o,k)=>L.push('   '+(o.label||'')+'. '+(o.text||'')+(k<opts.length-1?br:'')));
       L.push('');
     });
   }
@@ -12464,7 +12728,7 @@ function caseAuditPayload(cs,stageNumber,q){
   const stages=(cs.stages||[]);
   const ix=stages.findIndex(s=>Number(s.stageNumber)===Number(stageNumber));
   const through=ix>=0?stages.slice(0,ix+1):stages;
-  const md=caseToMarkdown({...cs,stages:through,debrief:null},{worksheetFactIds:false});
+  const md=caseToMarkdown({...cs,stages:through,debrief:null},{worksheetFactIds:false,hardBreaks:false}); // v18.0 (review L24): the auditor reads plain line ends
   const cut=md.indexOf('\n<div class="pagebreak">');
   return itemAuditPayload((cut>=0?md.slice(0,cut):md).trim(),q);
 }
@@ -12540,7 +12804,8 @@ ${payload}`;
 // never ran. But leaving it FAIL is worse: a real run showed "FAIL — DISTRACTOR LENGTH" in
 // the panel for an item the log had already reported as successfully rewritten, so the panel
 // was describing text that no longer existed. REPAIRED says exactly what happened.
-const ITEM_AUDIT_STATUS=new Set(['PASS','FAIL','REPAIRED','REVIEW','N/A','ERROR']);
+// v18.0 (review, dead code): the statuses are PASS, FAIL, REPAIRED, REVIEW, N/A and ERROR; the unused ITEM_AUDIT_STATUS
+// set that listed them was removed.
 // Criterion 3 is the ONLY one where the auditor overrules a keyed answer with no reference
 // standard, and it sits in the AI's second-weakest measured domain (ICC 0.575). A wrong
 // auto-repair here silently replaces a correct answer with an incorrect one, so an
@@ -12844,7 +13109,10 @@ function CaseStudyGenerator(){
               // v15.7: see the NCLEX audit — stop after two quota failures instead of
               // spending minutes confirming the allowance is still gone.
               if(isQuotaError(e)&&++quotaFails>=2)throw Object.assign(new Error('API quota exhausted'),{name:'QuotaStop'});
-              verdict={status:'ERROR',criterion:'',detail:e.message||String(e),warns:[],autoRepairable:false};
+              // v18.0 (review L41): this detail is shown in the panel and exported in the review appendix; the API key is
+              // removed from it as the Anki source check does.
+              const auditError=e.message||String(e);
+              verdict={status:'ERROR',criterion:'',detail:cfg.apiKey?auditError.split(cfg.apiKey).join('[redacted]'):auditError,warns:[],autoRepairable:false};
             }
             done++;
             owned_setAudit(p=>({...(p||{}),[it.key]:verdict}));
@@ -12872,7 +13140,10 @@ function CaseStudyGenerator(){
           const repairable=results.filter(r=>r.autoRepairable);
           for(const r of accuracyFails)
             owned_log('  ⚠ Stage '+r.stageNumber+' '+(r.q.id||'')+' failed on answer accuracy — NOT auto-repaired. This is the one criterion where the reviewer overrules a keyed answer with no reference standard; it needs your eyes.','err');
-          if(repairable.length){
+          // v18.0 (review L39): repairs still ran after the audit stopped for quota, spending calls the allowance no longer
+          // had. They are skipped and the failed items keep their FAIL verdicts.
+          if(repairable.length&&auditInterrupted)owned_log('Repairs skipped: the audit stopped for quota, so '+repairable.length+' failed item(s) were not rewritten. Run again after your quota resets.','warn');
+          else if(repairable.length){
             owned_setAuditPhase('repair');
             owned_log('Repairing '+repairable.length+' item(s) in a fresh call (one round, no re-audit)...','warn');
             let repaired=0;
@@ -12987,8 +13258,11 @@ function CaseStudyGenerator(){
       if(generatorSlot.current.current(operation))setAuditState(runAudit?(auditInterrupted?'interrupted':'complete'):'disabled');
     }catch(e){
       if(generatorSlot.current.owns(operation))setAuditState(e.name==='AbortError'?'interrupted':'failed');
-      if(e.name==='AbortError')owned_log('Cancelled.','warn');else owned_log('Error: '+(e.message||String(e)),'err');
-    }finally{if(generatorSlot.current.finish(operation)){setBusy(false);setAbortCtl(null);setLiveKB(0);setAuditPhase('');}}
+      // v18.0 (review L34): see the NCLEX generator; "Cancelled." was dropped with every other line of an aborted run.
+      if(e.name==='AbortError'){if(generatorSlot.current.owns(operation))log('Cancelled.','warn');}else owned_log('Error: '+(e.message||String(e)),'err');
+    // v18.0 (review L37): the truncated, unparseable and invalid-shape returns left the audit state "running". A run that
+    // ends with the audit still running records it as failed.
+    }finally{if(generatorSlot.current.finish(operation)){setBusy(false);setAbortCtl(null);setLiveKB(0);setAuditPhase('');setAuditState(s=>s==='running'?'failed':s);}}
   },[cfg,activeCondition,selectedFacts,sufficiency,difficulty,stages,questionsPerStage,types,K,runAudit]);
 
   // v15.6: audit verdicts joined back to their items for display.
@@ -13117,7 +13391,8 @@ function CaseStudyGenerator(){
           have never had criterion-validity testing. */}
       {auditRows.length>0&&<div style={{marginTop:12,padding:'11px 13px',borderRadius:8,border:'1px solid '+(auditTotals.fail?'var(--error-border)':auditUnresolved?'var(--warning-border)':'var(--success-border)'),background:auditTotals.fail?'var(--error-bg)':auditUnresolved?'var(--warning-bg)':'var(--success-bg)'}}>
         <span style={{fontSize:12,fontWeight:600,color:auditTotals.fail?'var(--accent-red)':auditUnresolved?'var(--accent-warm)':'var(--accent-green)'}}>
-          {auditTotals.fail?'⚠':auditState!=='complete'||auditTotals.review||auditTotals.repaired||auditTotals.error?'⚑':'✓'} Item quality: {auditTotals.pass} pass · {auditTotals.fail} fail · {auditTotals.review} review
+          {/* v18.0 (review L37): a skipped audit (unscored items) showed ✓ while the panel colour and exports said incomplete; the glyph now follows auditUnresolved. */}
+          {auditTotals.fail?'⚠':auditUnresolved?'⚑':'✓'} Item quality: {auditTotals.pass} pass · {auditTotals.fail} fail · {auditTotals.review} review
           {auditTotals.repaired>0&&<span style={{color:'var(--accent-warm)',fontWeight:400}}> · {auditTotals.repaired} repaired</span>}
           {auditTotals.na>0&&<span style={{color:'var(--text-dim)',fontWeight:400}}> · {auditTotals.na} N/A</span>}
           {auditTotals.error>0&&<span style={{color:'var(--text-dim)',fontWeight:400}}> · {auditTotals.error} not scored</span>}
@@ -13217,6 +13492,11 @@ function CaseRenderer({caseStudy:cs}){
 function ConfigSidebar({onClose,activeTool}){
   const cfg=useConfig();
   const [showProfiles,setShowProfiles]=useState(false);
+  // v18.0 (review L5): a typed model ID was saved raw (spaces included) and checked only on reload, which silently
+  // reverted it to the default. It is now trimmed and checked against MODEL_ID_RE as typed: a valid ID is used and
+  // saved at once; an invalid one stays in the field, marked invalid, and the last valid ID keeps running.
+  const [modelDraft,setModelDraft]=useState({});
+  const commitModelId=(slot,raw,set)=>{const id=String(raw).trim(),ok=MODEL_ID_RE.test(id);setModelDraft(d=>({...d,[slot]:raw,[slot+'Bad']:!ok}));if(ok)set(id);};
   const panelRef=useRef(null);
   // v17.3: this effect depended on onClose, and App recreated closeSettings on every render, so
   // any App state change while the drawer was open (typing a model name, a save-status change
@@ -13232,7 +13512,7 @@ function ConfigSidebar({onClose,activeTool}){
   },[]);
   return(
     <aside ref={panelRef} className="drawer config-drawer" id="suite-settings" aria-label="Study settings">
-      <div className="drawer-head"><div><h2>Study settings</h2><p>Shared across all six tools</p></div><button type="button" className="drawer-close settings-close" aria-label="Close study settings" onClick={onClose}>×</button></div>
+      <div className="drawer-head"><div><h2>Study settings</h2><p>Shared across all seven tools</p></div><button type="button" className="drawer-close settings-close" aria-label="Close study settings" onClick={onClose}>×</button></div>
       <div className="drawer-body sb-body">
       <div className="sb-section">
         <label className="sb-label" htmlFor="suite-api-key">Gemini API key</label>
@@ -13250,7 +13530,9 @@ function ConfigSidebar({onClose,activeTool}){
         {cfg.autoProfile?(
           <div style={{marginTop:6}}>
             <div className="sb-hint" style={{marginBottom:6}}>Each tool uses its own model and thinking level. The manual toggle is paused.</div>
-            {(()=>{const r=cfg.forTool(activeTool);return(
+            {/* v18.0 (review L4): NCLEX to Anki has no profile row, so this badge showed the Flash · low fallback. That tab always
+                runs the Flash model, reads images at the level chosen in the tab and answers at high. The header now says seven tools. */}
+            {(()=>{const r=activeTool==='nclex2anki'?{model:cfg.flashModel,level:'level set in tab',family:'flash'}:cfg.forTool(activeTool);return(
               <div className="model-badge"><div className={`model-dot ${r.family==='argon'?'argon':''}`}/><span style={{flex:1}}>{r.model}</span><span style={{fontSize:12,color:'var(--text-dim)'}}>{r.level}</span></div>
             );})()}
             <div style={{fontSize:12,color:'var(--text-dim)',marginTop:3,marginBottom:7}}>↑ what the open tab will use</div>
@@ -13283,13 +13565,13 @@ function ConfigSidebar({onClose,activeTool}){
                 <button key={lv} aria-pressed={cfg.thinkingLevel===lv} aria-label={lv+' thinking level'} className={`level-pill ${cfg.thinkingLevel===lv?'on':''}`} onClick={()=>cfg.setThinkingLevel(lv)}>{lv}</button>
               ))}
             </div>
-            <div className="sb-hint" style={{marginTop:5}}>Set per model — Flash and Argon remember their levels independently. Every tool uses the active one.</div>
+            <div className="sb-hint" style={{marginTop:5}}>Set per model — Flash and Argon remember their levels independently. Every tool uses the active one, except NCLEX to Anki, which always uses the Flash model.</div>
             <div className="model-badge"><div className={`model-dot ${cfg.thinkingMode?'argon':''}`}/><span style={{flex:1}}>{cfg.activeModel}</span><span style={{fontSize:12,color:'var(--text-dim)'}}>{cfg.thinkingLevel}</span></div>
           </div>
         )}
         <div style={{marginTop:10}}>
-          <div className="sb-field"><label htmlFor="suite-flash-model">Flash model</label><input id="suite-flash-model" type="text" value={cfg.flashModel} onChange={e=>cfg.setFlashModel(e.target.value)} spellCheck="false"/></div>
-          <div className="sb-field"><label htmlFor="suite-argon-model">Argon model</label><input id="suite-argon-model" type="text" value={cfg.argonModel} onChange={e=>cfg.setArgonModel(e.target.value)} spellCheck="false"/></div>
+          <div className="sb-field"><label htmlFor="suite-flash-model">Flash model</label><input id="suite-flash-model" type="text" value={modelDraft.flash??cfg.flashModel} aria-invalid={modelDraft.flashBad===true} aria-describedby={modelDraft.flashBad?'suite-flash-model-error':undefined} onChange={e=>commitModelId('flash',e.target.value,cfg.setFlashModel)} spellCheck="false"/>{modelDraft.flashBad&&<div className="sb-hint" id="suite-flash-model-error" style={{color:'var(--accent-warm)'}}>Not a valid model ID (letters, digits, dot, dash, underscore). Still using {cfg.flashModel}.</div>}</div>
+          <div className="sb-field"><label htmlFor="suite-argon-model">Argon model</label><input id="suite-argon-model" type="text" value={modelDraft.argon??cfg.argonModel} aria-invalid={modelDraft.argonBad===true} aria-describedby={modelDraft.argonBad?'suite-argon-model-error':undefined} onChange={e=>commitModelId('argon',e.target.value,cfg.setArgonModel)} spellCheck="false"/>{modelDraft.argonBad&&<div className="sb-hint" id="suite-argon-model-error" style={{color:'var(--accent-warm)'}}>Not a valid model ID (letters, digits, dot, dash, underscore). Still using {cfg.argonModel}.</div>}</div>
         </div>
       </div>
       <div className="sb-section">

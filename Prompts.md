@@ -1,6 +1,6 @@
 # Nursing Study Suite — Prompt Library
 
-The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, the item-quality auditor, and the NCLEX to Anki image reader, **extracted verbatim from the shipped v17.15 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
+The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, the item-quality auditor, and the NCLEX to Anki image reader, **extracted verbatim from the shipped v18.0 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
 
 > **Coverage.** All 14 named prompt constants are represented from live HTML bytes. Eleven are byte-frozen; `CARD_TRANSCRIBE_PROMPT` is deliberately tunable but requires two transcription runs per card after an edit. `I2A_TRANSCRIBE_PROMPT` and `I2A_ANSWER_PROMPT` (NCLEX to Anki, v17.9) are copied from img2anki.py and are not frozen. The generated appendix is maintained by `node tools/render-prompts.js --write` and checked by `node verify-repo.js`.
 
@@ -1595,8 +1595,9 @@ it can be cited. Narrative may set the scene only.
   FORBIDDEN in narrative: "BP is 82/50." · "Potassium fell to 2.8 mEq/L." · "She takes
                           furosemide 80 mg daily." · "Oxygen saturation dropped to 88%."
 This is checked automatically: any number carrying a clinical unit (mg, mcg, mL, mEq/L, mm Hg,
-bpm, %, units) or a blood-pressure pair found in these fields FAILS validation. Ages, room
-numbers, and clock times are fine.
+bpm, %, units, cm, mm, kg, lb) or a time span (hours, minutes, days) or a blood-pressure pair
+found in these fields FAILS validation. Write elapsed time in words ("Two hours later") or put it
+in "data". Ages, room numbers, and clock times (0800, 1400) are fine.
 
 ═══ SUPPORT TYPE (label honesty) ═══
 Each data item and rationale carries a supportType describing how it relates to the facts:

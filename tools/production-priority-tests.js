@@ -59,6 +59,15 @@ module.exports=async function productionPriorityTests(S,t){
   t('Priority keeps streamed text after a synthesis failure and labels it incomplete',h.out.step==='results'&&h.out.output==='Streamed before failure'&&h.out.error==='Synthetic timeout'&&/Analysis status: Synthetic timeout/.test(h.notice()));
   h=fixture({call:async(n,args)=>{if(n===1)return 'Captured A';throw Error('Synthetic timeout');}});await h.run();
   t('Priority synthesis failure with no streamed text still shows the error view',h.out.step==='error'&&h.out.error==='Synthetic timeout');
+  // v18.0 (review M21): a retry starts with onUpdate(''); that reset must not erase text already streamed.
+  h=fixture({call:async(n,args)=>{if(n===1)return 'Captured A';args[3].onUpdate('Streamed before the cut');args[3].onUpdate('');throw Error('Synthetic overloaded');}});await h.run();
+  t('Priority keeps streamed text when a retry resets the preview and then fails',h.out.step==='results'&&h.out.output==='Streamed before the cut'&&h.out.error==='Synthetic overloaded');
+  h=fixture({call:async(n,args)=>{if(n===1)return 'Captured A';args[3].onUpdate('');args[3].onUpdate('');throw Error('Synthetic overloaded');}});await h.run();
+  t('Priority whose retries never streamed text still shows the error view',h.out.step==='error'&&h.out.error==='Synthetic overloaded');
+  // v18.0 (review M22): a sub-line repeated under different items survives the merge; a whole repeated item does not.
+  {const part=n=>'## TIER 1 — Must Know\n### Topic\n- **Act '+n+'a** [§ S'+n+'] — (R1) why.\n  - Notify the provider\n- **Act '+n+'b** [§ S'+n+'] — (R2) why.\n  - Notify the provider\n- **Shared item** [§ S] — (R1) same.\n\n## TIER 2 — Should Know\n- **Item '+n+'c** [§ S'+n+'] — (R9) why.\n\n## TIER 3 — Good to Know\n- **Item '+n+'d** [§ S'+n+'] — (R9) d.\n\n---\n## Study Strategy\n- Drill '+n+'.\n\n*Audit: 5 items · 0 unverified · 0 inferred · 3/3 T1 rule-tagged*';
+    const merged=H.paMergeSynthesis([part(1),part(2)]).text;
+    t('Priority merge keeps a sub-line repeated under different items and drops only a whole repeated item',(merged.match(/^  - Notify the provider$/gm)||[]).length===4&&(merged.match(/Shared item/g)||[]).length===1);}
   let release;h=fixture({call:async(n)=>n===1?new Promise(r=>{release=r;}):'Should not synthesize'});
   let pending=h.run();h.replace();release('Old source evidence');await pending;
   t('Priority source replacement aborts the old harvest',h.out.calls[0][3].signal.aborted);

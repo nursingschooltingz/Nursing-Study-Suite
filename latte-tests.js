@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 3642;
+const EXPECTED_ASSERTIONS = 3753;
 
 let file;
 try {
@@ -28,7 +28,9 @@ const S = fs.readFileSync(file, 'utf8');
 console.log('LATTE regression harness — testing: ' + file + ' (' + S.length.toLocaleString() + ' chars)\n');
 
 let pass = 0, fail = 0;
-const t = (name, cond) => { if (cond) { pass++; console.log('PASS  ' + name); } else { fail++; console.log('FAIL  ' + name); } };
+// v18.0 (review L45): only a real true passes. A truthy non-boolean (an object, a nonzero count, a forgotten await's
+// promise) used to count as a pass.
+const t = (name, cond) => { if (cond === true) { pass++; console.log('PASS  ' + name); } else { fail++; console.log('FAIL  ' + name + (cond && cond !== true ? ' (condition was ' + typeof cond + ', not true)' : '')); } };
 const section = s => console.log('\n── ' + s + ' ──');
 
 function spanFrom(startAnchor, endAnchor, fromAnchor) {
@@ -83,7 +85,7 @@ const AUDIT = new Function('CASE_QUESTION_RULES', 'caseRenderFactPacket',
     .replace(/function CaseStudyGenerator\(\)$/, '') +
   ';return {caseToMarkdown,caseIsGateEligible,caseAuditPayload,itemBuildAuditPrompt,' +
   'itemParseAuditVerdict,itemAuditIsAnswerAccuracy,itemRunPool,caseGateItems,itemAuditSummary,' +
-  'caseBuildRepairPrompt,ITEM_AUDIT_STATUS};'
+  'caseBuildRepairPrompt};'
 )('«SHARED-QUESTION-RULES»', () => '«FACT-PACKET»');
 
 // v15.7 B1c: the worksheet validator depends on the ng* parsers, neiaTerminologyScan, and
@@ -185,6 +187,40 @@ section('nclexSplitByQNum — choice runs');
                 {num:4,index:620},{num:5,index:660}];
   t('a five-choice select-all run is dropped, leaving two questions',
     NXO.nclexDropOptionRuns(sata).map(p => p.num).join(',') === '1,2');
+}
+// v18.0 (review M1): the browser compiles the app with the react preset only; without the attribute
+// @babel/standalone also ran preset-env (about 4 s per load) and the page ran ES5 code the gate never tested.
+t('v18.0: the app script asks Babel for the react preset only', S.split('type="text/babel"').length === 2 && S.includes('<script type="text/babel" data-presets="react">'));
+// v18.0 (review M12, L17, L40): degenerate model output must not freeze the tab. Each input below took 7 to 80
+// seconds before; the bound is generous so a slow machine cannot fail it.
+{
+  const ms = f => { const t0 = Date.now(); f(); return Date.now() - t0; };
+  const parts = new Function(spanFrom('function ngSplitParts(raw){', '\n}\n') + ';return ngSplitParts;')();
+  const split = new Function(spanFrom('const NCLEX_OPTION_GAP=', '\n  return bestItems;\n}\n') + ';return nclexSplitByQNum;')();
+  const cases = new Function(spanFrom('const CASE_CLINICAL_TOKEN_RE=', '\n  return{tokens,unsupported};\n}\n') + ';return caseNumericTokens;')();
+  const key = 'PART 1\na\nPART 2\nb\nPART 3\nc\nPART 4\n1. ANSWER: A\n' + ' '.repeat(8000) + 'x\n   ═══ FINAL — VERIFY\nQ1: topic=x\nDISTRIBUTION: A';
+  const p = parts(key);
+  t('v18.0: a long run of spaces in the answer key splits at once, and FINAL VERIFY still ends the key',
+    ms(() => parts(key)) < 1000 && /^1\. ANSWER: A/.test(p.p4) && !p.p4.includes('FINAL') && p.dist === 'A');
+  const qs = split('1. a\n' + '\n \n'.repeat(33000) + '2. b\n3. c');
+  t('v18.0: thousands of blank lines between extracted questions split at once, with every question kept',
+    ms(() => split('1. a\n' + '\n \n'.repeat(33000) + '2. b\n3. c')) < 1000 && Object.keys(qs).join(',') === '1,2,3');
+  const field = '1-2, '.repeat(13000) + '5-10 mg';
+  const tk = cases(field);
+  t('v18.0: a 64k-character case field of ranges parses at once, and a unit range still gives both endpoints',
+    ms(() => cases(field)) < 1000 && tk.tokens.map(x => x.key).join(',') === '5mg,10mg');
+}
+// v18.0 (review M31): an export saved into the repository folder must never be committable. Every literal download
+// name in the app, plus an example of each computed name, is checked against .gitignore with git itself.
+{
+  const { spawnSync } = require('child_process');
+  const literal = [...S.matchAll(/(?:downloadBlob\([^;]{0,200}?|exportAs(?:Md|Txt|Pdf)\([^;]{0,200}?|outName=[^;]{0,120}?)'([A-Za-z0-9_.-]+\.(?:txt|md|json|csv))'/g)].map(m => m[1]).filter(n => /^[A-Za-z0-9]/.test(n)); // a leading '-' or '.' is the tail of a computed name
+  const computed = ['LATTE-Knowledge-Base-recovery-1.json', 'LATTE-Knowledge-Base-recovery-1-raw.txt', 'LATTE-Extraction-Diagnostics-2026-10-13.json', 'card-transcripts-2026-10-13.json',
+    'anki-source-report-complete.json', 'latte_anki_import.txt', 'latte_anki_import_tier1.txt', 'Exam1_anki.txt'];
+  const names = [...new Set([...literal, ...computed])];
+  const exposed = names.filter(n => spawnSync('git', ['check-ignore', '-q', '--no-index', n], { cwd: __dirname }).status !== 0);
+  t('v18.0: every export name the app writes is ignored by git (' + names.length + ' names, ' + literal.length + ' found in the app)', literal.length >= 12 && exposed.length === 0);
+  if (exposed.length) console.log('      not ignored: ' + exposed.join(', '));
 }
 // v17.15 (review H4): a choice run 1..k may not swallow the question numbered k+1.
 {
@@ -344,7 +380,7 @@ section('NCLEX extractor export grouping');
   t('the answers themselves land in the answer key',
     md.indexOf('earliest sign of decompensation') > cut && md.indexOf('monitor before each dose') > cut);
   t('both rationales land in the answer key', md.indexOf('Crackles indicate fluid overload.') > cut && md.indexOf('Loop diuretics waste potassium.') > cut);
-  t('choices are rendered as a list under the stem', /\n1\. Weight gain\n2\. Crackles\n3\. K 3\.9\n4\. BP 128\/78/.test(md.slice(0, cut)));
+  t('choices are rendered as a list under the stem', /\n1\. Weight gain {2}\n2\. Crackles {2}\n3\. K 3\.9 {2}\n4\. BP 128\/78\n/.test(md.slice(0, cut))); // v18.0 (review L24): hard line breaks
 
   const txt = nclexToTxt(fx, NXO.nclexSplitStemOptions);
   t('a run summary is written into the text export header', nclexToTxt(fx, NXO.nclexSplitStemOptions, { exportLine: 'Incomplete: synthetic' }, s => 'Extraction status: ' + s.exportLine).indexOf('Extraction status: Incomplete: synthetic') > -1 && !txt.includes('Extraction status'));
@@ -491,7 +527,7 @@ t('undefined textContent is survivable', pdfLayoutText(undefined) === '');
 // one place that produces page text must be the shared helper.
 t('KB path uses pdfLayoutText, not the naive join',
   S.includes("'\\n--- PAGE '+i+' ---\\n'+text") && !S.includes("+tc.items.map(x=>x.str).join(' ')") &&
-  S.includes('const text=pdfLayoutText(await pg.getTextContent());'));
+  S.includes('const tc=await pg.getTextContent(),text=pdfLayoutText(tc);'));
 t('there is exactly ONE page walk, and it is cancellable',
   S.split('async function pdfWalkPages').length - 1 === 1 &&
   !S.includes('for(let i=1;i<=pdf.numPages;i++)') &&
@@ -1557,7 +1593,8 @@ section('v15.6 — case audit pass');
   // v15.7, from a real case run: the panel showed "FAIL — DISTRACTOR LENGTH" for an item the
   // log had already reported as successfully repaired. The verdict described text that no
   // longer existed. REPAIRED is neither PASS (never re-checked) nor FAIL (already rewritten).
-  t('REPAIRED is a distinct status', S.includes("'PASS','FAIL','REPAIRED','REVIEW','N/A','ERROR'"));
+  // v18.0: the unused ITEM_AUDIT_STATUS set was removed; REPAIRED has its own panel mark and counts as unresolved.
+  t('REPAIRED is a distinct status', S.includes("r.status==='REPAIRED'?'⟳'")&&S.includes("['PENDING','UNSCORED','ERROR','REVIEW','REPAIRED'].includes(r.status)"));
   t('a repaired case item updates its stored verdict', S.includes("[r.key]:{status:'REPAIRED'"));
   t('a repaired worksheet item updates its stored verdict', S.includes("row.status='REPAIRED';"));
   t('REPAIRED admits it was not re-audited',
@@ -2847,6 +2884,14 @@ section('v15.14 — clamps, backoff, storage');
   section('v17.9-v17.11 NCLEX to Anki converters, PDF input and the merged export option');
   await require('./tools/nclex-to-anki-tests')(S,t);
 
+  section('v18.0 production review step 10, Low findings');
+  await require('./tools/v18-0-low-transport-tests')(S,t);
+  await require('./tools/v18-0-low-kb-tests')(S,t);
+  await require('./tools/v18-0-low-anki-tests')(S,t);
+  await require('./tools/v18-0-low-extractor-tests')(S,t);
+  await require('./tools/v18-0-low-converter-tests')(S,t);
+  await require('./tools/v18-0-low-cases-tests')(S,t);
+
   console.log('\n════════════════════════════');
   const total = pass + fail;
   if (total !== EXPECTED_ASSERTIONS) {
@@ -2854,4 +2899,9 @@ section('v15.14 — clamps, backoff, storage');
   }
   console.log(pass + ' passed · ' + fail + ' failed');
   process.exit(fail || total !== EXPECTED_ASSERTIONS ? 1 : 0);
-})();
+})().catch(error => {
+  // v18.0 (review L45): a module that throws used to end the run as an unhandled rejection, which exits 0 under
+  // --unhandled-rejections=warn or an older Node. It now always fails the gate.
+  console.error('FAIL  harness aborted: ' + (error && error.stack || error));
+  process.exit(1);
+});

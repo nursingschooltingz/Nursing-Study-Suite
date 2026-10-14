@@ -45,8 +45,16 @@ function loadBabel(argv) {
   return { Babel: require(candidate), file: candidate };
 }
 
+// v18.0 (review M1): the page asks @babel/standalone for the react preset only. These are the options its script-tag
+// runner then uses (babel.js buildBabelOptions), so the gate compiles exactly what the browser runs.
+const BROWSER_BABEL_OPTIONS = {
+  presets: ['react'],
+  plugins: ['transform-class-properties', 'transform-object-rest-spread', 'transform-flow-strip-types'],
+};
+
 function extractBabelScript(source) {
-  const startMarker = '<script type="text/babel">';
+  if (source.split('type="text/babel"').length !== 2) throw new Error('Expected exactly one text/babel script');
+  const startMarker = '<script type="text/babel" data-presets="react">';
   const occurrences = source.split(startMarker).length - 1;
   if (occurrences !== 1) throw new Error('Expected exactly one ' + startMarker + '; found ' + occurrences);
   const start = source.indexOf(startMarker) + startMarker.length;
@@ -63,6 +71,28 @@ function preflightSuite(suiteFile) {
     throw new Error('Filename version v' + version + ' has no matching release comment in the HTML');
   }
   return source;
+}
+
+// v18.0 (review M29): the Babel parse alone could certify an app that cannot boot. Babel does not validate a regex
+// body (`/[z-a]/` passed every gate and threw at load in the browser), and nothing evaluated the top level, so a
+// constant read before its declaration also passed. V8 now compiles the transformed block and the plain head scripts,
+// and the block's top level runs once against inert stubs: no network, no DOM, no rendering.
+function bootSmoke(code, source) {
+  const vm = require('vm');
+  new vm.Script(code, { filename: 'suite-babel-block.js' });
+  const inline = [...source.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
+  if (inline.length < 2) throw new Error('Expected the boot and DOMPurify head scripts; found ' + inline.length + ' plain <script> blocks');
+  inline.forEach((body, i) => new vm.Script(body, { filename: 'head-script-' + (i + 1) + '.js' }));
+  const noop = () => {};
+  const R = new Proxy({}, { get: (_, k) => k === 'createContext' ? () => ({ Provider: 'P' })
+    : k === 'memo' || k === 'forwardRef' ? f => f : k === 'Component' ? class {} : k === 'Fragment' ? 'F' : () => [undefined, noop] });
+  const g = { React: R, ReactDOM: { createRoot: () => ({ render: noop }) }, document: { getElementById: () => ({}), addEventListener: noop },
+    addEventListener: noop, removeEventListener: noop, localStorage: { getItem: () => null, setItem: noop }, sessionStorage: { getItem: () => null, setItem: noop },
+    fetch: () => { throw new Error('no network in verify'); }, pdfjsLib: { GlobalWorkerOptions: {}, OPS: {} }, JSZip: function () {}, marked: { parse: x => x, use: noop },
+    DOMPurify: { sanitize: x => x, addHook: noop }, console, setTimeout, clearTimeout, TextEncoder, TextDecoder, URL, Blob, AbortController, DOMException,
+    crypto: globalThis.crypto, indexedDB: { open: () => ({}) } };
+  g.window = g;
+  vm.runInNewContext(code, g, { filename: 'suite-babel-block.js', timeout: 10000 });
 }
 
 function runHarness(suiteFile, babelFile) {
@@ -90,8 +120,10 @@ function main() {
 
   runHarness(suiteFile, babel.file);
 
-  babel.Babel.transform(extractBabelScript(source), { presets: ['react'] });
+  const { code } = babel.Babel.transform(extractBabelScript(source), BROWSER_BABEL_OPTIONS);
   console.log('PASS  Babel parse with ' + babel.file);
+  bootSmoke(code, source);
+  console.log('PASS  V8 compiles the app and the head scripts, and the app\'s top level evaluates');
   console.log('\nALL REPOSITORY GATES PASSED');
 }
 

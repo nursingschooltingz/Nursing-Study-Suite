@@ -29,7 +29,7 @@ On a machine without the scratch Babel tool, run once:
 node verify-repo.js --setup-babel
 ```
 
-The setup installs `@babel/standalone` under the operating-system temp directory, never in this repository. The verifier requires one unambiguous suite HTML, rejects Proton Drive Name clash copies, checks LF bytes and version agreement, verifies all 11 frozen prompt hashes, checks `Prompts.md`, runs the regression harness with its enforced assertion total, and Babel-transforms the full JSX block with `presets:['react']`.
+The setup installs `@babel/standalone` under the operating-system temp directory, never in this repository. The verifier requires one unambiguous suite HTML, rejects Proton Drive Name clash copies, checks LF bytes and version agreement, verifies all 11 frozen prompt hashes, checks `Prompts.md`, runs the regression harness with its enforced assertion total, Babel-transforms the full JSX block with the options the page's `data-presets="react"` script tag gets in the browser, has V8 compile that output and the plain head scripts, and evaluates the app's top level once against inert stubs (no network, DOM or rendering), so an invalid regex or a read-before-declaration cannot pass.
 
 `neia-retest.js` and `davis-transcribe-test.js` make live Gemini API calls and consume quota. **Never run either without explicit user authorization for that run.** They are not repository gates and must never run in CI or through `verify-repo.js`.
 

@@ -1,5 +1,65 @@
 # Current maintainer state
 
+## v18.0 Production review steps 6–10 (2026-10-13)
+
+The canonical application is `Nursing-Study-Suite v18.0.html`. It implements steps 6–10 of the [v17.14 production review](docs/reviews/production-review-2026-10-13.md) plan:
+- M9, L31, M4, M5, M6, M21 and M22;
+- M23–M28 and M33;
+- M29, M30, M31, M32 and L45 (gates and tests);
+- M1, M12, M18, L17, L27 and L40 (speed);
+- the remaining Low findings (step 10). Each was correct output reported as an error (which also skips the item audit) or Priority text lost after a failure or in the part merge.
+- **Worksheet.** `incorrect` is accepted wherever `correct|wrong` was. The answer separator grammar accepts ", and" and ", &" in `ngAnswerLabels`, `ngLetterNumberedOptions` and `ngShuffleWorksheetOptions`.
+- **Cases.**
+  - `scanUncitedProse` exempts a 24-hour clock time followed by hours/hrs.
+  - `caseBuildPrompt` lists time, length and weight units.
+  - `caseAuditTextValues` accepts a plain fraction stated in a cited fact, and an instantiated N/10 with a cited 0–10 scale.
+  - `caseNumericTokens` reads qNh/qN min as "every N hours/minutes".
+  - `caseCalculationEvidence` and the bare-answer check accept thousands separators.
+- **Priority.** The synthesis loop keeps the last nonempty streamed text per part. `paMergeTopics` de-duplicates whole items, not lines.
+- **Step 7.**
+  - **`N2A_PDF_CHROME`.** A page counter must stand alone or be followed by a date.
+  - **Answer labels.** In `n2aAnswerLabels`, `i2aAnswerLabels` and `X2A_LABEL_ONE`, a decimal point is not a label separator. `n2aConvertText` skips label matching for Calculation items and flags bare ordering digit lists.
+  - **`n2aStripSources`.** Only C-number citations are stripped.
+  - **`n2aPdfChoiceLines`.** Prefers a next-label mark after sentence punctuation.
+  - **`n2aPdfToWorksheetText`.** On a count mismatch, numbers questions in order, maps answers by printed number, and writes the key in that order.
+  - **`markdownToPlainText`.** Removes emphasis only around non-space text with no word character outside, and keeps fenced content.
+- **Not measured.** Live output; how often models write "incorrect" or Oxford-comma keys; real non-Chrome PDFs.
+
+- **Step 8 (gates and tests).**
+  - **Verifier.** `verify-repo.js` `bootSmoke` V8-compiles the transformed block and the plain head scripts, then evaluates the block's top level against stubs.
+  - **Harness.** `latte-tests.js` accepts only `cond===true` and fails on a module that throws (`.catch`).
+  - **`.gitignore`.** It covers the current export names, and a harness assertion checks every download name with `git check-ignore`.
+  - **New tests.** Golden GUIDs in `tools/nclex-to-anki-tests.js`; the truncation split through the build handler in `tools/anki-integrity-source-regression.js`.
+
+- **Step 9 (speed).**
+  - **Babel.** The app script is `<script type="text/babel" data-presets="react">`; `verify-repo.js` transforms with `BROWSER_BABEL_OPTIONS` (react preset plus the three plugins @babel/standalone adds) and refuses any other script tag.
+  - **Regexes.** `ngSplitParts`' FINAL VERIFY prefix, `nclexSplitByQNum`'s line prefix (`[^\S\n]*`), and a sticky `CASE_CLINICAL_TOKEN_AT` match in `caseNumericTokens`.
+  - **Caches.** `ANKI_LINT_CACHE` (`lintAnkiCard` over `lintAnkiCardUncached`) and `ANKI_REVIEW_ROW_CACHE` in `ankiReviewCandidates`, both WeakMaps re-checked against the fields they read. `useDeferredValue` was not adopted: mixing deferred and current card arrays in one render could show maps missing a note.
+  - **PDF.** `pdfWalkPages` passes the text content to `onPage`; `n2aReadPdfPages` uses it. NCLEX to Anki's preview is a `previews` memo.
+  - **Not measured.** Browser start-up time with the new preset (the 3.5–4 s figure is the review's transform measurement).
+
+- **Step 10 (Low findings).** One test module per area: `tools/v18-0-low-{transport,kb,anki,extractor,converter,cases}-tests.js`.
+  - **New helpers:**
+    - `NumberInput` (clamp on blur);
+    - `cardRunInstability` and `kbDistinctChunkCount`;
+    - `n2aTrim` (Python-strip semantics for U+FEFF);
+    - the shared lane `AbortController` in `kbRunLanes` (passed to workers as a second argument).
+  - **Open:**
+    - L30;
+    - L38 (owner call);
+    - `ankiChunkText`'s pinned page path;
+    - the converter source helpers;
+    - an inline "Distribution:" inside a PART 4 rationale still ends PART 4 early (a loud false error);
+    - worksheet repairs still run after a quota stop.
+  - **Not measured:**
+    - live output;
+    - real PPTX decks with absolute part paths;
+    - mid-stream API errors.
+
+Step 11 of the review's plan (after the semester) is open.
+
+Verification: see the [release verification record](docs/reviews/v18.0-release.md).
+
 ## v17.15 Answer keys, letter references and lost questions (2026-10-13)
 
 The canonical application is `Nursing-Study-Suite v17.15.html`. It implements steps 1–5 of the [v17.14 production review](docs/reviews/production-review-2026-10-13.md) plan:

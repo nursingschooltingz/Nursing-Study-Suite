@@ -25,6 +25,15 @@ async function run(S,t){
     const unchecked=v=>withData([{label:v[0],value:v[1],factIds:['f1'],supportType:'direct'}]).some(i=>i.sev==='warn'&&/was not compared with its cited facts/.test(i.msg));
     t('pH, INR, a temperature with its conversion and a ng/mL troponin are disclosed as unchecked',[['pH','7.21'],['INR','4.8'],['Temperature','39.4°C (102.9°F)'],['Troponin','2.3 ng/mL (elevated)']].every(unchecked));
     t('a value the checker does compare, and an age, raise no unchecked-value warning',!unchecked(['SpO2','86%'])&&!unchecked(['Age','72']));
+    // v18.0 (review M4, M5, M6): notation that failed good cases.
+    const narr=text=>{const cs=fixture();cs.stages[0].narrative=text;return all(cs).filter(i=>i.sev==='error'&&/uncited clinical value/.test(i.msg));};
+    t('a 24-hour clock time written with "hours" is a clock time; an elapsed "2 hours later" is still checked',!narr('At 1400 hours, the nurse returns.').length&&!narr('At 0800 hrs the client is reassessed.').length&&narr('2 hours later, the nurse returns.').length===1);
+    const sup=(value,fact,st='direct')=>{const found=[];C.caseAuditTextValues(value,['f1'],index(fact),'Synthetic',found,st);return found.every(i=>i.sev!=='error');};
+    t('a pain score stated in the cited fact, or instantiated from its 0-10 scale, is supported; other fractions are not',sup('Pain 8/10','The client reported pain 8/10.')&&sup('Pain 8/10','Assess pain on a 0-10 scale.','instantiated')&&!sup('Pain 8/10','Assess pain on a 0-10 scale.')&&!sup('Give 1/2 tablet','Give 1 tablet.'));
+    t('q4h in a source supports "every 4 hours", and a written q4h is checked the same way',sup('Turn the client every 4 hours.','Turn q4h.')&&sup('Turn q4h.','Turn every 4 hours.')&&!sup('Turn q4h.','Turn every 2 hours.'));
+    const calc=question();calc.type='Calculation';calc.options=[];calc.correctAnswers=['100 units/mL'];calc.rationales=[{option:'A',text:'25,000 units divided by 250 mL = 100 units/mL.',supportType:'direct',factIds:['f1']}];
+    const calcIssues=C.validateCaseStudy(fixture(calc),index('Heparin 25,000 units in 250 mL.'),new Set(['f1']),'Synthetic');
+    t('a calculation written with thousands separators is verified, not reported as an unsupported value',!calcIssues.some(i=>i.sev==='error')&&!calcIssues.some(i=>/not independently verified/.test(i.msg)));
   }
   t('case remediation extraction reaches timing tail',C.validateStageTiming(fixture()).some(i=>i.msg.includes('never presented')));
   for(const [value,source,ok] of [['3.5 mEq/L','3.5–5 mEq/L',true],['5 mEq/L','3.5–5 mEq/L',true],['3.5–5 mEq/L','3.5–5 mEq/L',true],['2–5 mEq/L','3.5–5 mEq/L',false],['4 mEq/L','3.5–5 mEq/L',false],['5 mg','5 mg per protocol',true],['12 breaths/min','12 breaths per minute per shift',true],['5 mg','5 mg per banana',false],['5 mg/dose','5 mg per dose',true],['5 mcg/kg/min','5 mcg/kg/min',true],['5 mg','5 mg/(kg min)',false],['5 mg','5 mg²',false]]){
@@ -57,7 +66,7 @@ async function run(S,t){
   const calcErrors=cs=>C.validateCaseStudy(cs,index('Dose is 2 mg/kg.'),new Set(['f1']),'Synthetic').filter(i=>i.sev==='error');
   const weighted=(result,expression)=>{const cs=calc(result,expression);cs.stages[0].data=[{label:'Weight',value:'70 kg',supportType:'neutral-framing',availability:'revealed',factIds:[]}];return cs;};
   const babelPath=process.env.NSS_BABEL_STANDALONE||require('path').join(require('os').tmpdir(),'nursing-study-suite-verify/node_modules/@babel/standalone/babel.js');
-  const Babel=require(babelPath),browserCode=load(S,code=>Babel.transform(code,{presets:['env','react'],parserOpts:{allowReturnOutsideFunction:true}}).code);
+  const Babel=require(babelPath),browserCode=load(S,code=>Babel.transform(code,{presets:['react'],parserOpts:{allowReturnOutsideFunction:true}}).code);
   t('browser Babel transformed calculation executes exact BigInt arithmetic',!browserCode.validateCaseStudy(weighted(),index('Dose is 2 mg/kg.'),new Set(['f1']),'Synthetic').some(i=>i.sev==='error'));
   for(const expression of ['2 mg/kg × 70 kg = ','2 mg/kg multiplied by 70 kg gives '])t('verified dose calculation '+expression,calcErrors(weighted('140 mg',expression)).length===0);
   for(const result of ['150 mg','140 mL'])t('wrong calculation '+result+' rejected',calcErrors(weighted(result)).length>0);

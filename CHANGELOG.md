@@ -9,6 +9,117 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [18.0] — 2026-10-13
+
+Steps 6–10 of the [v17.14 production review](docs/reviews/production-review-2026-10-13.md) plan (the work prepared as v17.16, released as v18.0):
+- correct output that failed validation, which also skips the batch's item audit, and Priority text that was lost or merged away (M9, L31, M4, M5, M6, M21, M22);
+- content the NCLEX to Anki converter and plain-text exports lost or misread (M23–M28, M33);
+- gates and tests that could pass a broken app or let course content be committed (step 8: M29–M32, L45);
+- start-up time, typing lag and freezes on degenerate model output (step 9: M1, M12, M18, L17, L27, L40);
+- the remaining Low findings (step 10: L1–L16, L18–L29, L32–L44, and dead code).
+
+### Fixed
+
+- **"Why B is incorrect" (M9).** The prompt asks for "Why B is wrong", but a model that wrote "incorrect" had those lines folded into the previous rationale. The batch failed with "option B has no Why line", and its item audit was skipped. "incorrect" now reads as "wrong" in the worksheet parser, the numbered-choice relabeller and the shuffle. Such items also shuffle now.
+- **Oxford-comma SATA keys (L31).** "ANSWER: A, C, and E" (or "A, C, & E") parsed as no answer and failed the batch. It now reads as A, C and E everywhere the key is read.
+- **Case notation that failed good cases.**
+  - **Clock times (M4).** "At 1400 hours" / "0800 hrs" are clock times. Elapsed time in the narrative ("2 hours later") is still checked, as since v17.1, and the case prompt now says so: write it in words or put it in the data. It also lists cm, mm, kg and lb.
+  - **Pain scores and intervals (M5).**
+    - A pain score such as 8/10 is supported when a cited fact states the same fraction.
+    - An instantiated N/10 is supported when a cited fact gives a 0–10 scale.
+    - "q4h" in a source supports "every 4 hours", and a written "q4h" is checked the same way.
+    - No number is taken out of a fraction, so other fractions are still errors.
+  - **Thousands separators (M6).** A calculation such as "25,000 units divided by 250 mL = 100 units/mL", or a bare answer "7,000", is now verified.
+- **Priority synthesis.**
+  - **Retries (M21).** A retry's empty reset no longer erases text already streamed, so a run whose retries all failed keeps its partial guide. A run that never streamed text shows the error view again instead of an empty results page.
+  - **Merging parts (M22).** Duplicates were dropped line by line, so a sub-line such as "Notify the provider" repeated under two items survived once. Only a whole item repeated word for word is dropped now.
+- **NCLEX to Anki (step 7).**
+  - **Page-edge lines (M23).** A PDF line at a page edge that started with "88/50 mm Hg…", "8/10…", "1/2 tablet…" or "5 of 6…" was dropped as a browser page counter, taking vital signs or the question sentence with it. A counter must now stand alone or be followed by a date.
+  - **Decimal answers (M24).** An answer such as "1.5 mL" was read as choice 1, and a calculation item with a numbered lab list showed a ✓ against a lab line. A decimal point no longer separates a label, and a Calculation answer is never matched to a choice.
+  - **"sources:" in prose (M25).** A Why line containing "sources:" ("good sources: bananas…") lost everything after it. Only a concept citation ("Source: C3") is stripped now.
+  - **Split choices (M26).** In a PDF, a choice ending "…vitamin D." or "…hepatitis B." was cut at its own letter, giving a truncated key and a GUID that differed from the .md import. The split now prefers a mark that follows sentence punctuation.
+  - **Ordering digit lists (M27).** An ordering answer written only as numbers ("2, 4, 3, 1") is marked for review, since it can mean step numbers or positions.
+  - **Count mismatches (M28).** When a PDF's question and answer counts disagree, questions are numbered in order and each answer follows the question that printed its number. Before, the first gap folded every later question into one card. Every card is still marked for review, and an answer with no question is named.
+- **Repository gates (step 8).** No application behaviour changes.
+  - **Boot check (M29).** `node verify-repo.js` has V8 compile the transformed app and the two head scripts, and evaluates the app's top level against inert stubs. An invalid regex body (`/[z-a]/`) or a constant read before its declaration used to pass every gate and then fail to start in the browser. Both now fail the verifier.
+  - **Harness failures (L45).** A test module that throws now fails the harness (it used to exit 0 under `--unhandled-rejections=warn`). An assertion passes only on a real `true`.
+  - **Committable exports (M31).** `.gitignore` covered older export names but not the current ones: `nclex_questions.*`, `*_anki*.txt` (NCLEX to Anki, Anki tiers), `nclex_images_anki_transcripts*.json`, `latte_anki_import*.txt`, `anki-source-*.json`, KB recovery `.txt` copies and `LATTE-Case-Study*.txt`. These carry course or publisher content and could reach the public repository through `git add -A`. A harness assertion now checks every download name the app writes against `.gitignore`.
+  - **Golden GUIDs (M32).** Worksheet, Extractor and non-ASCII GUIDs are pinned to their recorded values, so a parser change cannot silently turn re-imports into duplicate notes.
+  - **Truncation split (M30).** The v17.13 KB truncation split is tested through the shipped build handler: a truncated chunk is split and both halves are published, and an unsplittable one publishes nothing and is reported failed.
+- **Speed (step 9).**
+  - **Start-up (M1).** The app script had no `data-presets`, so @babel/standalone also ran preset-env and compiled the whole app to ES5 on every load. It now asks for the react preset only: in Node the compile drops from about 10 s to 1.6 s, and the browser runs the same modern code the verifier tests (the verifier now compiles with the page's exact options).
+  - **Freezes on degenerate output (M12, L17, L40).** Three scans backtracked on long whitespace or range runs: the worksheet key split (8,000 spaces: 82 s), the Extractor's question numbering (100k blank characters: 14 s) and the case number parser (a 64k-character field of ranges: 4–7 s). Each now takes milliseconds, with the same results on 120,000 random inputs.
+  - **Anki typing (M18).** Every edit re-linted the whole deck about seven times and rebuilt every note's duplicate-review rows. Both are now cached per note and re-checked against the fields they read, so an edit costs one lint. A 1,000-note deck goes from 67 to 33 ms per edit in Node, 2,000 notes from 136 to 62 ms.
+  - **NCLEX to Anki (M18, L27).** The preview sanitized up to 80 cards on every render, including each keystroke in the deck and tag fields; it now sanitizes once per list. A PDF export read every page's text twice; once now.
+- **Low findings (step 10).**
+  - **Transport and Settings.**
+    - **PPTX (L1).** A deck whose relationships use absolute part paths ("/ppt/slides/slide1.xml") lost slides and speaker notes; they resolve from the package root now.
+    - **Thinking level (L2).** A call with no level was sent as "low", bypassing the Argon no-level refusal. No level is sent unless given; every current caller passes one.
+    - **Mid-stream errors (L3).** A `{"error":…}` chunk inside a stream was treated as an incomplete reply and retried blindly. It now keeps its status: a 429 waits for its RetryInfo delay and halts batch runs, a permanent error is not retried.
+    - **Settings badge and copy (L4).** NCLEX to Anki's badge names the Flash model with "level set in tab"; the drawer says seven tools.
+    - **Model IDs (L5).** A typed ID is trimmed and checked against `MODEL_ID_RE` before it is used or saved. An invalid one stays in the field, marked invalid, and the previous model keeps running. The request URL encodes the ID.
+    - **Number fields (L16).** Twelve fields clamped on every keystroke, so typing "12" into a field with a minimum of 5 became 5. `NumberInput` shows the digits while you type and clamps when you leave the field.
+    - **CSP (L44).** `style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com` added. Print previews underline links on screen and keep them plain in print.
+  - **Knowledge Base and cards.**
+    - **Card transcripts (L6).** A null or non-text `numerics` entry or `title` crashed the KB tool; the transcript is now refused as malformed.
+    - **Soft hyphens (L7).** A soft hyphen at a line end is joined before quote matching. Ordinary text normalizes exactly as before (3,000+ random inputs).
+    - **Alias merging (L8).** Merging conditions depended on chunk order; the matched name is recorded as an alias, so both orders give one condition.
+    - **Split labels (L9).** A chunk split twice is labelled from its own label ("page 3 (first half) (second half)").
+    - **Card blocker (L10).** "Numbers changed" was shown when a comparison merely failed; changed numbers, changed bullets and comparison problems are reported separately. What blocks a card is unchanged.
+    - **Chunk count (L11).** The "Chunks" stat counted recovered parts twice.
+    - **Lanes (L12).** A halting failure in one lane now aborts the other lane's request in flight, which spent quota on a build that could no longer be saved. The unreachable truncated-audit branch is removed.
+    - **"5mg" (L13).** The critical-fact check missed a number written against its unit.
+  - **Anki and Priority.**
+    - **Audit receipts (L14).** Allowed context references of an out-of-tier, manually excluded or invalid-note target were judged by the hidden-coverage rules, so valid receipts stayed unresolved and groups were retried. The rules now judge hidden references only.
+    - **Tier headings (L15).** A bold ("## **TIER 2**", "**Tier 2**") or other-emoji tier heading put Tier 2 inside Tier 1. Plain headings match exactly as before (300k random lines).
+  - **NCLEX Extractor.**
+    - **Window merge (L18).** A longer unanswered copy of a question no longer replaces the answered one.
+    - **Collision count (L19).** Printed question numbers no longer count every pair as a numbering collision.
+    - **"101.3 F." (L20).** An inline temperature ending in a capital letter no longer breaks the choice list, inside a choice or at its end.
+    - **Choice repair (L21).** Choices are restored only when the item's stem matches the page's, not on the model's question number alone.
+    - **Lifecycle (L22).** The Extractor and NCLEX to Anki abort their run when the tool unmounts; the Extractor's remove button is disabled while running.
+    - **Non-array replies (L23).** A JSON reply that is not a list counts as a failed chunk or batch, not a success.
+    - **Printed choices (L24).** Lettered choices printed as one paragraph; the Extractor .md and printed cases now end each choice line with a hard break. The case audit text is unchanged.
+  - **NCLEX to Anki.**
+    - **Carriage returns (L25).** A bare `\r` in an image transcript split Anki rows.
+    - **U+FEFF (L26).** JavaScript trimmed U+FEFF where Python's `strip()` keeps it, so such text got a different GUID from the Python scripts. It now matches them; other GUIDs are unchanged.
+    - **Screenshot order (L28).** macOS 12-hour screenshot names sort by time (12 AM first, PM after AM). This differs from img2anki.py's plain natural sort; GUIDs do not depend on order.
+    - **Repeated key numbers (L29).** A question whose number the key repeats more often than questions wait for it is marked NeedsReview. A restarted chapter still only warns.
+  - **Worksheets and cases.**
+    - **DISTRIBUTION (L32).** A "Distribution:" line in the text is no longer read as the batch's DISTRIBUTION line.
+    - **Short batches (L33).** A short last batch is allocated target facts for its own size.
+    - **Cancel (L34).** Both generators log "Cancelled."; a cancelled run no longer looks complete.
+    - **Arrows in ordering steps (L35).** An ordering entry whose step text contains an arrow keeps its valid digit answer.
+    - **Audit glyph (L37).** A skipped or unresolved case audit shows ⚑, not ✓, and an early return no longer leaves the audit "running".
+    - **Repairs after quota (L39).** Case repairs are skipped when the audit stopped for quota.
+    - **Key redaction (L41).** Case and worksheet audit error details remove the API key, as Anki's do.
+    - **Calculation facts (L42).** The Calculation top-up adds up to four unselected numeric facts (it added none).
+    - **Negated comparators (L43).** "no less than 90%" reads as at least 90; "no greater than" and "not more than" as at most.
+  - **Dead code removed.** `ngParseFactIds`, `ITEM_AUDIT_STATUS`, the unreachable truncation branches in `nclexCallGemini` and `runImages`, the KB truncated-audit branch and a duplicated comment block.
+  - **Not changed.**
+    - L30 (cosmetic; the review proposes no fix).
+    - L38 (a numeric `correctAnswers` scalar still discards the case: owner call).
+    - `ankiChunkText`'s unreachable page path (its bytes are pinned).
+    - `n2aConvertSources`/`x2aConvertSources` (tests use them to exercise converters directly).
+- **Plain-text exports (step 7, M33).** Any two asterisks on a line were taken as emphasis, so "2 mg/kg * 70 kg * 2 doses" lost its operators in .txt exports and in the Anki cards built from them. Fenced text was deleted too. Both are kept now; real emphasis is still removed.
+
+### Verification
+
+- 111 new assertions (3,753 total; 83 for step 10). Steps 6, 7, 9 and 10 assertions fail on the bytes before their step, except step 9's two cache checks, which guard that an in-place edit is still seen; step 8's 5 pin existing behaviour (GUIDs, truncation split, ignored export names). The export-name check fails against the previous `.gitignore`.
+- Covered by the new assertions:
+  - worksheet "incorrect" lines and Oxford-comma keys;
+  - case clock times, pain scores, q4h and thousands separators;
+  - Priority retries and merge;
+  - step 7's page-edge lines, decimal answers, "sources:" prose, split choices, ordering digit lists, count mismatches and .txt operators;
+  - step 8's export names, golden GUIDs and truncation split;
+  - step 9's preset attribute, the three degenerate inputs (each bounded at 1 s), the single PDF text read and the Anki caches;
+  - step 10's findings, one test module per area (`tools/v18-0-low-*-tests.js`).
+- The caches were compared with the uncached code on 18,000 random deck states with in-place edits: no differences.
+- The new boot check was tested on two broken copies (an invalid regex, a read-before-declaration); both now fail the verifier with the exact error. A copy with a broken test anchor, run under `--unhandled-rejections=warn`, now exits 1.
+- The v17.12 assertion that kept "Why B is incorrect" items unshuffled was changed deliberately: those lines are rationales now.
+- Prompts.md carries the case prompt builder's new wording.
+- Frozen prompts, model profiles and CDN pins are unchanged. No live Gemini request was made.
+
 ## [17.15] — 2026-10-13
 
 Steps 1–5 of the [v17.14 production review](docs/reviews/production-review-2026-10-13.md) plan. These cover answer keys and rationales that the NCLEX Generator and case shuffles could leave pointing at the wrong choice (findings C1, H3, M8, M10, M11), questions that the converters and the NCLEX Extractor could merge, lose or mis-key (H1, H2, H4, H5, H9), study content shown as checked or correct when it was not (H6, H7, H8, H10, H11), and work lost or quota spent after a failure (M3, M7, M14, M15, M17).

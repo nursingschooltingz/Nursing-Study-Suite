@@ -162,6 +162,13 @@ async function run(S,t){
   t('the worksheet converter also reads an Extractor export',M.n2aConvertSources([{name:'md',text:EXTRACT_MD}]).cards.length===2);
 
   const xmd=M.x2aConvertSources([{name:'nclex_questions',text:EXTRACT_MD}]);
+  // v18.0 (review M32): a parser change that alters a stem or option text changes the GUID, and re-importing then
+  // duplicates notes instead of updating them. These are the v17.14 values, pinned so such a change is deliberate;
+  // they have not yet been compared with nclex2anki.py / extract2anki.py output (Python is not installed here).
+  t('worksheet and Extractor GUIDs keep their recorded values',JSON.stringify(ws.cards.map(c=>c.guid))==='["n2a2cd653dccc88350dbb6e","n2ab0bf1534061206f631bc"]'&&JSON.stringify(xmd.cards.map(c=>c.guid))==='["x2ae7eb82ee9bd2372434c3","x2a4b3e586db5966717700d"]');
+  {const head='# NCLEX Practice Questions\n\n**1 questions** generated from source material.\n\n---\n\n## Questions\n\n',mid='\n\n<div class="pagebreak"></div>\n\n## Answer Key\n\n';
+    const unicode=head+'1. A client with a potassium ≤ 3.5 mEq/L takes 25 μg of a drug – which action is first?\n     A. Hold the dose\n     B. Give the dose\n     C. Call the provider\n     D. Recheck later'+mid+'1. ANSWER: A\n     Why A is correct: r. (Source: C1)\n     Why B is wrong: r. (Source: C1)\n     Why C is wrong: r. (Source: C1)\n     Why D is wrong: r. (Source: C1)\n     Tags: Tier 1';
+    t('a stem with a non-breaking space, ≤, μ and an en dash keeps its recorded GUID',JSON.stringify(M.n2aConvertExports([{name:'w',text:unicode}]).cards.map(c=>c.guid))==='["n2aed12aec48f332e4ee6b3"]');}
   t('an Extractor .md converts with conditions and CJ as tags',xmd.cards.length===2&&xmd.warnings.length===0&&
     xmd.cards[0].tags.join(' ')==='Condition::Thyroidectomy Condition::Hypocalcemia CJMM::Recognize_Cues NCLEX_Type::MCQ Source::nclex_questions');
   t('the Extractor back keys the numbered choice and moves book metadata to the bottom',
@@ -210,7 +217,10 @@ async function run(S,t){
   t('a saved transcripts file loads back into the cache',M.i2aMergeCache(merged,JSON.parse(JSON.stringify(cache)))===1&&Object.keys(merged.ai).length===1);
   t('the transcription prompt is the script prompt, versioned for cache keys',M.I2A_PROMPT_VERSION==='t1'&&M.I2A_TRANSCRIBE_PROMPT.startsWith('You are transcribing NCLEX-style practice questions from ONE image')&&M.I2A_TRANSCRIBE_PROMPT.includes('2. NEVER GUESS A NUMBER.'));
   t('image runs reuse the shared Gemini transport, halt rule and JSON parser',ui.includes('callGemini(cfg.apiKey,model,parts,{')&&ui.includes('halts:geminiHaltsBatch')&&ui.includes('extractJSON(text)'));
-  t('card previews are sanitized before rendering',(ui.match(/dangerouslySetInnerHTML/g)||[]).length===2&&(ui.match(/DOMPurify\.sanitize\(c\.(front|back),N2A_CARD_POLICY\)/g)||[]).length===2);
+  // v18.0 (review M18): the two sanitized previews are built once per shown list, and only they reach the page.
+  t('card previews are sanitized before rendering, once per shown list',(ui.match(/dangerouslySetInnerHTML/g)||[]).length===2&&(ui.match(/DOMPurify\.sanitize\(c\.(front|back),N2A_CARD_POLICY\)/g)||[]).length===2&&
+    ui.includes('const previews=useMemo(()=>shown.slice(0,N2A_PREVIEW_LIMIT).map(c=>({c,front:DOMPurify.sanitize(c.front,N2A_CARD_POLICY),back:DOMPurify.sanitize(c.back,N2A_CARD_POLICY)})),[shown]);')&&
+    ui.includes('dangerouslySetInnerHTML={{__html:front}}')&&ui.includes('dangerouslySetInnerHTML={{__html:back}}'));
 
   // v17.10: PDF exports. The fixture is the line geometry pdf.js read from synthetic Generator and
   // Extractor exports printed by headless Chrome from the suite's own print document, with and
@@ -301,7 +311,17 @@ async function run(S,t){
   t('merged worksheet cards carry no raw double quote, so one Anki file serves both kinds',!M.n2aAnkiFileText(mixed.cards,'D',false).split('\n').slice(6).join('').includes('"'));
   t('the tab offers one export option beside the image option, and reads PDFs through the shared page walk',
     /const N2A_MODES=\[\n  \{id:'export',/.test(ui.slice(0,0)+S)&&!S.includes("{id:'extract',icon:")&&ui.includes('accept=".md,.txt,.markdown,.pdf"')&&ui.includes('n2aConvertExports(sources,extraTags)')&&
-    ui.includes("if(/\\.pdf$/i.test(f.name||'')){")&&core.includes('await pdfWalkPages(file,{onPage:async(text,i,pg)=>')&&core.includes('finally{destroyPdfDoc(file);}'));
+    ui.includes("if(/\\.pdf$/i.test(f.name||'')){")&&core.includes('await pdfWalkPages(file,{onPage:(text,i,pg,total,tc)=>')&&core.includes('finally{destroyPdfDoc(file);}'));
+  // v18.0 (review L27): the PDF reader used the shared walk's text content and then read every page's again.
+  {
+    let reads=0,cleaned=0,destroyed=0;
+    const item=(str,y)=>({str,transform:[10,0,0,10,42,y],width:6*str.length});
+    const page=n=>({getTextContent:async()=>{reads++;return {items:[item(n+'. A synthetic stem',700),item('A. First',680)]};},cleanup:()=>{cleaned++;}});
+    const pdf={numPages:2,getPage:async n=>page(n)};
+    const read=new Function('getPdfDoc','destroyPdfDoc','pdfLayoutText',core+span(S,'async function pdfWalkPages(','async function extractPdfTextSpaced(')+';return n2aReadPdfPages;')(async()=>pdf,()=>{destroyed++;},tc=>tc.items.map(x=>x.str).join(' '));
+    const pages=await read({name:'w.pdf'});
+    t('a PDF export reads each page\'s text once, keeps its lines, cleans up every page and releases the document',reads===2&&pages.length===2&&pages[0].some(l=>/A synthetic stem/.test(typeof l==='string'?l:JSON.stringify(l)))&&cleaned===2&&destroyed===1);
+  }
   // v17.15 (review H1): a Generator worksheet in the prompt's own layout ("  1." questions, each batch's first one
   // trimmed flush-left by PART 3 parsing) converts to one card per question through the Generator's real assembly.
   const NG=new Function('neiaTerminologyScan','itemHeuristics',span(S,'function ngSplitParts(','function ngRenumber(')+span(S,'function ngRenumber(','function ngStem(')+';return {ngSplitParts,ngSplitNumbered,ngRenumber,ngMdLiteralNumbers};')(()=>[],()=>[]);
@@ -326,6 +346,24 @@ async function run(S,t){
   const joined=M.i2aAssemble([['s1.png',T([qItem(5,'Complete stem?')])],['s3.png',T([{kind:'continuation',number:null,answer:'B',answer_evidence:'printed',option_rationales:[{label:'B',verdict:'correct',text:'x'}],rationale:'Another question.',legibility:'clean',cut_off:false}])]]);
   const jc=M.i2aBuildCards(joined.questions,'');
   t('text joined onto a question that was not marked cut off is kept but marked for review',jc.cards.length===1&&jc.cards[0].tags.includes('NeedsReview'));
+  // v18.0 (review M23-M28): converter content.
+  const CHROME=new Function(span(S,'const N2A_PDF_CHROME=','const N2A_PDF_NUM=')+';return N2A_PDF_CHROME;')();
+  t('a page-edge line that starts with a blood pressure, pain score, fraction or count is content, not browser chrome',
+    !['88/50 mm Hg and a heart rate of 124/min.','8/10 and requests medication.','1/2 tablet twice daily.','5 of 6 findings reported.'].some(l=>CHROME.test(l))&&['3/12','Page 2 of 5','2 of 5 10/13/26','10/13/26, 7:31 PM'].every(l=>CHROME.test(l)));
+  const dose=[['1','0.5 mL'],['2','1.5 mL'],['3','2 mL'],['4','2.5 mL']];
+  const head1='# NCLEX Practice Questions\n\n**1 questions** generated from source material.\n\n---\n\n## Questions\n\n',mid1='\n\n<div class="pagebreak"></div>\n\n## Answer Key\n\n';
+  const calc=M.n2aConvertExports([{name:'w',text:head1+"1. The provider orders 500 mL over 4 hours. The client's labs:\n     1\\. Sodium 138 mEq/L\n     2\\. Potassium 4.0 mEq/L\n     3\\. Chloride 101 mEq/L\n     How many mL/hr should the nurse set?\n     Answer: __________ mL/hr"+mid1+'1. ANSWER: 2.5 mL/min\n     500 mL / 240 min = 2.08\n     Strategy: s\n     Tags: Tier 1'}]);
+  t('a decimal answer is a value, not the label of its first digit, and a calculation with a numbered lab list gets no choice check',
+    JSON.stringify(M.x2aResolveAnswer('1.5 mL',dose)[0])==='["2"]'&&calc.cards.length===1&&!calc.cards[0].back.includes('✓')&&!calc.warnings.some(w=>/could not tell which choice/.test(w)));
+  const nutrition=M.n2aConvertExports([{name:'w',text:head1+'1. Which foods should the nurse suggest?\n     A. Bananas and oranges\n     B. White rice\n     C. Cottage cheese\n     D. Bagels'+mid1+'1. ANSWER: A\n     Why A is correct: Potassium-rich foods replace losses; good sources: bananas, oranges, potatoes and spinach. (Source: C1)\n     Why B is wrong: White rice is low in potassium. (Source: C1)\n     Why C is wrong: Cottage cheese is high in sodium. (Source: C1)\n     Why D is wrong: Bagels add sodium. (Source: C1)\n     Tags: Tier 1'}]);
+  t('prose that says "sources:" keeps its text; only a concept citation is stripped',nutrition.cards[0].back.includes('bananas, oranges, potatoes and spinach')&&!nutrition.cards[0].back.includes('Source: C1'));
+  const choices=M.n2aPdfChoiceLines('A. Take the calcium with orange juice. B. Take the calcium at bedtime. C. Take the calcium with vitamin D. D. Take the calcium with an antacid.');
+  t('a PDF choice ending "vitamin D." is not cut at its own "D."',!!choices&&choices.length===4&&choices[2]==='C. Take the calcium with vitamin D.'&&choices[3]==='D. Take the calcium with an antacid.');
+  const order=M.n2aConvertExports([{name:'w',text:head1+"1. Place the steps in the correct order.\n     ___ Mitral area\n     ___ Aortic area\n     ___ Erb's point\n     ___ Pulmonic area"+mid1+"1. ANSWER: 2, 4, 3, 1\n     Aortic first, then pulmonic, Erb's, mitral.\n     Strategy: s\n     Tags: Tier 1"}]);
+  t('an ordering answer written only as numbers is marked for review',order.cards[0].tags.includes('NeedsReview')&&order.warnings.some(w=>/only a list of numbers/.test(w)));
+  const missingCards=M.n2aConvertExports([{name:'w',text:missing.text,reviewAll:true}]);
+  t('a PDF whose question and answer counts disagree still gives one card per question, all marked for review, and names the orphan answer',
+    missingCards.cards.length===11&&missingCards.cards.every(c=>c.tags.includes('NeedsReview'))&&missingCards.warnings.some(w=>/answer key entries with no question: 12/.test(w)));
 }
 
 module.exports=run;

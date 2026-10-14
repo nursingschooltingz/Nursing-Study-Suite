@@ -139,6 +139,8 @@ module.exports=function worksheetRemediationTests(S,t){
   const plain=new Function(span('function markdownToPlainText(','\n}')+'\n}\n;return markdownToPlainText;')();
   const answerBlock='72. ANSWER: Correct sequence:\n1. Stop the infusion\n2) Notify the provider\n   3. Recheck the level\nWhy 1 is first: reason.';
   t('inner numbered lines are escaped for print and the block keeps its own number',M(answerBlock)==='72. ANSWER: Correct sequence:\n1\\. Stop the infusion\n2\\) Notify the provider\n   3\\. Recheck the level\nWhy 1 is first: reason.');
+  // v18.0 (review M33): a .txt export keeps multiplication signs and fenced text; real emphasis is still removed.
+  t('plain-text export keeps "*" operators and code-fence content while stripping emphasis',plain('Math: 2 mg/kg * 70 kg * 2 doses = 280 mg.')==='Math: 2 mg/kg * 70 kg * 2 doses = 280 mg.'&&plain('5 * 4 = 20; 2*70*2')==='5 * 4 = 20; 2*70*2'&&plain('**Bold** and *italic* text')==='Bold and italic text'&&plain('```\nkept\n```').trim()==='kept');
   t('plain-text export reads escaped numbers as written',plain(M(answerBlock))===answerBlock&&plain('Dose 1\\. per protocol')==='Dose 1\\. per protocol');
   t('the generator relabels each batch before splitting or checking it',S.indexOf('const lettered=ngLetterNumberedOptions(raw);')>0&&S.indexOf('const lettered=ngLetterNumberedOptions(raw);')<S.indexOf('        const P=ngSplitParts(raw);'));
   // v17.8: ordering answers in the model's other shapes are restated as the step sequence when the entry shows it.
@@ -200,7 +202,7 @@ module.exports=function worksheetRemediationTests(S,t){
   const newC=X.ngParseItem(X.ngSplitNumbered(X.ngSplitParts(wOut.text).p3)[0]).options.find(o=>o.text==='Call the provider').label;
   t('a singular "option C" is relabelled with the choice it names',X.ngSplitParts(wOut.text).p4.includes('Unlike option '+newC+', this is urgent.')&&newC!=='C');
   const keep=(why,src='C1')=>{const raw=mixBatch([mixQ(1,'Which action is first?',mcqOpts)],[mixK(1,['A'],4,l=>l==='A'?why:'reason.').replace('reason. (Source: C1)\n     Strategy','reason. (Source: '+src+')\n     Strategy')],'Tier [1:1] | Types [MCQ:1]'),out=X.ngShuffleWorksheetOptions(raw,seq(.1));return out.text===raw&&JSON.stringify(out.kept)==='[1]'&&!out.shuffled.length;};
-  t('choices listed by letter keep the order as written',keep('Better than B and C.')&&keep('Unlike (C), it is urgent.')&&keep('Options B and D delay care.')&&keep('Like B, this is safe.')&&keep('The answer is B, not the others.')&&keep('reason.\n     Why B is incorrect: reason.'));
+  t('choices listed by letter keep the order as written',keep('Better than B and C.')&&keep('Unlike (C), it is urgent.')&&keep('Options B and D delay care.')&&keep('Like B, this is safe.')&&keep('The answer is B, not the others.')); // v18.0 (M9): a "Why B is incorrect" line is now a rationale, tested below
   t('position words keep the order as written',keep('The latter is wrong.')&&keep('The first option is unsafe.'));
   t('a source quotation that names an option keeps the order rather than misquote it',keep('reason.','C1 — "see option D"'));
   const benign=mixBatch([mixQ(1,'A client with hepatitis B and a D-dimer of 0.4 needs vitamin D. Which action is first?',mcqOpts)],[mixK(1,['A'],4,l=>l==='A'?'A client with type B blood still needs it. (Source: C1 — "Hepatitis B. A 5-day course")':'reason.')],'Tier [1:1] | Types [MCQ:1]');
@@ -234,6 +236,11 @@ module.exports=function worksheetRemediationTests(S,t){
   const refused=repair(overlapRepair,good,{num:1,item:W.ngParseItem({num:1,text:OR.p3})},OR.p4,1,contract,...helperNames.map(n=>W[n]));
   t('a repair on overlapping sections is refused and leaves the worksheet untouched',/could not locate PART 3 and PART 4 separately/.test(refused.error||'')&&refused.raw===overlapRepair);
   t('no PART 3 and PART 4 pair is spliced one section after the other any more',!S.includes('ngSpliceSection(ngSpliceSection(')&&S.includes('const candidate=ngSpliceParts(workRaw,parts,newP3,newP4);'));
+  // v18.0 (review M9, L31): "Why X is incorrect" and an Oxford-comma SATA key no longer fail the batch.
+  const incorrect=mixBatch([mixQ(1,'Which action is first?',mcqOpts)],[mixK(1,['A'],4).replace(/is wrong:/g,'is incorrect:')],'Tier [1:1] | Types [MCQ:1]'),incOut=X.ngShuffleWorksheetOptions(incorrect,seq(.1,.6,.3));
+  t('"Why X is incorrect" lines are rationales: the item validates, shuffles, and each rationale follows its choice',!error(X.validateNCLEXWorksheet(incorrect,1,null))&&JSON.stringify(incOut.shuffled)==='[1]'&&view(incOut.text)[0].pairs===view(incorrect)[0].pairs&&!error(X.validateNCLEXWorksheet(incOut.text,1,null)));
+  const oxford=mixBatch([mixQ(1,'(Select all that apply) Which findings are expected?',sataOpts)],[mixK(1,['A','C','E'],5).replace('ANSWER: A, C, E','ANSWER: A, C, and E')],'Tier [1:1] | Types [SATA:1]');
+  t('an Oxford-comma SATA key ("A, C, and E") is read as three answers and the item validates and shuffles',JSON.stringify(X.ngAnswerLabels('A, C, and E'))==='["A","C","E"]'&&JSON.stringify(X.ngAnswerLabels('A, C, & E'))==='["A","C","E"]'&&!error(X.validateNCLEXWorksheet(oxford,1,null))&&JSON.stringify(X.ngShuffleWorksheetOptions(oxford,seq(.1,.6,.3)).shuffled)==='[1]');
   // v17.15 (review H3, M10, M11): one shared letter-reference detector, conservative by default.
   const aota=['All of the above','None of the above','All of these','Both of the above'].map(last=>mixBatch([mixQ(1,'Which findings are expected with hypokalemia?',['Muscle weakness','U waves on the ECG','Leg cramps',last])],[mixK(1,['D'],4)],'Tier [1:1] | Types [MCQ:1]'));
   t('a choice that points at the other choices (all/none/both of the above, all of these) keeps the order as written',aota.every(raw=>{const out=X.ngShuffleWorksheetOptions(raw,seq(.1,.1,.1));return out.text===raw&&JSON.stringify(out.kept)==='[1]';}));

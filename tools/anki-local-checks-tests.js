@@ -7,7 +7,7 @@ function runAnkiLocalChecksTests({S,t,section}){
   const a=S.indexOf(start),b=S.indexOf(end,a+start.length);
   if(a<0||b<0||S.indexOf(start,a+start.length)>=0||S.indexOf(end,b+end.length)>=0)throw Error('Anki local-check extraction anchors missing or ambiguous');
   const source=S.slice(a,b);
-  const H=new Function('uid',source+';return {ankiAnswerExposure,ankiSourceConflicts,ankiReviewCandidates,ankiStyleWarnings,ankiReviewFilter,ankiSourceSnapshot,ankiBatchSummary,ankiSelection,ankiExportText,ankiDedupeCards,ankiCollisionGroups};')(()=> 'synthetic-note');
+  const H=new Function('uid',source+';return {lintAnkiCard,ankiAnswerExposure,ankiSourceConflicts,ankiReviewCandidates,ankiStyleWarnings,ankiReviewFilter,ankiSourceSnapshot,ankiBatchSummary,ankiSelection,ankiExportText,ankiDedupeCards,ankiCollisionGroups};')(()=> 'synthetic-note');
   const card=(id,text,extra='',factIds=['fact-1'],tags='Tier::1')=>({id,text,extra,tags,factIds,keep:true,pipeCount:2,mappingIssues:[]});
   const deepFreeze=x=>{if(x&&typeof x==='object'&&!Object.isFrozen(x)){Object.freeze(x);Object.values(x).forEach(deepFreeze);}return x;};
 
@@ -55,6 +55,27 @@ function runAnkiLocalChecksTests({S,t,section}){
   const candidates=H.ankiReviewCandidates([one,two]);
   t('Anki review candidates catch reworded identical targets with shared source association',candidates.length===1&&candidates[0].members.length===2&&candidates[0].factIds[0]==='fact-1');
   t('Anki review candidates provide note index answers and actual front',candidates[0]?.members.every(m=>m.index===1&&m.answers[0]==='40 mg/dL'&&m.front.includes('[...]')));
+  // v18.0 (review M18): lint results and review rows are cached per note object. An in-place change to any field
+  // they read must still be seen, and a caller changing a returned lint array must not change the next result.
+  {
+    const live=card('live',one.text);
+    const before=H.ankiReviewCandidates([live,two]).length;
+    live.text=live.text.replace('72','24');
+    const afterText=H.ankiReviewCandidates([live,two]).length;
+    live.text=one.text;live.mappingIssues=['m'];
+    const afterMapping=H.ankiReviewCandidates([live,two]).length;
+    live.mappingIssues=[];
+    t('Anki review candidates see an in-place text or mapping change to a cached note',before===1&&afterText===0&&afterMapping===0&&H.ankiReviewCandidates([live,two]).length===1);
+    const n=card('lint','[Example] Label: {{c1::answer}} here.');
+    const first=H.lintAnkiCard(n);first.push('poisoned');
+    const clean=H.lintAnkiCard(n).length===0;
+    n.text='no cloze';const noCloze=H.lintAnkiCard(n).includes('no-cloze');
+    n.text='[Example] Label: {{c1::answer}} here.';n.tags='Tier::9';const noTier=H.lintAnkiCard(n).includes('no-tier');
+    n.tags='Tier::1';n.pipeCount=1;const pipes=H.lintAnkiCard(n).includes('pipe-format');
+    n.pipeCount=2;n.parseIssues=['boundary'];const boundary=H.lintAnkiCard(n).includes('parse-boundary');
+    n.parseIssues=[];n.extra='{{c1::open';const extra=H.lintAnkiCard(n).includes('cloze-structure');
+    t('Anki lint sees every in-place field change on a cached note, and a returned array cannot poison it',clean&&noCloze&&noTier&&pipes&&boundary&&extra);
+  }
   t('Anki review candidates require overlapping source associations',H.ankiReviewCandidates([one,{...two,factIds:['fact-2']}]).length===0);
   t('Anki review candidates reject unrelated contexts despite a shared fact',H.ankiReviewCandidates([one,card('other','[Example] Bottle contents: the labeled solution concentration stored inside the refrigerator is {{c1::40 mg/dL}}.')]).length===0);
   t('Anki review candidates preserve hidden answer units',H.ankiReviewCandidates([one,{...two,text:two.text.replace('40 mg/dL','40 mmol/L')}]).length===0);

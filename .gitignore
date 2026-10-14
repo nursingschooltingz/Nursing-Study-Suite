@@ -44,6 +44,15 @@ anki*.txt
 !tools/fixtures/anki-v15.16-prompt.txt
 anki-batch-diagnostics*.json
 *-anki.txt
+# v18.0 (review M31): current export names. Each carries course or publisher content.
+nclex_questions*.md
+nclex_questions*.txt
+*_anki*.txt
+nclex_images_anki_transcripts*.json
+latte_anki_import*.txt
+anki-source-*.json
+LATTE-Knowledge-Base-recovery-*.txt
+LATTE-Case-Study*.txt
 
 # ── Secrets ───────────────────────────────────────────────────────────
 # The suite never writes your API key to disk (it lives in sessionStorage

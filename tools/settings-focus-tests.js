@@ -50,7 +50,7 @@ function loadDrawer(S,React,document){
   const constants=span(S,'const TOOL_PROFILE_DEFAULTS={','\n};')+'\n'+span(S,'const PROFILE_ROWS=[','\n];');
   const component=span(S,'function ConfigSidebar({onClose,activeTool}){','\n  );\n}\n');
   const prelude='const {useState,useRef,useCallback,useEffect,useMemo,useContext}=React;const ConfigCtx={};function useConfig(){return useContext(ConfigCtx);}\n';
-  const code=Babel.transform(prelude+constants+'\n'+component+'\nreturn ConfigSidebar;',{presets:['env','react'],parserOpts:{allowReturnOutsideFunction:true}}).code;
+  const code=Babel.transform(prelude+constants+'\n'+component+'\nreturn ConfigSidebar;',{presets:['react'],parserOpts:{allowReturnOutsideFunction:true}}).code;
   return new Function('React','document',code)(React,document);
 }
 

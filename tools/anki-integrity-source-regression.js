@@ -38,6 +38,16 @@ module.exports=async function ankiIntegritySourceRegression(S,t){
     await load(buildCode,['build'],env).build();return state;
   }
   const throws=fn=>{try{fn();return false;}catch{return true;}};
+  // v18.0 (review M30): a chunk whose JSON hits the output ceiling is split by page and retried (v17.13 contract); a
+  // chunk that cannot split is reported failed, never published as an empty success. Only source-string pins covered this.
+  {
+    const p1='The synthetic signal lamp remains green during readiness.',p2='The indicator is observed before the synthetic procedure.';
+    const cut=()=>Object.assign(Error('Output hit the 65,536-token ceiling before the JSON was complete.'),{isFatal:true,truncated:true,finishReason:'MAX_TOKENS',partialText:'{"conditions":[{"name":"Signal","facts":['});
+    const split=await build({pages:[p1,p2],responses:[cut(),primary([fact({text:p1,sourceQuote:p1})]),primary([fact({text:p2,sourceQuote:p2})])]});
+    t('a chunk whose JSON hits the ceiling is split by page and both halves are published',split.requests===3&&split.published.length===1&&split.published[0].conditions[0].facts.map(f=>f.text).sort().join('|')===[p1,p2].sort().join('|')&&split.logs.some(l=>/hit the token ceiling — splitting/.test(l.m)));
+    const single=await build({pages:[p1],responses:[cut()]});
+    t('a truncated chunk that cannot be split publishes nothing and reports the chunk failed',single.published.length===0&&!!single.diag&&single.diag.chunks.length===1&&single.diag.chunks[0].failed===true);
+  }
   // v17.15 (review M3): a halting audit failure stops the omission audit for the remaining chunks; their facts are kept.
   {
     const pa='The synthetic signal lamp remains green during readiness.',pb='The indicator is observed before the synthetic procedure.';
