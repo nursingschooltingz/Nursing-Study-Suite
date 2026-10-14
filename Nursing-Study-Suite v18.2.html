@@ -12,7 +12,12 @@
      policy and uses only its own inline style block and system fonts. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com">
 <title>LATTE Study Suite</title>
-<!-- v18.1 (2026-10-13): one exam tier and one priority order across the tabs. The NCLEX Generator re-tiered every
+<!-- v18.2 (2026-10-14): Argon's output ceiling is 65,536, the same as Flash's. v17.13 capped it at 32,768, citing a
+     non-streaming limit that was never checked on a real key; Google's Gemini API model page lists 65,536 as Argon's
+     synchronous limit, and a non-streaming generateContent call to gemini-4-argon asking for 65,536 returned HTTP 200.
+     The lower cap cut Priority synthesis, Case Studies and the item audit short at half the allowed budget, and halved
+     Priority synthesis parts on Argon; those parts are full size again. Prompts are unchanged.
+     v18.1 (2026-10-13): one exam tier and one priority order across the tabs. The NCLEX Generator re-tiered every
      concept by its own TIER RULES, so a worksheet's Tier tags (and the Tier::N tags NCLEX to Anki makes from them) could
      disagree with the Knowledge Base tier that the Anki and Case tabs use for the same fact. Its grounding adapter now
      says to keep each fact's KB tier. The priority frameworks on a typical test-taking handout (ABCs, Maslow, safety,
@@ -830,6 +835,7 @@ const TOOL_PROFILE_DEFAULTS={
   // v17.14: the R1–R9 cascade is the reasoning-heavy half of Priority, so it moved to Argon; its parts are already half
   // size there (paSynthPartChars). Medium, not high: the v17.7 run spent 62,914 tokens thinking in one request, and
   // Argon's whole budget is 32,768. The harvest above stays on Flash: it is a bulk sweep over many chunks.
+  // v18.2: Argon's ceiling is now 65,536 and its parts are full size, as on Flash. Medium stays until measured.
   priority:{m:'argon',lv:'medium'},       // stage-2 R1–R9 cascade, needs rule evaluation
   // v16.2: paired exports showed fewer shared-index gap bundles with Medium; saved overrides still win.
   anki:{m:'flash',lv:'medium'},           // recommended Anki Auto profile
@@ -837,6 +843,7 @@ const TOOL_PROFILE_DEFAULTS={
   nclexgen:{m:'flash',lv:'high'},         // distractor plausibility is genuine reasoning
   // v17.14: one request per case, the most reasoning-heavy task, and bounded output (at most 5 stages x 4 questions),
   // so it is the safest place for Argon at high within its 32,768-token ceiling.
+  // v18.2: that ceiling is now 65,536 (geminiOutputCap), so a high-thinking case has twice the room.
   cases:{m:'argon',lv:'high'},            // unfolding clinical reasoning + strict grounding
   // v15.6: applying a rubric to a rendered artifact is a JUDGMENT task, not a grounded
   // extraction task, so high reasoning is appropriate here and specifically NOT in the
@@ -850,7 +857,7 @@ const TOOL_PROFILE_DEFAULTS={
   // on a paid key the quality choice applies, and the only measured audit configuration
   // (2026-08-20: ten fixture items, three runs, zero verdict flips) was 3.1 Pro at high, which
   // Argon replaced. Each call judges one rendered item, so output stays far below Argon's
-  // 32,768-token ceiling. Not yet measured on Argon. On a free-tier key, switch this row back
+  // 32,768-token ceiling (65,536 since v18.2). Not yet measured on Argon. On a free-tier key, switch this row back
   // to Flash in the per-tool profiles; nothing else needs to change.
   itemAudit:{m:'argon',lv:'high'},       // NEIA item-quality review of a rendered item
 };
@@ -1225,11 +1232,14 @@ function geminiSSEParser(onEvent){
   return {feed};
 }
 // v17.13: geminiRequest now owns the output ceiling and the thinking rules, so no call site can send what the model
-// refuses. Every request used to ask for 65,536 tokens. Argon accepts 32,768 thinking-plus-output tokens on a
-// non-streaming request (a browser fetch to generateContent; 65,536 when streamed), and one 32,768 cap for every Argon
-// request keeps the rule simple. Flash keeps 65,536. The cap follows the model ID actually called, not the settings slot
-// it was typed into.
-const GEMINI_OUTPUT_CAP=65536,ARGON_OUTPUT_CAP=32768;
+// refuses. The cap follows the model ID actually called, not the settings slot it was typed into.
+// v18.2: Argon was capped at 32,768 on the belief that it refuses more on a non-streaming request. That came from a
+// guide and was never checked on a real key. Google's Gemini API model page lists 65,536 as Argon's synchronous
+// limit, and on 2026-10-14 a non-streaming generateContent call to gemini-4-argon with maxOutputTokens 65,536
+// returned HTTP 200. The lower cap stopped reasoning-heavy Argon work (Priority synthesis has thought for 62,914
+// tokens in one request) at half the allowed budget. Both caps are now 65,536; the per-model split stays so a model
+// with a lower limit is a one-number change.
+const GEMINI_OUTPUT_CAP=65536,ARGON_OUTPUT_CAP=65536;
 function geminiIsArgon(model){return /argon/i.test(String(model||''));}
 function geminiOutputCap(model){return geminiIsArgon(model)?ARGON_OUTPUT_CAP:GEMINI_OUTPUT_CAP;}
 // v17.13: Argon answers a thinkingBudget or a MINIMAL level with HTTP 400, and with no level it falls back to medium,
@@ -1786,7 +1796,7 @@ function TruncationNotice({meta,label}){
       <div style={{fontSize:12,marginTop:5,lineHeight:1.65,color:'var(--text-dim)'}}>
         The response stopped because it ran out of room, not because it finished. Content is missing from the end.
         {(think>0||out>0||inp>0)&&<div style={{fontFamily:'JetBrains Mono',fontSize:12,marginTop:6,color:'var(--text)'}}>
-          input {inp.toLocaleString()} · thinking {think.toLocaleString()} · output {out.toLocaleString()} · ceiling {(meta.maxOutputTokens||65536).toLocaleString()}{/* v17.13: Argon's ceiling is 32,768 */}
+          input {inp.toLocaleString()} · thinking {think.toLocaleString()} · output {out.toLocaleString()} · ceiling {(meta.maxOutputTokens||65536).toLocaleString()}{/* v18.2: the ceiling is per model (geminiOutputCap); Flash and Argon are both 65,536 */}
         </div>}
         {think>0
           ? <div style={{marginTop:6}}>Thinking tokens draw from the same budget as the document. Dropping Thinking Level (or switching to Standard) would free about <b style={{color:'var(--text)'}}>{think.toLocaleString()}</b> tokens for content.</div>
@@ -4346,6 +4356,8 @@ const PA_SYNTH_PART_CHARS=40000;
 // v17.13: Argon's ceiling is 32,768, half of Flash's, so a full 40,000-character part would spend about half of it on
 // thinking alone. The part size scales with the synthesis model's ceiling: 40,000 on Flash, 20,000 on Argon, which
 // keeps the safety margin the v17.7 run established.
+// v18.2: Argon's ceiling is 65,536 like Flash's, so this now returns 40,000 on both; the scaling stays for any model
+// with a lower ceiling.
 function paSynthPartChars(model){return Math.round(PA_SYNTH_PART_CHARS*geminiOutputCap(model)/GEMINI_OUTPUT_CAP);}
 // joins[i] marks an extraction that continues extraction i-1's condition (paChunkJoins). Joined runs stay in
 // one part so each condition is ranked once; only a run larger than a whole part is divided, by size.
@@ -6337,7 +6349,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '18.1';}
+function suiteVersion(){return '18.2';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -7807,7 +7819,7 @@ function NCLEXExtractor(){
   async function nclexCallGemini(prompt,signal){
     // Was 8192 — the legacy ceiling. A dense chunk overflowed it, the JSON came back
     // truncated, the bare parse threw, and the whole chunk was silently skipped.
-    // v17.13: no ceiling here; geminiRequest sets the called model's own (65,536 Flash, 32,768 Argon).
+    // v17.13: no ceiling here; geminiRequest sets the called model's own (65,536 for Flash and, since v18.2, Argon).
     const gc={responseMimeType:'application/json'};gc.thinkingConfig={thinkingLevel:toolLevel};
     // v18.0 (review dead code): a "cut" flag copied onMeta's truncated field for the parse error below. Since v17.13
     // geminiRequest rejects JSON cut off at the ceiling (e.truncated) before returning, and the last meta of a returned

@@ -139,11 +139,13 @@ function extractAnchoredRegex(source, anchor, startMarker, endMarker, flags = ''
   return new RegExp(body, flags);
 }
 
-// v17.13: the suite caps Argon requests at 32,768 output tokens (thinking included) and every other model at 65,536.
-// The measurement tools send plain generateContent requests, so they follow the same per-model rule as the app's
-// geminiOutputCap; a 65,536 request to Argon would be refused.
+// v17.13: the measurement tools send plain generateContent requests, so they follow the same per-model rule as the
+// app's geminiOutputCap.
+// v18.2: Argon's cap is 65,536 like every other model's; the 32,768 limit v17.13 assumed was refuted by a live call.
+// The per-model branch stays so a model with a lower limit is a one-number change, as in the app.
+const MEASUREMENT_OUTPUT_CAP = 65536, MEASUREMENT_ARGON_CAP = 65536;
 function measurementOutputCap(model) {
-  return /argon/i.test(String(model || '')) ? 32768 : 65536;
+  return /argon/i.test(String(model || '')) ? MEASUREMENT_ARGON_CAP : MEASUREMENT_OUTPUT_CAP;
 }
 
 // Manual measurement tools share strict parsing; importing this module does no I/O.

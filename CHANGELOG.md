@@ -9,6 +9,30 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [18.2] — 2026-10-14
+
+v17.13 capped every Argon request at 32,768 output tokens (thinking included), on the belief that Argon refuses more on a non-streaming request. That figure came from a guide and was never checked on a real key. Google's Gemini API model page lists 65,536 as Argon's synchronous limit. The user approved one live probe: a non-streaming `generateContent` call to `gemini-4-argon` asking for 65,536 tokens, which returned HTTP 200.
+
+### Changed
+
+- **Argon's output ceiling is 65,536**, the same as Flash's. Priority synthesis, Case Studies and the item-quality audit (the three Auto rows on Argon) get twice the room; Priority synthesis has thought for 62,914 tokens in one request.
+- **Priority synthesis parts are full size on Argon** (40,000 characters, as on Flash). They had been halved only because of the lower cap, so a large Knowledge Base now takes about half as many Argon requests.
+- The per-model cap (`geminiOutputCap`) stays, so a model with a lower limit is a one-number change. The thinking-level rules are unchanged.
+
+### Verification
+
+- **1 new assertion (3,764 total).** An Argon request asking for more than 65,536 is still clamped to 65,536.
+- **Updated assertions:**
+  - Argon's ceiling, request body and truncation message name 65,536, and the source pins `ARGON_OUTPUT_CAP=65536`;
+  - Priority parts are 40,000 characters on Argon;
+  - the measurement tools' cap follows the app;
+  - version literals read 18.2.
+- **Prompt bytes.** The eleven frozen prompt hashes and `prompt-baseline.json` are unchanged.
+- **SRI.** The eight SRI-pinned scripts and both PDF worker copies were re-hashed and match.
+- **Not measured.** No Argon run has hit the new ceiling yet, and Argon quality on these tasks is still unmeasured against Flash.
+
+See the [release verification record](docs/reviews/v18.2-release.md).
+
 ## [18.1] — 2026-10-13
 
 The user compared a test-taking strategy handout (ABCs, Maslow, safety, acute/unstable before chronic/stable, the Clinical Judgment Measurement Model) with the suite. Two gaps came out of that:

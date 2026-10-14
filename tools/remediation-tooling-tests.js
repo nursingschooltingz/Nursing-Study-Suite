@@ -52,7 +52,7 @@ async function runTests({ source, test = (name, value) => assert.ok(value, name)
   t('Argon measurement refuses the minimal level it answers with HTTP 400', throws(() => neia.parseArgs(['--level', 'minimal']), /Argon does not accept/) && neia.parseArgs(['--model', 'gemini-3.8-flash', '--level', 'minimal']).level === 'minimal');
   const plan = checks.measurementPlan(parseD(['--runs', '3']), 2, { model: 'gemini-test', level: 'low', profile: 'synthetic' });
   t('Plan separates logical operations and retry ceiling', plan.logicalOperations === 6 && plan.maximumAttempts === 24 && plan.maxAttemptsPerOperation === 4 && plan.maxOutputTokens === 65536);
-  t('Plan uses the same per-model output ceiling as the suite', checks.measurementPlan(parseD([]), 1, { model: 'gemini-4-argon', level: 'high', profile: 'synthetic' }).maxOutputTokens === 32768 && checks.measurementOutputCap('gemini-3.7-flash') === 65536);
+  t('Plan uses the same per-model output ceiling as the suite', checks.measurementPlan(parseD([]), 1, { model: 'gemini-4-argon', level: 'high', profile: 'synthetic' }).maxOutputTokens === 65536 && checks.measurementOutputCap('gemini-4-argon') === 65536 && checks.measurementOutputCap('gemini-3.7-flash') === 65536); // v18.2: Argon is 65,536
   t('Plan rejects zero selected inputs', throws(() => checks.measurementPlan(parseD([]), 0, {}), /No measurement inputs/));
 
   const transcript = { face: 'front', category: 'Synthetic', cardNumber: '1', overallLegibility: 'clean',

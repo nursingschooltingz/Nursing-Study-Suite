@@ -97,7 +97,8 @@ module.exports=async function productionPriorityTests(S,t){
   const guide=(n,audit=true)=>`## TIER 1 — Must Know\n- **Item ${n}a** [§ S${n}] — (R1 ABC) why.\n\n## TIER 2 — Should Know\n- **Item ${n}b** [§ S${n}] — (R9) why.\n\n## TIER 3 — Good to Know\n- **Item ${n}c** [§ S${n}] — (R9) detail.\n\n---\n## Study Strategy\n- Drill part ${n}.\n\n`+(audit?`*Audit: 3 items · ${n-1} unverified · 1 inferred · 1/1 T1 rule-tagged*`:'');
   const order=(text,...marks)=>marks.every((m,i)=>text.includes(m)&&(i===0||text.indexOf(m)>text.indexOf(marks[i-1])));
   t('Priority synthesis keeps an inventory within the part limit as one part',H.PA_SYNTH_PART_CHARS===40000&&JSON.stringify(H.paSynthGroups(['a','b'],10))==='[["a","b"]]'&&H.paSynthGroups(Array(3).fill('x'.repeat(1000))).length===1);
-  t('Priority synthesis parts are half size on Argon and unchanged on Flash',H.paSynthPartChars('gemini-3.8-flash')===40000&&H.paSynthPartChars('gemini-4-argon')===20000&&H.paSynthPartChars('gemini-4-argon-preview')===20000);
+  // v18.2: Argon's ceiling equals Flash's, so its parts are full size again (they were 20,000).
+  t('Priority synthesis parts are full size on Argon and on Flash',H.paSynthPartChars('gemini-3.8-flash')===40000&&H.paSynthPartChars('gemini-4-argon')===40000&&H.paSynthPartChars('gemini-4-argon-preview')===40000);
   const big=Array.from({length:15},(_,i)=>String(i).padEnd(10000,'.')),bigGroups=H.paSynthGroups(big);
   t('Priority synthesis packs a large inventory into ordered, unsplit parts',JSON.stringify(bigGroups.map(g=>g.length))==='[4,4,4,3]'&&JSON.stringify(bigGroups.flat())===JSON.stringify(big));
   t('Priority synthesis gives an oversized extraction its own part',JSON.stringify(H.paSynthGroups(['a','x'.repeat(50),'b'],10))==='[["a"],["'+'x'.repeat(50)+'"],["b"]]');
@@ -174,5 +175,5 @@ module.exports=async function productionPriorityTests(S,t){
   // v17.13: the part limit handed to paSynthGroups comes from the model synthesis will actually call.
   h=fixture();await h.run();const flashLimit=h.out.partLimit;
   h=fixture();h.env.cfg={...h.env.cfg,forTool:id=>({model:id==='priority'?'gemini-4-argon':id,level:'high'})};await h.run();
-  t('Priority sizes synthesis parts from the resolved synthesis model',flashLimit===40000&&h.out.partLimit===20000&&h.out.step==='results');
+  t('Priority sizes synthesis parts from the resolved synthesis model',flashLimit===40000&&h.out.partLimit===40000&&h.out.step==='results'); // v18.2: Argon parts are full size
 };

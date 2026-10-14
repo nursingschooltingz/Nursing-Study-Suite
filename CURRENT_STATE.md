@@ -1,5 +1,18 @@
 # Current maintainer state
 
+## v18.2 Argon output ceiling 65,536 (2026-10-14)
+
+The canonical application is `Nursing-Study-Suite v18.2.html`. v17.13 capped Argon at 32,768 output tokens (thinking included). That figure came from a guide and was never checked on a real key. Google's Gemini API model page lists 65,536 as Argon's synchronous limit. With the user's authorization, one non-streaming `generateContent` call to `gemini-4-argon` asked for 65,536 tokens and got HTTP 200 on 2026-10-14.
+- **Ceiling.** `ARGON_OUTPUT_CAP` is 65,536, the same as Flash. `geminiOutputCap` keeps its per-model branch.
+- **Priority.** Synthesis parts are 40,000 characters on Argon again (they were 20,000).
+- **Measurement tools.** `measurementOutputCap` in `tools/repo-checks.js` follows the app.
+- **Not measured.**
+  - No Argon run has used more than 32,768 tokens yet.
+  - Priority synthesis stays at medium. Whether high now fits is unmeasured.
+  - Argon's quality against Flash on these tasks is still unmeasured; it costs about 2.7× Flash per token.
+
+Verification: see the [release verification record](docs/reviews/v18.2-release.md).
+
 ## v18.1 One exam tier and one priority order (2026-10-13)
 
 The canonical application is `Nursing-Study-Suite v18.1.html`. The user compared a test-taking handout with the suite and approved three changes. No frozen prompt changed.
@@ -128,7 +141,7 @@ Verification: see the [release verification record](docs/reviews/v17.15-release.
 ## v17.14 Argon Auto-profile defaults (2026-10-13)
 
 The canonical application is `Nursing-Study-Suite v17.14.html`. The user, on a paid key, asked for Argon as the shipped default for the three rows recommended after v17.13:
-- **Priority · synthesis:** Argon · medium. Medium leaves room inside 32,768; the v17.7 run thought for 62,914 tokens.
+- **Priority · synthesis:** Argon · medium. Medium leaves room inside 32,768 (65,536 since v18.2); the v17.7 run thought for 62,914 tokens.
 - **Case studies:** Argon · high.
 - **Item quality · audit:** Argon · high. The only measured audit configuration was 3.1 Pro/high; Flash had been a free-tier cost choice.
 
@@ -146,7 +159,7 @@ Verification: see the [release verification record](docs/reviews/v17.14-release.
 
 The canonical application is `Nursing-Study-Suite v17.13.html`. The user asked to turn the Pro mode into Argon mode and rename every Pro reference.
 - **Defaults.** The second slot defaults to `gemini-4-argon` at high thinking, sent explicitly because Argon's own default is medium.
-- **Output ceiling.** Argon allows 32,768 thinking-plus-output tokens on a non-streaming request, so `geminiRequest` now sets every ceiling: 32,768 for a model ID containing "argon", 65,536 otherwise.
+- **Output ceiling.** Argon allows 32,768 thinking-plus-output tokens on a non-streaming request, so `geminiRequest` now sets every ceiling: 32,768 for a model ID containing "argon", 65,536 otherwise. *(Superseded in v18.2: a live call accepted 65,536 on Argon.)*
 - **Refused before sending.** A `thinkingBudget`, a level outside low/medium/high, or an Argon request with no level.
 - **Truncated JSON.** JSON cut off at the ceiling is now a failure, not a parse attempt. Knowledge Base chunks still split, and a truncated case still shows its partial text.
 - **Priority.** Synthesis parts are 20,000 characters on Argon and 40,000 on Flash.
@@ -480,8 +493,8 @@ The deterministic gates pass, but these v15.14 paths still need real-material ch
 - **`kbQuoteOperatorsAgree` remains WARN tier.** It can false-positive on column/table spans as `reordered` misses do. A non-zero diagnostic deserves investigation, not automatic pass-2 discard, until a real corpus establishes the false-positive rate.
 - **Card resize constants are prompt-class.** Changing `CARD_MAX_EDGE`, `CARD_JPEG_QUALITY`, or `CARD_RESIZE_ABOVE_BYTES` can change OCR accuracy and therefore requires two runs per card.
 - **`responseSchema` remains deliberately unimplemented.** It changes model output shape even though it does not touch frozen prompt bytes. It needs a real batch before adoption.
-- **Per-operation token budgets are rejected.** `maxOutputTokens` is a ceiling, not a reservation, and Gemini 3 thinking shares the budget. Since v17.13 the ceiling is per model rather than universal: 65,536 for Flash and 32,768 for Argon, which refuses more on a non-streaming request. `geminiRequest` chooses it from the model ID; no operation sets its own.
-- **All eight SRI pins were verified again on 2026-10-13 for v17.13**, together with both PDF worker copies. Recheck every pin on an application version bump.
+- **Per-operation token budgets are rejected.** `maxOutputTokens` is a ceiling, not a reservation, and Gemini 3 thinking shares the budget. Since v17.13 the ceiling is per model rather than universal. Since v18.2 both Flash and Argon get 65,536; v17.13 had set Argon to 32,768 from an unchecked limit. `geminiRequest` chooses it from the model ID; no operation sets its own.
+- **All eight SRI pins were verified again on 2026-10-14 for v18.2**, together with both PDF worker copies. Recheck every pin on an application version bump.
 - **`.gitattributes` pins `* -text`.** If the harness fails wholesale after a Git operation, check line endings first; every extraction anchor assumes LF (`\n`).
 
 ## Live-generation evidence
