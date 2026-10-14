@@ -678,7 +678,7 @@ Anki source/retrieval tools from the main-branch update at `6941e03`, plus the a
 
 ## [16.0] — 2026-09-11
 
-Visual and usability redesign of the existing single-file study suite. The [v16.0 release](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/tag/v16.0) implements the approved visual-update brief; the archived selective PDF-vision proposal remains unapproved and unbuilt.
+Visual and usability redesign of the existing single-file study suite. The [v16.0 release](https://github.com/nursingschooltingz/Nursing-Study-Suite/tree/v16.0) implements the approved visual-update brief; the archived selective PDF-vision proposal remains unapproved and unbuilt.
 
 ### Changed
 - Replaced the dark stylesheet with a cohesive light design system: blue primary actions, restrained orange accents, separate semantic status colors, readable type, consistent controls, focus rings and reduced-motion support.
@@ -693,7 +693,7 @@ Visual and usability redesign of the existing single-file study suite. The [v16.
 
 ## [15.18] — 2026-09-11
 
-Reliability and evidence remediation. The [v15.18 release](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/tag/v15.18) retains the frozen prompts and the single-file runtime. See [the execution ledger](docs/reviews/remediation-execution-v15.17.md) for verification and remaining acceptance.
+Reliability and evidence remediation. The [v15.18 release](https://github.com/nursingschooltingz/Nursing-Study-Suite/tree/v15.18) retains the frozen prompts and the single-file runtime. See [the execution ledger](docs/reviews/remediation-execution-v15.17.md) for verification and remaining acceptance.
 
 ### Fixed
 - Ordered KB saves and clears, current-save status, hydration/replacement races, and ambiguous legacy storage recovery. Concurrent browser changes are reported instead of silently overwritten. Raw KB exports remain compatible; export active/recovery copies before downgrading because older code cannot interpret the new save metadata and fallback tombstones.
@@ -711,7 +711,7 @@ Reliability and evidence remediation. The [v15.18 release](https://github.com/nu
 
 ## [15.17] — 2026-09-11
 
-Published as the [v15.17 GitHub release](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/tag/v15.17), with the exact pre-pilot Anki prompt restored. Actual Anki import verification remains outstanding.
+Published as the [v15.17 GitHub release](https://github.com/nursingschooltingz/Nursing-Study-Suite/tree/v15.17), with the exact pre-pilot Anki prompt restored. Actual Anki import verification remains outstanding.
 
 ### Fixed
 - Flat cloze structure now drives preview, index counting, numeric scanning, collisions, and export validation. Malformed delimiters, nesting, empty/nonpositive indices, and edits that insert pipes/newlines cannot silently export. Structural eligibility is independent of manual selection.
