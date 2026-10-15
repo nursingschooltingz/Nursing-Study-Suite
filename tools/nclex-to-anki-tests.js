@@ -132,7 +132,7 @@ async function run(S,t){
   t('the NCLEX to Anki tab is a memoized tool component',!!components&&components[1].includes('nclex2anki:React.memo(NCLEXToAnki)'));
   const core=span(S,'// ──── TOOL: NCLEX to Anki ────','async function i2aFileKey(');
   const ui=span(S,'async function i2aFileKey(','/* ═══════════════════════════════════════════════════════\n   CONFIG SIDEBAR');
-  const M=new Function(core+';return {n2aSha1Hex,n2aGuidBasis,n2aEsc,n2aConvertSources,n2aAnkiFileText,x2aConvertSources,x2aResolveAnswer,i2aNormalizeTranscript,i2aAssemble,i2aBuildCards,i2aConvert,i2aGuid,i2aNaturalCompare,i2aMergeCache,i2aEmptyCache,I2A_TRANSCRIBE_PROMPT,I2A_PROMPT_VERSION,n2aPdfPageLines,n2aPdfBlocks,n2aPdfChoiceLines,n2aPdfToWorksheetText,x2aPdfToExportText,n2aConvertExports,n2aExportKind,n2aConvertText,n2aKeyFit,n2aParseQuestion,n2aParseKey};')();
+  const M=new Function(core+';return {n2aSha1Hex,n2aGuidBasis,n2aEsc,n2aConvertSources,n2aAnkiFileText,x2aConvertSources,x2aResolveAnswer,i2aNormalizeTranscript,i2aAssemble,i2aBuildCards,i2aConvert,i2aWorksheetMd,i2aGuid,i2aNaturalCompare,i2aMergeCache,i2aEmptyCache,I2A_TRANSCRIBE_PROMPT,I2A_PROMPT_VERSION,n2aPdfPageLines,n2aPdfBlocks,n2aPdfChoiceLines,n2aPdfToWorksheetText,x2aPdfToExportText,n2aConvertExports,n2aExportKind,n2aConvertText,n2aKeyFit,n2aParseQuestion,n2aParseKey};')();
 
   t('the converter SHA-1 matches Node crypto on ASCII, Unicode and multi-block input',
     ['','abc','é ünïcode ✓ 🧠','x'.repeat(55),'y'.repeat(64),'z'.repeat(1000)].every(s=>M.n2aSha1Hex(s)===crypto.createHash('sha1').update(s,'utf8').digest('hex')));
@@ -200,6 +200,18 @@ async function run(S,t){
   t('an unreadable number marks the card NeedsReview',unreadable.cards[0].tags.includes('NeedsReview')&&unreadable.warnings.some(w=>w.includes('could not read everything')));
   const sameQ={stem:'A client with heart failure has a potassium of 3.1 mEq/L. Which action should the nurse take first?',options:[['A','Give the scheduled furosemide'],['B','Hold digoxin and notify the provider'],['C','Encourage oral fluids'],['D','Recheck in the morning']]};
   t('the same question imported from images and from a worksheet shares one GUID',M.i2aGuid(sameQ)===ws.cards[0].guid);
+  // v18.3: image questions also print as a worksheet: questions first, answer key on its own page.
+  const wsheet=M.i2aWorksheetMd(asm.questions);
+  const keyAt=wsheet.md.indexOf('## Answer Key');
+  t('the image worksheet lists every question before a page-broken answer key',wsheet.count===2&&keyAt>wsheet.md.indexOf('**2.** Calc?')&&
+    wsheet.md.indexOf('<div class="pagebreak"></div>')===keyAt-'<div class="pagebreak"></div>\n\n'.length&&wsheet.md.slice(0,keyAt).includes('A. One  \nB. Two')&&!wsheet.md.slice(0,keyAt).includes('Because.'));
+  t('the worksheet key marks the right choice with its rationale and names the source images',
+    wsheet.md.includes('**1.** B — Two')&&wsheet.md.includes('✓ **B.** Two — Because.')&&wsheet.md.includes('**Rationale:** Two wins.')&&wsheet.md.includes('*From: shot 1.png, shot 2.png*')&&wsheet.md.includes('**2.** 12 mL'));
+  const raw=M.i2aWorksheetMd(M.i2aAssemble([['m.png',M.i2aNormalizeTranscript({items:[{kind:'question',stem:'Give 2*3 mg <b>now</b>\n1. then # wait',format:'fill_in',legibility:'clean'},{kind:'question',stem:'',format:'fill_in',legibility:'clean'}]})]]).questions);
+  t('transcribed Markdown characters are escaped, an unanswered question still prints, and an empty stem is left out',
+    raw.count===1&&raw.md.includes('Give 2\\*3 mg \\<b\\>now\\</b\\>  \n1\\. then # wait')&&raw.md.includes('**1.** No answer in the images; tick "Have Gemini answer"')&&M.i2aWorksheetMd([]).count===0);
+  t('the image results offer a PDF of the worksheet through the shared print export',
+    ui.includes("{mode==='images'&&result.worksheet&&<button className=\"btn-secondary\" disabled={!result.worksheet.count}")&&ui.includes('onClick={()=>exportAsPdf(result.worksheet.md,')&&core.includes('result.worksheet=i2aWorksheetMd(questions);'));
   t('images are read in natural file-name order',['shot 10.png','shot 2.png','Shot 1.png'].sort(M.i2aNaturalCompare).join()==='Shot 1.png,shot 2.png,shot 10.png');
 
   const cache=M.i2aEmptyCache();let calls=0;
@@ -208,6 +220,7 @@ async function run(S,t){
   const imgs=[{name:'a.png',key:'k1',payload:async()=>({mimeType:'image/png',data:'xx'})}];
   let res=await M.i2aConvert({images:imgs,gemini,halts:()=>false,model:'m',cache,deck:'NCLEX'});
   t('a question the images never answer is skipped unless AI answers are on',res.cards.length===0&&res.needsAi===1&&calls===1);
+  t('a run with no cards still returns the questions as a printable worksheet',res.worksheet.count===1&&res.worksheet.md.includes('**1.** Q one?'));
   res=await M.i2aConvert({images:imgs,gemini,halts:()=>false,model:'m',cache,deck:'NCLEX',aiAnswers:true});
   t('a cached image is not sent again and an AI answer is labelled and tagged',calls===2&&res.cards.length===1&&res.ai===1&&res.cards[0].tags.includes('AI_Answer')&&res.cards[0].back.includes('AI-generated answer'));
   const quota=Object.assign(new Error('quota'),{status:429});

@@ -1,8 +1,17 @@
 # Current maintainer state
 
+## v18.3 NCLEX to Anki images print a PDF (2026-10-14)
+
+The canonical application is `Nursing-Study-Suite v18.3.html`. The user asked for the image option to make a PDF as well as Anki cards.
+- **What it does.** `i2aWorksheetMd` builds a worksheet from the questions `i2aConvert` assembled (questions, then the answer key after a page break). The run result carries it as `worksheet`, and the **🖨 PDF** button passes it to `exportAsPdf`.
+- **Same questions as the cards, plus unanswered ones.** Duplicates (by GUID) and empty stems are dropped as for cards. A question with no answer is printed and its key says so.
+- **Not measured.** No real image run has printed a PDF yet.
+
+Verification: see the [release verification record](docs/reviews/v18.3-release.md).
+
 ## v18.2 Argon output ceiling 65,536 (2026-10-14)
 
-The canonical application is `Nursing-Study-Suite v18.2.html`. v17.13 capped Argon at 32,768 output tokens (thinking included). That figure came from a guide and was never checked on a real key. Google's Gemini API model page lists 65,536 as Argon's synchronous limit. With the user's authorization, one non-streaming `generateContent` call to `gemini-4-argon` asked for 65,536 tokens and got HTTP 200 on 2026-10-14.
+The application was `Nursing-Study-Suite v18.2.html`. v17.13 capped Argon at 32,768 output tokens (thinking included). That figure came from a guide and was never checked on a real key. Google's Gemini API model page lists 65,536 as Argon's synchronous limit. With the user's authorization, one non-streaming `generateContent` call to `gemini-4-argon` asked for 65,536 tokens and got HTTP 200 on 2026-10-14.
 - **Ceiling.** `ARGON_OUTPUT_CAP` is 65,536, the same as Flash. `geminiOutputCap` keeps its per-model branch.
 - **Priority.** Synthesis parts are 40,000 characters on Argon again (they were 20,000).
 - **Measurement tools.** `measurementOutputCap` in `tools/repo-checks.js` follows the app.

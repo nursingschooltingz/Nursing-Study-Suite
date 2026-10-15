@@ -12,7 +12,11 @@
      policy and uses only its own inline style block and system fonts. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com">
 <title>LATTE Study Suite</title>
-<!-- v18.2 (2026-10-14): Argon's output ceiling is 65,536, the same as Flash's. v17.13 capped it at 32,768, citing a
+<!-- v18.3 (2026-10-14): NCLEX to Anki's image option also prints a PDF. Questions read from images could only become an
+     Anki file, so they could not be printed or worked on paper. After an image run a 🖨 PDF button prints the same
+     questions as a worksheet in the Extractor's layout (questions, then the answer key on its own page), including
+     questions the images never answer. No Gemini call is added and prompts are unchanged.
+     v18.2 (2026-10-14): Argon's output ceiling is 65,536, the same as Flash's. v17.13 capped it at 32,768, citing a
      non-streaming limit that was never checked on a real key; Google's Gemini API model page lists 65,536 as Argon's
      synchronous limit, and a non-streaming generateContent call to gemini-4-argon asking for 65,536 returned HTTP 200.
      The lower cap cut Priority synthesis, Case Studies and the item audit short at half the allowed budget, and halved
@@ -6349,7 +6353,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '18.2';}
+function suiteVersion(){return '18.3';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -9324,6 +9328,55 @@ function i2aBuildCards(questions,sourceTag,extraTags=[]){
   }
   return {cards,warnings};
 }
+// v18.3: the image converter could only write an Anki file, so questions read from photos could not be printed or
+// worked on paper. The same assembled questions now also make a printable worksheet in the Extractor's layout:
+// questions first, then the answer key on its own page. Transcribed text is escaped so a "*", "#" or "1." read from
+// an image prints as itself rather than as Markdown. A question with no answer is still printed, and says so.
+function i2aMdEsc(s){
+  return String(s).replace(/\r\n?/g,'\n').replace(/([\\`*_[\]<>|~])/g,'\\$1')
+    .replace(/^([ \t]*)([#>+=-])/gm,'$1\\$2').replace(/^([ \t]*\d{1,9})([.)])/gm,'$1\\$2').replace(/\n/g,'  \n');
+}
+function i2aWorksheetMd(questions){
+  const seen=new Set(),list=[];
+  for(const q of questions){if(!q.stem)continue;const g=i2aGuid(q);if(seen.has(g))continue;seen.add(g);list.push(q);}
+  if(!list.length)return {md:'',count:0};
+  let out='# NCLEX Practice Questions\n\n**'+list.length+' question'+(list.length===1?'':'s')+'** read from question images.\n\n---\n\n## Questions\n\n';
+  list.forEach((q,i)=>{
+    out+='**'+(i+1)+'.** '+i2aMdEsc(q.stem)+'\n\n';
+    if(q.exhibit)out+='*[Exhibit: '+i2aMdEsc(q.exhibit)+' - see '+i2aMdEsc(q.images[0])+']*\n\n';
+    if(q.options.length)out+=q.options.map(([l,t])=>i2aMdEsc(l)+'. '+i2aMdEsc(t)).join('  \n')+'\n\n';
+    if(q.format==='fill_in')out+='Answer: ______\n\n';
+  });
+  out+='<div class="pagebreak"></div>\n\n## Answer Key\n\n';
+  list.forEach((q,i)=>{
+    const ai=q.ai,aiAnswer=!!(ai&&ai.mode==='answer');
+    if(!q.answer){out+='**'+(i+1)+'.** No answer in the images'+(q.exhibit||q.format==='other'?'.':'; tick "Have Gemini answer" to have Gemini answer it.')+'\n\n---\n\n';return;}
+    const labels=q.options.length&&q.format!=='ordering'?i2aAnswerLabels(q.answer,q.options):[],opts=new Map(q.options);
+    let head=q.answer;
+    if(labels.length===1&&opts.has(labels[0])&&!q.answer.toLowerCase().includes(opts.get(labels[0]).toLowerCase()))head+=' — '+opts.get(labels[0]);
+    out+='**'+(i+1)+'.** '+i2aMdEsc(head)+'\n\n';
+    if(aiAnswer)out+='> ⚠ **AI-generated answer and rationales** - your images did not show the answer. Check it against your source.\n\n';
+    else if(ai)out+='> Answer from your source; **rationales are AI-written**.\n\n';
+    if(ai&&ai.agrees===false&&ai.dispute)out+='> ⚠ **AI disagrees with this key:** '+i2aMdEsc(ai.dispute)+'\n\n';
+    const why=new Map((aiAnswer?ai.whys:q.whys).map(w=>[w[0],w])),rows=[];
+    if(q.options.length&&q.format!=='ordering'){
+      for(const [lab,txt] of q.options){
+        const w=why.get(lab),correct=labels.includes(lab);
+        if(!w&&!correct)continue;
+        rows.push((correct?'✓ ':'✗ ')+'**'+i2aMdEsc(lab)+'.** '+i2aMdEsc(txt)+(w?' — '+i2aMdEsc(w[2]):''));
+      }
+    }else for(const [l,w] of why)rows.push('**'+i2aMdEsc(l)+'.** '+i2aMdEsc(w[2]));
+    if(rows.length)out+=rows.join('  \n')+'\n\n';
+    const rationale=aiAnswer?ai.rationale:q.rationale;
+    if(rationale)out+='**Rationale:** '+i2aMdEsc(rationale)+'\n\n';
+    const extras=[...q.extras];
+    if(aiAnswer&&ai.strategy)extras.push(['Strategy (AI)',ai.strategy]);
+    for(const [h,text] of extras)out+='**'+i2aMdEsc(h)+':** '+i2aMdEsc(text)+'\n\n';
+    const src=q.images.join(', ')+(q.answer_image&&!q.images.includes(q.answer_image)?' (answer: '+q.answer_image+')':'');
+    out+='*From: '+i2aMdEsc(src)+'*\n\n---\n\n';
+  });
+  return {md:out,count:list.length};
+}
 // v18.0 (review L28): macOS names screenshots "… at 9.05.12 AM" / "… at 1.02.03 PM", so 1 PM sorted before 9 AM and
 // 12 AM after 11 AM. A 12-hour clock time is read as 24-hour (12 AM = 0) before the natural sort. The port kept
 // img2anki.py's plain natural sort, so for such names the suite's image order now differs from the script's.
@@ -9392,6 +9445,7 @@ async function i2aConvert({images,gemini,halts,model,cache,deck,extraTags=[],sou
   const built=i2aBuildCards(questions,sourceTag,extraTags);
   warnings.push(...built.warnings);
   result.cards=built.cards;result.needsReview=built.cards.filter(c=>c.tags.includes('NeedsReview')).length;result.ai=built.cards.filter(c=>c.tags.includes('AI_Answer')).length;
+  result.worksheet=i2aWorksheetMd(questions); // v18.3: printable worksheet of the same questions
   return result;
 }
 
@@ -9600,6 +9654,7 @@ function NCLEXToAnki(){
     {result&&<>
       <ResultsHead title="Anki import file" count={<><b>{result.cards.length}</b> card{result.cards.length!==1?'s':''}</>}>
         <button className="btn-primary" disabled={!result.text} onClick={()=>downloadBlob(new Blob([result.text],{type:'text/plain;charset=utf-8'}),result.outName)}>⬇ {result.outName}</button>
+        {mode==='images'&&result.worksheet&&<button className="btn-secondary" disabled={!result.worksheet.count} title="Questions first, then the answer key on its own page. Choose Save as PDF in the print dialog." onClick={()=>exportAsPdf(result.worksheet.md,'NCLEX Practice Questions',result.worksheet.count+' question'+(result.worksheet.count===1?'':'s')+' from images')}>🖨 PDF</button>}
       </ResultsHead>
       {result.cards.length>0?<div className="tip-banner"><span>✓</span><div>
         <div><b>{result.cards.length}</b> card(s) for deck <b>{result.deck}</b>{types.length>0&&<> · {types.map(([k,v])=>k+' '+v).join(', ')}</>}</div>
@@ -9607,7 +9662,7 @@ function NCLEXToAnki(){
         {result.ai>0&&<div>{result.ai} answered by AI (tag:AI_Answer) - check them against your source.</div>}
         {result.needsReview>0&&<div>{result.needsReview} tagged NeedsReview (search tag:NeedsReview in the Anki browser).</div>}
         <div>Import: Anki → File → Import → pick the file. Deck, note type and tags are preset.</div>
-      </div></div>:<div className="error-banner"><span>⚠</span><div>No cards written.{result.needsAi>0&&!aiAnswers?' '+result.needsAi+' question(s) show no answer in the images; tick "Have Gemini answer" and run again (images already read are not sent again).':''}</div></div>}
+      </div></div>:<div className="error-banner"><span>⚠</span><div>No cards written.{mode==='images'&&result.worksheet&&result.worksheet.count>0?' The questions can still be printed with 🖨 PDF.':''}{result.needsAi>0&&!aiAnswers?' '+result.needsAi+' question(s) show no answer in the images; tick "Have Gemini answer" and run again (images already read are not sent again).':''}</div></div>}
       {result.warnings.length>0&&<Panel title={result.warnings.length+' warning(s)'} className="flat">
         <div className="log-stream" style={{maxHeight:260,overflowY:'auto'}}>{result.warnings.map((w,i)=><div key={i}>- {w}</div>)}</div>
       </Panel>}
@@ -9623,7 +9678,7 @@ function NCLEXToAnki(){
     </>}
     {!result&&!(mode==='images'&&(busy||log.length>0))&&<EmptyState mark="⇄" title={meta.title}
       note={mode==='export'?'Turns NCLEX Generator worksheets and NCLEX Extractor exports into one Anki import file: question and choices on the front; the answer, every choice marked right or wrong with its rationale, and the strategy, tip and CJ on the back. For review-book questions, a rationale that explains each choice is split onto every choice.':'Gemini copies each image verbatim — it never guesses a number and never supplies an answer the image does not show — then the questions are assembled and checked here.'}
-      steps={mode==='images'?['Add the images (and your API key in Settings).','Optionally let Gemini answer questions the images never answer.','Read the images, then download the .txt and import it in Anki.']:['Add the exports (.md, .txt or PDF; Generator and Extractor can be mixed) or paste a Copy output.','Set the deck and any extra tags.','Convert, then download the .txt and import it in Anki (File → Import).']}/>}
+      steps={mode==='images'?['Add the images (and your API key in Settings).','Optionally let Gemini answer questions the images never answer.','Read the images, then download the .txt and import it in Anki, or press 🖨 PDF for a printable worksheet.']:['Add the exports (.md, .txt or PDF; Generator and Extractor can be mixed) or paste a Copy output.','Set the deck and any extra tags.','Convert, then download the .txt and import it in Anki (File → Import).']}/>}
   </Workbench>;
 }
 

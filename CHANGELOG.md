@@ -9,6 +9,31 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [18.3] — 2026-10-14
+
+The user asked for the NCLEX to Anki image option to make a PDF as well as Anki cards. Questions read from screenshots or page photos could only become an Anki file, so they could not be printed or worked on paper.
+
+### Added
+
+- **🖨 PDF after an image run.** It sits beside the .txt download and prints the same questions as a worksheet in the NCLEX Extractor's layout:
+  - the questions first, then the answer key on its own page;
+  - each choice marked right or wrong with its rationale, then the rationale, strategy and the image each question came from;
+  - AI-written answers and rationales are labelled, as on the cards.
+- **Unanswered questions still print.** A question the images never answer is in the worksheet, and its key entry says so. When a run writes no cards, the results point to the PDF.
+- Text read from an image is escaped, so a `*`, `#` or a leading "1." prints as written instead of as formatting.
+- The PDF uses the suite's existing print export (Save as PDF in the print dialog). It makes no extra Gemini call.
+
+### Verification
+
+- **5 new assertions (3,769 total).** The worksheet lists every question before a page-broken answer key; the key marks the right choice with its rationale and source images; transcribed Markdown characters are escaped; an unanswered question still prints and an empty stem is left out; a run with no cards still returns the worksheet; the results button calls the shared print export.
+- **Updated assertions:** version literals read 18.3.
+- **Prompt bytes.** The eleven frozen prompt hashes and `prompt-baseline.json` are unchanged. `I2A_TRANSCRIBE_PROMPT` is unchanged.
+- **SRI.** The eight SRI-pinned scripts and both PDF worker copies were re-hashed and match.
+- **Checked in a browser.** A synthetic three-question worksheet rendered through the app's print document with the expected questions, key, marks and escaping.
+- **Not checked.** No real image run, and no printed or saved PDF was inspected.
+
+See the [release verification record](docs/reviews/v18.3-release.md).
+
 ## [18.2] — 2026-10-14
 
 v17.13 capped every Argon request at 32,768 output tokens (thinking included), on the belief that Argon refuses more on a non-streaming request. That figure came from a guide and was never checked on a real key. Google's Gemini API model page lists 65,536 as Argon's synchronous limit. The user approved one live probe: a non-streaming `generateContent` call to `gemini-4-argon` asking for 65,536 tokens, which returned HTTP 200.
