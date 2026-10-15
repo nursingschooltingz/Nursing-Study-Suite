@@ -7,6 +7,8 @@ module.exports=async function productionPriorityTests(S,t){
   const sourceHelpers=new Function('buildFactIndex',span('function artifactSourceSnapshot(','function artifactExportNotice(')+';return {artifactSourceSnapshot,artifactSourceCurrent};')(()=>new Map());
   const P=new Function('kbSourceText','artifactSourceCurrent',span('function kbForPriority(','function PriorityAnalyzer(){')+';return {kbForPriority,paResultNotice};')(()=>'',sourceHelpers.artifactSourceCurrent);
   const runSource=span('  async function runAnalysis(){','\n  const resultNotice=');
+  // v18.4: the harvest reads kbFactView(source.kb); the shipped view is compiled in so entry facts reach the packet.
+  const {kbFactView}=new Function(span('const KB_ENTITY_KINDS=','\nfunction kbBucketFacts(')+';return {kbFactView};')();
   const {geminiHaltsBatch}=new Function(span('function geminiHaltsBatch(','\nasync function callGemini(')+';return {geminiHaltsBatch};')(); // v17.4: the harvest catch consults the shared halting rule
   const effectSource=span('    if(analysisSlot.current.active&&analysisSource.current!==K.knowledgeBase){','\n  },[K.knowledgeBase]);');
   // v17.7: split-synthesis helpers sit between paParseTiers and kbForPriority; each copy binds the tier parser it is given.
@@ -25,7 +27,7 @@ module.exports=async function productionPriorityTests(S,t){
     const set=(key,value)=>{out[key]=typeof value==='function'?value(out[key]):value;};
     const tiers=realTiers?parseTiers:stubTiers,split=splitHelpers(tiers);
     const env={cfg:{apiKey:'synthetic',forTool:id=>({model:id,level:'low'})},K:{knowledgeBase:A,isCurrentSource:kb=>kb===activeKB},analysisSlot:{current:createOperationSlot()},analysisSource:{current:null},
-      kbTiers:[1,2,3],kbConditionFilter:query,chunkSize:12000,overlapSize:1500,context:'',...sourceHelpers,...P,geminiHaltsBatch,
+      kbTiers:[1,2,3],kbConditionFilter:query,chunkSize:12000,overlapSize:1500,context:'',...sourceHelpers,...P,geminiHaltsBatch,kbFactView,
       paChunkText:text=>chunks||[text],paBuildExtractPrompt:text=>'HARVEST:'+text,paBuildSynthPrompt:rows=>'SYNTHESIZE:'+rows.join('\n'),paParseTiers:tiers,
       paSynthPartChars:split.paSynthPartChars,paSynthGroups:(rows,limit,joins)=>{out.partLimit=limit;return split.paSynthGroups(rows,groupLimit,joins);},paMergeSynthesis:split.paMergeSynthesis,paChunkJoins:C.paChunkJoins,
       setAnalysisBusy:value=>set('busy',value),setResultSource:value=>set('source',value),setHarvestState:value=>set('harvest',value),setStep:value=>set('step',value),setError:value=>set('error',value),setOutput:value=>set('output',value),

@@ -154,7 +154,8 @@ async function run(S,t){
   const usable=new Function(span(S,'function kbUsableFactCount(','function kbForAnki(')+';return kbUsableFactCount;')();
   t('R07: usable facts are counted across conditions and blank facts are ignored',usable(null)===0&&usable({conditions:[]})===0&&usable({conditions:[{name:'Empty',facts:[]}]})===0&&usable({conditions:[{name:'A',facts:[{text:'  '},null,{text:'Real'}]},{name:'B',facts:[{text:'Also'}]}]})===2);
   const anki=span(S,'function AnkiGenerator(){','// ──── TOOL: NCLEX Extractor ────');
-  const runStart=anki.indexOf('  const run=useCallback(async()=>{'),guard=anki.indexOf('if(!kbUsableFactCount(K.knowledgeBase)){log(',runStart),clear=anki.indexOf('setBatch(completed);setCards(deduped);',runStart),packet=anki.indexOf('kbForAnki(K.knowledgeBase)',runStart); // v17.15 (M17): the deck is replaced only on success
+  // v18.4: the guard and the packet read kbFactView, so medication, diagnostic and scoring-tool facts count and convert.
+  const runStart=anki.indexOf('  const run=useCallback(async()=>{'),guard=anki.indexOf('if(!kbUsableFactCount(kbFactView(K.knowledgeBase))){log(',runStart),clear=anki.indexOf('setBatch(completed);setCards(deduped);',runStart),packet=anki.indexOf('kbForAnki(kbFactView(K.knowledgeBase,{boxTableFirst:true}))',runStart); // v17.15 (M17): the deck is replaced only on success
   t('R07: the Anki run refuses a factless Knowledge Base before clearing the deck or building a packet',runStart>=0&&guard>runStart&&clear>guard&&packet>guard&&anki.slice(guard,guard+400).includes('nothing was sent to the model'));
 
   /* ── R09: Priority keeps streamed text after a failure ── */

@@ -1,0 +1,65 @@
+diff --git a/KB_EXTRACTION_PROMPT.txt b/KB_EXTRACTION_PROMPT.txt
+--- a/KB_EXTRACTION_PROMPT.txt
++++ b/KB_EXTRACTION_PROMPT.txt
+@@ -16,7 +16,10 @@ JSON SHAPE:
+       "safetyCritical":false,
+       "tier":1,
+       "sourceQuote":"verbatim source phrase, 20 words maximum",
+-      "sourcePointer":{"filename":"string","location":"page N or slide N"}
++      "sourcePointer":{"filename":"string","location":"page N or slide N"},
++      "sourceKind":"box|table|figure|prose",
++      "sourceLabel":"box, table, or figure label as printed, or null",
++      "printedPage":"the book's printed page number, or null"
+     }]
+   }],
+   "medications":[],
+@@ -106,6 +109,12 @@ SOURCE POINTER RULES
+ - Do not silently correct or modernize source content.
+ - When two source statements conflict within this file, preserve both and add a concise item to contradictions.
+ 
++BOX AND TABLE RULES
++
++- When a fact comes from a boxed feature, sidebar, table, or figure caption, set sourceKind to box (for boxes and sidebars), table, or figure, and copy its label exactly as printed into sourceLabel. For running text, set sourceKind to prose and sourceLabel to null.
++- Every row of a table and every bullet of a box must produce at least one fact. Boxes and tables are high-yield; never summarize a box or table into a single fact.
++- Set printedPage to the book's own page number when it is visible in the page text, such as in a running header or footer; otherwise null. It is not the PDF page number in the page markers.
++
+ TIER RULES
+ 
+ Every fact receives exactly one tier.
+@@ -129,5 +138,6 @@ Silently verify:
+ - every fact has one tier
+ - safety-critical and numerical facts have actual filename pointers
+ - each fact has a verbatim sourceQuote when the source text allows one
++- every table row and every box bullet produced at least one fact
+ - no outside facts were introduced
+ - the response is valid JSON matching the required shape`;
+diff --git a/KB_VERIFY_PROMPT.txt b/KB_VERIFY_PROMPT.txt
+--- a/KB_VERIFY_PROMPT.txt
++++ b/KB_VERIFY_PROMPT.txt
+@@ -14,7 +14,10 @@ JSON SHAPE:
+   "factType":"mechanism|symptom|assessment|test|medication|intervention|education|threshold|contraindication|other",
+   "safetyCritical":false,
+   "tier":1,
+-  "sourceQuote":"verbatim source phrase, 20 words maximum"
++  "sourceQuote":"verbatim source phrase, 20 words maximum",
++  "sourceKind":"box|table|figure|prose",
++  "sourceLabel":"box, table, or figure label as printed, or null",
++  "printedPage":"the book's printed page number, or null"
+ }]}
+ 
+ REPORT AS MISSED:
+@@ -25,6 +28,7 @@ REPORT AS MISSED:
+ - a nursing assessment or intervention not represented
+ - a teaching point or when-to-seek-care instruction not represented
+ - a qualifier that changes meaning and was dropped: population, exception, timing, route, or a comparison word such as increased, decreased, above, below
++- a table row or box bullet without its own fact: check every box and table label in the source chunk against the extracted list, where a fact shows its label in brackets, and report each missing row or bullet
+ 
+ DO NOT REPORT:
+ - content already represented in the extracted list, even if worded differently
+@@ -38,4 +42,5 @@ HARD RULES
+ - Do not add outside clinical knowledge, even when it is correct and relevant.
+ - Finding nothing is a valid and expected result. If nothing substantive was missed, return {"missed":[]}.
+ - Do NOT pad this list to appear thorough. An empty result is better than a fabricated one. You are not scored on how many items you return.
+-- Assign latteBucket, subtype, factType, safetyCritical, and tier using the same rules the original extraction used.`;
++- Assign latteBucket, subtype, factType, safetyCritical, and tier using the same rules the original extraction used.
++- Set sourceKind, sourceLabel, and printedPage by the same rules: a recovered table row or box bullet carries its label exactly as printed.`;

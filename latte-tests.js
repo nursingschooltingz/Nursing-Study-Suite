@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 3769;
+const EXPECTED_ASSERTIONS = 3818;
 
 let file;
 try {
@@ -2672,8 +2672,9 @@ section('v15.14 — clamps, backoff, storage');
   // schedule ~99,999 generation calls.
   t('targetCount has the ceiling its own markup already declares',
     S.includes('setTargetCount(Math.max(5,Math.min(200,parseInt(e.target.value)||50)))'));
+  // v18.4: an emptied field falls back to the shipped default constant (15,000), no longer a literal 30000.
   t('chunkChars has the ceiling its own markup already declares',
-    S.includes('setChunkChars(Math.max(6000,Math.min(120000,Number(e.target.value)||30000)))'));
+    S.includes('setChunkChars(Math.max(6000,Math.min(120000,Number(e.target.value)||KB_DEFAULT_CHUNK_CHARS)))'));
 }
 {
   const RD = new Function(spanFrom('function geminiRetryDelayMs', 'return Math.max(Number.isFinite(headerMs)?headerMs:0,Number.isFinite(infoMs)?infoMs:0,exp);\n}') + ';return geminiRetryDelayMs;')();
@@ -2894,6 +2895,9 @@ section('v15.14 — clamps, backoff, storage');
 
   section('v18.1 one exam tier and one priority order across the tabs');
   require('./tools/v18-1-alignment-tests')(S,t);
+
+  section('v18.4 Knowledge Base coverage: entry facts, box and table provenance, 15,000-character chunks');
+  await require('./tools/v18-4-kb-coverage-tests')(S,t);
 
   console.log('\n════════════════════════════');
   const total = pass + fail;

@@ -9,6 +9,55 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [18.4] — 2026-10-15
+
+An audit of a real Exam 1 Knowledge Base (a 197-page textbook PDF, 650 condition facts) against the instructor's exam review found three gaps, and the user asked for them fixed. Mannitol, which the review says will be tested, had a good entry under medications but appeared in no card, guide or question.
+
+### Fixed
+
+- **Medications, diagnostics and scoring tools reach every tool.** Every consumer read `kb.conditions[].facts[]` only. Entry facts, and the 57 of 83 entries with flat fields instead of facts (33 of 45 medications, 16 of 29 diagnostics, 8 of 9 scoring tools), were invisible after the Knowledge Base tab.
+  - **Normalizer.** `normalizeKbEntities` writes `facts[]` from an entry's flat fields (class, mechanism, indications, considerations, contraindications, side effects, monitoring, teaching, normal and critical ranges, purpose, interpretation, scoring range, components, and similar), one fact per list item. A derived fact has `derived: true`, Tier 1, `sourceQuote: null`, the entry's source pointer and `derivedFrom` naming its field. The flat fields are kept. It runs at the end of every build and on every import and restore, so a saved Knowledge Base is repaired without re-extraction. An entry that already has facts keeps them; they gain only a missing ID, sources or tier.
+  - **Fact IDs.** Entry facts get `fact-N` IDs after the conditions' facts. The brief proposed `<entry>-dN`, but Anki's chunker and coverage map, the NCLEX Generator's citation check and the fact inspector accept only `fact-N`.
+  - **One view for every consumer.** `kbFactView` adds one group per entry with facts after the conditions, shaped like a condition. The fact index and inspector, header fact count, Study view and validation, Knowledge Base browser, Anki (packet, snapshot, gate), NCLEX Generator (pool, packet, known IDs), Priority and the Case Studies topic list read it. The pinned packet builders (`kbForAnki`, `kbForNCLEX`, `ngBuildFactPool`, `kbForPriority`, `ankiSourceSnapshot`) are unchanged; only their call sites pass the view.
+  - **Validation.** A derived fact is not warned for its missing verbatim anchor. A warning says how many entries still have no facts, and a status chip on the Knowledge Base tab reads **N entities without facts**.
+
+### Added
+
+- **Box and table provenance (schema 1.2).** Optional fact fields `sourceKind` (box, table, figure or prose), `sourceLabel` (the label as printed) and `printedPage` (the book's page number). The build and Import JSON keep them; an unknown `sourceKind` is read as prose with a warning. A 1.1 Knowledge Base loads unchanged. New builds write `schemaVersion` 1.2.
+- **Prompt change (approved): `KB_EXTRACTION_PROMPT` and `KB_VERIFY_PROMPT` only.** Extraction asks for the three fields and for at least one fact per table row and box bullet, never one summary fact for a box. The omission audit checks every box and table label in the chunk and labels what it recovers. The audit's inventory now shows a fact's label (`- [Tests] [Table 8.1] …`). Exact diff: `docs/history/KB-v18.4-box-table-provenance.diff`.
+- **Study view** shows the label and printed page after the source line.
+- **Box and table facts first.** In the Anki packet and the NCLEX Generator's allocation, box and table facts come first within each group (`BOX_TABLE_WEIGHT = 2`, prose and figures 1); source order is kept otherwise. The selectors themselves are unchanged.
+
+### Changed
+
+- **Default chunk size 15,000 characters** (was 30,000). The audit had recovered missed facts in 13 of 14 chunks of the 197-page build. The audit stays on, overlap stays 1, two lanes stays off; the lanes help text says two lanes offset the extra calls. These settings were never saved, so every load starts from the defaults.
+
+### Not changed, found while checking
+
+- **Step 0 diagnostic.** Run with the app's own `pdfLayoutText` and pdf.js 3.11.174, aldosterone, mannitol, STOP-BANG, Epworth and zolpidem are in the extracted text, so their absence was a model-attention or schema problem. "Box 7.1", "Box 7.2", "Table 6-2", "Table 7.1", oliguria, "implement safety" and "risk for altered thermoregulation" are not in this PDF's text. The PDF holds Giddens Concepts 10–13 and Saunders chapters 8–10; all 43 of its box and table labels are in the text layer. Saunders chapters 8–10 map some glyphs (c, o, fi, fl) to private-use code points: 885 characters on 40 pages, most in chapter 9's tables.
+- **NCLEX Generator allocation** starts every batch from the first group with facts left. A default 50-question run reaches the first 20 of 145 groups on the Exam 1 Knowledge Base (and reached the first 20 of 62 conditions in v18.3). The condition filter reaches later topics; it now matches entry names too.
+- `formulas` (7 of 8 without facts in the Exam 1 KB) is not normalized; the brief named only the three collections above.
+
+### Verification
+
+- **49 new assertions (3,818 total)** in `tools/v18-4-kb-coverage-tests.js`:
+  - the normalizer (the Mannitol fixture becomes 6 derived facts in the mapped buckets; a mixed KB ends with 0 entries without facts; idempotence, fact-N IDs, unmapped-field reporting);
+  - the shipped build handler with an omission audit (derived facts with a null quote survive while an unlocatable recovery is discarded; provenance kept; an unknown kind coerced with a warning);
+  - import and restore (1.1 unchanged; a 1.2 `Table 6-2` fact round-trips);
+  - one assertion per consumer;
+  - box/table ordering in Anki and NCLEX allocation;
+  - the prompt contracts;
+  - the defaults (15,000 / audit on / overlap 1).
+  - Six mutations of the fix each fail the module.
+- **Updated assertions:** the chunk-size fallback pin, the Anki guard and packet call sites, the transport pin around the audit inventory, the Priority run environment, version literals 18.4.
+- **Prompt bytes.** Nine frozen hashes unchanged. `KB_EXTRACTION_PROMPT` and `KB_VERIFY_PROMPT` changed as approved and their baseline hashes were updated deliberately. `Prompts.md` regenerated.
+- **SRI.** The eight SRI-pinned scripts and both PDF worker copies were re-hashed and match.
+- **Exam1_KB.json re-import (no API call).** Entries without facts 57 → 0; total facts 702 → 932 (230 derived); mannitol in the Anki packet 0 → 8 mentions and the NCLEX pool 0 → 7.
+- **Browser.** On the synthetic real-App fixture, an imported KB with flat entries showed the entries in the browser and the Case Studies list, "0 entities without facts", and "Table 6-2 · printed p. 89" in the Study view.
+- **Not measured.** No live build with the new prompts; whether the model fills the provenance fields, and how many box rows the audit now recovers, are unmeasured.
+
+See the [release verification record](docs/reviews/v18.4-release.md).
+
 ## [18.3] — 2026-10-14
 
 The user asked for the NCLEX to Anki image option to make a PDF as well as Anki cards. Questions read from screenshots or page photos could only become an Anki file, so they could not be printed or worked on paper.

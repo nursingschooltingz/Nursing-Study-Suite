@@ -8,7 +8,7 @@ Turn your lecture PDFs and PowerPoints into a complete, source-cited study syste
 
 The whole suite is **one HTML file**. There is nothing to install, no account to create, and no website collecting your data. You open the file in your web browser, paste in a free Google Gemini API key, upload your study materials, and go.
 
-**Published release: v18.3.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v18.3/Nursing-Study-Suite.v18.3.html) or open the [repository HTML](Nursing-Study-Suite%20v18.3.html).
+**Published release: v18.4.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v18.4/Nursing-Study-Suite.v18.4.html) or open the [repository HTML](Nursing-Study-Suite%20v18.4.html).
 
 The left rail lists the seven tools in the order you use them, grouped by stage. **Source:** *Knowledge Base* builds or imports the cited facts everything else reads from. **Plan:** *Priority* ranks those facts by clinical urgency into its own Tier 1/2/3. **Practice:** *Anki* for recall, *NCLEX Extract* for questions out of a review book you already own, *NCLEX Generate* for new ones written from your facts, *Case Studies* for unfolding cases, and *NCLEX to Anki* to turn NCLEX questions into Anki cards.
 
@@ -112,7 +112,13 @@ The **focus box** helps here too — tell it things like *"Only Ch. 61–63 are 
 1. Optionally fill in **Course** and **Exam/unit** — these become organizational tags on your Anki cards later.
 2. Add your PDF/PPTX file(s) — or photos of flashcards (see below).
 3. Click **Build Knowledge Base**. Watch the log: it runs an extraction pass and then a second **audit pass** that re-reads each chunk hunting for facts the first pass missed. Recovered facts are only kept if their quoted text is actually found in your source — the suite verifies this in code, not on the AI's word.
-4. Browse the result: conditions on the left, facts (with tiers, buckets, and source pointers) on the right. **⬇ Study View** exports the whole thing as a readable markdown study guide.
+4. Browse the result: conditions on the left, followed by medication, diagnostic and scoring-tool entries (each labelled with its kind), and facts (with tiers, buckets, and source pointers) on the right. **⬇ Study View** exports the whole thing as a readable markdown study guide.
+
+**Medications, tests and scoring tools (v18.4).** The model often wrote these as a short profile (class, mechanism, indications, normal range, and so on) instead of as facts, and until v18.4 no other tool read them at all, so a drug like mannitol could have a good entry and still never appear on a card or in a question. The suite now turns each profile field into a fact (marked *derived*, Tier 1, citing the entry's source pages) at every build, import and reload, so an older saved or exported Knowledge Base is repaired without rebuilding. Anki, Priority, NCLEX Generate, Case Studies and the Fact Inspector all read them. On the Knowledge Base tab a chip in the header shows **N entities without facts**; it should read 0. Derived facts have no verbatim quote, by design, so they do not count as quote warnings.
+
+**Boxes and tables (v18.4).** Textbook boxes and tables are where exam questions often come from. Each fact can now record whether it came from a box, table or figure, its label as printed (for example "Box 8.1"), and the book's printed page. The Study View shows these next to the source line, the audit pass checks every box and table in a chunk for missed rows, and Anki and NCLEX Generate take box and table facts first. Only Knowledge Bases built with v18.4 have these labels; older ones still work and simply show none.
+
+**Chunk size (v18.4).** The default is now 15,000 characters (about 7–8 dense textbook pages), half the old 30,000. On a 197-page book the audit pass found facts the first pass had missed in 13 of 14 chunks, mostly in boxes and tables, so smaller chunks give the model less to hold at once. A build makes about twice as many calls; **Two parallel lanes** offsets that if your key's rate limit allows. The setting resets to the default each time you open the app.
 
 PPTX files are limited to 64 MiB and 2,000 slides, with separate limits on expanded XML and extracted text. If a deck exceeds a limit, split it or convert it to PDF; the suite rejects the deck instead of silently shortening it. Cancel stops extraction before it can publish a partial result.
 
@@ -146,7 +152,7 @@ Removing a photo also removes its transcript from build inputs. If repeat transc
 
 The workspace header shows the current browser-save status, and the Knowledge Base results area holds the recovery controls. If saved copies disagree or a saved record cannot be restored safely, it preserves them and offers **Inspect**, **Export copy**, and **Use this copy**. You can also import or build a replacement, then choose **Use current workspace**. Choosing either path first archives the preserved copies; if that archive cannot be saved, they are not overwritten and saving remains paused. Saving also stops on a detected conflict with another tab. Export your in-memory KB before closing, then reload to reconcile. Before opening an older suite version, export the current KB and any recovery copies: older versions cannot interpret the new fallback/save-order metadata.
 
-Import preserves full fact text, quotes and source strings. Invalid tier/category values or exceeded collection limits reject the import with an explanation instead of guessing values or keeping a shortened KB. Invalid rows that can be skipped are counted in the import notice. Restoring an app-saved KB preserves its IDs and content; invalid saved records stay available for recovery instead of being silently shortened or repaired.
+Import preserves full fact text, quotes and source strings. Invalid tier/category values or exceeded collection limits reject the import with an explanation instead of guessing values or keeping a shortened KB. Invalid rows that can be skipped are counted in the import notice. Restoring an app-saved KB preserves its IDs and content; invalid saved records stay available for recovery instead of being silently shortened or repaired. The one addition, since v18.4, is that import and restore write facts for medication, diagnostic and scoring-tool entries that have none; an import numbers them after the conditions' facts, and a restore keeps every saved ID.
 
 **Rebuilding replaces.** Building or importing over an existing KB *replaces* it — the suite will show you exactly what you're about to lose ("3 conditions, 147 facts") and ask you to confirm. When in doubt: export first.
 
@@ -266,7 +272,7 @@ This writes **brand-new** NCLEX-style questions from your Knowledge Base — and
 **How to use it:**
 
 1. Set **Total Questions** and **Questions per Batch** (smaller batches are more reliable; the default is sensible).
-2. Optionally filter to one condition (*blank uses all conditions*) and add context (*"This exam is 50 questions, heavy on burns"*).
+2. Optionally filter to one condition (*blank uses all conditions*; since v18.4 the filter also matches medication, diagnostic and scoring-tool entries, such as *mannitol*) and add context (*"This exam is 50 questions, heavy on burns"*). Allocation walks the Knowledge Base in source order, conditions first and then those entries, and each batch starts again from the first group with facts left. A 50-question run on a large Knowledge Base therefore reaches only the first groups (on one 197-page book, the first 20 of 145), so use the filter to reach a later topic.
 3. Generate, then flip between the **worksheet** view (questions only — print it, take it cold) and the answer-key view (answers + cited rationales).
 4. Check the **coverage panel**: it reports which facts were actually used in the questions you can see and lists any that went uncovered — run another batch to sweep those up.
 5. **📋 Copy**, **📝 .txt**, or **🖨 PDF** to take it with you.

@@ -1,6 +1,6 @@
 # Nursing Study Suite — Prompt Library
 
-The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, the item-quality auditor, and the NCLEX to Anki image reader, **extracted verbatim from the shipped v18.3 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
+The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, the item-quality auditor, and the NCLEX to Anki image reader, **extracted verbatim from the shipped v18.4 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
 
 > **Coverage.** All 15 named prompt constants are represented from live HTML bytes. Eleven are byte-frozen; `CARD_TRANSCRIBE_PROMPT` is deliberately tunable but requires two transcription runs per card after an edit. `I2A_TRANSCRIBE_PROMPT` and `I2A_ANSWER_PROMPT` (NCLEX to Anki, v17.9) are copied from img2anki.py and are not frozen. `PRIORITY_ORDER_RULES` (v18.1) is not frozen; a harness assertion keeps it in step with the Priority cascade. The generated appendix is maintained by `node tools/render-prompts.js --write` and checked by `node verify-repo.js`.
 
@@ -8,7 +8,7 @@ How to read them: text inside `${...}` is filled in at runtime by the app (your 
 
 ---
 
-## 1 · Knowledge Base Builder (`KB_EXTRACTION_PROMPT` 6,172 chars · `KB_VERIFY_PROMPT` 2,454 chars)
+## 1 · Knowledge Base Builder (`KB_EXTRACTION_PROMPT` 7,061 chars · `KB_VERIFY_PROMPT` 2,971 chars)
 
 This is the first tool in the suite and the one every other tool feeds from — the study guide, Anki cards, NCLEX questions and case studies are all generated from the Knowledge Base this pass produces, not from the source PDF directly.
 
@@ -20,6 +20,8 @@ It runs as **two passes over each chunk**, with different risk profiles on purpo
 | 2 — audit | `KB_VERIFY_PROMPT` | find what pass 1 *omitted* | **discards** a fact whose `sourceQuote` fails |
 
 The asymmetry is deliberate and long-standing: pass 1 losing a real fact is worse than carrying one with a weak quote, while pass 2 adding a fabricated fact is worse than missing a marginal one. Making both strict reintroduces omissions.
+
+**v18.4 (approved prompt change).** Both prompts ask for schema 1.2 provenance on each fact: `sourceKind` (box, table, figure or prose), `sourceLabel` (the label as printed, such as a box or table number) and `printedPage` (the book's own page number). Pass 1 must produce at least one fact per table row and box bullet; pass 2 checks every box and table label in the chunk against the extracted list. The exact diff is `docs/history/KB-v18.4-box-table-provenance.diff`. After the merge, `normalizeKbEntities` (code, not a prompt) writes facts for medication, diagnostic and scoring-tool entries that came back as flat fields.
 
 ### Runtime assembly — pass 1
 
@@ -44,6 +46,8 @@ contents: [{ parts: [
 ]}]
 ````
 
+Each `inventory` line is `- [LATTE bucket] fact text`; since v18.4 a fact with a box or table label shows it after the bucket (`- [Tests] [Table 8.1] fact text`), so the audit can match each printed box and table against what was extracted.
+
 `focusBlock` is the same Outcomes / Points / Additional Context rendering the other tools use. Neither KB prompt contains any `${...}` interpolation — both are fixed text, and everything variable arrives in the parts above.
 
 ### `KB_EXTRACTION_PROMPT`
@@ -67,7 +71,10 @@ JSON SHAPE:
       "safetyCritical":false,
       "tier":1,
       "sourceQuote":"verbatim source phrase, 20 words maximum",
-      "sourcePointer":{"filename":"string","location":"page N or slide N"}
+      "sourcePointer":{"filename":"string","location":"page N or slide N"},
+      "sourceKind":"box|table|figure|prose",
+      "sourceLabel":"box, table, or figure label as printed, or null",
+      "printedPage":"the book's printed page number, or null"
     }]
   }],
   "medications":[],
@@ -157,6 +164,12 @@ SOURCE POINTER RULES
 - Do not silently correct or modernize source content.
 - When two source statements conflict within this file, preserve both and add a concise item to contradictions.
 
+BOX AND TABLE RULES
+
+- When a fact comes from a boxed feature, sidebar, table, or figure caption, set sourceKind to box (for boxes and sidebars), table, or figure, and copy its label exactly as printed into sourceLabel. For running text, set sourceKind to prose and sourceLabel to null.
+- Every row of a table and every bullet of a box must produce at least one fact. Boxes and tables are high-yield; never summarize a box or table into a single fact.
+- Set printedPage to the book's own page number when it is visible in the page text, such as in a running header or footer; otherwise null. It is not the PDF page number in the page markers.
+
 TIER RULES
 
 Every fact receives exactly one tier.
@@ -180,6 +193,7 @@ Silently verify:
 - every fact has one tier
 - safety-critical and numerical facts have actual filename pointers
 - each fact has a verbatim sourceQuote when the source text allows one
+- every table row and every box bullet produced at least one fact
 - no outside facts were introduced
 - the response is valid JSON matching the required shape
 ````
@@ -203,7 +217,10 @@ JSON SHAPE:
   "factType":"mechanism|symptom|assessment|test|medication|intervention|education|threshold|contraindication|other",
   "safetyCritical":false,
   "tier":1,
-  "sourceQuote":"verbatim source phrase, 20 words maximum"
+  "sourceQuote":"verbatim source phrase, 20 words maximum",
+  "sourceKind":"box|table|figure|prose",
+  "sourceLabel":"box, table, or figure label as printed, or null",
+  "printedPage":"the book's printed page number, or null"
 }]}
 
 REPORT AS MISSED:
@@ -214,6 +231,7 @@ REPORT AS MISSED:
 - a nursing assessment or intervention not represented
 - a teaching point or when-to-seek-care instruction not represented
 - a qualifier that changes meaning and was dropped: population, exception, timing, route, or a comparison word such as increased, decreased, above, below
+- a table row or box bullet without its own fact: check every box and table label in the source chunk against the extracted list, where a fact shows its label in brackets, and report each missing row or bullet
 
 DO NOT REPORT:
 - content already represented in the extracted list, even if worded differently
@@ -228,6 +246,7 @@ HARD RULES
 - Finding nothing is a valid and expected result. If nothing substantive was missed, return {"missed":[]}.
 - Do NOT pad this list to appear thorough. An empty result is better than a fabricated one. You are not scored on how many items you return.
 - Assign latteBucket, subtype, factType, safetyCritical, and tier using the same rules the original extraction used.
+- Set sourceKind, sourceLabel, and printedPage by the same rules: a recovered table row or box bullet carries its label exactly as printed.
 ````
 
 ---

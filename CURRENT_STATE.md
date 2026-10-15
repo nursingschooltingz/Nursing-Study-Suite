@@ -1,8 +1,35 @@
 # Current maintainer state
 
+## v18.4 Knowledge Base coverage (2026-10-15)
+
+The canonical application is `Nursing-Study-Suite v18.4.html`. The user supplied a brief from an audit of a real Exam 1 KB (197-page PDF), with the KB and PDF. Prompt changes were approved by the brief.
+- **Entries reach every tool.**
+  - **`normalizeKbEntities`.** Writes facts for medication, diagnostic and scoring-tool entries that have only flat fields. It runs at build, import and restore. Derived facts are Tier 1 with no quote, and their IDs are `fact-N`.
+  - **`kbFactView`.** Every consumer (fact index, KB tab, Anki, NCLEX Generator, Priority, Case Studies) reads it.
+  - **`Exam1_KB.json`.** 57 → 0 entries without facts; 702 → 932 facts.
+- **Schema 1.2 box/table provenance.**
+  - **Fields.** `sourceKind`, `sourceLabel` and `printedPage`. The two KB prompts ask for them and for one fact per table row and box bullet; the audit checks every label.
+  - **Use.** The Study view shows them. Anki and the NCLEX pool order box and table facts first (`BOX_TABLE_WEIGHT`).
+  - **Diff.** `docs/history/KB-v18.4-box-table-provenance.diff`.
+- **Defaults.** Chunk 15,000 characters (was 30,000); audit on, overlap 1, one lane. These settings are not saved between loads.
+- **Step 0 findings.**
+  - **Model attention, not text layer.** Aldosterone, mannitol, STOP-BANG, Epworth and zolpidem are in the PDF's extracted text, so their absence downstream was not a text-layer problem.
+  - **Instructor's labels absent.** The labels the instructor cited (Box 7.1, Table 6-2 and others) are not in this PDF at all. Its 43 box and table labels are numbered 8.x–13.x and are all in the text layer.
+  - **Private-use glyphs.** Saunders chapters 8–10 map c, o, fi and fl to private-use code points on 40 pages (885 characters, mostly in chapter 9's tables).
+- **Open.**
+  - The NCLEX Generator allocation starts each batch from the first group, so a default 50-question run reaches the first 20 of 145 groups. v18.3 had the same limit over conditions. The condition filter is the workaround.
+  - `formulas` is not normalized (7 of 8 facts-less in the Exam 1 KB).
+  - The private-use glyph mapping is unfixed.
+  - Aldosterone needs a rebuild to enter the KB.
+- **Not measured.**
+  - No live build with the new prompts. Whether the model fills the provenance fields, and how many box rows the audit recovers, is unknown.
+  - No live run of any tool on derived facts.
+
+Verification: see the [release verification record](docs/reviews/v18.4-release.md).
+
 ## v18.3 NCLEX to Anki images print a PDF (2026-10-14)
 
-The canonical application is `Nursing-Study-Suite v18.3.html`. The user asked for the image option to make a PDF as well as Anki cards.
+The application was `Nursing-Study-Suite v18.3.html`. The user asked for the image option to make a PDF as well as Anki cards.
 - **What it does.** `i2aWorksheetMd` builds a worksheet from the questions `i2aConvert` assembled (questions, then the answer key after a page break). The run result carries it as `worksheet`, and the **🖨 PDF** button passes it to `exportAsPdf`.
 - **Same questions as the cards, plus unanswered ones.** Duplicates (by GUID) and empty stems are dropped as for cards. A question with no answer is printed and its key says so.
 - **Not measured.** No real image run has printed a PDF yet.

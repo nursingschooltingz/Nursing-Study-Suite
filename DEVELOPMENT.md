@@ -4,7 +4,7 @@ This is the task map for maintainers and coding agents. `AGENTS.md` remains the 
 
 ## Repository shape
 
-- `Nursing-Study-Suite v18.3.html` is the complete application.
+- `Nursing-Study-Suite v18.4.html` is the complete application.
 - `latte-tests.js` is the deterministic regression harness and extracts live functions by anchor.
 - `verify-repo.js` is the only ordinary repository verification entry point.
 - `prompt-baseline.json` stores the 11 frozen prompt hashes.
@@ -37,6 +37,8 @@ This is the task map for maintainers and coding agents. `AGENTS.md` remains the 
 - `Prompts.md` also documents dynamic prompt builders; the generated appendix guarantees that all 12 named constants appear verbatim.
 - The focused v16.1 Extra change is recorded in `docs/history/ANKI-v16.1-extra-default.diff`; the preceding source/retrieval change is in `docs/history/ANKI-source-retrieval-update.diff`. These approved diffs do not authorize further prompt changes. Empty Extra must retain the same two pipe separators and third-field Tags.
 
+The approved v18.4 change to `KB_EXTRACTION_PROMPT` and `KB_VERIFY_PROMPT` (schema 1.2 box and table provenance, one fact per table row and box bullet) is recorded in `docs/history/KB-v18.4-box-table-provenance.diff`; only those two baseline hashes changed.
+
 The approved v16.5 Anki master and runtime adapter changes are recorded in `docs/history/ANKI-v16.5-target-allocation.diff` and `docs/history/ANKI-v16.5-adapter.diff`. Internal target planning and reconciliation keep the same two-block response contract. Prompt-contract assertions protect instructions and formatting, not model adherence.
 
 The approved v16.6 changes leave all eleven frozen constants unchanged. Exact runtime changes are recorded in `docs/history/ANKI-v16.6-adapter.diff`, `docs/history/ANKI-v16.6-serializer.diff`, and `docs/history/ANKI-v16.6-audit-builder.diff`. The source packet supplies canonical Condition tokens; reference normalization is lossless and recorded; mixed-context and short-citation signals remain advisory.
@@ -50,7 +52,8 @@ The 2026-09-18 integrity changes ship in v16.7. They leave prompt bytes and CDN 
 | Gemini transport and profiles | `SAFETY_SETTINGS`, `callGemini`, profile registry |
 | PDF/PPTX intake | `pdfLayoutText`, `kbSourceUnits`, scanned-file detection |
 | Card intake | `CARD_TRANSCRIBE_PROMPT`, `cardFileId`, `cardMergeFaces`, resize constants |
-| Knowledge Base | `KB_EXTRACTION_PROMPT`, `KB_VERIFY_PROMPT`, `kbQuoteInSource`, `mergeLatteParts` |
+| Knowledge Base | `KB_EXTRACTION_PROMPT`, `KB_VERIFY_PROMPT`, `kbQuoteInSource`, `mergeLatteParts`, `normalizeKbEntities`, `kbCoerceProvenance` |
+| Every KB consumer | `kbFactView` (conditions plus medication, diagnostic and scoring-tool groups), `buildFactIndex`, `BOX_TABLE_WEIGHT` |
 | Anki | `ANKI_MASTER_PROMPT`, Anki validation/export functions |
 | NCLEX extraction | `NCLEX_INLINE_PROMPT`, `NCLEX_SPLIT_PROMPT`, `nclexSplitByQNum`, `nclexRepairOptions` |
 | NCLEX generation | `NCLEX_GEN_PROMPT`, `validateNCLEXWorksheet`, worksheet repair helpers |
