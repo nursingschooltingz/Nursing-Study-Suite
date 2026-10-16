@@ -56,5 +56,5 @@ module.exports=function run(S,t){
 
   // ── the generator passes each batch its start ──
   t('v18.5: the NCLEX Generator gives every batch its evenly spaced start',
-    S.split('start:ngBatchStart(pool,b,numBatches)').length===2&&S.includes('alloc=ngAllocateBatch(pool,usedFactIds,{want:Math.max(1,Math.round(size*factsPerQ)),perCondition:4,neighborCap:2,start:ngBatchStart(pool,b,numBatches)});'));
+    S.split('start:ngBatchStart(pool,b,numBatches)').length===2&&S.includes('alloc=ngAllocateBatch(pool,usedFactIds,{want:Math.max(1,Math.round(size*factsPerQ)),perCondition:4,neighborCap:2,start:ngBatchStart(pool,b,numBatches),first:focus.plan[b-1]});'));
 };

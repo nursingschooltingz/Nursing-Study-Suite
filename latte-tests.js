@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 3830;
+const EXPECTED_ASSERTIONS = 3854;
 
 let file;
 try {
@@ -2901,6 +2901,9 @@ section('v15.14 — clamps, backoff, storage');
 
   section('v18.5 NCLEX Generator batches spread through the whole Knowledge Base');
   require('./tools/v18-5-allocation-tests')(S,t);
+
+  section('v18.6 NCLEX Generator Points and Outcomes pick facts that go first in their batches');
+  require('./tools/v18-6-focus-allocation-tests')(S,t);
 
   console.log('\n════════════════════════════');
   const total = pass + fail;

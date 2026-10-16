@@ -9,6 +9,25 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **The NCLEX Generator's Points and Outcomes choose facts, not just wording.**
+  - **What was wrong.** The boxes reached the model only as prompt text. The allocator never read them, and a batch can cite only the facts it is given, so a Point whose facts no batch received could not get a question. A default 50-question run on the Exam 1 KB gave facts to 12 of 20 realistic Points.
+  - **Change.** `ngFocusPlan` gives each Point and Outcome line up to facts-per-question facts, placed first in one batch.
+    - **Matching.** A line picks facts from a group whose name or alias it contains; a Point also picks facts holding more than half of its words, one of them rare (`ngFocusMatch`).
+    - **Limits.** Picks take at most half of a run's target facts. `ngAllocateBatch` takes them through a new `first` option, counted toward the group limit.
+    - **Log.** The run log names the Points that matched nothing.
+  - **Unchanged.** The v18.5 walk fills the rest of every batch. Additional Context, `buildFocusBlock` and every prompt are unchanged.
+- **Measured on the Exam 1 KB (dry run, no API call), 20 realistic Points:** 12 → 20 Points with an allocated fact (50 questions), 5 → 19 (20 questions), 17 → 20 (100 questions). All 48 picks were on-topic. Of 17 generic Points, 3 got weak or wrong facts.
+
+### Verification
+
+- **24 new assertions (3,854 total)** in `tools/v18-6-focus-allocation-tests.js`. Thirteen mutations of the rule, the allocator and the call site each fail the module.
+- **Updated assertions.** The call-site pins in `tools/v18-0-low-cases-tests.js` and `tools/v18-5-allocation-tests.js`.
+- **Not measured.** No live NCLEX run.
+
 ## [18.5] — 2026-10-15
 
 The v18.4 checks found that the NCLEX Generator only ever wrote questions from the start of the Knowledge Base, and the user asked for it fixed.

@@ -21,7 +21,7 @@ module.exports=async function run(S,t){
       W.ngSplitParts(lying).dist==='Tier [1:1] | Types [SATA:1]'&&errors(issues).some(m=>/DISTRIBUTION claims 1 SATA/.test(m))&&!issues.some(i=>/not in the required/.test(i.msg))&&W.ngSplitParts(plain).dist==='Tier [1:1] | Types [MCQ:1]'&&!errors(W.validateNCLEXWorksheet(plain,1,null)).length);
   }
   // v18.0 (review L33): the short last batch asks for target facts in proportion to its size.
-  t('a short batch is allocated target facts for its own size, not a full batch',S.includes('alloc=ngAllocateBatch(pool,usedFactIds,{want:Math.max(1,Math.round(size*factsPerQ)),perCondition:4,neighborCap:2,start:ngBatchStart(pool,b,numBatches)});')&&!S.includes('{want:wantPerBatch,'));
+  t('a short batch is allocated target facts for its own size, not a full batch',S.includes('alloc=ngAllocateBatch(pool,usedFactIds,{want:Math.max(1,Math.round(size*factsPerQ)),perCondition:4,neighborCap:2,start:ngBatchStart(pool,b,numBatches),first:focus.plan[b-1]});')&&!S.includes('{want:wantPerBatch,'));
   // v18.0 (review L34): owned_log drops lines once the signal is aborted; "Cancelled." uses the raw log while the run owns its slot.
   t('both generators log "Cancelled." with the raw log while the cancelled run still owns its slot',S.split("if(e.name==='AbortError'){if(generatorSlot.current.owns(operation))log('Cancelled.','warn');}else owned_log('Error: ").length===3&&!S.includes("owned_log('Cancelled.'"));
   // v18.0 (review L35): a step text containing an arrow keeps a valid digit answer valid.

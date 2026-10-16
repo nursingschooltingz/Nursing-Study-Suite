@@ -1,5 +1,35 @@
 # Current maintainer state
 
+## v18.6 (unreleased) NCLEX Generator Points and Outcomes choose facts (2026-10-15)
+
+Not released: the application file is still `Nursing-Study-Suite v18.5.html`. The user asked whether the Outcomes, Points and Additional Context boxes are respected. They reached the model only as prompt text. The allocator never read them, and a batch can cite only the facts it is given, so a Point whose facts no batch received could not get a question. The user approved the matching rule after seeing its false-match risk.
+- **Change.** `ngFocusPlan` gives each Point and Outcome line up to facts-per-question facts, placed first in batch (k mod batches)+1.
+  - **Matching.** `ngFocusMatch` matches by group name or alias. Points also match by more than half of their words, one of them rare.
+  - **Limits.** Picks take at most half of a run's target facts. `ngAllocateBatch` takes them through `first` and counts them toward the group limit.
+  - **Log.** The run log says how many lines matched and names the Points that matched nothing.
+  - **Unchanged.** Prompts, including the `buildFocusBlock` wording.
+- **Exam 1 KB, dry run, 20 realistic Points** (hand-judged: a Point counts when an allocated target fact could ground a question on it):
+
+| Run | v18.5 | With picks | Groups reached |
+|---|---|---|---|
+| 20 questions | 5/20 | 19/20 | 18 → 28 |
+| 25 questions | 9/20 | 20/20 | 23 → 33 |
+| 50 questions (default) | 12/20 | 20/20 | 48 → 56 |
+| 100 questions | 17/20 | 20/20 | 96 → 96 |
+
+  - **Picks.** 48 of 48 picked facts were on-topic (default run). Every pick is allocated somewhere in the run.
+  - **Groups counted by index.** The table counts groups by index; v18.5's 45 counted names, and same-named entries such as the three Calcium Gluconate groups count once by name.
+- **False-match probe, 17 generic or off-KB Points.**
+  - **No match, as intended (10).** For example *Delegation to UAP*, *Therapeutic communication*, *Discharge teaching*.
+  - **On-topic (4).** *Seizure precautions*, *Older adult considerations*, *Normal vital signs*, *Pain management*.
+  - **Weak or wrong (3).** *Fall risk* picked an IV phosphorus fact ("falls below"); *Safety* picked brain-injury prevention; *Blood transfusion reactions* picked transfusion facts not about reactions.
+  - **Cost of a false match.** One to three real KB facts take walk slots. They are still cited normally, but the log counts the Point as matched.
+- **Not measured.** No live run. Whether the model writes a question on a Point's picked facts is unmeasured: a batch has about 30 target facts for 10 questions.
+- **Open.**
+  - **Two topics in one line can miss.** *Cushing's triad / increased ICP* matched nothing; the log names it.
+  - **Optional, not approved.** Label picked targets with their Point in the batch's fact list (a prompt wording change).
+  - **Pre-existing context lookup.** `ngAllocateBatch` finds context facts by condition name, so a target from the second of two same-named entries gets context from the first.
+
 ## v18.5 NCLEX Generator batches spread through the KB (2026-10-15)
 
 The canonical application is `Nursing-Study-Suite v18.5.html`. The user asked for the allocation limit found in v18.4 to be fixed.

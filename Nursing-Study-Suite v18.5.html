@@ -10454,7 +10454,8 @@ function ngBuildFactPool(kb,{tiers=[1,2,3],conditionQuery=''}={}){
   for(const c of kb.conditions||[]){
     if(q&&!String(c.name||'').toLowerCase().includes(q)&&!(c.aliases||[]).some(a=>String(a).toLowerCase().includes(q)))continue;
     const facts=(c.facts||[]).filter(f=>tiers.includes(Number(f.tier)));
-    if(facts.length)groups.push({condition:c.name||'—',facts});
+    // v18.6: aliases ride along so a student's Points and Outcomes can name a group by them (ngFocusMatch).
+    if(facts.length)groups.push({condition:c.name||'—',aliases:Array.isArray(c.aliases)?c.aliases:[],facts});
   }
   return groups;
 }
@@ -10466,14 +10467,28 @@ function ngPoolSize(groups){return groups.reduce((n,g)=>n+g.facts.length,0);}
 // a default 50-question run on a 145-group Exam 1 KB reached the first 20 groups and none of its medication, diagnostic
 // or scoring-tool entries. A batch now walks forward from group `start`, wrapping at the end, and the generator spreads
 // the batches' starts evenly through the pool (ngBatchStart). A batch's shape is unchanged; start 0 is the old order.
-function ngAllocateBatch(groups,usedIds,{want,perCondition=4,neighborCap=2,start=0}={}){
+// v18.6: `first`, the fact IDs ngFocusPlan gave this batch for the student's Points and Outcomes. They are taken before
+// the walk and count toward their group's perCondition in its first round, so a batch keeps the v18.5 shape. A first
+// round in which every group still holding facts was already full gets the second round the walk would have had.
+function ngAllocateBatch(groups,usedIds,{want,perCondition=4,neighborCap=2,start=0,first=[]}={}){
   const targets=[],taken=new Set(),n=groups.length,from=n?((Math.floor(Number(start))||0)%n+n)%n:0,order=groups.map((_,i)=>groups[(from+i)%n]);
+  const credit=new Map(),firstIds=new Set(Array.isArray(first)?first:[]);
+  if(firstIds.size){
+    const at=new Map();
+    for(const g of groups)for(const f of g.facts)if(firstIds.has(f.id)&&!at.has(f.id))at.set(f.id,g);
+    for(const id of firstIds){
+      if(targets.length>=want)break;
+      const g=at.get(id);
+      if(!g||usedIds.has(id)||taken.has(id))continue;
+      taken.add(id);targets.push({...g.facts.find(f=>f.id===id),condition:g.condition});credit.set(g,(credit.get(g)||0)+1);
+    }
+  }
   let progressed=true;
-  while(targets.length<want&&progressed){
+  for(let round=0;targets.length<want&&(progressed||round===1);round++){
     progressed=false;
     for(const g of order){
       if(targets.length>=want)break;
-      let n=0;
+      let n=round?0:credit.get(g)||0;
       for(const f of g.facts){
         if(n>=perCondition||targets.length>=want)break;
         if(usedIds.has(f.id)||taken.has(f.id))continue;
@@ -10506,6 +10521,79 @@ function ngBatchStart(groups,b,total){
   const at=Math.floor((Math.max(1,Math.floor(b))-1)%total*size/total);
   for(let i=0,seen=0;i<groups.length;i++){seen+=groups[i].facts.length;if(at<seen)return i;}
   return 0;
+}
+// v18.6: Outcomes and Points reached the model only as prompt text (buildFocusBlock). The allocator never read them, and
+// a batch can cite only the facts it is given, so a Point whose facts no batch received could not get a question: a
+// default 50-question run on the Exam 1 KB gave facts to 12 of 20 realistic Points. Each Point and Outcome now picks a
+// few facts that go first in one batch (ngFocusPlan); the rest of every batch is the v18.5 walk. Matching is plain text,
+// with no model call: by group name or alias, and for Points also by words. Additional Context reaches the prompt only.
+const NG_FOCUS_STOP=new Set('a an and or vs versus the of in on at to for from by with without nurse nursing client patient care'.split(' '));
+// Lower-case words with a possessive 's and a plural s removed; each keeps its typed form for acronym matching.
+function ngFocusWords(s){
+  return String(s||'').replace(/['’]s\b/gi,'').split(/[^A-Za-z0-9]+/).filter(Boolean).map(raw=>{const w=raw.toLowerCase();return {raw,w:w.length>3&&/s$/.test(w)&&!/(?:ss|us|is)$/.test(w)?w.slice(0,-1):w};});
+}
+// One item per line or ';'-separated part, with any bullet or list number removed.
+function ngFocusItems(text){
+  return String(text||'').split(/\r?\n|;/).map(s=>s.replace(/^\s*(?:[-–—•*·>]+|\(?\d{1,3}[.)](?=\s))/,'').trim()).filter(s=>(s.match(/[A-Za-z]/g)||[]).length>=2);
+}
+// Word sets, word counts and group labels for one pool, built once per run.
+function ngFocusIndex(groups){
+  const facts=[],df=new Map();
+  groups.forEach((g,gi)=>(g.facts||[]).forEach(f=>{const words=new Set(ngFocusWords(f.text).map(t=>t.w));facts.push({f,gi,words});for(const w of words)df.set(w,(df.get(w)||0)+1);}));
+  const labels=groups.map(g=>[g.condition,...(Array.isArray(g.aliases)?g.aliases:[])].map(l=>String(l||'').trim()).filter(l=>(l.match(/[A-Za-z]/g)||[]).length>=2)
+    .map(l=>/^[A-Z][A-Z0-9]{1,5}$/.test(l)?{acronym:l,words:[l.toLowerCase()]}:{acronym:'',words:ngFocusWords(l).map(t=>t.w)}));
+  return {facts,df,labels,rareMax:Math.max(5,Math.ceil(facts.length/50))};
+}
+// The facts one item picks. An item names a group when the group's name or an alias appears in it as whole words (an
+// all-capitals alias such as MH, ALL or GCS only in capitals); a name inside a longer name the item also contains is
+// ignored, so "malignant hyperthermia" names Malignant Hyperthermia and not Hyperthermia. With `words` (Points), a fact
+// outside the named groups also matches when it has more than half of the item's words and one of them is rare in the
+// pool (in at most 2% of its facts, or 5). Only the matches with the most of the item's words are kept, named-group facts
+// first, then pool order. Those two rules keep one rare word from matching alone: "Seizure precautions" picks seizure
+// precautions, not neutropenic ones, and "Discharge teaching" picks nothing rather than ear discharge.
+function ngFocusMatch(ix,item,{words=true}={}){
+  const toks=ngFocusWords(item),spans=[];
+  ix.labels.forEach((labels,gi)=>{for(const L of labels){
+    const n=L.words.length;
+    for(let i=0;n&&i+n<=toks.length;i++)if(L.acronym?toks[i].raw===L.acronym:L.words.every((w,k)=>toks[i+k].w===w))spans.push({gi,s:i,e:i+n});
+  }});
+  const named=new Set(spans.filter(m=>!spans.some(o=>o.s<=m.s&&o.e>=m.e&&o.e-o.s>m.e-m.s)).map(m=>m.gi));
+  const content=[...new Set(toks.map(t=>t.w))].filter(w=>w.length>=3&&!NG_FOCUS_STOP.has(w)),found=[];
+  ix.facts.forEach((x,order)=>{
+    const hits=content.filter(w=>x.words.has(w)),inNamed=named.has(x.gi);
+    if(inNamed||words&&hits.length*2>content.length&&hits.some(w=>ix.df.get(w)<=ix.rareMax))found.push({x,order,hits:hits.length,inNamed});
+  });
+  found.sort((a,b)=>b.hits-a.hits||b.inNamed-a.inNamed||a.order-b.order);
+  return {named:[...named],facts:found.filter(m=>m.hits===found[0].hits).map(m=>m.x)};
+}
+// v18.6: the fact IDs each batch takes first. Item k (Points, then Outcomes, which match by name only) goes to batch
+// (k mod batches)+1 with up to perItem facts no earlier item took. All items together take at most `cap` facts (the
+// generator passes half the run's target facts); the per-item quota shrinks to fit, to no less than 1, so the v18.5
+// walk keeps at least half of a run.
+function ngFocusPlan(groups,{points='',outcomes='',batches=1,perItem=3,cap=Infinity}={}){
+  const items=[...ngFocusItems(points).map(text=>({kind:'point',text})),...ngFocusItems(outcomes).map(text=>({kind:'outcome',text}))];
+  const nb=Math.max(1,Math.floor(Number(batches))||1),plan=Array.from({length:nb},()=>[]);
+  if(!items.length)return {plan,items};
+  const ix=ngFocusIndex(groups),limit=Number.isFinite(Number(cap))?Math.max(0,Math.floor(Number(cap))):Infinity;
+  const quota=Math.max(1,Math.min(Math.floor(Number(perItem))||1,Math.floor(limit/items.length))),claimed=new Set();
+  items.forEach((it,k)=>{
+    const m=ngFocusMatch(ix,it.text,{words:it.kind==='point'});
+    it.matched=m.facts.length>0;
+    it.facts=m.facts.filter(x=>!claimed.has(x.f.id)).slice(0,Math.max(0,Math.min(quota,limit-claimed.size))).map(x=>x.f.id);
+    it.facts.forEach(id=>{claimed.add(id);plan[k%nb].push(id);});
+  });
+  return {plan,items};
+}
+// v18.6: the run log's line on what the Points and Outcomes matched, naming up to five Points that matched nothing.
+function ngFocusSummary(items){
+  if(!(items||[]).length)return null;
+  const points=items.filter(i=>i.kind==='point'),outcomes=items.filter(i=>i.kind==='outcome'),missed=points.filter(i=>!i.matched);
+  const part=(list,one,many)=>list.length?list.filter(i=>i.matched).length+' of '+list.length+' '+(list.length===1?one:many):'';
+  const picked=items.reduce((n,i)=>n+(i.facts||[]).length,0);
+  return {t:missed.length?'warn':'ok',text:'Focus: '+[part(points,'Point','Points'),part(outcomes,'Outcome','Outcomes')].filter(Boolean).join(' and ')
+    +' matched Knowledge Base facts; '+picked+' of those fact(s) go first in their batches.'
+    +(missed.length?' No match for '+missed.slice(0,5).map(i=>'"'+(i.text.length>60?i.text.slice(0,60)+'…':i.text)+'"').join(', ')+(missed.length>5?' and '+(missed.length-5)+' more':'')
+      +'. To steer those, use a condition, medication or test name as the Knowledge Base spells it.':'')};
 }
 // v17.3: this text was duplicated in the legacy and allocation packet builders; both now interpolate it.
 // v18.1: the TIER line. The generator re-tiered every concept by its own TIER RULES, so a worksheet's Tier tags (and the
@@ -11369,9 +11457,13 @@ ${NG_GROUNDING_ADAPTER}
 
 ${kbPacket}`});
       const wantPerBatch=Math.max(1,Math.round(batchSize*factsPerQ));
+      // v18.6: the student's Points and Outcomes pick facts that go first in their batches, at most half the run's targets.
+      const focus=allocMode?ngFocusPlan(pool,{points,outcomes,batches:numBatches,perItem:factsPerQ,cap:Math.floor(targetCount*factsPerQ/2)}):{plan:[],items:[]};
       if(allocMode){
         owned_log(`✓ Fact pool ready: ${poolSize} facts across ${pool.length} condition(s).`,'ok');
         owned_log(`Allocating ~${wantPerBatch} target facts per batch (${factsPerQ}× batch size) plus same-condition context; batches start at evenly spaced points through the Knowledge Base.`,'');
+        const focusNote=ngFocusSummary(focus.items);
+        if(focusNote)owned_log(focusNote.text,focusNote.t);
         const capacity=Math.ceil(poolSize/wantPerBatch);
         if(capacity<numBatches)owned_log(`ⓘ The pool supports about ${capacity} full batch(es) at this rate. Later batches will be smaller or skipped.`,'warn');
       }else{
@@ -11394,7 +11486,8 @@ ${kbPacket}`});
           // v18.0 (review L33): a short last batch was allocated (and reserved) a full batch of target facts, most of which
           // it could not cite. The number of target facts now scales with this batch's size.
           // v18.5: each batch starts at its evenly spaced point in the pool (ngBatchStart), not at the first group.
-          alloc=ngAllocateBatch(pool,usedFactIds,{want:Math.max(1,Math.round(size*factsPerQ)),perCondition:4,neighborCap:2,start:ngBatchStart(pool,b,numBatches)});
+          // v18.6: and takes the facts its Points and Outcomes picked (ngFocusPlan) before that walk.
+          alloc=ngAllocateBatch(pool,usedFactIds,{want:Math.max(1,Math.round(size*factsPerQ)),perCondition:4,neighborCap:2,start:ngBatchStart(pool,b,numBatches),first:focus.plan[b-1]});
           if(!alloc.targets.length){
             owned_log('  ⓘ No unused facts remain — stopping early rather than repeating content.','warn');
             owned_setTrackers(p=>p.map(t=>t.id===b?{...t,status:'pending'}:t));
@@ -11414,7 +11507,8 @@ ${kbPacket}`});
           // Reserve before the call: a failed batch must not silently release its facts
           // back into the pool and let a later batch duplicate it.
           alloc.targets.forEach(f=>{usedFactIds.add(f.id);allocatedAll.add(f.id);});
-          owned_log(`  Allocated ${alloc.targets.length} target fact(s) across ${[...new Set(alloc.targets.map(t=>t.condition))].length} condition(s) + ${alloc.context.length} context fact(s).`);
+          const focusTargets=alloc.targets.filter(f=>(focus.plan[b-1]||[]).includes(f.id)).length;
+          owned_log(`  Allocated ${alloc.targets.length} target fact(s) across ${[...new Set(alloc.targets.map(t=>t.condition))].length} condition(s) + ${alloc.context.length} context fact(s).`+(focusTargets?` ${focusTargets} of the targets were picked for your Points and Outcomes.`:''));
         }
         // v15.17: validation retains targets AND supplied supporting context, or the filtered legacy packet.
         const worksheetContract=ngWorksheetContract({allocation:allocMode?alloc:null,pool,expectedCount:size,knownFactIds:[...source.factIndex.keys()]});
