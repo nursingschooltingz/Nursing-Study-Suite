@@ -1,8 +1,21 @@
 # Current maintainer state
 
+## v18.5 NCLEX Generator batches spread through the KB (2026-10-15)
+
+The canonical application is `Nursing-Study-Suite v18.5.html`. The user asked for the allocation limit found in v18.4 to be fixed.
+- **Change.** `ngAllocateBatch` takes a `start` group, walks forward and wraps. `ngBatchStart` spaces a run's batch starts evenly through the pool by fact count. The batch shape (4 targets per group, 2 context) and the prompts are unchanged.
+- **Exam 1 KB, dry run.**
+  - 50 questions: 20 → 45 groups, 0 → 12 entry groups, mannitol targeted.
+  - 100 questions: 35 → 92 groups.
+  - No duplicate allocation.
+- **Not measured.** No live run. It is unknown whether batches drawn mostly from short entries write as well as condition batches.
+- **Open.** A 50-question run still cannot reach all 145 groups. The condition filter remains the way to guarantee a topic.
+
+Verification: see the [release verification record](docs/reviews/v18.5-release.md).
+
 ## v18.4 Knowledge Base coverage (2026-10-15)
 
-The canonical application is `Nursing-Study-Suite v18.4.html`. The user supplied a brief from an audit of a real Exam 1 KB (197-page PDF), with the KB and PDF. Prompt changes were approved by the brief.
+The application was `Nursing-Study-Suite v18.4.html`. The user supplied a brief from an audit of a real Exam 1 KB (197-page PDF), with the KB and PDF. Prompt changes were approved by the brief.
 - **Entries reach every tool.**
   - **`normalizeKbEntities`.** Writes facts for medication, diagnostic and scoring-tool entries that have only flat fields. It runs at build, import and restore. Derived facts are Tier 1 with no quote, and their IDs are `fact-N`.
   - **`kbFactView`.** Every consumer (fact index, KB tab, Anki, NCLEX Generator, Priority, Case Studies) reads it.

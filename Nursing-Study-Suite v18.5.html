@@ -12,7 +12,12 @@
      policy and uses only its own inline style block and system fonts. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com">
 <title>LATTE Study Suite</title>
-<!-- v18.4 (2026-10-15): Knowledge Base coverage. Medications, diagnostics and scoring tools reached no other tool: every
+<!-- v18.5 (2026-10-15): the NCLEX Generator spreads a run across the whole Knowledge Base. Every batch began allocating at
+     the first group, so a default 50-question run on a 145-group KB reached only the first 20 groups (the first third of
+     the book) and none of the medication, diagnostic or scoring-tool entries. Batches now start at evenly spaced points
+     through the pool by fact count (ngBatchStart) and walk forward from there; each batch's shape (up to 4 facts from
+     each of several neighbouring groups, then same-group context) is unchanged. Prompts are unchanged.
+     v18.4 (2026-10-15): Knowledge Base coverage. Medications, diagnostics and scoring tools reached no other tool: every
      consumer read conditions only, and most entries had flat fields instead of facts (in one 197-page build mannitol,
      STOP-BANG and the Epworth scale were in no card or question). normalizeKbEntities writes their facts from those fields
      at every build, import and restore, and kbFactView gives the fact index, Study view, Anki, the NCLEX Generator,
@@ -6557,7 +6562,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '18.4';}
+function suiteVersion(){return '18.5';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -10457,12 +10462,16 @@ function ngPoolSize(groups){return groups.reduce((n,g)=>n+g.facts.length,0);}
 // Round-robin across conditions in slices, so one batch spans several conditions with
 // a few facts each. The prompt caps any single topic at ~30% of a batch, so pulling all
 // targets from one condition would fight that quota.
-function ngAllocateBatch(groups,usedIds,{want,perCondition=4,neighborCap=2}={}){
-  const targets=[],taken=new Set();
+// v18.5: `start`. Every batch began at the first group, so a run used up the Knowledge Base from its first page onward:
+// a default 50-question run on a 145-group Exam 1 KB reached the first 20 groups and none of its medication, diagnostic
+// or scoring-tool entries. A batch now walks forward from group `start`, wrapping at the end, and the generator spreads
+// the batches' starts evenly through the pool (ngBatchStart). A batch's shape is unchanged; start 0 is the old order.
+function ngAllocateBatch(groups,usedIds,{want,perCondition=4,neighborCap=2,start=0}={}){
+  const targets=[],taken=new Set(),n=groups.length,from=n?((Math.floor(Number(start))||0)%n+n)%n:0,order=groups.map((_,i)=>groups[(from+i)%n]);
   let progressed=true;
   while(targets.length<want&&progressed){
     progressed=false;
-    for(const g of groups){
+    for(const g of order){
       if(targets.length>=want)break;
       let n=0;
       for(const f of g.facts){
@@ -10487,6 +10496,16 @@ function ngAllocateBatch(groups,usedIds,{want,perCondition=4,neighborCap=2}={}){
     }
   }
   return{targets,context};
+}
+// v18.5: the group batch b of `total` starts from: the one holding pool fact floor((b-1)*poolSize/total), counting facts in
+// pool order. A run's batches are spread evenly through the Knowledge Base by fact count, so long conditions get
+// proportionally more batches than one-line entries; each batch still takes a few facts from neighbouring groups.
+function ngBatchStart(groups,b,total){
+  const size=groups.reduce((n,g)=>n+g.facts.length,0);
+  if(!size||!(total>1))return 0;
+  const at=Math.floor((Math.max(1,Math.floor(b))-1)%total*size/total);
+  for(let i=0,seen=0;i<groups.length;i++){seen+=groups[i].facts.length;if(at<seen)return i;}
+  return 0;
 }
 // v17.3: this text was duplicated in the legacy and allocation packet builders; both now interpolate it.
 // v18.1: the TIER line. The generator re-tiered every concept by its own TIER RULES, so a worksheet's Tier tags (and the
@@ -11352,7 +11371,7 @@ ${kbPacket}`});
       const wantPerBatch=Math.max(1,Math.round(batchSize*factsPerQ));
       if(allocMode){
         owned_log(`✓ Fact pool ready: ${poolSize} facts across ${pool.length} condition(s).`,'ok');
-        owned_log(`Allocating ~${wantPerBatch} target facts per batch (${factsPerQ}× batch size) plus same-condition context.`,'');
+        owned_log(`Allocating ~${wantPerBatch} target facts per batch (${factsPerQ}× batch size) plus same-condition context; batches start at evenly spaced points through the Knowledge Base.`,'');
         const capacity=Math.ceil(poolSize/wantPerBatch);
         if(capacity<numBatches)owned_log(`ⓘ The pool supports about ${capacity} full batch(es) at this rate. Later batches will be smaller or skipped.`,'warn');
       }else{
@@ -11374,7 +11393,8 @@ ${kbPacket}`});
         if(allocMode){
           // v18.0 (review L33): a short last batch was allocated (and reserved) a full batch of target facts, most of which
           // it could not cite. The number of target facts now scales with this batch's size.
-          alloc=ngAllocateBatch(pool,usedFactIds,{want:Math.max(1,Math.round(size*factsPerQ)),perCondition:4,neighborCap:2});
+          // v18.5: each batch starts at its evenly spaced point in the pool (ngBatchStart), not at the first group.
+          alloc=ngAllocateBatch(pool,usedFactIds,{want:Math.max(1,Math.round(size*factsPerQ)),perCondition:4,neighborCap:2,start:ngBatchStart(pool,b,numBatches)});
           if(!alloc.targets.length){
             owned_log('  ⓘ No unused facts remain — stopping early rather than repeating content.','warn');
             owned_setTrackers(p=>p.map(t=>t.id===b?{...t,status:'pending'}:t));

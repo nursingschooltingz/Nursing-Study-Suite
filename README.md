@@ -8,7 +8,7 @@ Turn your lecture PDFs and PowerPoints into a complete, source-cited study syste
 
 The whole suite is **one HTML file**. There is nothing to install, no account to create, and no website collecting your data. You open the file in your web browser, paste in a free Google Gemini API key, upload your study materials, and go.
 
-**Published release: v18.4.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v18.4/Nursing-Study-Suite.v18.4.html) or open the [repository HTML](Nursing-Study-Suite%20v18.4.html).
+**Published release: v18.5.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v18.5/Nursing-Study-Suite.v18.5.html) or open the [repository HTML](Nursing-Study-Suite%20v18.5.html).
 
 The left rail lists the seven tools in the order you use them, grouped by stage. **Source:** *Knowledge Base* builds or imports the cited facts everything else reads from. **Plan:** *Priority* ranks those facts by clinical urgency into its own Tier 1/2/3. **Practice:** *Anki* for recall, *NCLEX Extract* for questions out of a review book you already own, *NCLEX Generate* for new ones written from your facts, *Case Studies* for unfolding cases, and *NCLEX to Anki* to turn NCLEX questions into Anki cards.
 
@@ -272,7 +272,7 @@ This writes **brand-new** NCLEX-style questions from your Knowledge Base — and
 **How to use it:**
 
 1. Set **Total Questions** and **Questions per Batch** (smaller batches are more reliable; the default is sensible).
-2. Optionally filter to one condition (*blank uses all conditions*; since v18.4 the filter also matches medication, diagnostic and scoring-tool entries, such as *mannitol*) and add context (*"This exam is 50 questions, heavy on burns"*). Allocation walks the Knowledge Base in source order, conditions first and then those entries, and each batch starts again from the first group with facts left. A 50-question run on a large Knowledge Base therefore reaches only the first groups (on one 197-page book, the first 20 of 145), so use the filter to reach a later topic.
+2. Optionally filter to one condition (*blank uses all conditions*; since v18.4 the filter also matches medication, diagnostic and scoring-tool entries, such as *mannitol*) and add context (*"This exam is 50 questions, heavy on burns"*). Since v18.5 a run's batches start at evenly spaced points through the Knowledge Base, by number of facts, and each batch takes a few facts from several neighbouring conditions or entries, so one batch stays on related topics. Before v18.5 every batch began at the first condition: on one 197-page book a 50-question run reached only the first 20 of 145 groups. Now it reaches 45, spread across the whole book including medications and tests, and a 100-question run reaches 92. A 50-question run still cannot touch all 145, so use the filter when one topic must be in the set.
 3. Generate, then flip between the **worksheet** view (questions only — print it, take it cold) and the answer-key view (answers + cited rationales).
 4. Check the **coverage panel**: it reports which facts were actually used in the questions you can see and lists any that went uncovered — run another batch to sweep those up.
 5. **📋 Copy**, **📝 .txt**, or **🖨 PDF** to take it with you.

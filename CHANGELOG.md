@@ -9,6 +9,37 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [18.5] — 2026-10-15
+
+The v18.4 checks found that the NCLEX Generator only ever wrote questions from the start of the Knowledge Base, and the user asked for it fixed.
+
+### Fixed
+
+- **A run now covers the whole Knowledge Base.**
+  - **What was wrong.** The allocator's comment says it round-robins across conditions, but every batch started at the first group with facts left. A run used up the KB from its first page onward. A default 50-question run on the Exam 1 KB (931 facts in 145 groups) reached the first 20 groups, all in the first fifth of the book, and none of the medication, diagnostic or scoring-tool entries.
+  - **Change.** `ngAllocateBatch` takes a `start` group, walks forward from it and wraps at the end. The new `ngBatchStart` gives batch b of n the group holding fact floor((b-1)·poolSize/n), so batches are spread evenly through the KB by fact count.
+  - **Unchanged.** A batch's shape: up to 4 target facts from each of several neighbouring groups, then up to 2 same-group context facts. With no start the order is the old one. Prompts are unchanged.
+- **Measured on the Exam 1 KB (dry run, no API call):**
+  - 50 questions: 20 → 45 groups; 0 → 12 entry groups; mannitol now targeted.
+  - 100 questions: 35 → 92 groups.
+  - No fact is allocated twice. A run long enough allocates all 931 facts once.
+
+### Verification
+
+- **12 new assertions (3,830 total)** in `tools/v18-5-allocation-tests.js`:
+  - the start option: old order at 0, the walk and wrap, out-of-range starts;
+  - even spacing by fact count;
+  - an Exam-1-shaped default run reaching more than twice the groups, entries included;
+  - no fact allocated twice, and every fact once in a long run;
+  - unchanged batch shape and box/table-first order;
+  - the call site.
+  - Three mutations of the fix each fail the module.
+- **Updated assertions:** the call-site pin in `tools/v18-0-low-cases-tests.js`, version literals 18.5.
+- **Prompt bytes.** All 11 frozen hashes unchanged. `Prompts.md` regenerated.
+- **Not measured.** No live NCLEX run yet. Whether questions written from a batch near the end of the KB (mostly short entries) read as well as condition batches is unmeasured.
+
+See the [release verification record](docs/reviews/v18.5-release.md).
+
 ## [18.4] — 2026-10-15
 
 An audit of a real Exam 1 Knowledge Base (a 197-page textbook PDF, 650 condition facts) against the instructor's exam review found three gaps, and the user asked for them fixed. Mannitol, which the review says will be tested, had a good entry under medications but appeared in no card, guide or question.
