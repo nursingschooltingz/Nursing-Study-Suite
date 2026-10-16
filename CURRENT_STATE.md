@@ -1,8 +1,8 @@
 # Current maintainer state
 
-## v18.6 (unreleased) NCLEX Generator Points and Outcomes choose facts (2026-10-15)
+## v18.6 NCLEX Generator Points and Outcomes choose facts (2026-10-15)
 
-Not released: the application file is still `Nursing-Study-Suite v18.5.html`. The user asked whether the Outcomes, Points and Additional Context boxes are respected. They reached the model only as prompt text. The allocator never read them, and a batch can cite only the facts it is given, so a Point whose facts no batch received could not get a question. The user approved the matching rule after seeing its false-match risk.
+The canonical application is `Nursing-Study-Suite v18.6.html`. The user asked whether the Outcomes, Points and Additional Context boxes are respected. They reached the model only as prompt text. The allocator never read them, and a batch can cite only the facts it is given, so a Point whose facts no batch received could not get a question. The user approved the matching rule after seeing its false-match risk.
 - **Change.** `ngFocusPlan` gives each Point and Outcome line up to facts-per-question facts, placed first in batch (k mod batches)+1.
   - **Matching.** `ngFocusMatch` matches by group name or alias. Points also match by more than half of their words, one of them rare.
   - **Limits.** Picks take at most half of a run's target facts. `ngAllocateBatch` takes them through `first` and counts them toward the group limit.
@@ -30,9 +30,11 @@ Not released: the application file is still `Nursing-Study-Suite v18.5.html`. Th
   - **Optional, not approved.** Label picked targets with their Point in the batch's fact list (a prompt wording change).
   - **Pre-existing context lookup.** `ngAllocateBatch` finds context facts by condition name, so a target from the second of two same-named entries gets context from the first.
 
+Verification: see the [release verification record](docs/reviews/v18.6-release.md).
+
 ## v18.5 NCLEX Generator batches spread through the KB (2026-10-15)
 
-The canonical application is `Nursing-Study-Suite v18.5.html`. The user asked for the allocation limit found in v18.4 to be fixed.
+The application was `Nursing-Study-Suite v18.5.html`. The user asked for the allocation limit found in v18.4 to be fixed.
 - **Change.** `ngAllocateBatch` takes a `start` group, walks forward and wraps. `ngBatchStart` spaces a run's batch starts evenly through the pool by fact count. The batch shape (4 targets per group, 2 context) and the prompts are unchanged.
 - **Exam 1 KB, dry run.**
   - 50 questions: 20 → 45 groups, 0 → 12 entry groups, mannitol targeted.

@@ -9,7 +9,9 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
-## [Unreleased]
+## [18.6] — 2026-10-15
+
+The user asked whether the NCLEX Generator's Outcomes, Points and Additional Context boxes are still respected after v18.5. They reached the model, but no box decided which facts a batch got. The user approved a matching rule after seeing its false-match risk.
 
 ### Added
 
@@ -25,8 +27,12 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 ### Verification
 
 - **24 new assertions (3,854 total)** in `tools/v18-6-focus-allocation-tests.js`. Thirteen mutations of the rule, the allocator and the call site each fail the module.
-- **Updated assertions.** The call-site pins in `tools/v18-0-low-cases-tests.js` and `tools/v18-5-allocation-tests.js`.
-- **Not measured.** No live NCLEX run.
+- **Updated assertions.** The call-site pins in `tools/v18-0-low-cases-tests.js` and `tools/v18-5-allocation-tests.js`, version literals 18.6.
+- **Prompt bytes.** All 11 frozen hashes unchanged. `Prompts.md` regenerated.
+- **SRI.** The eight SRI-pinned scripts and both PDF worker copies were re-hashed against their CDNs and match.
+- **Not measured.** No live NCLEX run. Whether the model writes a question on a Point's picked facts is unmeasured: a batch has about 30 target facts for 10 questions.
+
+See the [release verification record](docs/reviews/v18.6-release.md).
 
 ## [18.5] — 2026-10-15
 

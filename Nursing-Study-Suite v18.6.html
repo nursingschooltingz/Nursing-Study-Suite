@@ -12,7 +12,12 @@
      policy and uses only its own inline style block and system fonts. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com">
 <title>LATTE Study Suite</title>
-<!-- v18.5 (2026-10-15): the NCLEX Generator spreads a run across the whole Knowledge Base. Every batch began allocating at
+<!-- v18.6 (2026-10-15): the NCLEX Generator's Points and Outcomes choose facts, not just wording. They reached the model
+     only as prompt text, and a batch can cite only the facts it is given, so a Point whose facts no batch received could
+     not get a question: a default 50-question run on one KB gave facts to 12 of 20 realistic Points. Each Point and Outcome
+     line now picks a few facts by group name or alias, and for Points by most of their words (ngFocusMatch); they go first
+     in one batch (ngFocusPlan) and take at most half of a run. The v18.5 walk fills the rest. Prompts are unchanged.
+     v18.5 (2026-10-15): the NCLEX Generator spreads a run across the whole Knowledge Base. Every batch began allocating at
      the first group, so a default 50-question run on a 145-group KB reached only the first 20 groups (the first third of
      the book) and none of the medication, diagnostic or scoring-tool entries. Batches now start at evenly spaced points
      through the pool by fact count (ngBatchStart) and walk forward from there; each batch's shape (up to 4 facts from
@@ -6562,7 +6567,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '18.5';}
+function suiteVersion(){return '18.6';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
