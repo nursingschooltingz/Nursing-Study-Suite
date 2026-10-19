@@ -12,7 +12,18 @@
      policy and uses only its own inline style block and system fonts. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com">
 <title>LATTE Study Suite</title>
-<!-- v18.6 (2026-10-15): the NCLEX Generator's Points and Outcomes choose facts, not just wording. They reached the model
+<!-- v19.0 (2026-10-18): Point-ID anchoring, Step 6 atomic Point audit, and Step 7 Anki 4-category LATTE scope.
+     parseAndNumberPoints strips Markdown/bold/colon headings and preserves dotted prefixes ("2.1 Hypokalemia" ->
+     "Hypokalemia") and clinical numbers ("12-lead ECG") before numbering P1...Pn; formatPointsForPrompt formats them
+     for KB extraction; buildKbFactItemSchema builds the per-run enum schema with the "NONE" escape hatch; and
+     auditKbFacts deduplicates pointAnchors, flags empty/NONE/partial-invalid arrays (e.g. ['P1','P99']), and flags
+     bleed-suspect Points strictly above 2x median fact count (verified by runPointAnchorHarness). kbBuildFocusBlock
+     injects numbered Points and SOURCE & ANCHOR RULES when Points are supplied; mergeLatteParts and kbNormalizeImported
+     preserve numberedPoints and pointAnchors (stripping trailing [P#]/[NONE] tags from fact prose); KnowledgeBaseBuilder
+     surfaces the Step 6 Point-to-Fact Audit panel; and AnkiGenerator strips [P#] tags and applies the Step 7
+     4-category rules (including Nursing Interventions & Patient Education — LATTE T & E). All 11 frozen prompt
+     constants are unchanged.
+     v18.6 (2026-10-15): the NCLEX Generator's Points and Outcomes choose facts, not just wording. They reached the model
      only as prompt text, and a batch can cite only the facts it is given, so a Point whose facts no batch received could
      not get a question: a default 50-question run on one KB gave facts to 12 of 20 realistic Points. Each Point and Outcome
      line now picks a few facts by group name or alias, and for Points by most of their words (ngFocusMatch); they go first
@@ -2268,10 +2279,13 @@ HARD RULES
 // The same block is appended to BOTH passes; otherwise the omission audit would spend its
 // effort "recovering" exactly the content the scope filter was told to drop.
 function kbBuildFocusBlock(outcomes,points,extra,mode){
-  const seg=[];
+  const seg=[],numberedPoints=parseAndNumberPoints(points);
   if(String(outcomes||'').trim())seg.push('OUTCOMES (learning objectives this exam covers):\n'+outcomes.trim());
-  if(String(points||'').trim())seg.push('POINTS (specific content that must be covered):\n'+points.trim());
+  // v19.0: parse-time Point ID assignment (P1...Pn) + SOURCE & ANCHOR RULES with [NONE] escape hatch.
+  if(numberedPoints.length)seg.push('POINTS (specific atomic content that must be covered — map every extracted fact to its Point ID(s) in a "pointAnchors" array on the fact object, e.g. ["P1"] or ["P3", "P4"], or ["NONE"] if unmapped):\n'+formatPointsForPrompt(numberedPoints));
+  else if(String(points||'').trim())seg.push('POINTS (specific content that must be covered):\n'+points.trim());
   if(String(extra||'').trim())seg.push('ADDITIONAL CONTEXT:\n'+extra.trim());
+  if(numberedPoints.length&&!String(extra||'').includes('SOURCE & ANCHOR RULES:'))seg.push(KB_SOURCE_ANCHOR_RULES);
   if(!seg.length)return'';
   const rules=mode==='scope'?
 `HOW TO APPLY THIS FOCUS CONTEXT — SCOPE MODE (deliberately restrictive):
@@ -2341,6 +2355,183 @@ function kbCoerceProvenance(f){
   if(f.sourceLabel!=null)f.sourceLabel=text(f.sourceLabel);
   if(f.printedPage!=null)f.printedPage=text(f.printedPage);
   return warning;
+}
+// v19.0: Point-ID anchoring, dynamic schema builder, deterministic Step 6 KB audit, and self-test harness.
+// Plain declarations (no export) so in-browser text/babel compiles without module-syntax errors.
+const KB_SOURCE_ANCHOR_RULES=`SOURCE & ANCHOR RULES:
+1. Strict Point-ID Mapping (With [NONE] Escape Hatch): Every extracted fact must map to one or more exact Point IDs from the Points list (e.g., [P1] or [P3, P4]). Never invent Point IDs. If an extracted fact does not directly fit any listed Point ID, tag it [NONE] rather than forcing a loose match. Only include a page number if an explicit [Page X] marker appears in the extracted text stream; otherwise omit page numbers entirely.
+2. Keep Tags Out of Fact Prose: Place the Point ID tag at the very end of the fact entry (or in its dedicated metadata field), never woven into the sentence, so downstream audio/TTS and flashcards remain clean.
+3. Preserve Causal Context: When a Point covers a condition, lab, or intervention, include the underlying mechanism/pathophysiology from the textbook if it directly explains that Point. Do not use a broad Point ID as a dumping ground for adjacent textbook subsections.
+4. Inverse Consolidation (Multi-Anchor Allowed): Merge opposing states into a single comparative fact and tag both Point IDs (e.g., contrast Hypokalemia and Hyperkalemia ECG changes in one entry tagged [P3, P4]).
+5. Zero-Tolerance Exclusion List: Never extract epidemiological statistics (incidence, prevalence, mortality percentages), historical background, cost-of-care data, general wellness platitudes, or universal nursing actions (hand hygiene, emotional support, routine documentation, generic "educate the patient").`;
+
+// 1. Parse-time Point ID assignment (skips headings, preserves "2.1" from turning into "1")
+function parseAndNumberPoints(rawPointsText) {
+  const lines = String(rawPointsText || '')
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean);
+
+  const validLines = lines.filter(line => {
+    // Skip Markdown headers (# Topic), bold-only headers (**Topic**), or bare label lines ending in ":"
+    if (/^#{1,6}\s+/.test(line)) return false;
+    if (/^\*\*[^*]+\*\*:?$/.test(line)) return false;
+    if (/^[A-Za-z0-9\s/&,-]+:$/.test(line)) return false;
+    return true;
+  });
+
+  return validLines.map((line, idx) => {
+    // Requires whitespace after numbered/dotted prefixes so "2.1 Hypokalemia" -> "Hypokalemia"
+    // and clinical numbers like "12-lead ECG" or "2 L/min O2" are untouched.
+    const cleanText = line
+      .replace(/^(?:P\d+[\s:—-]+|[-*•]\s+|\d+(?:\.\d+)+[.)]?\s+|\d+[.)]\s+)/i, '')
+      .trim();
+    return { id: `P${idx + 1}`, text: cleanText };
+  });
+}
+
+// 2. Formatted string to inject into the KB Builder prompt (persist numberedPoints with the KB object!)
+function formatPointsForPrompt(numberedPoints) {
+  return numberedPoints.map(p => `${p.id}: ${p.text}`).join('\n');
+}
+
+// 3. Per-run dynamic schema builder (enforces exact Point IDs + 'NONE' at the API level)
+function buildKbFactItemSchema(numberedPoints) {
+  const allowedIds = [...numberedPoints.map(p => p.id), "NONE"];
+  return {
+    type: "OBJECT",
+    properties: {
+      fact: {
+        type: "STRING",
+        description: "Clean clinical fact or comparative statement. Do NOT include Point IDs or page citations inside this string."
+      },
+      pointAnchors: {
+        type: "ARRAY",
+        minItems: 1,
+        items: {
+          type: "STRING",
+          format: "enum",
+          enum: allowedIds
+        },
+        description: "One or more exact Point IDs (e.g., ['P1'] or ['P3', 'P4']) that this fact directly explains, or ['NONE'] if it does not directly map to any listed Point."
+      },
+      sourcePage: {
+        type: "INTEGER",
+        nullable: true,
+        description: "Page number ONLY if an explicit [Page X] marker is present in the source text; otherwise null."
+      }
+    },
+    required: ["fact", "pointAnchors"]
+  };
+}
+
+// 4. Deterministic KB Audit (deduplicates tags, flags partial invalid/NONE arrays, flags > 2x median)
+function auditKbFacts(numberedPoints, kbFacts) {
+  const validIds = new Set(numberedPoints.map(p => p.id));
+  const countsByPoint = Object.fromEntries(numberedPoints.map(p => [p.id, 0]));
+
+  const flaggedFacts = [];
+
+  for (const item of kbFacts) {
+    const rawAnchors = Array.isArray(item.pointAnchors) ? item.pointAnchors : [];
+    // Deduplicate so ['P1', 'P1'] counts once
+    const uniqueAnchors = [...new Set(rawAnchors)];
+
+    const hasNone = uniqueAnchors.includes("NONE");
+    const invalidIds = uniqueAnchors.filter(id => id !== "NONE" && !validIds.has(id));
+    const validMatches = uniqueAnchors.filter(id => validIds.has(id));
+
+    // Flag if empty, tagged NONE, or contains ANY invalid ID (catches ['P1', 'P99'])
+    if (uniqueAnchors.length === 0 || hasNone || invalidIds.length > 0) {
+      flaggedFacts.push({
+        ...item,
+        flagReason: hasNone
+          ? "UNMAPPED_NONE"
+          : invalidIds.length > 0
+          ? `INVALID_ID:${invalidIds.join(",")}`
+          : "EMPTY_ANCHORS"
+      });
+    }
+
+    // Count valid unique matches
+    for (const id of validMatches) {
+      countsByPoint[id] += 1;
+    }
+  }
+
+  const uncoveredPoints = numberedPoints.filter(p => countsByPoint[p.id] === 0);
+
+  // Compute median across Points to flag bleed pile-ups (> 2x median)
+  const sortedCounts = Object.values(countsByPoint).sort((a, b) => a - b);
+  const mid = Math.floor(sortedCounts.length / 2);
+  const medianCount =
+    sortedCounts.length === 0
+      ? 0
+      : sortedCounts.length % 2 !== 0
+      ? sortedCounts[mid]
+      : (sortedCounts[mid - 1] + sortedCounts[mid]) / 2;
+
+  const bleedCutoff = Math.max(medianCount * 2, 1);
+  const bleedSuspectPoints = numberedPoints
+    .filter(p => countsByPoint[p.id] > bleedCutoff)
+    .map(p => ({ ...p, factCount: countsByPoint[p.id] }))
+    .sort((a, b) => b.factCount - a.factCount);
+
+  return {
+    countsByPoint,
+    uncoveredPoints,
+    flaggedFacts,
+    medianCount,
+    bleedCutoff,
+    bleedSuspectPoints
+  };
+}
+
+// 5. Self-Test Harness (Run in browser console or Node to verify before release)
+function runPointAnchorHarness() {
+  // Assertion 1: "2.1 Hypokalemia" must not parse to "1 Hypokalemia"
+  const parsed = parseAndNumberPoints("# Fluid Section\n2.1 Hypokalemia\n12-lead ECG changes");
+  if (parsed.length !== 2 || parsed[0].text === "1 Hypokalemia" || parsed[0].text !== "Hypokalemia") {
+    throw new Error(`Harness Failed Assertion 1: got "${parsed[0]?.text}"`);
+  }
+  if (parsed[1].text !== "12-lead ECG changes") {
+    throw new Error(`Harness Failed Clinical Number Preservation: got "${parsed[1]?.text}"`);
+  }
+
+  // Assertion 2 & 3: ['P1','P99'] must be flagged, and ['P1','P1'] counts once
+  const audit = auditKbFacts(parsed, [
+    { fact: "Duplicate tag test", pointAnchors: ["P1", "P1"] },
+    { fact: "Partial invalid tag test", pointAnchors: ["P1", "P99"] },
+    { fact: "Explicit NONE test", pointAnchors: ["NONE"] }
+  ]);
+
+  if (audit.countsByPoint["P1"] !== 2) {
+    throw new Error(`Harness Failed Assertion 3: expected P1 count of 2, got ${audit.countsByPoint["P1"]}`);
+  }
+  const caughtP99 = audit.flaggedFacts.some(f => f.flagReason === "INVALID_ID:P99");
+  if (!caughtP99) {
+    throw new Error("Harness Failed Assertion 2: ['P1','P99'] was not flagged");
+  }
+
+  return "ALL HARNESS ASSERTIONS PASSED";
+}
+
+// v19.0: strip [P#] / [P3, P4] / [NONE] tags from fact or card prose while leaving untagged strings byte-identical.
+function kbStripPointTags(text){
+  const str=String(text||'');
+  if(!/\[(?:P\d+(?:\s*,\s*P\d+)*|NONE)\]/i.test(str))return str;
+  return str.replace(/\s*\[(?:P\d+(?:\s*,\s*P\d+)*|NONE)\]/gi,'').replace(/\s+([.,;:])/g,'$1').trim();
+}
+function kbExtractPointAnchors(rawText,rawAnchors){
+  const str=String(rawText||''),tagRe=/\[((?:P\d+(?:\s*,\s*P\d+)*|NONE))\]/gi,fromText=[];
+  let m;
+  while((m=tagRe.exec(str))!==null){
+    for(const part of m[1].split(',')){const tok=part.trim().toUpperCase();if(tok)fromText.push(tok);}
+  }
+  const cleanText=fromText.length?kbStripPointTags(str):str;
+  const hasExplicit=Array.isArray(rawAnchors);
+  const explicit=hasExplicit?rawAnchors.map(a=>String(a||'').trim().toUpperCase()).filter(Boolean):[];
+  return{text:cleanText,pointAnchors:[...explicit,...fromText],hadAnchors:hasExplicit||fromText.length>0};
 }
 // v18.4: medications, diagnostics and scoring tools reached no tool after the Knowledge Base tab. Every consumer reads
 // facts[], and the extraction prompt gives these arrays no shape, so the model often returned flat fields instead (class,
@@ -2455,7 +2646,7 @@ function kbFactKey(f){return [f.latteBucket||'',f.subtype||'',String(f.text||'')
 // a guessed category), and a condition with no usable slug gets the id "condition". KB_FACT_BUCKETS must equal
 // KB_BUCKETS; a harness assertion pins the two together.
 const KB_FACT_BUCKETS=['BriefPatho','Look','Assess','Tests','Treatments','Educate'];
-function mergeLatteParts(parts,course='',exam=''){
+function mergeLatteParts(parts,course='',exam='',numberedPoints=null){
   const map=new Map();let factN=0;const usedCondIds=new Set(),dropped=[],coerced=[]; // v15.14: see below
   for(const part of parts){
     for(const c of part.conditions||[]){
@@ -2479,13 +2670,19 @@ function mergeLatteParts(parts,course='',exam=''){
       const existing=new Map(target.facts.map(f=>[kbFactKey(f),f]));
       for(const raw of c.facts||[]){
         if(!raw||!String(raw.text||'').trim())continue;
+        // v19.0: extract any trailing [P#]/[NONE] tags from fact text into pointAnchors so prose stays clean.
+        const {text:cleanText,pointAnchors,hadAnchors}=kbExtractPointAnchors(raw.text,raw.pointAnchors);
+        if(!cleanText.trim())continue;
         const bad=!KB_FACT_BUCKETS.includes(raw.latteBucket)?'unknown category "'+String(raw.latteBucket)+'"':raw.subtype!=null&&typeof raw.subtype!=='string'?'subtype is not text':raw.factType!=null&&typeof raw.factType!=='string'?'factType is not text':'';
         if(bad){dropped.push({condition:String(c.name||''),text:String(raw.text).slice(0,160),reason:bad});continue;}
-        const k=kbFactKey(raw),src=raw.sourcePointer?[raw.sourcePointer]:[];
+        const rawClean=cleanText===raw.text?raw:{...raw,text:cleanText};
+        const k=kbFactKey(rawClean),src=raw.sourcePointer?[raw.sourcePointer]:[];
         if(existing.has(k)){
           const f=existing.get(k);f.sources=[...new Map([...(f.sources||[]),...src].map(x=>[(x.filename||'')+'|'+(x.location||''),x])).values()];
+          if(hadAnchors)f.pointAnchors=[...new Set([...(f.pointAnchors||[]),...pointAnchors])];
         }else{
-          const f={...raw,id:'fact-'+(++factN),sourceQuote:String(raw.sourceQuote||'').trim(),tier:[1,2,3].includes(Number(raw.tier))?Number(raw.tier):(raw.safetyCritical?1:2),sources:src};delete f.sourcePointer;
+          const f={...rawClean,id:'fact-'+(++factN),sourceQuote:String(raw.sourceQuote||'').trim(),tier:[1,2,3].includes(Number(raw.tier))?Number(raw.tier):(raw.safetyCritical?1:2),sources:src};delete f.sourcePointer;
+          if(hadAnchors)f.pointAnchors=pointAnchors;
           const warning=kbCoerceProvenance(f);if(warning)coerced.push({condition:String(c.name||''),text:String(raw.text).slice(0,160),reason:warning}); // v18.4
           target.facts.push(f);existing.set(k,f);
         }
@@ -2494,7 +2691,9 @@ function mergeLatteParts(parts,course='',exam=''){
   }
   // v18.4: schema 1.2 adds the optional fact fields sourceKind, sourceLabel and printedPage (kbCoerceProvenance) and the
   // facts normalizeKbEntities writes for entries; a 1.1 Knowledge Base still imports and restores.
-  const out={metadata:{course,exam,createdAt:new Date().toISOString(),schemaVersion:'1.2'},sources:parts.map(p=>p.source).filter(Boolean),conditions:[...map.values()],medications:parts.flatMap(p=>p.medications||[]),diagnostics:parts.flatMap(p=>p.diagnostics||[]),scoringTools:parts.flatMap(p=>p.scoringTools||[]),formulas:parts.flatMap(p=>p.formulas||[]),contradictions:parts.flatMap(p=>p.contradictions||[])};
+  // v19.0: persist numberedPoints alongside the KB when present so Point IDs never shift.
+  const cleanPoints=typeof numberedPoints==='string'?parseAndNumberPoints(numberedPoints):Array.isArray(numberedPoints)?numberedPoints.filter(p=>p&&typeof p.id==='string'&&typeof p.text==='string'):[];
+  const out={metadata:{course,exam,createdAt:new Date().toISOString(),schemaVersion:'1.2'},...(cleanPoints.length?{numberedPoints:cleanPoints}:{}),sources:parts.map(p=>p.source).filter(Boolean),conditions:[...map.values()],medications:parts.flatMap(p=>p.medications||[]),diagnostics:parts.flatMap(p=>p.diagnostics||[]),scoringTools:parts.flatMap(p=>p.scoringTools||[]),formulas:parts.flatMap(p=>p.formulas||[]),contradictions:parts.flatMap(p=>p.contradictions||[])};
   const {kb:merged,report}=normalizeKbEntities(out);
   Object.defineProperty(merged,'dropped',{value:dropped}); // not saved: diagnostics for this build only
   Object.defineProperty(merged,'coerced',{value:coerced}); // v18.4: facts whose unknown sourceKind was read as prose
@@ -2539,7 +2738,8 @@ function kbNormalizeImported(raw,{restore=false}={}){
     for(const [fi,f0] of bounded(Array.isArray(c.facts)?c.facts:[],5000,cp+'.facts').entries()){
       const fp=cp+'.facts['+fi+']';
       if(!f0||typeof f0!=='object'||Array.isArray(f0)){unusable('facts',fp);continue;}
-      const f=_kbSafeKeys(f0),text=str(f.text,fp+'.text',true);
+      const f=_kbSafeKeys(f0),rawText=str(f.text,fp+'.text',true);
+      const {text,pointAnchors,hadAnchors}=kbExtractPointAnchors(rawText,f.pointAnchors);
       if(!text.trim()){unusable('facts',fp+'.text');continue;}
       // v16.7: unknown priority/category cannot be safely guessed from a malformed import.
       const tier=(typeof f.tier==='number'||typeof f.tier==='string'&&f.tier.trim())?Number(f.tier):NaN;
@@ -2558,6 +2758,7 @@ function kbNormalizeImported(raw,{restore=false}={}){
         ...(restore?f:{}),id:str(f.id,fp+'.id',true)||'',text,tier,latteBucket:f.latteBucket,
         subtype:f.subtype==null?null:str(f.subtype,fp+'.subtype'),factType:str(f.factType,fp+'.factType')||'other',
         safetyCritical:!!f.safetyCritical,recovered:!!f.recovered,sourceQuote:str(f.sourceQuote,fp+'.sourceQuote'),sources,...provenance,
+        ...(hadAnchors?{pointAnchors}:{}),
       });
     }
     if((restore||c.aliases!=null)&&!Array.isArray(c.aliases))throw new Error(cp+'.aliases must be an array. No aliases were discarded.');
@@ -2581,10 +2782,17 @@ function kbNormalizeImported(raw,{restore=false}={}){
   const meta=_kbSafeKeys(src.metadata||{});
   const arr=k=>{if((restore||src[k]!=null)&&!Array.isArray(src[k]))throw new Error(k+' must be an array. No source data was discarded.');return bounded(src[k]||[],5000,k).map(x=>x&&typeof x==='object'&&!Array.isArray(x)?_kbSafeKeys(x):x);};
   if((restore||src.sources!=null)&&!Array.isArray(src.sources))throw new Error('sources must be an array. No provenance was discarded.');
+  // v19.0: preserve numberedPoints across import and restore when present.
+  const numberedPoints=Array.isArray(src.numberedPoints)?bounded(src.numberedPoints,1000,'numberedPoints').map((p,pi)=>{
+    if(!p||typeof p!=='object'||Array.isArray(p))return null;
+    const x=_kbSafeKeys(p),id=str(x.id,'numberedPoints['+pi+'].id',true).trim(),ptText=str(x.text,'numberedPoints['+pi+'].text',true).trim();
+    return id&&ptText?{id,text:ptText}:null;
+  }).filter(Boolean):null;
   // v18.4: medication, diagnostic and scoring-tool entries get facts and fact IDs here (normalizeKbEntities): an import
   // numbers them after the conditions' fresh IDs, a restore keeps every saved ID. A saved Knowledge Base needs no rebuild.
   const normalized=normalizeKbEntities({
     ...(restore?src:{}),metadata:{...(restore?meta:{}),course:str(meta.course,'metadata.course'),exam:str(meta.exam,'metadata.exam'),createdAt:str(meta.createdAt,'metadata.createdAt'),schemaVersion:str(meta.schemaVersion,'metadata.schemaVersion')||'1.1'},
+    ...(numberedPoints&&numberedPoints.length?{numberedPoints}:{}),
     sources:bounded(src.sources||[],500,'sources'),conditions,
     medications:arr('medications'),diagnostics:arr('diagnostics'),scoringTools:arr('scoringTools'),formulas:arr('formulas'),contradictions:arr('contradictions'),
   },{rekey:!restore});
@@ -2879,7 +3087,9 @@ function kbForAnki(kb){
     if((c.aliases||[]).length)lines.push('ALIASES: '+c.aliases.join(', '));
     for(const f of c.facts||[]){
       const subtype=f.subtype?' | Subtype: '+f.subtype:'';
-      lines.push(`FACT ${f.id} | LATTE: ${f.latteBucket}${subtype} | Tier: ${f.tier} | ${f.text} | Source: ${kbSourceText(f)||'pointer unavailable'}`);
+      // v19.0: strip any residual [P#] / [NONE] tags from fact text for Anki while keeping untagged text byte-identical.
+      const cleanText=/\[(?:P\d+(?:\s*,\s*P\d+)*|NONE)\]/i.test(String(f.text||''))?String(f.text||'').replace(/\s*\[(?:P\d+(?:\s*,\s*P\d+)*|NONE)\]/gi,'').replace(/\s+([.,;:])/g,'$1').trim():f.text;
+      lines.push(`FACT ${f.id} | LATTE: ${f.latteBucket}${subtype} | Tier: ${f.tier} | ${cleanText} | Source: ${kbSourceText(f)||'pointer unavailable'}`);
     }
   }
   return lines.join('\n');
@@ -3529,7 +3739,7 @@ function KBFactList({condition}){
   const shown=useMemo(()=>{
     const needle=q.trim().toLowerCase();
     return facts.filter(f=>(bucket==='all'||f.latteBucket===bucket)&&
-      (!needle||String(f.text||'').toLowerCase().includes(needle)||String(f.id||'').toLowerCase().includes(needle)||String(f.sourceQuote||'').toLowerCase().includes(needle)));
+      (!needle||String(f.text||'').toLowerCase().includes(needle)||String(f.id||'').toLowerCase().includes(needle)||String(f.sourceQuote||'').toLowerCase().includes(needle)||(Array.isArray(f.pointAnchors)&&f.pointAnchors.some(p=>String(p||'').toLowerCase().includes(needle)))));
   },[facts,q,bucket]);
   return <div>
     <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center',marginBottom:10}}>
@@ -3547,6 +3757,7 @@ function KBFactList({condition}){
           <span className="fact-bucket-badge">{f.latteBucket}{f.subtype?' \u00b7 '+f.subtype:''}</span>
           <span className={'tier-badge t'+(f.tier||'')}>T{f.tier}</span>
           {f.safetyCritical&&<span className="tier-badge t1">safety</span>}
+          {Array.isArray(f.pointAnchors)&&f.pointAnchors.length>0&&<span className={'tier-badge '+(f.pointAnchors.includes('NONE')?'t1':'t3')} title="Mapped Point ID(s)">[{f.pointAnchors.join(', ')}]</span>}
           <span style={{fontSize:12,color:'var(--text-dim)',fontFamily:'JetBrains Mono',wordBreak:'break-word'}}>{kbSourceText(f)||'no source pointer'}</span>
         </div>
       </div>
@@ -3956,7 +4167,8 @@ function KnowledgeBaseBuilder(){
       // v17.3: chunk order, not completion order, decides fact numbering and diagnostics order.
       for(const entry of finished.sort((a,b)=>kbCompareOrder(a.order,b.order))){parts.push(...entry.parts);stats.push(entry.stat);}
       // v16.7: publish diagnostics even when every chunk failed; a failed build never replaces the KB.
-      const kb=parts.length?mergeLatteParts(parts,course,exam):null;
+      // v19.0: persist atomic numberedPoints alongside the KB so Point IDs never shift and auditKbFacts can run.
+      const kb=parts.length?mergeLatteParts(parts,course,exam,kbPoints):null;
       // v17.15 (review H11): facts the restore check would reject are left out and named, so the saved copy reloads.
       if(kb&&kb.dropped&&kb.dropped.length){
         const sample=kb.dropped.slice(0,5).map(d=>d.condition+': '+d.reason+' — "'+d.text+'"').join('; ');
@@ -4031,6 +4243,16 @@ function KnowledgeBaseBuilder(){
   // v18.4: the browser, Study view, validation and fact count read kbFactView, so medication, diagnostic and scoring-tool
   // entries are listed after the conditions.
   const kb=K.knowledgeBase,view=useMemo(()=>kbFactView(kb),[kb]),md=useMemo(()=>renderKBMarkdown(view),[view]),validation=useMemo(()=>validateLatteKnowledgeBase(view),[view]),facts=view.conditions.reduce((n,c)=>n+(c.facts||[]).length,0),sel=view.conditions.find(c=>c.id===selected),entries=view.conditions.length-(kb.conditions||[]).length;
+  // v19.0: Step 6 deterministic Point-to-Fact Audit across active numberedPoints (0-fact uncovered points, [NONE]/invalid IDs, >2x median bleed suspects).
+  const pointAudit=useMemo(()=>{
+    if(typeof auditKbFacts!=='function')return null;
+    const pts=Array.isArray(kb.numberedPoints)&&kb.numberedPoints.length?kb.numberedPoints:(typeof parseAndNumberPoints==='function'?parseAndNumberPoints(kbPoints):[]);
+    if(!pts.length||!(view.conditions||[]).length)return null;
+    const allFacts=(view.conditions||[]).flatMap(c=>(c.facts||[]).map(f=>({...f,conditionName:c.name})));
+    const audit=auditKbFacts(pts,allFacts);
+    const maxCount=Object.values(audit.countsByPoint).reduce((m,v)=>Math.max(m,v),0);
+    return {...audit,numberedPoints:pts,maxCount,totalFacts:allFacts.length};
+  },[kb,view,kbPoints]);
   // v17.3: the study view ran marked and DOMPurify inline on every render of this component,
   // which every App re-render triggers (API-key keystrokes, save-status ticks, tab switches).
   const selHtml=useMemo(()=>sel&&kbView==='study'?mdToSafeHtml(renderKBMarkdown({...kb,conditions:[sel]})):'',[kb,sel,kbView]);
@@ -4243,6 +4465,33 @@ function KnowledgeBaseBuilder(){
             <div style={{fontSize:12,color:'var(--text-dim)',marginTop:5,lineHeight:1.5}}>A source may legitimately carry no content for a bucket. This points the eye; it does not assert an error.</div>
           </div>}
         </div>}
+      </div>}
+      {pointAudit&&<div style={{marginBottom:12,padding:'11px 13px',borderRadius:8,border:'1px solid '+((pointAudit.uncoveredPoints.length||pointAudit.flaggedFacts.length||pointAudit.bleedSuspectPoints.length)?'var(--warning-border)':'var(--success-border)'),background:(pointAudit.uncoveredPoints.length||pointAudit.flaggedFacts.length||pointAudit.bleedSuspectPoints.length)?'var(--warning-bg)':'var(--success-bg)'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+          <span style={{fontSize:12,fontWeight:600,color:(pointAudit.uncoveredPoints.length||pointAudit.flaggedFacts.length||pointAudit.bleedSuspectPoints.length)?'var(--accent-warm)':'var(--accent-green)'}}>
+            {(pointAudit.uncoveredPoints.length||pointAudit.flaggedFacts.length||pointAudit.bleedSuspectPoints.length)?'⚑':'✓'} Step 6 · Point-to-Fact Audit — {pointAudit.numberedPoints.length} atomic Point(s) · {pointAudit.uncoveredPoints.length} uncovered (0 facts) · {pointAudit.flaggedFacts.length} unmapped/invalid ([NONE]) · max {pointAudit.maxCount} fact(s)/Point (median {pointAudit.medianCount}, 2× cutoff {pointAudit.bleedCutoff}, {pointAudit.bleedSuspectPoints.length} bleed suspect{pointAudit.bleedSuspectPoints.length===1?'':'s'})
+          </span>
+        </div>
+        {pointAudit.uncoveredPoints.length>0&&<div style={{fontSize:12,color:'var(--accent-warm)',marginTop:6,lineHeight:1.5}}>
+          <b>1. Uncovered Points (Fact Count = 0):</b> {pointAudit.uncoveredPoints.map(p=>`${p.id} (${p.text})`).join(' · ')} — PDF page range may be cut too tight or slide concept is missing from textbook.
+        </div>}
+        {pointAudit.flaggedFacts.length>0&&<div style={{fontSize:12,color:'var(--accent-warm)',marginTop:6,lineHeight:1.5}}>
+          <b>2. Unmapped / Invalid Facts ({pointAudit.flaggedFacts.length}):</b> {pointAudit.flaggedFacts.slice(0,6).map(f=>`${f.id||'fact'} [${f.flagReason}] (${f.conditionName||''}: "${String(f.text||f.fact||'').slice(0,80)}${String(f.text||f.fact||'').length>80?'…':''}")`).join(' · ')}{pointAudit.flaggedFacts.length>6?` · +${pointAudit.flaggedFacts.length-6} more`:''} — honest textbook bleed to delete or a missing Point to add.
+        </div>}
+        {pointAudit.bleedSuspectPoints.length>0&&<div style={{fontSize:12,color:'var(--accent-warm)',marginTop:6,lineHeight:1.5}}>
+          <b>3. Bleed Suspects (&gt; 2× Median = &gt;{pointAudit.bleedCutoff} facts):</b> {pointAudit.bleedSuspectPoints.map(p=>`${p.id}: ${p.factCount} facts (${p.text})`).join(' · ')} — spot-check these high-count Points for textbook bleed hiding under a valid tag.
+        </div>}
+        <details style={{marginTop:7}}>
+          <summary style={{fontSize:12,color:'var(--text-dim)',cursor:'pointer'}}>Point-to-Fact Audit Table ({pointAudit.numberedPoints.length} Points)</summary>
+          <div style={{maxHeight:200,overflowY:'auto',background:'var(--bg-deep)',border:'1px solid var(--border)',borderRadius:6,padding:8,marginTop:6}}>
+            {pointAudit.numberedPoints.map(p=>{
+              const cnt=pointAudit.countsByPoint[p.id]||0;
+              const status=cnt===0?'UNCOVERED (0 facts)':cnt>pointAudit.bleedCutoff?`BLEED SUSPECT (>2× median = ${pointAudit.bleedCutoff})`:'OK';
+              const col=cnt===0?'var(--accent-red)':cnt>pointAudit.bleedCutoff?'var(--accent-warm)':'var(--text-dim)';
+              return <div key={p.id} style={{fontSize:12,fontFamily:'JetBrains Mono',lineHeight:1.6,color:col}}>{p.id} · {cnt} fact{cnt===1?'':'s'} [{status}] — {p.text}</div>;
+            })}
+          </div>
+        </details>
       </div>}
       <ResultsHead title="Reusable LATTE Knowledge Base" count={<>{kb.conditions.length} conditions{entries?' · '+entries+' medication, diagnostic and tool entries':''} · {facts} facts</>}>
         <div className="segmented-control" role="group" aria-label="Knowledge Base view">
@@ -5533,11 +5782,13 @@ function ankiParseCards(raw,chunkNo=1,tagFormatContract=null){
   if(!lines.some(line=>line.includes('|')||/\{\{c\d*:?/i.test(line)))return {cards,ledger:blocks[1]||''};
   // v16.7: whitespace cannot separate a dropped qualifier from its plausible remainder.
   const fragment=(index,step)=>{while(index>=0&&index<lines.length&&!lines[index].trim())index+=step;return index>=0&&index<lines.length&&!lines[index].includes('|');};
+  // v19.0: Step 7 — strip all [P#] / [NONE] tags from card text and extra.
+  const stripPTags=s=>/\[(?:P\d+(?:\s*,\s*P\d+)*|NONE)\]/i.test(String(s||''))?String(s||'').replace(/\s*\[(?:P\d+(?:\s*,\s*P\d+)*|NONE)\]/gi,'').replace(/\s+([.,;:])/g,'$1').trim():s;
   lines.forEach((line,index)=>{
     const t=line.trim();if(!t)return;const pts=t.split('|'),parseIssues=[];
     if(pts.length===1)parseIssues.push('unpiped-fragment');
     else if(fragment(index-1,-1)||fragment(index+1,1))parseIssues.push('adjacent-unpiped-line');
-    const card={id:uid(),chunk:chunkNo,sourceLine:index+1,text:pts[0].trim(),extra:(pts[1]||'').trim(),tags:pts.slice(2).join('|').trim(),pipeCount:pts.length-1,parseIssues,needsReview:pts.length!==3||parseIssues.length>0,keep:true,factIds:[],...(tagFormatContract==='hierarchical-v1'?{tagFormatContract}:{})};
+    const card={id:uid(),chunk:chunkNo,sourceLine:index+1,text:stripPTags(pts[0].trim()),extra:stripPTags((pts[1]||'').trim()),tags:pts.slice(2).join('|').trim(),pipeCount:pts.length-1,parseIssues,needsReview:pts.length!==3||parseIssues.length>0,keep:true,factIds:[],...(tagFormatContract==='hierarchical-v1'?{tagFormatContract}:{})};
     card.parseProvenance=[{noteId:card.id,chunk:chunkNo,sourceLine:index+1,rawText:line,text:card.text,extra:card.extra,tags:card.tags,pipeCount:card.pipeCount,parseIssues:[...parseIssues]}];
     cards.push(card);
   });
@@ -6567,7 +6818,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '18.6';}
+function suiteVersion(){return '19.0';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -7280,11 +7531,13 @@ function AnkiGenerator(){
   // Build optional focus context block
   function buildFocusBlock(){
     const parts=[];
+    const numberedPts=typeof parseAndNumberPoints==='function'?parseAndNumberPoints(points):[];
     if(outcomes.trim())parts.push(`OUTCOMES (Learning Objectives the student must master):\n${outcomes.trim()}`);
-    if(points.trim())parts.push(`POINTS (Specific content that must be covered):\n${points.trim()}`);
+    if(numberedPts.length&&typeof formatPointsForPrompt==='function')parts.push(`POINTS (Specific atomic content that must be covered):\n${formatPointsForPrompt(numberedPts)}`);
+    else if(points.trim())parts.push(`POINTS (Specific content that must be covered):\n${points.trim()}`);
     if(focusContext.trim())parts.push(`ADDITIONAL CONTEXT:\n${focusContext.trim()}`);
     if(!parts.length)return'';
-    return`\n\n═══ STUDENT-PROVIDED FOCUS CONTEXT ═══\n${parts.join('\n\n')}\n\nINSTRUCTIONS FOR FOCUS CONTEXT:\n- If Outcomes are listed, ensure EVERY outcome is covered by at least one card.\n- If Points are listed, ensure EVERY point has dedicated cards.\n- Use these to guide Tier assignment: content matching outcomes/points should be Tier 1.\n- If the source material is non-nursing (e.g., anatomy, physiology, chemistry, biology), adapt tag hierarchy to match the subject. Use Topic:: instead of Condition:: and subject-appropriate domain tags instead of Nursing::LATTE:: (e.g., AandP::Musculoskeletal::Structure, Bio::CellBiology::Mitosis). Still use the Tier system and the same card quality standards. When the source is the structured LATTE Knowledge Base, its supplied LATTE/Tier tags take precedence — do not re-map them.\n═══════════════════════════════════════\n`;
+    return`\n\n═══ STUDENT-PROVIDED FOCUS CONTEXT ═══\n${parts.join('\n\n')}\n\nINSTRUCTIONS FOR FOCUS CONTEXT:\n- If Outcomes are listed, ensure EVERY outcome is covered by at least one card.\n- If Points are listed, ensure EVERY point has dedicated cards. Strip all [P#] or [NONE] tags from card text.\n- Use these to guide Tier assignment: content matching outcomes/points should be Tier 1.\n- If the source material is non-nursing (e.g., anatomy, physiology, chemistry, biology), adapt tag hierarchy to match the subject. Use Topic:: instead of Condition:: and subject-appropriate domain tags instead of Nursing::LATTE:: (e.g., AandP::Musculoskeletal::Structure, Bio::CellBiology::Mitosis). Still use the Tier system and the same card quality standards. When the source is the structured LATTE Knowledge Base, its supplied LATTE/Tier tags take precedence — do not re-map them.\n═══════════════════════════════════════\n`;
   }
 
   const run=useCallback(async()=>{
@@ -7331,8 +7584,17 @@ function AnkiGenerator(){
         // v16.2: source fidelity failures included invented definitions, lost qualifiers and visible-only list targets.
         // v16.5: allocate targets before composing, then reconcile actual masked reviews without changing the mapping wire format.
         // v16.6: pin source-owned tags and check qualifier/action changes plus targets displaced into Extra or smaller bundles.
+        // v19.0: Step 7 — 4 exam-testable categories covering full LATTE scope (including T & E), front-anchored clozes, closed sets vs open lists, and strict source grounding for priorities/thresholds.
         const kbAdapter=`\n\nKNOWLEDGE BASE ADAPTER — THIS RUN USES A STRUCTURED KNOWLEDGE BASE, NOT RAW PDF TEXT.
-- The structured FACT lines below are the sole source of truth. Each already carries a source-grounded meaning, exactly one LATTE bucket, and exactly one Tier.
+- The structured FACT lines below are the sole source of truth. Each already carries a source-grounded meaning, exactly one LATTE bucket, and exactly one Tier. Strip all [P#] or [NONE] tags from card text.
+- Filter at the Card Layer across four exam-testable categories covering full LATTE scope:
+  1. Clinical Discriminators: Hallmark vs. early findings, expected side effect vs. adverse reaction to report immediately, Condition A vs. Condition B, and priority/first actions.
+  2. Exact Numeric Parameters: Normal lab ranges, therapeutic drug levels, hold parameters, infusion rate limits, and calculation formulas.
+  3. Direct Clinical Associations: Drug classes/suffixes, mechanisms of action that dictate nursing care, reversal agents/antidotes, and definitive diagnostic tests.
+  4. Nursing Interventions & Patient Education (LATTE T & E): Specific nursing actions, administration/procedural safety rules, therapeutic positioning, contraindications, and actionable patient teaching (diet/activity rules, self-care, and signs to report to the provider).
+- Front-Anchored Clozes: The text outside the cloze must uniquely cue the exact answer inside the blank (specify whether the blank asks for the earliest sign, hallmark finding, normal range, mechanism, antidote, patient teaching point, or priority action — never leave bare blanks like "treated with {{c1::...}}").
+- Closed Sets vs. Open Symptom Lists: For open-ended symptom lists, test only the hallmark, earliest, or most dangerous cue (max 1–2 items per cloze) across notes as needed. For testable closed sets or triads (e.g., Cushing's triad, Beck's triad, classic SATA clusters), preserve the full set by stating the item count outside the blank and assigning one numbered cloze per item (e.g., "The 3 classic findings of Cushing's triad are {{c1::bradycardia}}, {{c2::widening pulse pressure}}, and {{c3::irregular respirations}}").
+- Strict Source Grounding for Priorities & Thresholds: Generate "first/priority action" cards or numeric hold-parameter cards ONLY when the KB explicitly states that sequence or number. Never invent ordering or numeric cutoffs from general NCLEX knowledge.
 - Keep Extra empty unless the supplied FACT text explicitly gives a useful supporting explanation or contrast. Do not add cue captions or move unsupported claims into Text. Source-supported symptoms, risk groups, actions and timing still need hidden destinations; Extra is not their substitute. A term listed without a definition must not become a definition card unless this input actually defines it; do not supply missing mechanisms, frequency rankings, severity labels, or durations from memory. Check the definition and heading themselves, not just whether the answer term occurs in a FACT.
 - Before combining FACTs, preserve each fact's independent population, trigger, action, timing and certainty (may, often, as prescribed, if indicated). Separate notes when a merger would change AND/OR, preparation versus administration, or distinct eligibility criteria. Keep potential actions conditional; do not turn keeping a treatment available into immediate administration. A lower-priority repetition must not hide a higher-priority source target in the selected tier.
 - Never leave a substantive list member permanently visible merely to satisfy a cloze limit. Test that target elsewhere when needed, preserving equivalent units and inseparable clinical decisions.

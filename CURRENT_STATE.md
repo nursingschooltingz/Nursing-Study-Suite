@@ -1,8 +1,25 @@
 # Current maintainer state
 
+## v19.0 Point-ID anchoring, Step 6 atomic Point KB audit, and Step 7 4-category Anki workflow (2026-10-18)
+
+The canonical application is `Nursing-Study-Suite v19.0.html`. All 11 frozen prompt constants remain byte-identical (`prompt-baseline.json` unchanged).
+- **Plain-JS (`text/babel`-safe) Point-ID helpers (`parseAndNumberPoints`, `formatPointsForPrompt`, `buildKbFactItemSchema`, `auditKbFacts`, `runPointAnchorHarness`).**
+  - Strips Markdown headings, bold-only headers, and bare colon-terminated headers before numbering `P1…Pn`.
+  - Requires trailing whitespace after dotted/numbered prefixes (`2.1 Hypokalemia` → `Hypokalemia`) so clinical numbers (`12-lead ECG`, `2 L/min O2`) are preserved.
+  - Deduplicates repeated tags (`['P1', 'P1']` counts once), flags partial invalid arrays (`['P1', 'P99']` → `INVALID_ID:P99`) and explicit `['NONE']` (`UNMAPPED_NONE`), identifies `0`-fact uncovered points, and flags bleed suspects strictly above `2× median` (`Math.max(medianCount * 2, 1)`).
+- **Dynamic `SOURCE & ANCHOR RULES` injection (`kbBuildFocusBlock`) & Step 6 KB Audit UI.**
+  - When Points or focus inputs are provided, `kbBuildFocusBlock` formats atomic `P1…Pn` items and appends `KB_SOURCE_ANCHOR_RULES`.
+  - `mergeLatteParts` and `kbNormalizeImported` extract any trailing `[P#]` / `[NONE]` tags from fact prose into `pointAnchors` and persist `numberedPoints` on the KB object across JSON export/import and IndexedDB restore.
+  - `KnowledgeBaseBuilder` renders the Step 6 Point-to-Fact Audit summary and collapsible `P1…Pn` table; `KBFactList` renders `[P#]` badges and filters by Point ID.
+- **Step 7 Anki 4-Category LATTE Scope & `[P#]` stripping.**
+  - `kbForAnki` and `ankiParseCards` strip any residual `[P#]` or `[NONE]` tags from fact/card text and extra while leaving untagged text byte-identical.
+  - `AnkiGenerator` `kbAdapter` enforces the 4 exam-testable categories (Clinical Discriminators, Exact Numeric Parameters, Direct Clinical Associations, Nursing Interventions & Patient Education — LATTE T & E), front-anchored clozes, closed sets vs. open symptom lists, and strict source grounding for priority sequences and numeric thresholds.
+
+Verification: see the [release verification record](docs/reviews/v19.0-release.md).
+
 ## v18.6 NCLEX Generator Points and Outcomes choose facts (2026-10-15)
 
-The canonical application is `Nursing-Study-Suite v18.6.html`. The user asked whether the Outcomes, Points and Additional Context boxes are respected. They reached the model only as prompt text. The allocator never read them, and a batch can cite only the facts it is given, so a Point whose facts no batch received could not get a question. The user approved the matching rule after seeing its false-match risk.
+The application was `Nursing-Study-Suite v18.6.html`. The user asked whether the Outcomes, Points and Additional Context boxes are respected. They reached the model only as prompt text. The allocator never read them, and a batch can cite only the facts it is given, so a Point whose facts no batch received could not get a question. The user approved the matching rule after seeing its false-match risk.
 - **Change.** `ngFocusPlan` gives each Point and Outcome line up to facts-per-question facts, placed first in batch (k mod batches)+1.
   - **Matching.** `ngFocusMatch` matches by group name or alias. Points also match by more than half of their words, one of them rare.
   - **Limits.** Picks take at most half of a run's target facts. `ngAllocateBatch` takes them through `first` and counts them toward the group limit.

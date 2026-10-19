@@ -9,6 +9,34 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [19.0] — 2026-10-18
+
+The user locked in five changes for v19.0: plain `text/babel`-safe function declarations for Point-ID parsing, schema building and auditing; dynamic `enum` schema generation with a `NONE` escape hatch; the regex fix for dotted section numbers (`2.1`) and heading filters; dynamic `2× median` bleed detection on atomic Points (Step 6 KB Audit); and the fourth Anki category covering Nursing Interventions and Patient Education (LATTE's T & E, Step 7).
+
+### Added
+
+- **Plain-JS (`text/babel`-safe) Point-ID helpers and built-in harness.**
+  - `parseAndNumberPoints(rawPointsText)` strips Markdown headings (`#`), bold-only headers (`**Topic**`) and bare label lines ending in `:`, and requires trailing whitespace after dotted/numbered prefixes (`2.1 Hypokalemia` → `Hypokalemia`) while preserving clinical numbers (`12-lead ECG`, `2 L/min O2`).
+  - `formatPointsForPrompt(numberedPoints)` formats numbered atomic `P1…Pn` lines for prompt injection.
+  - `buildKbFactItemSchema(numberedPoints)` builds the per-run JSON schema locking `pointAnchors` to the exact `P1…Pn` enum plus `"NONE"`.
+  - `auditKbFacts(numberedPoints, kbFacts)` deduplicates repeated tags (`['P1', 'P1']` counts once), flags empty/invalid/`NONE` anchor arrays (including partial bad arrays like `['P1', 'P99']`), identifies uncovered points (`Fact Count = 0`), and flags bleed-suspect points strictly greater than `2× median` (`Math.max(medianCount * 2, 1)`).
+  - `runPointAnchorHarness()` verifies the dotted-section regex, clinical number preservation, duplicate-tag deduplication, and partial invalid array flagging.
+- **Ready-to-run `SOURCE & ANCHOR RULES` (with `[NONE]` escape hatch) in `kbBuildFocusBlock`.**
+  - Formats user-supplied Points as `P1…Pn` and injects `KB_SOURCE_ANCHOR_RULES` (Strict Point-ID Mapping with `[NONE]` Escape Hatch, Keep Tags Out of Fact Prose / in `pointAnchors`, Preserve Causal Context, Inverse Consolidation `[P3, P4]`, and Zero-Tolerance Exclusion List) while keeping all 11 byte-frozen prompt constants untouched.
+- **Step 6 — Atomic Point Persistence & Point-to-Fact Audit Panel in the Knowledge Base tab.**
+  - `mergeLatteParts` and `kbNormalizeImported` strip any trailing `[P#]` / `[NONE]` tags out of fact prose into `pointAnchors` and persist `numberedPoints` alongside the Knowledge Base so Point IDs never shift across exports, imports, or reloads.
+  - `KnowledgeBaseBuilder` renders the Step 6 Point-to-Fact Audit panel reporting Uncovered Points (`Fact Count = 0`), Unmapped/Invalid Facts (`[NONE]` or invalid ID), Max Facts on a Single Point & Bleed Suspects (`> 2× Median`), and the collapsible Point-to-Fact Audit Table (`P1…Pn`). `KBFactList` displays `[P#]` badges and supports filtering by Point ID.
+- **Step 7 — Anki 4-Category LATTE Scope & `[P#]` Tag Stripping.**
+  - `kbForAnki` and `ankiParseCards` strip any residual `[P#]` / `[NONE]` tags from fact and card text/extra while keeping untagged strings byte-identical.
+  - `AnkiGenerator` formats numbered Points in `buildFocusBlock` and updates `kbAdapter` with the four exam-testable categories covering full LATTE scope (Clinical Discriminators, Exact Numeric Parameters, Direct Clinical Associations, and Nursing Interventions & Patient Education — LATTE T & E), front-anchored clozes, closed sets vs. open symptom lists, and strict source grounding for priorities and numeric thresholds.
+
+### Verification
+
+- **11 new assertions (3,865 total)** in `tools/v19-0-point-anchor-tests.js`.
+- **Prompt bytes.** All 11 frozen hashes unchanged. `Prompts.md` regenerated.
+
+See the [release verification record](docs/reviews/v19.0-release.md).
+
 ## [18.6] — 2026-10-15
 
 The user asked whether the NCLEX Generator's Outcomes, Points and Additional Context boxes are still respected after v18.5. They reached the model, but no box decided which facts a batch got. The user approved a matching rule after seeing its false-match risk.

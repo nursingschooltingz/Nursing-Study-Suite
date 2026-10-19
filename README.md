@@ -8,7 +8,7 @@ Turn your lecture PDFs and PowerPoints into a complete, source-cited study syste
 
 The whole suite is **one HTML file**. There is nothing to install, no account to create, and no website collecting your data. You open the file in your web browser, paste in a free Google Gemini API key, upload your study materials, and go.
 
-**Published release: v18.6.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v18.6/Nursing-Study-Suite.v18.6.html) or open the [repository HTML](Nursing-Study-Suite%20v18.6.html).
+**Published release: v19.0.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v19.0/Nursing-Study-Suite.v19.0.html) or open the [repository HTML](Nursing-Study-Suite%20v19.0.html).
 
 The left rail lists the seven tools in the order you use them, grouped by stage. **Source:** *Knowledge Base* builds or imports the cited facts everything else reads from. **Plan:** *Priority* ranks those facts by clinical urgency into its own Tier 1/2/3. **Practice:** *Anki* for recall, *NCLEX Extract* for questions out of a review book you already own, *NCLEX Generate* for new ones written from your facts, *Case Studies* for unfolding cases, and *NCLEX to Anki* to turn NCLEX questions into Anki cards.
 

@@ -4,7 +4,7 @@ This is the task map for maintainers and coding agents. `AGENTS.md` remains the 
 
 ## Repository shape
 
-- `Nursing-Study-Suite v18.6.html` is the complete application.
+- `Nursing-Study-Suite v19.0.html` is the complete application.
 - `latte-tests.js` is the deterministic regression harness and extracts live functions by anchor.
 - `verify-repo.js` is the only ordinary repository verification entry point.
 - `prompt-baseline.json` stores the 11 frozen prompt hashes.
@@ -52,7 +52,7 @@ The 2026-09-18 integrity changes ship in v16.7. They leave prompt bytes and CDN 
 | Gemini transport and profiles | `SAFETY_SETTINGS`, `callGemini`, profile registry |
 | PDF/PPTX intake | `pdfLayoutText`, `kbSourceUnits`, scanned-file detection |
 | Card intake | `CARD_TRANSCRIBE_PROMPT`, `cardFileId`, `cardMergeFaces`, resize constants |
-| Knowledge Base | `KB_EXTRACTION_PROMPT`, `KB_VERIFY_PROMPT`, `kbQuoteInSource`, `mergeLatteParts`, `normalizeKbEntities`, `kbCoerceProvenance` |
+| Knowledge Base | `KB_EXTRACTION_PROMPT`, `KB_VERIFY_PROMPT`, `parseAndNumberPoints`, `auditKbFacts`, `kbQuoteInSource`, `mergeLatteParts`, `normalizeKbEntities`, `kbCoerceProvenance` |
 | Every KB consumer | `kbFactView` (conditions plus medication, diagnostic and scoring-tool groups), `buildFactIndex`, `BOX_TABLE_WEIGHT` |
 | Anki | `ANKI_MASTER_PROMPT`, Anki validation/export functions |
 | NCLEX extraction | `NCLEX_INLINE_PROMPT`, `NCLEX_SPLIT_PROMPT`, `nclexSplitByQNum`, `nclexRepairOptions` |

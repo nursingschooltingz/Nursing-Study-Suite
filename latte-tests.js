@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 3854;
+const EXPECTED_ASSERTIONS = 3865;
 
 let file;
 try {
@@ -2461,12 +2461,12 @@ section('v15.17 — approved rollback, historical examples and replay evidence')
 
 section('generation input pins and bounded pilot');
 {
-  // v16.6: approved exact canonical input tokens and focused adapter changes have deliberate pins; chunker/focus remain frozen at their measured bytes.
+  // v16.6/v19.0: approved exact canonical input tokens, [P#] stripping, numbered Points focus, and Step 7 4-category adapter have deliberate pins.
   const inputs=[
-    ['source packet','function kbForAnki(kb){','// ── KB source chunking','7a99d66b543e48414bd21d48a74d5753bbca883cf96ad967d4e0901cbbb29656'],
+    ['source packet','function kbForAnki(kb){','// ── KB source chunking','d20a020713be8e0432c30fe4212f0d68bc6e6960c6171deed7997e9472fbdf6e'],
     ['chunking','function splitOversizedConditionBlock(block,max){','function ankiParseCards(raw','b3d15fb1e63a7b1cdd49eb105db827debac59bd0340c282fdae5049989e42002'],
-    ['focus block','  function buildFocusBlock(){','  const run=useCallback(async()=>{','b096b8eb8733da287a097a99ede3f3e233d8e413c01bdf5605376f516054094f'],
-    ['mapping adapter','        const kbAdapter=','        parts.push({text:ANKI_MASTER_PROMPT','82295952ef835a9cf84ed63ced9f15840614566ac09b547856d9c5ed2d98609e']
+    ['focus block','  function buildFocusBlock(){','  const run=useCallback(async()=>{','f97fa95eb4b7602943e0f26b851cb8c635dac90f2c6c000bca2812423162db53'],
+    ['mapping adapter','        const kbAdapter=','        parts.push({text:ANKI_MASTER_PROMPT','ae8ec4d8a10aa6e518b8fbc6be33189d56c4ba0978250464b95c345f439b42d9']
   ];
   const {sha256}=require('./tools/repo-checks');
   for(const [name,start,end,hash] of inputs){const a=S.indexOf(start,name==='focus block'?S.indexOf('function AnkiGenerator()'):0),b=S.indexOf(end,a);t('generation input matches its approved pin: '+name,a>=0&&b>a&&sha256(S.slice(a,b).trim())===hash);}
@@ -2904,6 +2904,9 @@ section('v15.14 — clamps, backoff, storage');
 
   section('v18.6 NCLEX Generator Points and Outcomes pick facts that go first in their batches');
   require('./tools/v18-6-focus-allocation-tests')(S,t);
+
+  section('v19.0 Point-ID anchoring, Step 6 atomic Point KB audit, and Step 7 4-category Anki rules');
+  require('./tools/v19-0-point-anchor-tests')(S,t);
 
   console.log('\n════════════════════════════');
   const total = pass + fail;
