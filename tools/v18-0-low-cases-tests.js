@@ -3,7 +3,7 @@
 // v18.0: step 10 of the v17.14 production review, Low findings (cases group). Synthetic data only.
 
 module.exports=async function run(S,t){
-  const span=(a,b)=>{const x=S.indexOf(a),y=S.indexOf(b,x+a.length);if(x<0||y<0)throw Error('Missing low-cases anchor '+a);return S.slice(x,y);};
+  const span=(a,b)=>{const x=S.indexOf(a),y=S.indexOf(b,x+a.length);if(x<0||y<0||S.indexOf(a,x+a.length)>=0)throw Error('Missing or ambiguous low-cases anchor '+a);return S.slice(x,y);};
   const W=new Function('neiaTerminologyScan','itemHeuristics',span('function ngSplitParts(','function ngRenumber(')+';return {ngCanonicalOrderingAnswers,ngSplitParts,validateNCLEXWorksheet};')(()=>{},()=>{});
   const C=new Function(span('const CASE_CLINICAL_TOKEN_RE=','function CaseStudyGenerator()')+';return {caseParseThresholds};')();
   const selectCaseFacts=new Function(span('function selectCaseFacts(','// Sufficiency check')+';return selectCaseFacts;')();

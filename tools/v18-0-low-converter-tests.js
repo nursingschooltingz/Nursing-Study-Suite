@@ -7,7 +7,7 @@
 const crypto=require('crypto');
 
 function span(S,start,end){
-  const a=S.indexOf(start);if(a<0)throw Error('converter anchor missing: '+start);
+  const a=S.indexOf(start);if(a<0||S.indexOf(start,a+start.length)>=0)throw Error('converter anchor missing or ambiguous: '+start);
   const b=S.indexOf(end,a+start.length);if(b<0)throw Error('converter end anchor missing after: '+start);
   return S.slice(a,b);
 }

@@ -12,7 +12,18 @@
      policy and uses only its own inline style block and system fonts. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com">
 <title>LATTE Study Suite</title>
-<!-- v19.0 (2026-10-18): Point-ID anchoring, Step 6 atomic Point audit, and Step 7 Anki 4-category LATTE scope.
+<!-- v19.1 (2026-10-22): Production code review remediation across all 7 tools (Phases 1–10).
+     Hardens clinical answer-keying (preserving decimals, word boundaries, and explicit label separators in
+     n2aAnswerLabels, x2aResolveAnswer, and i2aAnswerLabels); Point-ID and entity normalization (parseAndNumberPoints,
+     kbStripPointTags, kbExtractPointAnchors, mergeLatteParts, normalizeKbEntities, persisted numberedPoints in Step 6
+     and AnkiGenerator, and untranscribed card-photo build guards); NCLEX allocation, audit, and repair resilience
+     (QuotaStop skip, no-op repair rejection, citedAll refresh, duplicate-condition neighbor context, pre-filled focus
+     perCondition caps, deferred focus carry-over, and ngFocusPlan batchCaps); Case Study option-label calculation
+     answers and single-line option-word shuffling; Priority 2-stage progress scaling, partial-tier recovery, and bold/
+     italic Audit footers; Anki oversized audit-unit trimming and duplicate unresolvedFactIds preservation; NCLEX
+     Extractor and NCLEX-to-Anki parser/resume edge cases; PPTX URI-decoded OPC targets, PDF worker abort guards,
+     print/copy focus and fallback handling, and startup CDN global checks. All 11 frozen prompt constants are unchanged.
+     v19.0 (2026-10-18): Point-ID anchoring, Step 6 atomic Point audit, and Step 7 Anki 4-category LATTE scope.
      parseAndNumberPoints strips Markdown/bold/colon headings and preserves dotted prefixes ("2.1 Hypokalemia" ->
      "Hypokalemia") and clinical numbers ("12-lead ECG") before numbering P1...Pn; formatPointsForPrompt formats them
      for KB extraction; buildKbFactItemSchema builds the per-run enum schema with the "NONE" escape hatch; and
@@ -845,6 +856,8 @@ input[aria-invalid="true"],textarea[aria-invalid="true"],select[aria-invalid="tr
   }
   window.__latteBootFail=bootFail;
   window.addEventListener('error',function(e){if(!window.__latteMounted)bootFail(e.message||'A startup script failed.');});
+  // v19.0: surface missing synchronous CDN globals immediately instead of waiting 12 s when Babel is blocked.
+  if(!window.Babel||!window.React||!window.ReactDOM||!window.marked||!window.DOMPurify||!window.pdfjsLib||!window.JSZip){bootFail('One or more required CDN scripts failed to load.');return;}
   setTimeout(function(){if(!window.__latteMounted)bootFail('Startup timed out. One or more CDN dependencies may have failed to load.');},12000);
 })();
 </script>
@@ -959,12 +972,15 @@ function useFactInspector(){return useContext(FactInspectorCtx);}
 function buildFactIndex(kb){
   const map=new Map();
   // v18.4: medication, diagnostic and scoring-tool facts resolve too (kbFactView); only condition facts did before.
+  // v19.0: skip facts with empty/missing IDs so an empty factId lookup never resolves to an id-less fact.
   for(const condition of kbFactView(kb).conditions)
-    for(const fact of condition.facts||[])
-      map.set(String(fact.id||'').toLowerCase(),{condition,fact});
+    for(const fact of condition.facts||[]){
+      const id=String(fact&&fact.id||'').trim().toLowerCase();
+      if(id)map.set(id,{condition,fact});
+    }
   return map;
 }
-function findFactById(index,factId){return index?index.get(String(factId||'').toLowerCase())||null:null;}
+function findFactById(index,factId){const id=String(factId||'').trim().toLowerCase();return index&&id?index.get(id)||null:null;}
 
 // Compact, shared registry of generated artifacts, so the inspector can answer "Used in".
 // Only lightweight indexes live here (id + factIds + a short label); full bodies stay in
@@ -987,8 +1003,9 @@ function mergeArtifactEntries(existing,incoming){
   return[...map.values()];
 }
 function getFactUsage(registry,factId){
-  const id=String(factId||'').toLowerCase();
-  const hit=arr=>(arr||[]).filter(item=>(item.factIds||[]).some(x=>String(x).toLowerCase()===id));
+  const id=String(factId||'').trim().toLowerCase();
+  if(!id||!registry)return{anki:[],nclex:[],cases:[]};
+  const hit=arr=>(arr||[]).filter(item=>(item.factIds||[]).some(x=>String(x||'').trim().toLowerCase()===id));
   return{anki:hit(registry.ankiNotes),nclex:hit(registry.nclexQuestions),cases:hit(registry.caseStudies)};
 }
 
@@ -996,7 +1013,8 @@ function getFactUsage(registry,factId){
    SHARED UTILITIES
    ═══════════════════════════════════════════════════════ */
 function formatSize(b){return b<1024?b+' B':b<1048576?(b/1024).toFixed(1)+' KB':(b/1048576).toFixed(1)+' MB';}
-function getExt(name){return name.split('.').pop().toLowerCase();}
+// v19.0: return '' when filename has no extension separator (instead of returning the whole filename).
+function getExt(name){const s=String(name||''),i=s.lastIndexOf('.');return(i>0?s.slice(i+1):'').toLowerCase();}
 // All markdown that reaches the DOM goes through this — marked does NOT sanitize HTML.
 // v15.17: default sanitization admitted styles and auto-fetch media; study output needs only text markup.
 const STUDY_OUTPUT_POLICY=Object.freeze({
@@ -1022,16 +1040,24 @@ function mdToSafeHtml(md){
 async function copyText(text){
   try{await navigator.clipboard.writeText(text);return true;}
   catch{
+    // v19.0: preserve activeElement across fallback textarea selection so copying inside a modal drawer keeps focus trapped.
+    const prev=typeof document!=='undefined'?document.activeElement:null;
+    const ta=typeof document!=='undefined'?document.createElement('textarea'):null;
+    if(!ta)return false;
     try{
-      const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.left='-9999px';
-      document.body.appendChild(ta);ta.select();const ok=document.execCommand('copy');ta.remove();return ok;
+      ta.value=text;ta.style.position='fixed';ta.style.left='-9999px';
+      document.body.appendChild(ta);ta.select();return Boolean(document.execCommand('copy'));
     }catch{return false;}
+    finally{try{ta.remove();}catch{}try{prev&&prev.focus&&prev.focus();}catch{}}
   }
 }
 // A merged fact can carry several supporting sources — cite all of them, not just the first.
 function formatFactCitation(fact){
   const sources=(fact.sources||[]).map(s=>`${s.filename||''}${s.location?` (${s.location})`:''}`).filter(Boolean).join('; ');
-  return `"${fact.sourceQuote||fact.text||''}"${sources?` — ${sources}`:''}`;
+  // v19.0: include box/table/figure label and printed page provenance in copied citations when present.
+  const prov=typeof kbProvenanceText==='function'?kbProvenanceText(fact):'';
+  const tail=[sources,prov].filter(Boolean).join(' · ');
+  return `"${fact.sourceQuote||fact.text||''}"${tail?` — ${tail}`:''}`;
 }
 // crypto.randomUUID requires a secure context. file:// and https:// are fine, but on a
 // plain http:// host it is undefined and calling it throws — which would kill card
@@ -1050,8 +1076,13 @@ function uid(){
 // error. Extracting client-side guarantees the slide content actually reaches the
 // model, and preserves per-slide numbering so Source Pointers stay citable.
 const _OOXML_A_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+function _pptxAssertXml(doc){
+  // v19.0: DOMParser returns a <parsererror> document on truncated/corrupt XML rather than throwing; fail explicitly instead of silently dropping slides or notes.
+  if(doc&&typeof doc.getElementsByTagName==='function'&&doc.getElementsByTagName('parsererror').length)throw new Error('PPTX contains malformed XML. Repair the deck or convert it to PDF.');
+  return doc;
+}
 function _pptxRunText(xml,maxChars=PPTX_LIMITS.textChars) {
-  const doc = new DOMParser().parseFromString(xml, 'application/xml');
+  const doc = _pptxAssertXml(new DOMParser().parseFromString(xml, 'application/xml'));
   let runs = doc.getElementsByTagNameNS(_OOXML_A_NS, 't');
   if (!runs || !runs.length) runs = doc.getElementsByTagName('a:t');
   const out = [];let chars=0;
@@ -1070,11 +1101,13 @@ function _zipNormalizePath(basePath,target){
   // v18.0 (review L1): an absolute OPC target ("/ppt/slides/slide1.xml") was appended to the source part's folder,
   // so its slide or speaker notes were not found and later slides were renumbered. A leading "/" now starts at the
   // package root; relative targets resolve exactly as before.
+  // v19.0: ECMA-376 OPC Target attributes are URI references that may percent-encode characters (e.g. "slides/slide%201.xml")
+  // while JSZip keys use decoded entry names ("ppt/slides/slide 1.xml"); decode percent-encoded path segments safely.
   const t=String(target||'').replace(/\\/g,'/');
   const base=t.startsWith('/')?[]:basePath.split('/');if(base.length)base.pop();
   for(const part of t.split('/')){
     if(!part||part==='.')continue;
-    if(part==='..')base.pop();else base.push(part);
+    if(part==='..')base.pop();else{let seg=part;if(seg.includes('%'))try{seg=decodeURIComponent(seg);}catch(e){}base.push(seg);}
   }
   return base.join('/').replace(/^\//,'');
 }
@@ -1082,7 +1115,7 @@ function _xmlElementsByLocalName(doc,name){
   return Array.from(doc.getElementsByTagName('*')).filter(el=>el.localName===name||el.nodeName.split(':').pop()===name);
 }
 function _relsMap(xml){
-  const doc=new DOMParser().parseFromString(xml,'application/xml');const map=new Map();
+  const doc=_pptxAssertXml(new DOMParser().parseFromString(xml,'application/xml'));const map=new Map();
   for(const rel of _xmlElementsByLocalName(doc,'Relationship'))map.set(rel.getAttribute('Id'),{target:rel.getAttribute('Target')||'',type:rel.getAttribute('Type')||''});
   return map;
 }
@@ -1139,7 +1172,7 @@ async function extractPptxText(file,{signal}={}) {
   // PowerPoint presentation order is defined by presentation.xml relationships, not slide filenames.
   if(zip.files['ppt/presentation.xml']&&zip.files['ppt/_rels/presentation.xml.rels']){
     const presXml=await read('ppt/presentation.xml');
-    const presDoc=new DOMParser().parseFromString(presXml,'application/xml');
+    const presDoc=_pptxAssertXml(new DOMParser().parseFromString(presXml,'application/xml'));
     const rels=_relsMap(await read('ppt/_rels/presentation.xml.rels'));
     const references=_xmlElementsByLocalName(presDoc,'sldId');
     if(references.length>PPTX_LIMITS.slides)throw new Error('PPTX contains more than 2,000 slide references. Split the deck before importing.');
@@ -1161,8 +1194,9 @@ async function extractPptxText(file,{signal}={}) {
     const remaining=PPTX_LIMITS.textChars-out.length-marker.length-1;
     if(remaining<0)throw new Error('PPTX extracted text exceeds the safe limit. Split the deck before importing.');
     const body = _pptxRunText(await read(slidePath),remaining).join('\n');
-    const slideBase=slidePath.split('/').pop();
-    const relPath='ppt/slides/_rels/'+slideBase+'.rels';
+    // v19.0: derive the OPC .rels path from slidePath's own directory rather than hardcoding ppt/slides/_rels/.
+    const slash=slidePath.lastIndexOf('/'),slideDir=slash>=0?slidePath.slice(0,slash+1):'',slideBase=slash>=0?slidePath.slice(slash+1):slidePath;
+    const relPath=slideDir+'_rels/'+slideBase+'.rels';
     let notes = '';
     if(zip.files[relPath]){
       const rels=_relsMap(await read(relPath));
@@ -1300,17 +1334,18 @@ async function geminiRequest(apiKey,model,body,{signal,retries=2,onUpdate,onMeta
   // encoding leaves unchanged; anything else can no longer alter the request path.
   const url=`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(String(model))}:${streaming?'streamGenerateContent?alt=sse':'generateContent'}`;
   const meta=m=>{if(typeof onMeta==='function')try{onMeta({...m,model,maxOutputTokens:cap});}catch(e){}};
+  let bestPartial='';
   for(let attempt=0;attempt<=retries;attempt++){
     if(signal?.aborted)throw new DOMException('Aborted','AbortError');
     const wd=new AbortController();let timedOut=false,timer=null,reader=null,readerDone=false;
-    let text='',finish=null,blocked=null,usage=null,failure=null,retryDelay=null,result;
+    let text='',lastEmitted='',finish=null,blocked=null,usage=null,failure=null,retryDelay=null,result;
     const arm=()=>{clearTimeout(timer);timer=setTimeout(()=>{timedOut=true;wd.abort();},timeoutMs);};
     const onOuterAbort=()=>wd.abort();
     if(signal)signal.addEventListener('abort',onOuterAbort,{once:true});
     arm();
     try{
       // Each retry owns a new preview; diagnostic metadata retains the prior attempt's partial text.
-      if(streaming&&attempt)onUpdate('');
+      if(streaming&&attempt){onUpdate('');lastEmitted='';}
       const resp=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':apiKey},body:JSON.stringify(body),signal:wd.signal});
       if(!resp.ok){
         const err=await resp.json().catch(()=>({})),msg=err.error?.message||'API error '+resp.status;
@@ -1324,8 +1359,10 @@ async function geminiRequest(apiKey,model,body,{signal,retries=2,onUpdate,onMeta
         // v18.0 (review L3): an {"error":...} object sent after the HTTP 200 (mid-stream) was ignored, so a 429 or 5xx
         // ended as a statusless "incomplete" response: no RetryInfo pacing, and geminiHaltsBatch could not stop the run.
         // It now fails with the same status, retryable and isFatal fields as an HTTP error; one without a code stays incomplete.
+        // v19.0: also map canonical gRPC integer/string status codes (8 / RESOURCE_EXHAUSTED -> 429, 14 / UNAVAILABLE -> 503, etc.).
         if(d.error&&typeof d.error==='object'){
-          const code=Number(d.error.code),status=Number.isInteger(code)&&code>=400?code:0,msg=d.error.message||'API error '+(status||'in stream');
+          const grpcMap={3:400,4:504,7:403,8:429,13:500,14:503,16:401,INVALID_ARGUMENT:400,DEADLINE_EXCEEDED:504,PERMISSION_DENIED:403,RESOURCE_EXHAUSTED:429,INTERNAL:500,UNAVAILABLE:503,UNAUTHENTICATED:401};
+          const code=Number(d.error.code),status=(Number.isInteger(code)&&code>=400?code:0)||grpcMap[code]||grpcMap[String(d.error.status||'').toUpperCase()]||0,msg=d.error.message||'API error '+(status||'in stream');
           if(!status)throw Object.assign(new Error(msg),{incomplete:true});
           const retryable=status===429||status===408||status>=500;
           const e=Object.assign(new Error(msg),{status,retryable,isFatal:!retryable});
@@ -1350,7 +1387,7 @@ async function geminiRequest(apiKey,model,body,{signal,retries=2,onUpdate,onMeta
           if(wd.signal.aborted)throw new DOMException('Aborted','AbortError');
           const {done,value}=await reader.read();if(done){readerDone=true;break;}
           arm();parser.feed(dec.decode(value,{stream:true}));
-          const now=Date.now();if(text&&now-lastEmit>150){lastEmit=now;onUpdate(text);}
+          const now=Date.now();if(text&&now-lastEmit>150){lastEmit=now;lastEmitted=text;onUpdate(text);}
         }
         parser.feed(dec.decode(),true);
       }else accept(await resp.json());
@@ -1373,14 +1410,17 @@ async function geminiRequest(apiKey,model,body,{signal,retries=2,onUpdate,onMeta
         const think=usage?.thoughtsTokenCount||0;
         throw Object.assign(new Error('Output hit the '+cap.toLocaleString()+'-token ceiling before the JSON was complete'+(think?' (thinking used '+think.toLocaleString()+' tokens)':'')+'. Lower the Thinking Level for this tool, or reduce the input size.'),{isFatal:true,truncated:true,finishReason:'MAX_TOKENS'});
       }
-      if(streaming)onUpdate(text);
+      if(streaming){lastEmitted=text;onUpdate(text);}
       meta({attempt:attempt+1,status:finish==='MAX_TOKENS'?'truncated':'complete',complete:finish!=='MAX_TOKENS',finishReason:finish,truncated:finish==='MAX_TOKENS',usage});
       result=text;
     }catch(err){
       failure=err;
+      // v19.0: flush any unthrottled trailing stream delta before failing, and retain the best partial text across retries.
+      if(streaming&&text&&text!==lastEmitted){try{onUpdate(text);}catch(e){}lastEmitted=text;}
+      if(text)bestPartial=text;
       if(timedOut&&!signal?.aborted)failure=Object.assign(new Error('No response data for '+Math.round(timeoutMs/1000)+'s — request timed out.'),{incomplete:true,retryable:true});
       if(signal?.aborted&&failure.name!=='AbortError')failure=new DOMException('Aborted','AbortError');
-      failure.partialText=text;failure.attempt=attempt+1;
+      failure.partialText=text||bestPartial;failure.attempt=attempt+1;
       meta({attempt:attempt+1,status:failure.name==='AbortError'?'interrupted':'incomplete',complete:false,incomplete:true,finishReason:finish,truncated:finish==='MAX_TOKENS',usage,partialText:text,error:failure.message,httpStatus:failure.status});
       retryDelay=failure.retryDelayMs??Math.pow(2,attempt+1)*1000;
     }finally{
@@ -1438,7 +1478,8 @@ function extractJSON(text){
   // v17.3: every fenced block is tried, and a brace scan that fails from the first brace in prose
   // is retried from the first line that begins with a brace. Both are fallbacks: any input the
   // previous order accepted still yields the same value, and the original failure is rethrown.
-  const fences=[...source.matchAll(/```(?:json)?\s*([\s\S]*?)```/g)];
+  // v19.0: match ```JSON case-insensitively and iterate all line-start braces/brackets in fallback.
+  const fences=[...source.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)];
   if(fences.length)try{return JSON.parse(fences[0][1].trim());}catch(e){}
   const scan=start=>{
     const opener=source[start],closer=opener==='{'?'}':']';let depth=0,inStr=false,esc=false;
@@ -1456,8 +1497,7 @@ function extractJSON(text){
   let failure;
   try{return scan(first);}catch(e){failure=e;}
   for(const fence of fences.slice(1))try{return JSON.parse(fence[1].trim());}catch(e){}
-  const lineStart=source.match(/(?:^|\n)[ \t]*[{[]/);
-  if(lineStart){const at=lineStart.index+lineStart[0].length-1;if(at>first)try{return scan(at);}catch(e){}}
+  for(const m of source.matchAll(/(?:^|\n)[ \t]*[{[]/g)){const at=m.index+m[0].length-1;if(at>first)try{return scan(at);}catch(e){}}
   throw failure;
 }
 
@@ -1561,7 +1601,8 @@ if(typeof window!=='undefined')window.addEventListener('pagehide',event=>{if(!ev
 // preserves row structure, which is most of what a nursing textbook's tables, alert
 // boxes, and lab-value panels actually carry.
 function pdfLayoutText(tc){
-  const items=(tc&&tc.items)||[];let result='';let lastX=-1,lastWidth=0,lastY=-1;
+  // v19.0: use null instead of -1 for uninitialized coordinates so valid PDF items at x=-1 or y=-1 are not treated as uninitialized.
+  const items=(tc&&tc.items)||[];let result='';let lastX=null,lastWidth=0,lastY=null;
   for(const item of items){if(!item.str)continue;const x=item.transform?.[4]??0,y=item.transform?.[5]??0;
     // v15.8: transform[0] alone is the horizontal scale, which is 0 for 90-degree rotated
     // text. ?? does not default 0, so fontSize became 0 and every y-delta exceeded the
@@ -1569,8 +1610,8 @@ function pdfLayoutText(tc){
     // hypot(a,b) is the rotation-invariant scale.
     const _a=item.transform?.[0]??12,_b=item.transform?.[1]??0;
     const fontSize=Math.max(4,Math.hypot(_a,_b))||12;
-    if(lastY!==-1&&Math.abs(y-lastY)>fontSize*0.5){result+='\n';lastX=-1;}
-    if(lastX!==-1){const gap=x-(lastX+lastWidth);if(gap>fontSize*0.25)result+=' ';else if(gap<-fontSize*2)result+='\n';}
+    if(lastY!==null&&Math.abs(y-lastY)>fontSize*0.5){result+='\n';lastX=null;}
+    if(lastX!==null){const gap=x-(lastX+lastWidth);if(gap>fontSize*0.25)result+=' ';else if(gap<-fontSize*2)result+='\n';}
     result+=item.str;lastX=x;lastWidth=item.width??(item.str.length*fontSize*0.5);lastY=y;}
   return result;
 }
@@ -1600,7 +1641,10 @@ function kbTextQuality(units){
 // cleanup() sits in a finally AFTER onPage is awaited, which is what keeps the v15.10
 // composition probe working: the operator list is exactly what cleanup() releases.
 async function pdfWalkPages(file,{signal,from=1,to=Infinity,onPage}={}){
+  // v19.0: check abort signal before and after async PDF worker calls so an aborted walk never invokes onPage.
+  if(signal&&signal.aborted)throw new DOMException('Aborted','AbortError');
   const pdf=await getPdfDoc(file);
+  if(signal&&signal.aborted)throw new DOMException('Aborted','AbortError');
   const first=Math.max(1,Math.floor(from)||1);
   const last=Math.min(pdf.numPages,to===Infinity?pdf.numPages:Math.floor(to)||0);
   for(let i=first;i<=last;i++){
@@ -1609,6 +1653,7 @@ async function pdfWalkPages(file,{signal,from=1,to=Infinity,onPage}={}){
     try{
       // v18.0 (review L27): the text content is passed on, so a caller that needs item positions does not read it twice.
       const tc=await pg.getTextContent(),text=pdfLayoutText(tc);
+      if(signal&&signal.aborted)throw new DOMException('Aborted','AbortError');
       if(onPage)await onPage(text,i,pg,pdf.numPages,tc);
     }finally{
       try{pg.cleanup();}catch(e){}
@@ -1632,7 +1677,8 @@ function markdownToPlainText(md){
   // operators in every .txt export (and on the Anki cards built from them), and the code-fence rule ran after the
   // inline-code rule and never matched. Emphasis now needs non-space text inside and no word character outside, and
   // fence marker lines are removed with their content kept.
-  return String(md||'').replace(/^([ \t]*\d{1,9})\\([.)])/gm,'$1$2').replace(/<div class="pagebreak"><\/div>/g,'\n---\n').replace(/^#{1,6}\s+/gm,'').replace(/^[ \t]*```[^\n]*$/gm,'').replace(/(^|[^\w*])\*\*(?=\S)([^\n]*?\S)\*\*(?![\w*])/gm,'$1$2').replace(/(^|[^\w*])\*(?=\S)([^*\n]*?\S)\*(?![\w*])/gm,'$1$2').replace(/`(.+?)`/g,'$1').replace(/^\|.*\|$/gm,line=>{if(/^[\|\s:-]+$/.test(line))return'';return line.replace(/^\||\|$/g,'').split('|').map(c=>c.trim()).join('\t');}).replace(/^[-*+]\s+/gm,'\u2022 ').replace(/^>\s+/gm,'  ').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1').replace(/---+/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+  // v19.0: strip standalone markdown rules before converting <div class="pagebreak"></div> to \n---\n so the pagebreak rule survives and inline "---" in prose is not turned into a newline; disallow "**" inside bold spans so an unclosed or word-followed "**" cannot bridge across a later bold span.
+  return String(md||'').replace(/^([ \t]*\d{1,9})\\([.)])/gm,'$1$2').replace(/^[ \t]*-{3,}[ \t]*$/gm,'').replace(/<div class="pagebreak"><\/div>/g,'\n---\n').replace(/^#{1,6}\s+/gm,'').replace(/^[ \t]*```[^\n]*$/gm,'').replace(/(^|[^\w*])\*\*(?=\S)((?:(?!\*\*)[^\n])*?\S)\*\*(?![\w*])/gm,'$1$2').replace(/(^|[^\w*])\*(?=\S)([^*\n]*?\S)\*(?![\w*])/gm,'$1$2').replace(/`(.+?)`/g,'$1').replace(/^\|.*\|$/gm,line=>{if(/^[\|\s:-]+$/.test(line))return'';return line.replace(/^\||\|$/g,'').split('|').map(c=>c.trim()).join('\t');}).replace(/^[-*+]\s+/gm,'\u2022 ').replace(/^>\s+/gm,'  ').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1').replace(/\n{3,}/g,'\n\n').trim();
 }
 
 // Shared export helpers
@@ -1654,7 +1700,7 @@ function buildPrintDoc(mdContent,title,subtitle){
   return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'" />
-<title>${escHtml(fileTitle.replace(/-+/g,'-').replace(/^-|-$/g,''))}</title>
+<title>${escHtml(fileTitle.replace(/-+/g,'-').replace(/^-|-$/g,'')||'export')}</title>
 <style>
 /* ── Page geometry ── */
 @page{size:letter;margin:0.55in 0.5in 0.6in;}
@@ -1790,9 +1836,9 @@ function exportAsPdf(mdContent,title,subtitle){
   // v16.7: retained external links may navigate the preview; their destination must have no opener.
   try{win=window.open('','_blank');if(win)win.opener=null;winDoc=win?win.document:null;}catch(e){win=null;winDoc=null;}
   if(!win||!winDoc){printViaIframe(html);return;}
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
+  // v19.0: fall back to printViaIframe if open/write/close throws under popup extensions or WebView restrictions, and wire #lp-print immediately.
+  try{win.document.open();win.document.write(html);win.document.close();const btn=win.document.getElementById('lp-print');if(btn)btn.onclick=()=>win.print();}
+  catch(e){try{win.close();}catch(err){}printViaIframe(html);return;}
   const fire=()=>{
     try{
       const btn=win.document.getElementById('lp-print');
@@ -1898,9 +1944,10 @@ function FactInspectorDrawer(){
   const found=useMemo(()=>factId?findFactById(K.factIndex,factId):null,[factId,K.factIndex]);
   const usage=useMemo(()=>factId&&K.artifactRegistry?getFactUsage(K.artifactRegistry,factId):{anki:[],nclex:[],cases:[]},[factId,K.artifactRegistry]);
 
+  // v19.0: do not overwrite returnFocusRef.current when focus is already inside the drawer across context re-renders.
   useEffect(()=>{
     if(!factId)return;
-    returnFocusRef.current=document.activeElement;
+    if(!drawerRef.current||!drawerRef.current.contains(document.activeElement))returnFocusRef.current=document.activeElement;
     const onKey=e=>{
       if(e.key==='Escape'){e.preventDefault();FI.closeFactInspector();return;}
       if(e.key!=='Tab')return;
@@ -1922,7 +1969,7 @@ function FactInspectorDrawer(){
       clearTimeout(t);
       try{returnFocusRef.current&&returnFocusRef.current.focus&&returnFocusRef.current.focus();}catch(e){}
     };
-  },[factId,FI]);
+  },[factId]);
 
   if(!factId)return null;
   const fact=found&&found.fact,condition=found&&found.condition;
@@ -1944,12 +1991,14 @@ function FactInspectorDrawer(){
             {fact.factType&&fact.factType!=='other'&&<span className="fact-bucket-badge" style={{color:'var(--text-dim)'}}>{fact.factType}</span>}
             {fact.safetyCritical&&<span className="tier-badge t1">safety-critical</span>}
             {fact.recovered&&<span className="fact-bucket-badge" style={{color:'var(--accent-green)'}}>audit-recovered</span>}
+            {fact.derived&&<span className="fact-bucket-badge" style={{color:'var(--accent)'}}>derived-entry</span>}
+            {Array.isArray(fact.pointAnchors)&&fact.pointAnchors.map(id=><span key={id} className={'tier-badge '+(id==='NONE'?'t2':'t3')} title="Mapped Point ID">[{id}]</span>)}
           </div>
           <div className="fd-section-label">Fact</div>
           <div className="fd-fact-text">{fact.text}</div>
           {fact.sourceQuote&&<><div className="fd-section-label">Verbatim anchor</div><div className="fd-anchor">{fact.sourceQuote}</div></>}
           <div className="fd-section-label">Source</div>
-          <div className="fd-source">{kbSourceText(fact)||'Pointer unavailable'}</div>
+          <div className="fd-source">{[kbSourceText(fact),typeof kbProvenanceText==='function'?kbProvenanceText(fact):''].filter(Boolean).join(' · ')||'Pointer unavailable'}</div>
           <div className="fd-section-label">Used in</div>
           {(usage.anki.length||usage.nclex.length||usage.cases.length)?<div>
             {usage.anki.map((a,i)=><div key={'a'+i} className="fd-usage-item">🗂 Anki note {a.label||a.id}</div>)}
@@ -2015,11 +2064,11 @@ function Workbench({setup,setupLabel,action,resultsLabel,children}){
 function Step({n,title,note,lede,children}){
   return <div className="sect">
     <div className="sect-head">
-      {n&&<span className="sect-num" aria-hidden="true">{n}</span>}
+      {n!=null&&n!==''&&n!==false&&<span className="sect-num" aria-hidden="true">{n}</span>}
       <h3 className="sect-title">{title}</h3>
-      {note&&<span className="sect-note">{note}</span>}
+      {note!=null&&note!==''&&note!==false&&<span className="sect-note">{note}</span>}
     </div>
-    {lede&&<p className="sect-lede">{lede}</p>}
+    {lede!=null&&lede!==''&&lede!==false&&<p className="sect-lede">{lede}</p>}
     {children}
   </div>;
 }
@@ -2027,7 +2076,7 @@ function Step({n,title,note,lede,children}){
 // never removed. `note` carries the current value so a closed section still reports itself.
 function Disclose({summary,note,children,open=false,className=''}){
   return <details className={('disclose '+className).trim()} open={open||undefined}>
-    <summary>{summary}{note&&<span className="disclose-note">{note}</span>}</summary>
+    <summary>{summary}{note!=null&&note!==''&&note!==false&&<span className="disclose-note">{note}</span>}</summary>
     <div>{children}</div>
   </details>;
 }
@@ -2052,7 +2101,7 @@ function EmptyState({mark,title,note,steps}){
 function ResultsHead({title,count,children}){
   return <div className="results-head">
     <h2 className="results-title">{title}</h2>
-    {count&&<span className="results-count">{count}</span>}
+    {count!=null&&count!==''&&count!==false&&<span className="results-count">{count}</span>}
     {children&&<div className="results-actions">{children}</div>}
   </div>;
 }
@@ -2071,9 +2120,10 @@ function RunStatus({label,value,max=100,caption,detail,children}){
 }
 
 // v17.3: one capped log per tool. Six copies of the same slice(-200) used to live in the tools.
+// v19.0: slice after appending so the log length is strictly capped at `cap` (not `cap + 1`) and `cap <= 0` yields `[]`.
 function useCappedLog(cap=200){
   const [logs,setLogs]=useState([]);
-  const push=useCallback(entry=>setLogs(p=>[...p.slice(-cap),entry]),[cap]);
+  const push=useCallback(entry=>setLogs(p=>cap>0?[...p.slice(-cap),entry].slice(-cap):[]),[cap]);
   return [logs,push,setLogs];
 }
 
@@ -2283,7 +2333,7 @@ function kbBuildFocusBlock(outcomes,points,extra,mode){
   if(String(outcomes||'').trim())seg.push('OUTCOMES (learning objectives this exam covers):\n'+outcomes.trim());
   // v19.0: parse-time Point ID assignment (P1...Pn) + SOURCE & ANCHOR RULES with [NONE] escape hatch.
   if(numberedPoints.length)seg.push('POINTS (specific atomic content that must be covered — map every extracted fact to its Point ID(s) in a "pointAnchors" array on the fact object, e.g. ["P1"] or ["P3", "P4"], or ["NONE"] if unmapped):\n'+formatPointsForPrompt(numberedPoints));
-  else if(String(points||'').trim())seg.push('POINTS (specific content that must be covered):\n'+points.trim());
+  else if(typeof parseAndNumberPoints!=='function'&&String(points||'').trim())seg.push('POINTS (specific content that must be covered):\n'+points.trim());
   if(String(extra||'').trim())seg.push('ADDITIONAL CONTEXT:\n'+extra.trim());
   if(numberedPoints.length&&!String(extra||'').includes('SOURCE & ANCHOR RULES:'))seg.push(KB_SOURCE_ANCHOR_RULES);
   if(!seg.length)return'';
@@ -2367,27 +2417,29 @@ const KB_SOURCE_ANCHOR_RULES=`SOURCE & ANCHOR RULES:
 
 // 1. Parse-time Point ID assignment (skips headings, preserves "2.1" from turning into "1")
 function parseAndNumberPoints(rawPointsText) {
+  // Skip Markdown headers (# Topic), bold-only headers (**Topic**), or bare label lines ending in ":"
+  const isHeading = line =>
+    /^#{1,6}\s+/.test(line) ||
+    /^\*\*[^*]+\*\*:?$/.test(line) ||
+    /^[A-Za-z0-9\s/&,-]+:$/.test(line);
+
   const lines = String(rawPointsText || '')
     .split('\n')
     .map(line => line.trim())
-    .filter(Boolean);
+    .filter(line => Boolean(line) && !isHeading(line));
 
-  const validLines = lines.filter(line => {
-    // Skip Markdown headers (# Topic), bold-only headers (**Topic**), or bare label lines ending in ":"
-    if (/^#{1,6}\s+/.test(line)) return false;
-    if (/^\*\*[^*]+\*\*:?$/.test(line)) return false;
-    if (/^[A-Za-z0-9\s/&,-]+:$/.test(line)) return false;
-    return true;
-  });
+  // v19.0: re-filter after prefix stripping so bare prefixes ("P1 —", "1.") or bulleted headings ("- **Topic**:") never emit empty or heading Points.
+  const cleaned = lines
+    .map(line =>
+      line
+        // Requires whitespace (or end-of-line) after numbered/dotted prefixes so "2.1 Hypokalemia" -> "Hypokalemia"
+        // and clinical numbers like "12-lead ECG" or "2 L/min O2" are untouched.
+        .replace(/^(?:P\d+[\s:—-]+|[-*•](?:\s+|$)|\d+(?:\.\d+)+[.)]?(?:\s+|$)|\d+[.)](?:\s+|$))/i, '')
+        .trim()
+    )
+    .filter(line => Boolean(line) && !isHeading(line));
 
-  return validLines.map((line, idx) => {
-    // Requires whitespace after numbered/dotted prefixes so "2.1 Hypokalemia" -> "Hypokalemia"
-    // and clinical numbers like "12-lead ECG" or "2 L/min O2" are untouched.
-    const cleanText = line
-      .replace(/^(?:P\d+[\s:—-]+|[-*•]\s+|\d+(?:\.\d+)+[.)]?\s+|\d+[.)]\s+)/i, '')
-      .trim();
-    return { id: `P${idx + 1}`, text: cleanText };
-  });
+  return cleaned.map((cleanText, idx) => ({ id: `P${idx + 1}`, text: cleanText }));
 }
 
 // 2. Formatted string to inject into the KB Builder prompt (persist numberedPoints with the KB object!)
@@ -2404,6 +2456,24 @@ function buildKbFactItemSchema(numberedPoints) {
       fact: {
         type: "STRING",
         description: "Clean clinical fact or comparative statement. Do NOT include Point IDs or page citations inside this string."
+      },
+      text: {
+        type: "STRING",
+        description: "Clean clinical fact or comparative statement (LATTE schema field)."
+      },
+      latteBucket: {
+        type: "STRING",
+        format: "enum",
+        enum: ["BriefPatho", "Look", "Assess", "Tests", "Treatments", "Educate"],
+        description: "LATTE bucket assignment."
+      },
+      tier: {
+        type: "INTEGER",
+        description: "Exam priority tier (1, 2, or 3)."
+      },
+      sourceQuote: {
+        type: "STRING",
+        description: "Verbatim source phrase, 20 words maximum."
       },
       pointAnchors: {
         type: "ARRAY",
@@ -2520,7 +2590,8 @@ function runPointAnchorHarness() {
 function kbStripPointTags(text){
   const str=String(text||'');
   if(!/\[(?:P\d+(?:\s*,\s*P\d+)*|NONE)\]/i.test(str))return str;
-  return str.replace(/\s*\[(?:P\d+(?:\s*,\s*P\d+)*|NONE)\]/gi,'').replace(/\s+([.,;:])/g,'$1').trim();
+  // v19.0: collapse whitespace before punctuation only at the stripped tag boundary so leading-dot decimals ("Administer .5 mg") in prose stay intact, and normalize embedded newlines in tagged facts.
+  return str.replace(/\s*\r?\n\s*/g,' ').replace(/(?:\s*\[(?:P\d+(?:\s*,\s*P\d+)*|NONE)\])+\s*(?=[.,;:]|$)/gi,'').replace(/\s*\[(?:P\d+(?:\s*,\s*P\d+)*|NONE)\]/gi,'').trim();
 }
 function kbExtractPointAnchors(rawText,rawAnchors){
   const str=String(rawText||''),tagRe=/\[((?:P\d+(?:\s*,\s*P\d+)*|NONE))\]/gi,fromText=[];
@@ -2530,8 +2601,11 @@ function kbExtractPointAnchors(rawText,rawAnchors){
   }
   const cleanText=fromText.length?kbStripPointTags(str):str;
   const hasExplicit=Array.isArray(rawAnchors);
-  const explicit=hasExplicit?rawAnchors.map(a=>String(a||'').trim().toUpperCase()).filter(Boolean):[];
-  return{text:cleanText,pointAnchors:[...explicit,...fromText],hadAnchors:hasExplicit||fromText.length>0};
+  // v19.0: normalize bracketed/comma-joined explicit anchors, deduplicate, and drop NONE when a real Point ID is present.
+  const explicit=hasExplicit?rawAnchors.flatMap(a=>String(a||'').replace(/[\[\]]/g,'').split(',')).map(s=>s.trim().toUpperCase()).filter(Boolean):[];
+  const combined=[...new Set([...explicit,...fromText])];
+  const pointAnchors=combined.length>1&&combined.some(id=>/^P\d+$/.test(id))?combined.filter(id=>id!=='NONE'):combined;
+  return{text:cleanText,pointAnchors,hadAnchors:hasExplicit||fromText.length>0};
 }
 // v18.4: medications, diagnostics and scoring tools reached no tool after the Knowledge Base tab. Every consumer reads
 // facts[], and the extraction prompt gives these arrays no shape, so the model often returned flat fields instead (class,
@@ -2576,8 +2650,10 @@ function kbEntityValueTexts(value){
 function normalizeKbEntities(kb,{rekey=false}={}){
   const report={entries:0,withoutFactsBefore:0,withoutFactsAfter:0,factsWritten:0,factsRepaired:0,unmapped:{},summary:''};
   if(!kb||typeof kb!=='object'||Array.isArray(kb))return{kb,report};
-  const isObj=v=>!!v&&typeof v==='object'&&!Array.isArray(v),hasText=f=>isObj(f)&&!!String(f.text||'').trim(),factId=id=>typeof id==='string'&&/^fact-\d+$/.test(id);
+  // v19.0: require typeof f.text==='string', filter invalid elements from e.facts, sanitize f.sources, and extract [P#] tags on entity facts.
+  const isObj=v=>!!v&&typeof v==='object'&&!Array.isArray(v),hasText=f=>isObj(f)&&typeof f.text==='string'&&!!f.text.trim(),factId=id=>typeof id==='string'&&/^fact-\d+$/.test(id);
   const pointer=p=>isObj(p)&&(p.filename||p.location)?{filename:String(p.filename||''),location:String(p.location||'')}:null;
+  const firstSource=arr=>Array.isArray(arr)?arr.map(pointer).find(Boolean)||null:null;
   const owner=new Map();let max=0;
   const claim=f=>{if(!isObj(f)||!factId(f.id)||owner.has(f.id))return;owner.set(f.id,f);max=Math.max(max,Number(f.id.slice(5)));};
   for(const c of Array.isArray(kb.conditions)?kb.conditions:[])for(const f of isObj(c)&&Array.isArray(c.facts)?c.facts:[])claim(f);
@@ -2588,19 +2664,25 @@ function normalizeKbEntities(kb,{rekey=false}={}){
     out[key]=kb[key].map(e=>{
       if(!isObj(e))return e;
       report.entries++;
-      const name=String(e.name||'').replace(/\s+/g,' ').trim()||'Unnamed entry',source=pointer(e.sourcePointer);
+      const name=String(e.name||'').replace(/\s+/g,' ').trim()||'Unnamed entry',source=pointer(e.sourcePointer)||firstSource(e.sources);
       if(Array.isArray(e.facts)&&e.facts.some(hasText)){
-        let touched=false;
-        const facts=e.facts.map(f=>{
-          if(!hasText(f))return f;
-          const keepId=!rekey&&owner.get(f.id)===f,tier=[1,2,3].includes(Number(f.tier))?Number(f.tier):(f.safetyCritical?1:2),needsSources=!Array.isArray(f.sources);
-          if(keepId&&tier===f.tier&&!needsSources)return f;
-          if(!factId(f.id)||tier!==f.tier||needsSources)report.factsRepaired++;
+        let touched=e.facts.some(f=>!hasText(f));
+        const validFacts=touched?e.facts.filter(hasText):e.facts;
+        const facts=validFacts.map(f=>{
+          const {text:cleanText,pointAnchors,hadAnchors}=kbExtractPointAnchors(f.text,f.pointAnchors);
+          const textChanged=cleanText!==f.text;
+          const anchorsChanged=hadAnchors&&(!Array.isArray(f.pointAnchors)||f.pointAnchors.length!==pointAnchors.length||f.pointAnchors.some((a,idx)=>a!==pointAnchors[idx]));
+          const keepId=!rekey&&owner.get(f.id)===f,tier=[1,2,3].includes(Number(f.tier))?Number(f.tier):(f.safetyCritical?1:2);
+          const badSources=Array.isArray(f.sources)&&f.sources.some(s=>!pointer(s));
+          const needsSources=!Array.isArray(f.sources)||badSources;
+          if(keepId&&tier===f.tier&&!needsSources&&!textChanged&&!anchorsChanged)return f;
+          if(!factId(f.id)||tier!==f.tier||needsSources||textChanged||anchorsChanged)report.factsRepaired++;
           touched=true;
-          const g={...f,id:keepId?f.id:nextId(),tier};
-          if(needsSources){const p=pointer(f.sourcePointer)||source;g.sources=p?[p]:[];}
+          const g={...f,id:keepId?f.id:nextId(),text:cleanText,tier,...(hadAnchors?{pointAnchors}:{})};
+          if(needsSources){const cleanSrc=Array.isArray(f.sources)?f.sources.map(pointer).filter(Boolean):[];const p=pointer(f.sourcePointer)||source;g.sources=cleanSrc.length?cleanSrc:(p?[p]:[]);}
           return g;
-        });
+        }).filter(f=>!!f.text.trim());
+        if(facts.length!==validFacts.length)touched=true;
         if(!touched)return e;
         changed=true;return{...e,facts};
       }
@@ -2608,12 +2690,13 @@ function normalizeKbEntities(kb,{rekey=false}={}){
       const facts=[];
       for(const [field,bucket,factType,label,safetyCritical] of KB_ENTITY_FIELD_MAP){
         if(!Object.prototype.hasOwnProperty.call(e,field))continue;
-        for(const value of kbEntityValueTexts(e[field])){
-          if(field==='genericName'&&value.toLowerCase()===name.toLowerCase())continue;
+        for(const rawVal of kbEntityValueTexts(e[field])){
+          const {text:value,pointAnchors,hadAnchors}=kbExtractPointAnchors(rawVal,e.pointAnchors);
+          if(!value||(field==='genericName'&&value.toLowerCase()===name.toLowerCase()))continue;
           const text=label?name+' — '+label+': '+value
             :name+' is '+(/^[aeiou]/i.test(value)?'an ':'a ')+(/^[A-Z][a-z]/.test(value)?value[0].toLowerCase()+value.slice(1):value)+(/[.!?]$/.test(value)?'':'.');
           facts.push({id:nextId(),text,latteBucket:key!=='medications'&&(field==='indications'||field==='indication')?'Tests':bucket,subtype:null,factType,
-            safetyCritical,tier:1,sourceQuote:null,sources:source?[source]:[],derived:true,derivedFrom:{collection:key,field}});
+            safetyCritical,tier:1,sourceQuote:null,sources:source?[source]:[],derived:true,derivedFrom:{collection:key,field},...(hadAnchors?{pointAnchors}:{})});
         }
       }
       for(const field of Object.keys(e))if(!mapped.has(field)&&!KB_ENTITY_META_FIELDS.includes(field)&&kbEntityValueTexts(e[field]).length)report.unmapped[field]=(report.unmapped[field]||0)+1;
@@ -2679,7 +2762,7 @@ function mergeLatteParts(parts,course='',exam='',numberedPoints=null){
         const k=kbFactKey(rawClean),src=raw.sourcePointer?[raw.sourcePointer]:[];
         if(existing.has(k)){
           const f=existing.get(k);f.sources=[...new Map([...(f.sources||[]),...src].map(x=>[(x.filename||'')+'|'+(x.location||''),x])).values()];
-          if(hadAnchors)f.pointAnchors=[...new Set([...(f.pointAnchors||[]),...pointAnchors])];
+          if(hadAnchors){const mergedAnchors=[...new Set([...(f.pointAnchors||[]),...pointAnchors])];f.pointAnchors=mergedAnchors.length>1&&mergedAnchors.some(id=>/^P\d+$/.test(id))?mergedAnchors.filter(id=>id!=='NONE'):mergedAnchors;}
         }else{
           const f={...rawClean,id:'fact-'+(++factN),sourceQuote:String(raw.sourceQuote||'').trim(),tier:[1,2,3].includes(Number(raw.tier))?Number(raw.tier):(raw.safetyCritical?1:2),sources:src};delete f.sourcePointer;
           if(hadAnchors)f.pointAnchors=pointAnchors;
@@ -2691,9 +2774,10 @@ function mergeLatteParts(parts,course='',exam='',numberedPoints=null){
   }
   // v18.4: schema 1.2 adds the optional fact fields sourceKind, sourceLabel and printedPage (kbCoerceProvenance) and the
   // facts normalizeKbEntities writes for entries; a 1.1 Knowledge Base still imports and restores.
-  // v19.0: persist numberedPoints alongside the KB when present so Point IDs never shift.
-  const cleanPoints=typeof numberedPoints==='string'?parseAndNumberPoints(numberedPoints):Array.isArray(numberedPoints)?numberedPoints.filter(p=>p&&typeof p.id==='string'&&typeof p.text==='string'):[];
-  const out={metadata:{course,exam,createdAt:new Date().toISOString(),schemaVersion:'1.2'},...(cleanPoints.length?{numberedPoints:cleanPoints}:{}),sources:parts.map(p=>p.source).filter(Boolean),conditions:[...map.values()],medications:parts.flatMap(p=>p.medications||[]),diagnostics:parts.flatMap(p=>p.diagnostics||[]),scoringTools:parts.flatMap(p=>p.scoringTools||[]),formulas:parts.flatMap(p=>p.formulas||[]),contradictions:parts.flatMap(p=>p.contradictions||[])};
+  // v19.0: persist numberedPoints alongside the KB when present so Point IDs never shift, and bind chunk sourcePointer onto entity entries when absent.
+  const cleanPoints=typeof numberedPoints==='string'?parseAndNumberPoints(numberedPoints):Array.isArray(numberedPoints)?numberedPoints.filter(p=>p&&typeof p.id==='string'&&typeof p.text==='string'&&p.id.trim()&&p.text.trim()):[];
+  const bindEntitySource=(p,items)=>(items||[]).map(e=>e&&typeof e==='object'&&!Array.isArray(e)&&!e.sourcePointer&&!e.sources&&p&&p.source&&(p.source.filename||p.source.range)?{...e,sourcePointer:{filename:String(p.source.filename||''),location:String(p.source.range||p.source.location||'')}}:e);
+  const out={metadata:{course,exam,createdAt:new Date().toISOString(),schemaVersion:'1.2'},...(cleanPoints.length?{numberedPoints:cleanPoints}:{}),sources:parts.map(p=>p.source).filter(Boolean),conditions:[...map.values()],medications:parts.flatMap(p=>bindEntitySource(p,p.medications)),diagnostics:parts.flatMap(p=>bindEntitySource(p,p.diagnostics)),scoringTools:parts.flatMap(p=>bindEntitySource(p,p.scoringTools)),formulas:parts.flatMap(p=>p.formulas||[]),contradictions:parts.flatMap(p=>p.contradictions||[])};
   const {kb:merged,report}=normalizeKbEntities(out);
   Object.defineProperty(merged,'dropped',{value:dropped}); // not saved: diagnostics for this build only
   Object.defineProperty(merged,'coerced',{value:coerced}); // v18.4: facts whose unknown sourceKind was read as prose
@@ -2763,7 +2847,8 @@ function kbNormalizeImported(raw,{restore=false}={}){
     }
     if((restore||c.aliases!=null)&&!Array.isArray(c.aliases))throw new Error(cp+'.aliases must be an array. No aliases were discarded.');
     const cid=str(c.id,cp+'.id',true);if(restore&&!cid)unusable('conditions',cp+'.id');
-    conditions.push({...(restore?c:{}),id:cid||kbSlug(name),name,aliases:bounded(c.aliases||[],50,cp+'.aliases').map((a,ai)=>str(a,cp+'.aliases['+ai+']',true)).filter(Boolean),facts});
+    // v19.0: fall back to 'condition' when kbSlug(name) is empty (e.g. non-ASCII condition name) so restore never sees id:"".
+    conditions.push({...(restore?c:{}),id:cid||kbSlug(name)||'condition',name,aliases:bounded(c.aliases||[],50,cp+'.aliases').map((a,ai)=>str(a,cp+'.aliases['+ai+']',true)).filter(Boolean),facts});
   }
   // v16.7: an intentionally empty saved KB is a valid snapshot, not malformed input.
   if(!conditions.length&&!restore)throw new Error('No usable conditions were found in this file.');
@@ -2994,7 +3079,7 @@ function validateLatteKnowledgeBase(kb){
       // v18.0 (review L13): "5mg" never matched, because the \b before a unit cannot sit between a digit and a letter. A
       // unit written straight after a digit is now its own alternative; everything the old pattern matched still matches.
       const critical=!!f.safetyCritical||f.factType==='threshold'||f.factType==='contraindication'||/(?:\b(?:mg|mcg|mEq|mm\s*Hg|bpm|mL|hours?|minutes?|days?|hold|notify|emergency|rapid response)\b|\d(?:mg|mcg|mEq|mm\s*Hg|bpm|mL|hours?|minutes?|days?)\b|contraindicat|\d\s*%)/i.test(f.text||''); // v15: "%" and "contraindicat" sat before a \b that a non-word/continuing char can never satisfy — neither alternative had ever matched
-      if(critical&&!(f.sources||[]).some(x=>String(x.filename||'').trim()))issues.push({severity:'error',condition:c.name,factId:f.id,message:'Safety-critical or numerical fact lacks an actual filename source pointer.'});
+      if(critical&&!(f.sources||[]).some(x=>x&&typeof x==='object'&&String(x.filename||'').trim()))issues.push({severity:'error',condition:c.name,factId:f.id,message:'Safety-critical or numerical fact lacks an actual filename source pointer.'});
     }
   }
   // v18.4: an entry without facts reaches no other tool; normalizeKbEntities brings this to 0 unless no field maps.
@@ -3008,7 +3093,7 @@ const KB_ENTITY_KINDS=[['medications','medication'],['diagnostics','diagnostic']
 function kbEntitiesWithoutFacts(kb){
   let n=0;
   for(const [key] of KB_ENTITY_KINDS)for(const e of Array.isArray(kb&&kb[key])?kb[key]:[])
-    if(e&&typeof e==='object'&&!Array.isArray(e)&&!(Array.isArray(e.facts)&&e.facts.some(f=>f&&typeof f==='object'&&String(f.text||'').trim())))n++;
+    if(e&&typeof e==='object'&&!Array.isArray(e)&&!(Array.isArray(e.facts)&&e.facts.some(f=>f&&typeof f==='object'&&typeof f.text==='string'&&f.text.trim())))n++;
   return n;
 }
 // v18.4: the one view of the Knowledge Base that every consumer reads: the fact index and inspector, the Study view and
@@ -3024,7 +3109,7 @@ function kbFactView(kb,{boxTableFirst=false}={}){
   const src=kb&&typeof kb==='object'&&!Array.isArray(kb)?kb:{},groups=[...(Array.isArray(src.conditions)?src.conditions:[])];
   for(const [key,kind] of KB_ENTITY_KINDS)(Array.isArray(src[key])?src[key]:[]).forEach((e,i)=>{
     if(!e||typeof e!=='object'||Array.isArray(e)||!Array.isArray(e.facts))return;
-    const facts=e.facts.filter(f=>f&&typeof f==='object'&&String(f.text||'').trim());
+    const facts=e.facts.filter(f=>f&&typeof f==='object'&&typeof f.text==='string'&&f.text.trim());
     if(facts.length)groups.push({id:key+':'+i,name:String(e.name||'').replace(/\s+/g,' ').trim()||'Unnamed '+kind,aliases:Array.isArray(e.aliases)?e.aliases.filter(a=>typeof a==='string'):[],facts,entityKind:kind});
   });
   const order=facts=>facts.map((f,i)=>[f,i]).sort((a,b)=>kbFactWeight(b[0])-kbFactWeight(a[0])||a[1]-b[1]).map(x=>x[0]);
@@ -3032,7 +3117,7 @@ function kbFactView(kb,{boxTableFirst=false}={}){
 }
 
 function kbBucketFacts(c,bucket,subtype){return (c.facts||[]).filter(f=>f.latteBucket===bucket&&(!subtype||f.subtype===subtype));}
-function kbSourceText(f){return (f.sources||[]).map(x=>[x.filename,x.location].filter(Boolean).join(', ')).join('; ');}
+function kbSourceText(f){return (f.sources||[]).filter(x=>x&&typeof x==='object').map(x=>[x.filename,x.location].filter(Boolean).join(', ')).join('; ');}
 // v18.4: a box or table label and the book's printed page (schema 1.2), shown next to the source line in the Study view.
 function kbProvenanceText(f){
   const text=v=>typeof v==='string'||typeof v==='number'?String(v).trim():'';
@@ -3088,7 +3173,7 @@ function kbForAnki(kb){
     for(const f of c.facts||[]){
       const subtype=f.subtype?' | Subtype: '+f.subtype:'';
       // v19.0: strip any residual [P#] / [NONE] tags from fact text for Anki while keeping untagged text byte-identical.
-      const cleanText=/\[(?:P\d+(?:\s*,\s*P\d+)*|NONE)\]/i.test(String(f.text||''))?String(f.text||'').replace(/\s*\[(?:P\d+(?:\s*,\s*P\d+)*|NONE)\]/gi,'').replace(/\s+([.,;:])/g,'$1').trim():f.text;
+      const cleanText=/\[(?:P\d+(?:\s*,\s*P\d+)*|NONE)\]/i.test(String(f.text||''))?String(f.text||'').replace(/(?:\s*\[(?:P\d+(?:\s*,\s*P\d+)*|NONE)\])+\s*(?=[.,;:]|$)/gi,'').replace(/\s*\[(?:P\d+(?:\s*,\s*P\d+)*|NONE)\]/gi,'').trim():f.text;
       lines.push(`FACT ${f.id} | LATTE: ${f.latteBucket}${subtype} | Tier: ${f.tier} | ${cleanText} | Source: ${kbSourceText(f)||'pointer unavailable'}`);
     }
   }
@@ -3397,13 +3482,14 @@ const KB_QUOTE_MISS_LABEL={tooShort:'too short to verify',numericBoundary:'parti
 // de-hyphenated match, so 'hyphenation' can no longer fire in the app — and that turns this
 // bucket into a free regression detector. A non-zero 'hyphenation' count in the diagnostics
 // panel means the matcher's fallback and this function have come apart, which is a bug.
-function kbClassifyQuoteMiss(quote,sourceNorm,sourceDehyphNorm,sourceTokens){
+function kbClassifyQuoteMiss(quote,sourceNorm,sourceDehyphNorm,sourceTokens,marks){
   const q=kbNormForMatch(quote);
   if(q.length<10)return 'tooShort';
   // v16.7: an old substring hit at a partial number is a distinct miss, not an absent quote.
-  if(kbQuoteNumericBoundedMatch(q,sourceNorm))return null;
+  // v19.0: forward decimal-point marks to kbQuoteNumericBoundedMatch so "5 mg" inside "0.5 mg" is classified as numericBoundary rather than returning null.
+  if(kbQuoteNumericBoundedMatch(q,sourceNorm,marks&&marks.norm))return null;
   const d=kbDehyphNormForMatch(quote);
-  if(sourceDehyphNorm&&kbQuoteNumericBoundedMatch(d,sourceDehyphNorm))return 'hyphenation';
+  if(sourceDehyphNorm&&kbQuoteNumericBoundedMatch(d,sourceDehyphNorm,marks&&marks.dehyph))return 'hyphenation';
   if(String(sourceNorm||'').includes(q)||(sourceDehyphNorm&&sourceDehyphNorm.includes(d)))return 'numericBoundary';
   // Two things this must get right, both found by running it against real drug text:
   // 1. Word-boundary membership, not substring containment — "ate" lives inside
@@ -3757,7 +3843,7 @@ function KBFactList({condition}){
           <span className="fact-bucket-badge">{f.latteBucket}{f.subtype?' \u00b7 '+f.subtype:''}</span>
           <span className={'tier-badge t'+(f.tier||'')}>T{f.tier}</span>
           {f.safetyCritical&&<span className="tier-badge t1">safety</span>}
-          {Array.isArray(f.pointAnchors)&&f.pointAnchors.length>0&&<span className={'tier-badge '+(f.pointAnchors.includes('NONE')?'t1':'t3')} title="Mapped Point ID(s)">[{f.pointAnchors.join(', ')}]</span>}
+          {Array.isArray(f.pointAnchors)&&f.pointAnchors.length>0&&<span className={'tier-badge '+(f.pointAnchors.includes('NONE')?'t2':'t3')} title="Mapped Point ID(s)">[{f.pointAnchors.join(', ')}]</span>}
           <span style={{fontSize:12,color:'var(--text-dim)',fontFamily:'JetBrains Mono',wordBreak:'break-word'}}>{kbSourceText(f)||'no source pointer'}</span>
         </div>
       </div>
@@ -3836,7 +3922,8 @@ function KnowledgeBaseBuilder(){
   const addFiles=fl=>{const selected=Array.from(fl);setFiles(p=>[...p,...selected.filter(f=>/\.(pdf|pptx|jpe?g|png|webp|heic|heif)$/i.test(f.name)).filter(f=>!p.some(x=>x.name===f.name&&x.size===f.size&&x.lastModified===f.lastModified))]);};
   const importJSON=async file=>{
     if(!kbConfirmReplace('Importing this file'))return;
-    const run=replacementSlot.current.start();abortRef.current=run.ctl;setBusy(true);
+    // v19.0: do not bind abortRef to importJSON so removing an unrelated source file chip in Step 01 cannot abort an active JSON import.
+    const run=replacementSlot.current.start();setBusy(true);
     try{
       // Size gate first: file.text() on a multi-hundred-MB file would hang the tab
       // before a single validation check ran.
@@ -4036,7 +4123,7 @@ function KnowledgeBaseBuilder(){
         const missDetail=[],missByReason={},discardByReason={};
         let dehyphSaved=0;
         const noteMiss=(pass,f)=>{
-          const reason=kbClassifyQuoteMiss(f.sourceQuote,srcNorm,srcDehyph,srcToks);
+          const reason=kbClassifyQuoteMiss(f.sourceQuote,srcNorm,srcDehyph,srcToks,srcMarks);
           if(!reason)return;
           const bucket=pass===1?missByReason:discardByReason;
           bucket[reason]=(bucket[reason]||0)+1;
@@ -4231,24 +4318,29 @@ function KnowledgeBaseBuilder(){
   // boolean, so the disabled button can say WHICH one is stopping it.
   const cardsNeedReview=cardChunks.length>0&&!txReviewed;
   const onlyCardSources=files.length>0&&!files.some(x=>!cardIsImage(x));
+  // v19.0: block Build whenever any uploaded card image has not yet been transcribed, even alongside a PDF/PPTX or previously reviewed cards.
+  const untranscribedCards=files.filter(cardIsImage).some(f=>!transcripts[cardFileId(f)]);
   // Covers both shapes: images loaded but not yet transcribed, and images transcribed but
   // none clearing the gate. Previously the first fell through to a thrown 'no readable source
   // chunks' after the click, which is a worse way to learn the same thing.
-  const nothingToBuild=onlyCardSources&&!cardGate.buildable.length;
+  const nothingToBuild=untranscribedCards||(onlyCardSources&&!cardGate.buildable.length);
   const buildBlocked=busy||txBusy||!cfg.apiKey||!files.length||cardsNeedReview||nothingToBuild;
   const buildLabel=busy?'Extracting…':txBusy?'Transcribing…':!cfg.apiKey?'Enter API Key'
     :!files.length?'Add Sources':cardsNeedReview?'Confirm the card numbers first'
-    :nothingToBuild?(cardChunks.length?'No card clears the gate':'Transcribe the cards first')
+    :nothingToBuild?(untranscribedCards?'Transcribe the cards first':cardChunks.length?'No card clears the gate':'Transcribe the cards first')
     :'Build Knowledge Base';
   // v18.4: the browser, Study view, validation and fact count read kbFactView, so medication, diagnostic and scoring-tool
   // entries are listed after the conditions.
   const kb=K.knowledgeBase,view=useMemo(()=>kbFactView(kb),[kb]),md=useMemo(()=>renderKBMarkdown(view),[view]),validation=useMemo(()=>validateLatteKnowledgeBase(view),[view]),facts=view.conditions.reduce((n,c)=>n+(c.facts||[]).length,0),sel=view.conditions.find(c=>c.id===selected),entries=view.conditions.length-(kb.conditions||[]).length;
   // v19.0: Step 6 deterministic Point-to-Fact Audit across active numberedPoints (0-fact uncovered points, [NONE]/invalid IDs, >2x median bleed suspects).
   const pointAudit=useMemo(()=>{
-    if(typeof auditKbFacts!=='function')return null;
-    const pts=Array.isArray(kb.numberedPoints)&&kb.numberedPoints.length?kb.numberedPoints:(typeof parseAndNumberPoints==='function'?parseAndNumberPoints(kbPoints):[]);
-    if(!pts.length||!(view.conditions||[]).length)return null;
-    const allFacts=(view.conditions||[]).flatMap(c=>(c.facts||[]).map(f=>({...f,conditionName:c.name})));
+    if(typeof auditKbFacts!=='function'||!(view.conditions||[]).length)return null;
+    // v19.0: exclude un-anchored derived entity facts from Step 6 audit, and only fall back to live kbPoints when the KB itself carries pointAnchors.
+    const allFacts=(view.conditions||[]).flatMap(c=>(c.facts||[]).filter(f=>!f.derived||(Array.isArray(f.pointAnchors)&&f.pointAnchors.length>0)).map(f=>({...f,conditionName:c.name})));
+    const hasPersistedPts=Array.isArray(kb.numberedPoints)&&kb.numberedPoints.length>0;
+    const hasAnyAnchors=allFacts.some(f=>Array.isArray(f.pointAnchors)&&f.pointAnchors.length>0);
+    const pts=hasPersistedPts?kb.numberedPoints:(hasAnyAnchors&&typeof parseAndNumberPoints==='function'?parseAndNumberPoints(kbPoints):[]);
+    if(!pts.length||!allFacts.length)return null;
     const audit=auditKbFacts(pts,allFacts);
     const maxCount=Object.values(audit.countsByPoint).reduce((m,v)=>Math.max(m,v),0);
     return {...audit,numberedPoints:pts,maxCount,totalFacts:allFacts.length};
@@ -4266,7 +4358,7 @@ function KnowledgeBaseBuilder(){
     setup={<>
       <Step n="01" title="Sources" note={files.length?files.length+(files.length===1?' file':' files'):'none yet'} lede="PDFs and PPTX decks are read as text. Flashcard photos have no text layer, so they are transcribed first and reviewed before they become facts.">
     <div role="button" tabIndex={0} aria-label="Add PDF, PPTX, or flashcard image source files" onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fileRef.current?.click();}}} className="upload-zone" onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();addFiles(e.dataTransfer.files)}}><h3>Drop PDF, PPTX, or flashcard photos</h3><p>Large sources are processed in page or slide chunks; successful chunks are retained even if another chunk fails. Flashcard photos are transcribed first, and you review the transcript before it becomes facts.</p><input aria-label="Source files" ref={fileRef} type="file" multiple accept=".pdf,.pptx,.jpg,.jpeg,.png,.webp,.heic,.heif" style={{display:'none'}} onChange={e=>{addFiles(e.target.files);e.target.value=''}}/></div>
-    {files.length>0&&<div style={{marginTop:8}}>{files.map((f,i)=><div className="file-chip" key={cardFileId(f)}><div className={'f-icon '+getExt(f.name)}>{getExt(f.name)}</div><span className="f-name">{f.name}</span><span className="f-size">{formatSize(f.size)}</span><button className="f-rm" aria-label={'Remove source '+f.name} onClick={()=>{destroyPdfDoc(f);currentFiles.current=currentFiles.current.filter(x=>cardFileId(x)!==cardFileId(f));txAbortRef.current?.abort();abortRef.current?.abort();setTranscripts(p=>{const n={...p};delete n[cardFileId(f)];return n;});setTxReviewed(false);setFiles(currentFiles.current);}}>×</button></div>)}</div>}
+    {files.length>0&&<div style={{marginTop:8}}>{files.map((f,i)=><div className="file-chip" key={cardFileId(f)}><div className={'f-icon '+getExt(f.name)}>{getExt(f.name)}</div><span className="f-name">{f.name}</span><span className="f-size">{formatSize(f.size)}</span><button className="f-rm" aria-label={'Remove source '+f.name} onClick={()=>{destroyPdfDoc(f);currentFiles.current=currentFiles.current.filter(x=>cardFileId(x)!==cardFileId(f));txAbortRef.current?.abort();if(busy)abortRef.current?.abort();setTranscripts(p=>{const n={...p};delete n[cardFileId(f)];return n;});setTxReviewed(false);setFiles(currentFiles.current);}}>×</button></div>)}</div>}
     <div className="form-grid" style={{margin:'14px 0'}}><div className="field-block"><label htmlFor="kb-course">Course <span className="badge-opt">optional</span></label><input id="kb-course" type="text" value={course} onChange={e=>setCourse(e.target.value)} placeholder="Course name"/></div><div className="field-block"><label htmlFor="kb-exam">Exam / unit <span className="badge-opt">optional</span></label><input id="kb-exam" type="text" value={exam} onChange={e=>setExam(e.target.value)} placeholder="Exam or unit name"/></div></div>
       </Step>
       {files.some(cardIsImage)&&<Step n="02" title="Flashcard transcription" note={cardChunks.length?cardChunks.length+' transcribed':'not run'} lede="Pass 1 reads each card photo into verbatim text. Nothing downstream ever sees the photo again — every fact, quote and citation is grounded against this transcript, so a number misread here is verified flawlessly against the wrong text. The transcript review is on the right.">
@@ -4802,15 +4894,18 @@ function paParseTiers(text){
   for(const line of src.split('\n')){
     const h=HEAD.find(([re])=>re.test(line));
     if(h){cur=h[1];continue;}
-    const am=line.match(/^\s*\*?\s*Audit:\s*(.+)$/i);
+    // v19.0: also accept bold (**Audit: ...**) or label-italicized (*Audit*: ...) audit footers.
+    const am=line.match(/^\s*\*{0,2}\s*Audit\*{0,2}:\*{0,2}\s*(.+)$/i);
     if(am){audit=am[1].replace(/\*+\s*$/,'').trim();continue;}
     if(cur)sec[cur].push(line);
   }
-  if(!sec.tier1.length&&!sec.tier2.length&&!sec.tier3.length)return null;
   // The strategy block ends at a horizontal rule when the model emits one.
-  const clean=a=>a.join('\n').replace(/\n\s*-{3,}\s*$/,'').trim();
-  return{tier1:clean(sec.tier1),tier2:clean(sec.tier2),tier3:clean(sec.tier3),
+  // v19.0: strip standalone "---" even when a section contains only a rule, and return null when all cleaned tiers are empty.
+  const clean=a=>a.join('\n').replace(/(?:^|\n)\s*-{3,}\s*$/,'').trim();
+  const out={tier1:clean(sec.tier1),tier2:clean(sec.tier2),tier3:clean(sec.tier3),
     strategy:clean(sec.strategy),audit};
+  if(!out.tier1&&!out.tier2&&!out.tier3)return null;
+  return out;
 }
 
 // v17.7: synthesis sent the whole harvested inventory in one request, and thinking shares that request's
@@ -4853,7 +4948,8 @@ function paMergeTopics(bodies){
     let sec=null,item=null;
     const flush=()=>{if(item){const k=norm(item.join('\n'));if(!sec.seen.has(k)){sec.seen.add(k);sec.lines.push(...item);}item=null;}};
     for(const raw of String(body||'').split('\n')){
-      const line=raw.replace(/\s+$/,''),h=line.match(/^#{3,6}\s+(.+)$/);
+      // v19.0: accept ## through ###### topic headings so synthesis parts using H2 topic headers still merge cleanly.
+      const line=raw.replace(/\s+$/,''),h=line.match(/^#{2,6}\s+(.+)$/);
       if(!h&&!line.trim())continue;
       const key=h?norm(h[1]):(sec?null:'');
       if(key!==null){
@@ -4916,7 +5012,9 @@ function kbForPriority(kb,{tiers=[1,2,3],conditionQuery=""}={}){
     lines.push("## "+c.name);
     for(const f of facts){
       const src=kbSourceText(f);
-      lines.push(`- ${f.text} [KB ${f.id}; LATTE ${f.latteBucket}; source-tier T${f.tier}${src?'; '+src:''}]`);
+      // v19.0: collapse embedded newlines so multi-line facts cannot split mid-fact in paChunkText.
+      const cleanText=/[\r\n]/.test(String(f.text||''))?String(f.text||'').replace(/\s*\r?\n\s*/g,' ').trim():f.text;
+      lines.push(`- ${cleanText} [KB ${f.id}; LATTE ${f.latteBucket}; source-tier T${f.tier}${src?'; '+src:''}]`);
     }
     lines.push("");
   }
@@ -4990,13 +5088,14 @@ function PriorityAnalyzer(){
     const [owned_setStep,owned_setProgress,owned_setPhase,owned_setOutput,owned_setParsedTiers,owned_setError,owned_setMeta,owned_setChunks,owned_setIsStreaming]=[setStep,setProgress,setPhase,setOutput,setParsedTiers,setError,setMeta,setChunks,setIsStreaming].map(guard);
     owned_setStep('processing');owned_setProgress(0);owned_setPhase(`${total} chunks`);owned_setOutput('');owned_setParsedTiers(null);owned_setError('');owned_setMeta(null);owned_setChunks(chunkItems);
     setAbortController(controller);
-    const totalSteps=total+1;let completed=0;const extractions=[],extractionChunks=[];let gotOutput=false;
+    let completed=0,synthParts=0;const extractions=[],extractionChunks=[],texts=[];let gotOutput=false;
     const harvest={total,successful:0,failed:[],truncated:[]};
     const publishHarvest=guard(()=>setHarvestState({...harvest,failed:[...harvest.failed],truncated:[...harvest.truncated]}));publishHarvest();
     try{
       for(let i=0;i<total;i++){
         if(!current())throw new DOMException('Aborted','AbortError');
-        owned_setChunks(p=>p.map(c=>c.id===`ext-${i}`?{...c,status:'running'}:c));owned_setPhase(`Extracting chunk ${i+1}/${total}...`);owned_setProgress(Math.floor(completed/totalSteps*90));
+        // v19.0: Stage-1 harvest scales 0→50% so Stage-2 synthesis (50→100%) never jumps progress backwards.
+        owned_setChunks(p=>p.map(c=>c.id===`ext-${i}`?{...c,status:'running'}:c));owned_setPhase(`Extracting chunk ${i+1}/${total}...`);owned_setProgress(Math.floor(completed/total*50));
         let prevSummary='';if(extractions.length>0){const last=extractions[extractions.length-1];prevSummary=last.length>2000?last.slice(0,2000)+'\n[...truncated]':last;}
         try{
           const prompt=paBuildExtractPrompt(textChunks[i],i,total,prevSummary);
@@ -5011,7 +5110,7 @@ function PriorityAnalyzer(){
           owned_setChunks(p=>p.map(c=>c.id===`ext-${i}`?{...c,status:'done'}:c));
         }catch(err){if(err.name==='AbortError'||!current())throw new DOMException('Aborted','AbortError');owned_setChunks(p=>p.map(c=>c.id===`ext-${i}`?{...c,status:'error'}:c));harvest.failed.push({chunk:i+1,message:err.message||String(err)});if(geminiHaltsBatch(err)){publishHarvest();throw new Error(`Harvest stopped at chunk ${i+1} of ${total}; the remaining chunks were not sent. `+(err.message||String(err)));}} // v17.4: stop instead of harvesting into a closed quota window
         publishHarvest();
-        completed++;owned_setProgress(Math.floor(completed/totalSteps*90));
+        completed++;owned_setProgress(Math.floor(completed/total*50));
       }
       if(!current())throw new DOMException('Aborted','AbortError');
       // v16.7: transport failures are metadata, never study evidence for synthesis.
@@ -5026,7 +5125,7 @@ function PriorityAnalyzer(){
       const groups=paSynthGroups(extractions,paSynthPartChars(synthModel),joins),parts=groups.length;
       const synthIds=parts>1?groups.map((_,k)=>'synthesis-'+(k+1)):['synthesis'];
       if(parts>1)owned_setChunks(p=>[...p.filter(c=>c.id!=='synthesis'),...synthIds.map((id,k)=>({id,name:'Synthesis '+(k+1)+'/'+parts,phase:'synthesis',status:'pending'}))]);
-      const texts=[],metas=[],failed=[],SEP='\n\n---\n\n';
+      synthParts=parts;const metas=[],failed=[],SEP='\n\n---\n\n';
       // Published metadata for a split run: the first truncated part's usage for the banner, plus every truncated part.
       const publishSynthMeta=()=>{const cut=[];metas.forEach((m,i)=>{if(m&&m.truncated)cut.push(i+1);});const base=cut.length?metas[cut[0]-1]:metas.filter(Boolean).pop();owned_setMeta({...(base||{}),part:cut[0]||null,parts,truncatedParts:cut});};
       if(parts>1)publishSynthMeta();
@@ -5043,24 +5142,33 @@ function PriorityAnalyzer(){
           const full=await callGemini(cfg.apiKey,synthModel,[{text:synthPrompt}],{thinkingLevel:synthLevel,signal:controller.signal,onUpdate:t=>{if(!current())return;if(t)lastText=t;const shown=before?before+SEP+lastText:lastText;gotOutput=!!shown.trim();owned_setOutput(shown);if(gotOutput)owned_setStep('results');},onMeta:m=>{metas[k]=m;if(parts>1)publishSynthMeta();else owned_setMeta(m);}});
           owned_setIsStreaming(false);
           if(!current())throw new DOMException('Aborted','AbortError');
-          texts[k]=full;owned_setChunks(p=>p.map(c=>c.id===synthIds[k]?{...c,status:'done'}:c));
+          texts[k]=full;owned_setChunks(p=>p.map(c=>c.id===synthIds[k]?{...c,status:'done'}:c));owned_setProgress(Math.round(50+((k+1)/parts)*50));
         }catch(err){
           // A single part, a cancel, a source change or a halting transport failure ends the run as before;
           // the outer handler keeps whatever streamed. Any other failure costs only its own part.
+          texts[k]=err.partialText||lastText;
           if(parts===1||err.name==='AbortError'||!current())throw err;
           if(geminiHaltsBatch(err))throw new Error('Synthesis stopped at part '+(k+1)+' of '+parts+'; the remaining parts were not sent. '+(err.message||String(err)));
-          texts[k]=err.partialText||lastText;failed.push({part:k+1,message:err.message||String(err)});
-          owned_setChunks(p=>p.map(c=>c.id===synthIds[k]?{...c,status:'error'}:c));
+          failed.push({part:k+1,message:err.message||String(err)});
+          owned_setChunks(p=>p.map(c=>c.id===synthIds[k]?{...c,status:'error'}:c));owned_setProgress(Math.round(50+((k+1)/parts)*50));
         }
       }
       owned_setIsStreaming(false);
       if(!current())throw new DOMException('Aborted','AbortError');
+      // v19.0: when at least one synthesis part parsed into tiers, drop any failed part's unparseable preamble fragment so it cannot force the entire guide into the raw fallback view.
+      if(parts>1&&failed.length&&texts.some(t=>String(t||'').trim()&&paParseTiers(t))){for(const f of failed){if(texts[f.part-1]&&!paParseTiers(texts[f.part-1]))texts[f.part-1]='';}}
       if(parts>1&&!texts.some(t=>String(t||'').trim()))throw new Error('No synthesis part returned text. '+failed.map(f=>'Part '+f.part+': '+f.message).join(' '));
       const merged=paMergeSynthesis(texts);
       owned_setOutput(merged.text);owned_setParsedTiers(merged.tiers);owned_setProgress(100);owned_setStep('results');
       if(failed.length)owned_setError('Synthesis part'+(failed.length>1?'s ':' ')+failed.map(f=>f.part).join(', ')+' of '+parts+' failed ('+failed.map(f=>f.message).join('; ')+'). The other parts are shown.');
     }catch(e){
       owned_setIsStreaming(false);
+      // v19.0: when a multi-part synthesis stops early on quota or cancel after earlier parts succeeded, merge the surviving parts into parsedTiers.
+      if(synthParts>1&&current()&&texts.some(t=>String(t||'').trim())){
+        const slots=Array.from({length:synthParts},(_,j)=>texts[j]||'');
+        if(slots.some(t=>String(t||'').trim()&&paParseTiers(t))){for(let j=0;j<synthParts;j++)if(slots[j]&&!paParseTiers(slots[j]))slots[j]='';}
+        if(slots.some(t=>String(t||'').trim())){const partialMerged=paMergeSynthesis(slots);owned_setOutput(partialMerged.text);owned_setParsedTiers(partialMerged.tiers);gotOutput=true;}
+      }
       const cancelled=e.name==='AbortError';
       owned_setError(cancelled?'Cancelled.':e.message);
       // Keep whatever streamed in before the cancel — the error view would discard it.
@@ -5096,7 +5204,7 @@ function PriorityAnalyzer(){
     resultsLabel="Priority analysis results"
     setup={<>
       <Step n="01" title="Knowledge Base scope" note={(K.knowledgeBase.conditions||[]).length?(K.knowledgeBase.conditions||[]).length+' conditions':'empty'}>
-            <div style={{fontSize:12,color:(K.knowledgeBase.conditions||[]).length?'var(--accent-green)':'var(--accent-warm)',marginBottom:9}}>{(K.knowledgeBase.conditions||[]).length?`${K.knowledgeBase.conditions.length} conditions · ${(K.knowledgeBase.conditions||[]).reduce((n,c)=>n+(c.facts||[]).length,0)} facts ready`:'Build the Knowledge Base first.'}</div>
+            <div style={{fontSize:12,color:(K.knowledgeBase.conditions||[]).length?'var(--accent-green)':'var(--accent-warm)',marginBottom:9}}>{(K.knowledgeBase.conditions||[]).length?`${K.knowledgeBase.conditions.length} conditions · ${kbUsableFactCount(kbFactView(K.knowledgeBase))} facts ready`:'Build the Knowledge Base first.'}</div>
             <label htmlFor="priority-condition" className="sb-label">Condition filter <span className="badge-opt">optional</span></label><input id="priority-condition" type="text" value={kbConditionFilter} onChange={e=>setKbConditionFilter(e.target.value)} placeholder="Optional condition filter"/>
             <div style={{display:'flex',gap:5,marginTop:8}}>{[1,2,3].map(t=><button key={t} aria-pressed={kbTiers.includes(t)} className={`tier-btn t${t} ${kbTiers.includes(t)?'active':''}`} onClick={()=>setKbTiers(p=>p.includes(t)?(p.length>1?p.filter(x=>x!==t):p):[...p,t].sort())}><b>T{t}</b></button>)}</div>
             <div className="sb-hint">Source tiers only limit which facts enter the analyzer. The analyzer still applies its unchanged rule cascade and may assign a different final tier.</div>
@@ -5782,13 +5890,13 @@ function ankiParseCards(raw,chunkNo=1,tagFormatContract=null){
   if(!lines.some(line=>line.includes('|')||/\{\{c\d*:?/i.test(line)))return {cards,ledger:blocks[1]||''};
   // v16.7: whitespace cannot separate a dropped qualifier from its plausible remainder.
   const fragment=(index,step)=>{while(index>=0&&index<lines.length&&!lines[index].trim())index+=step;return index>=0&&index<lines.length&&!lines[index].includes('|');};
-  // v19.0: Step 7 — strip all [P#] / [NONE] tags from card text and extra.
-  const stripPTags=s=>/\[(?:P\d+(?:\s*,\s*P\d+)*|NONE)\]/i.test(String(s||''))?String(s||'').replace(/\s*\[(?:P\d+(?:\s*,\s*P\d+)*|NONE)\]/gi,'').replace(/\s+([.,;:])/g,'$1').trim():s;
+  // v19.0: Step 7 — strip all [P#] / [NONE] tags from card text, extra, and tags while preserving leading-dot decimals in prose.
+  const stripPTags=s=>/\[(?:P\d+(?:\s*,\s*P\d+)*|NONE)\]/i.test(String(s||''))?String(s||'').replace(/(?:\s*\[(?:P\d+(?:\s*,\s*P\d+)*|NONE)\])+\s*(?=[.,;:]|$)/gi,'').replace(/\s*\[(?:P\d+(?:\s*,\s*P\d+)*|NONE)\]/gi,'').trim():s;
   lines.forEach((line,index)=>{
     const t=line.trim();if(!t)return;const pts=t.split('|'),parseIssues=[];
     if(pts.length===1)parseIssues.push('unpiped-fragment');
     else if(fragment(index-1,-1)||fragment(index+1,1))parseIssues.push('adjacent-unpiped-line');
-    const card={id:uid(),chunk:chunkNo,sourceLine:index+1,text:stripPTags(pts[0].trim()),extra:stripPTags((pts[1]||'').trim()),tags:pts.slice(2).join('|').trim(),pipeCount:pts.length-1,parseIssues,needsReview:pts.length!==3||parseIssues.length>0,keep:true,factIds:[],...(tagFormatContract==='hierarchical-v1'?{tagFormatContract}:{})};
+    const card={id:uid(),chunk:chunkNo,sourceLine:index+1,text:stripPTags(pts[0].trim()),extra:stripPTags((pts[1]||'').trim()),tags:stripPTags(pts.slice(2).join('|').trim()),pipeCount:pts.length-1,parseIssues,needsReview:pts.length!==3||parseIssues.length>0,keep:true,factIds:[],...(tagFormatContract==='hierarchical-v1'?{tagFormatContract}:{})};
     card.parseProvenance=[{noteId:card.id,chunk:chunkNo,sourceLine:index+1,rawText:line,text:card.text,extra:card.extra,tags:card.tags,pipeCount:card.pipeCount,parseIssues:[...parseIssues]}];
     cards.push(card);
   });
@@ -5809,10 +5917,11 @@ function parseKBCoverage(text,chunk=1){
 }
 // v16.0: capture the aliases and subtype actually available to generation for later source review.
 function ankiSourceSnapshot(kb){
+  const stripPTags=s=>/\[(?:P\d+(?:\s*,\s*P\d+)*|NONE)\]/i.test(String(s||''))?String(s||'').replace(/(?:\s*\[(?:P\d+(?:\s*,\s*P\d+)*|NONE)\])+\s*(?=[.,;:]|$)/gi,'').replace(/\s*\[(?:P\d+(?:\s*,\s*P\d+)*|NONE)\]/gi,'').trim():String(s||'');
   const facts=[];
   for(const condition of (kb&&kb.conditions)||[])for(const f of condition.facts||[])facts.push(Object.freeze({
-    id:String(f.id||'').toLowerCase(),condition:condition.name||'',aliases:Object.freeze((condition.aliases||[]).map(a=>String(a))),subtype:String(f.subtype||''),text:String(f.text||''),sourceQuote:String(f.sourceQuote||''),tier:f.tier,bucket:f.latteBucket,
-    sources:Object.freeze((f.sources||[]).map(p=>Object.freeze({filename:String(p.filename||''),location:String(p.location||'')})))
+    id:String(f.id||'').toLowerCase(),condition:condition.name||'',aliases:Object.freeze((condition.aliases||[]).map(a=>String(a))),subtype:String(f.subtype||''),text:stripPTags(f.text),sourceQuote:String(f.sourceQuote||''),tier:f.tier,bucket:f.latteBucket,
+    sources:Object.freeze((f.sources||[]).filter(p=>p&&typeof p==='object').map(p=>Object.freeze({filename:String(p.filename||''),location:String(p.location||'')})))
   }));
   const byId=Object.create(null);for(const f of facts)byId[f.id]=f;
   return Object.freeze({facts:Object.freeze(facts),byId:Object.freeze(byId)});
@@ -5870,6 +5979,8 @@ function ankiDedupeCards(cards){
     const key=ankiExactMergeKey(c);
     if(key&&seen.has(key)){
       const kept=seen.get(key);kept.factIds=[...new Set([...kept.factIds,...c.factIds])];kept.mappingIssues=union(kept.mappingIssues,c.mappingIssues);
+      // v19.0: preserve unresolvedFactIds across exact-duplicate merges so tag normalization still sees unresolved IDs.
+      if(Array.isArray(kept.unresolvedFactIds)||Array.isArray(c.unresolvedFactIds))kept.unresolvedFactIds=[...new Set([...(kept.unresolvedFactIds||[]),...(c.unresolvedFactIds||[])])];
       for(const field of ['mergedNoteIds','sourceLocations','parseProvenance','conditionTagNormalizations','sourceLinkEdits'])kept[field]=union(kept[field]||[],c[field]||[]);
       if(c.sourceLinksNeedReview)kept.sourceLinksNeedReview=true;
       continue;
@@ -6369,11 +6480,13 @@ function ankiAuditGroups(cards,batch,tier='all',protocolVersion=3){
     const packetSize=part=>JSON.stringify(protocolVersion===4?ankiAuditPacket({id:'source-unassigned-part-999999',chunk:plan.chunk,part:999999,parts:999999,...part}):part).length;
     const parts=[];let pending=[];
     for(const unit of units){
-      const single=payload([unit]);
-      if(packetSize(single)>ANKI_SOURCE_AUDIT_GROUP_CHARS)throw new Error('Anki audit cannot fit source '+(unit.factIds.join(', ')||'unmapped note')+' / notes '+unit.noteIds.join(', ')+' within '+ANKI_SOURCE_AUDIT_GROUP_CHARS+' characters. Nothing was truncated; split these source facts or notes before auditing.');
-      const candidate=payload([...pending,unit]);
+      let u=unit,single=payload([u]);
+      // v19.0: if an unmapped note's full origin-chunk supportFactIds push a single unit past 24,000 chars, drop the redundant chunk-wide supportFactIds on this unit before failing; the unmapped note's own fallback unit still carries its chunk context.
+      if(u.supportFactIds&&u.supportFactIds.length&&u.factIds.length&&packetSize(single)>ANKI_SOURCE_AUDIT_GROUP_CHARS){u={...u,supportFactIds:[]};single=payload([u]);}
+      if(packetSize(single)>ANKI_SOURCE_AUDIT_GROUP_CHARS)throw new Error('Anki audit cannot fit source '+(u.factIds.join(', ')||'unmapped note')+' / notes '+u.noteIds.join(', ')+' within '+ANKI_SOURCE_AUDIT_GROUP_CHARS+' characters. Nothing was truncated; split these source facts or notes before auditing.');
+      const candidate=payload([...pending,u]);
       if(pending.length&&packetSize(candidate)>ANKI_SOURCE_AUDIT_GROUP_CHARS){parts.push(payload(pending));pending=[];}
-      pending.push(unit);
+      pending.push(u);
     }
     if(pending.length)parts.push(payload(pending));
     parts.forEach((part,i)=>{const group={id:'source-'+(plan.chunk||'unassigned')+'-part-'+(i+1),chunk:plan.chunk,part:i+1,parts:parts.length,...part};group.sizeChars=protocolVersion===4?JSON.stringify(ankiAuditPacket(group)).length:JSON.stringify(part).length;groups.push(group);});
@@ -6818,7 +6931,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '19.0';}
+function suiteVersion(){return '19.1';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -7336,7 +7449,7 @@ function AnkiGenerator(){
   const activeRun=useRef(null),currentKB=useRef(K.knowledgeBase);
   const current=!!batch&&batch.sourceKB===K.knowledgeBase;
   useEffect(()=>()=>{auditRun.current?.ctl.abort();auditRun.current=null;},[]);
-  useEffect(()=>{if(editFocus&&view==='table'){const field=document.getElementById('anki-text-'+editFocus);if(field){field.scrollIntoView({block:'center'});field.focus();setEditFocus(null);}}},[editFocus,view,warningFilter,styleOnly,notePage]);
+  useEffect(()=>{if(editFocus&&view==='table'){const field=document.getElementById('anki-text-'+editFocus);if(field){field.scrollIntoView({block:'center'});field.focus();setEditFocus(null);}}},[editFocus,view,tierFilter,warningFilter,styleOnly,notePage]);
   const sourceConflicts=useMemo(()=>ankiSourceConflicts(batch?.snapshot||ankiSourceSnapshot(kbFactView(K.knowledgeBase))),[batch,K.knowledgeBase]); // v18.4: entry facts too
   const reviewCandidates=useMemo(()=>current?ankiReviewCandidates(cards):[],[cards,current]);
   const candidateIds=useMemo(()=>new Set(reviewCandidates.flatMap(g=>g.members.map(m=>m.noteId))),[reviewCandidates]);
@@ -7531,10 +7644,13 @@ function AnkiGenerator(){
   // Build optional focus context block
   function buildFocusBlock(){
     const parts=[];
-    const numberedPts=typeof parseAndNumberPoints==='function'?parseAndNumberPoints(points):[];
+    // v19.0: fall back to persisted K.knowledgeBase.numberedPoints when local points state is empty, and suppress heading-only points.
+    const localPts=typeof parseAndNumberPoints==='function'?parseAndNumberPoints(points):[];
+    const persistedPts=!points.trim()&&Array.isArray(K.knowledgeBase?.numberedPoints)?K.knowledgeBase.numberedPoints:[];
+    const numberedPts=localPts.length?localPts:persistedPts;
     if(outcomes.trim())parts.push(`OUTCOMES (Learning Objectives the student must master):\n${outcomes.trim()}`);
     if(numberedPts.length&&typeof formatPointsForPrompt==='function')parts.push(`POINTS (Specific atomic content that must be covered):\n${formatPointsForPrompt(numberedPts)}`);
-    else if(points.trim())parts.push(`POINTS (Specific content that must be covered):\n${points.trim()}`);
+    else if(typeof parseAndNumberPoints!=='function'&&points.trim())parts.push(`POINTS (Specific content that must be covered):\n${points.trim()}`);
     if(focusContext.trim())parts.push(`ADDITIONAL CONTEXT:\n${focusContext.trim()}`);
     if(!parts.length)return'';
     return`\n\n═══ STUDENT-PROVIDED FOCUS CONTEXT ═══\n${parts.join('\n\n')}\n\nINSTRUCTIONS FOR FOCUS CONTEXT:\n- If Outcomes are listed, ensure EVERY outcome is covered by at least one card.\n- If Points are listed, ensure EVERY point has dedicated cards. Strip all [P#] or [NONE] tags from card text.\n- Use these to guide Tier assignment: content matching outcomes/points should be Tier 1.\n- If the source material is non-nursing (e.g., anatomy, physiology, chemistry, biology), adapt tag hierarchy to match the subject. Use Topic:: instead of Condition:: and subject-appropriate domain tags instead of Nursing::LATTE:: (e.g., AandP::Musculoskeletal::Structure, Bio::CellBiology::Mitosis). Still use the Tier system and the same card quality standards. When the source is the structured LATTE Knowledge Base, its supplied LATTE/Tier tags take precedence — do not re-map them.\n═══════════════════════════════════════\n`;
@@ -7593,7 +7709,7 @@ function AnkiGenerator(){
   3. Direct Clinical Associations: Drug classes/suffixes, mechanisms of action that dictate nursing care, reversal agents/antidotes, and definitive diagnostic tests.
   4. Nursing Interventions & Patient Education (LATTE T & E): Specific nursing actions, administration/procedural safety rules, therapeutic positioning, contraindications, and actionable patient teaching (diet/activity rules, self-care, and signs to report to the provider).
 - Front-Anchored Clozes: The text outside the cloze must uniquely cue the exact answer inside the blank (specify whether the blank asks for the earliest sign, hallmark finding, normal range, mechanism, antidote, patient teaching point, or priority action — never leave bare blanks like "treated with {{c1::...}}").
-- Closed Sets vs. Open Symptom Lists: For open-ended symptom lists, test only the hallmark, earliest, or most dangerous cue (max 1–2 items per cloze) across notes as needed. For testable closed sets or triads (e.g., Cushing's triad, Beck's triad, classic SATA clusters), preserve the full set by stating the item count outside the blank and assigning one numbered cloze per item (e.g., "The 3 classic findings of Cushing's triad are {{c1::bradycardia}}, {{c2::widening pulse pressure}}, and {{c3::irregular respirations}}").
+- Closed Sets vs. Open Symptom Lists: For open-ended symptom lists, split distinct hallmark, earliest, or dangerous cues across atomic notes (max 1–2 items per cloze; never drop a substantive source-supported target). For testable closed sets or triads (e.g., Cushing's triad, Beck's triad, classic SATA clusters), preserve the full set by stating the item count in words outside the blank and assigning one numbered cloze per item (e.g., "[Increased ICP] Cushing's triad (three classic findings): {{c1::bradycardia}}, {{c2::widening pulse pressure}}, and {{c3::irregular respirations}}").
 - Strict Source Grounding for Priorities & Thresholds: Generate "first/priority action" cards or numeric hold-parameter cards ONLY when the KB explicitly states that sequence or number. Never invent ordering or numeric cutoffs from general NCLEX knowledge.
 - Keep Extra empty unless the supplied FACT text explicitly gives a useful supporting explanation or contrast. Do not add cue captions or move unsupported claims into Text. Source-supported symptoms, risk groups, actions and timing still need hidden destinations; Extra is not their substitute. A term listed without a definition must not become a definition card unless this input actually defines it; do not supply missing mechanisms, frequency rankings, severity labels, or durations from memory. Check the definition and heading themselves, not just whether the answer term occurs in a FACT.
 - Before combining FACTs, preserve each fact's independent population, trigger, action, timing and certainty (may, often, as prescribed, if indicated). Separate notes when a merger would change AND/OR, preparation versus administration, or distinct eligibility criteria. Keep potential actions conditional; do not turn keeping a treatment available into immediate administration. A lower-priority repetition must not hide a higher-priority source target in the selected tier.
@@ -7894,9 +8010,12 @@ function nclexAdmitRecord(q){
   if(!q||typeof q!=='object'||Array.isArray(q)||typeof q.question!=='string'||!q.question.trim())return null;
   const text=v=>typeof v==='string'?v.slice(0,NCLEX_RECORD_FIELD_MAX):(typeof v==='number'&&Number.isFinite(v))||typeof v==='boolean'?String(v):'';
   const out={question:q.question.slice(0,NCLEX_RECORD_FIELD_MAX)};
-  for(const f of NCLEX_RECORD_TEXT_FIELDS){const v=text(q[f]);if(v)out[f]=v;}
+  // v19.0: collapse internal newlines in single-line metadata fields so x2aPopMeta and answer-key parsing never break on multi-line Tip/Strategy/CJ values.
+  for(const f of NCLEX_RECORD_TEXT_FIELDS){const v=text(q[f]);if(v){const norm=f==='rationale'?v:v.replace(/\s*\r?\n\s*/g,' ').trim();if(norm)out[f]=norm;}}
   out.diseases_conditions=nclexConditions(q.diseases_conditions);
-  const num=Number(q.question_number);if(q.question_number!==undefined&&q.question_number!==null&&q.question_number!==''&&Number.isFinite(num))out.question_number=num;
+  // v19.0: also parse string question numbers like "Q12" or "#12" returned by the model.
+  const rawNum=q.question_number,num=typeof rawNum==='number'?rawNum:typeof rawNum==='string'&&rawNum.trim()?(Number.isFinite(Number(rawNum))?Number(rawNum):/^(?:q(?:uestion)?\s*#?\s*|#\s*)\d+\b/i.test(rawNum.trim())?Number(rawNum.match(/\d+/)[0]):NaN):NaN;
+  if(Number.isFinite(num))out.question_number=num;
   if(q.options_repaired===true)out.options_repaired=true;
   if(q.answer_unmatched===true)out.answer_unmatched=true; // v17.15 (review M14)
   if(typeof q.id==='string'&&q.id)out.id=q.id;
@@ -7910,8 +8029,12 @@ function nclexAccumulate(seen,allQ,incoming,track){
     // v17.15 (review M15): chunk overlap extracts a boundary question twice, and the first copy can lack its answer; the
     // complete later copy was discarded and the exports printed "undefined". Missing fields are now filled from the later
     // copy; a field the first copy has is never overwritten.
-    if(seen.has(k)){const at=allQ.findIndex(x=>x&&nclexKey(x)===k),prev=at<0?null:allQ[at],fill=prev?NCLEX_RECORD_TEXT_FIELDS.filter(fl=>!prev[fl]&&rec[fl]):[];
-      if(fill.length){const next={...prev};for(const fl of fill)next[fl]=rec[fl];if(next.answer_unmatched&&fill.includes('correct_answer')&&!rec.answer_unmatched)delete next.answer_unmatched;allQ[at]=next;}continue;}
+    if(seen.has(k)){const at=allQ.findIndex(x=>x&&nclexKey(x)===k),prev=at<0?null:allQ[at];
+      // v19.0: allow a matched later copy to replace an earlier answer_unmatched placeholder, propagate answer_unmatched when filling an empty answer from an unmatched record, and fill empty diseases_conditions.
+      const replaceUnmatched=Boolean(prev&&prev.answer_unmatched&&!rec.answer_unmatched&&rec.correct_answer);
+      const fill=prev?NCLEX_RECORD_TEXT_FIELDS.filter(fl=>(!prev[fl]||(replaceUnmatched&&(fl==='correct_answer'||fl==='rationale')))&&rec[fl]):[];
+      const condFill=Boolean(prev&&!(prev.diseases_conditions&&prev.diseases_conditions.length)&&rec.diseases_conditions&&rec.diseases_conditions.length);
+      if(fill.length||condFill){const next={...prev};for(const fl of fill)next[fl]=rec[fl];if(condFill)next.diseases_conditions=rec.diseases_conditions;if(fill.includes('correct_answer')||replaceUnmatched){if(rec.answer_unmatched)next.answer_unmatched=true;else delete next.answer_unmatched;}allQ[at]=next;}continue;}
     seen.add(k);allQ.push(rec);
   }
   if(track)track.questions=allQ.length;
@@ -7977,8 +8100,8 @@ function nclexDropOptionRuns(positions){
     // v17.15 (review H4): a run keeps growing while the numbers rise by one, so in a book that numbers choices 1-4
     // the next question, numbered 5, joined question 4's choices and vanished; every pair still "matched", so the
     // AI fallback never ran and the run reported Complete. A run that ends on the question number the sequence
-    // expects next, with a new choice run right after it, stops before that number.
-    if(j-i>=NCLEX_OPTION_RUN_MIN&&positions[j].num===positions[i-1].num+1&&nclexStartsRun(positions,j+1))j--;
+    // expects next, with a new choice run or the following question right after it, stops before that number.
+    if(j-i>=NCLEX_OPTION_RUN_MIN&&positions[j].num===positions[i-1].num+1&&(nclexStartsRun(positions,j+1)||(j+1<positions.length&&positions[j+1].num===positions[j].num+1)))j--;
     if(j-i+1>=NCLEX_OPTION_RUN_MIN){runs.push({i,j});i=j;}
   }
   if(!runs.length)return positions;
@@ -8085,7 +8208,7 @@ function nclexSplitStemOptions(text){
       for(let k=i+1;k<pool.length;k++){
         const want=pool[run[run.length-1]].rank+1;
         if(pool[k].rank===want&&pool[k].numeric===pool[i].numeric)run.push(k);
-        else if(pool[k].rank<=want)break;
+        else if(pool[k].numeric===pool[i].numeric&&pool[k].rank<=want)break;
       }
       const len=run.length;
       if(len>=NCLEX_OPTION_RUN_MIN&&(!best||len>best.len||(len===best.len&&pool[i].from>best.start))){best={run,len,start:pool[i].from};bestPool=pool;}
@@ -8111,7 +8234,8 @@ function nclexRepairOptions(item,sourceText){
   // v18.0 (review L21): the page text was picked by the model's question_number alone, so a misnumbered record got
   // another question's choices attached as its own. Choices are restored only when the item's stem and the page stem
   // share their opening (printed question numbers aside); otherwise the item keeps its bare stem and its warning.
-  const key=v=>String(v||'').replace(/\s+/g,' ').trim().toLowerCase().replace(/^(?:(?:question|q)\s*#?\s*\d{1,4}\s*[.):;]|question\s+\d{1,4}(?=\s)|#\s*\d{1,4}\s*[.):;]?|\[\d{1,4}\]|\d{1,4}\s*[.)](?=\s|$))\s*/,'');
+  // v19.0: also strip "Q 12 " and "12: " prefixes before comparing stem openings.
+  const key=v=>String(v||'').replace(/\s+/g,' ').trim().toLowerCase().replace(/^(?:(?:question|q)\s*#?\s*\d{1,4}\s*[.):;]|(?:question|q)\s+\d{1,4}(?=\s)|#\s*\d{1,4}\s*[.):;]?|\[\d{1,4}\]|\d{1,4}\s*[.):](?=\s|$))\s*/,'');
   const a=key(item.question),b=key(src.stem);
   if(!a||!b||(!a.startsWith(b.slice(0,40))&&!b.startsWith(a.slice(0,40))))return item;
   return{...item,question:item.question.trim()+'\n'+src.options.map(o=>o.label+'. '+o.text).join('\n'),options_repaired:true};
@@ -8131,7 +8255,7 @@ function nclexPairQA(qText,aText){
 function nclexMergePairs(regexPairs,aiRows){
   // v18.0 (review L19): the page text keeps its printed number ("12. A client...") and the model's text usually does
   // not, so nearly every pair was counted as a numbering collision. The leading number is stripped before comparing.
-  const byNum=new Map(),norm=v=>String(v||'').replace(/\s+/g,' ').trim().toLowerCase().replace(/^(?:(?:question|q)\s*#?\s*\d{1,4}\s*[.):;]|question\s+\d{1,4}(?=\s)|#\s*\d{1,4}\s*[.):;]?|\[\d{1,4}\]|\d{1,4}\s*[.)](?=\s|$))\s*/,'');
+  const byNum=new Map(),norm=v=>String(v||'').replace(/\s+/g,' ').trim().toLowerCase().replace(/^(?:(?:question|q)\s*#?\s*\d{1,4}\s*[.):;]|(?:question|q)\s+\d{1,4}(?=\s)|#\s*\d{1,4}\s*[.):;]?|\[\d{1,4}\]|\d{1,4}\s*[.):](?=\s|$))\s*/,'');
   let filled=0,added=0,collisions=0;
   for(const p of regexPairs||[])if(p&&p.question)byNum.set(Number(p.number)||0,{...p});
   for(const r of aiRows||[]){
@@ -8398,10 +8522,14 @@ function NCLEXExtractor(){
           const qs=grab(qText,qStep,w),as=grab(aText,aStep,w);
           if(!qs.trim()&&!as.trim())continue;
           if(W>1)addLog('  pairing window '+(w+1)+'/'+W+'...');
-          const part=await nclexCallGemini(NCLEX_AI_PAIR_PROMPT+qs+'\n\nANSWERS SECTION:\n'+as,signal);
+          // v19.0: isolate per-window non-halting errors so one malformed pairing window does not discard all other windows.
+          let part;
+          try{part=await nclexCallGemini(NCLEX_AI_PAIR_PROMPT+qs+'\n\nANSWERS SECTION:\n'+as,signal);}
+          catch(we){if(geminiHaltsBatch(we))throw we;track.notes.push('AI pairing window '+(w+1)+' failed: '+we.message);addLog(`  ⚠ AI pairing window ${w+1} failed: ${we.message}`);if(w<W-1)await _sleep(500,signal);continue;}
           if(!Array.isArray(part))continue;
           for(const r of part){
-            const row={number:Number(r&&r.number)||0,question:String(r&&r.question||''),answer:String(r&&r.answer||''),matched:!!(r&&r.answer)};
+            // v19.0: normalize string question numbers like "Q12" or "#12" in AI pairing windows so seam deduplication and nclexMergePairs match numeric keys.
+            const row={number:Number(String(r&&r.number||'').trim().replace(/^(?:q(?:uestion)?\s*#?\s*|#\s*)/i,''))||0,question:String(r&&r.question||''),answer:String(r&&r.answer||''),matched:!!(r&&r.answer)};
             if(!row.question.trim())continue;
             const prev=byNum.get(row.number);
             // An overlapping seam can yield the same number twice; keep the fuller record.
@@ -8441,7 +8569,8 @@ function NCLEXExtractor(){
           // The batch still holds each question's verbatim source text, so this costs nothing
           // and invents nothing.
           const srcByNum=new Map(batch.map(p=>[Number(p.number),p.question]));
-          const fixed=result.map(q=>nclexRepairOptions(q,srcByNum.get(Number(q&&q.question_number)))).map(q=>q&&typeof q==='object'&&unmatchedNums.has(Number(q.question_number))?{...q,answer_unmatched:true}:q);
+          // v19.0: normalize string question_number ("Q12", "#12") before srcByNum option repair and unmatchedNums lookup.
+          const fixed=result.map(q=>{const n=Number(String(q&&q.question_number||'').trim().replace(/^(?:q(?:uestion)?\s*#?\s*|#\s*)/i,''));return q&&typeof q==='object'&&Number.isFinite(n)?{...q,question_number:n}:q;}).map(q=>nclexRepairOptions(q,srcByNum.get(Number(q&&q.question_number)))).map(q=>q&&typeof q==='object'&&unmatchedNums.has(Number(q.question_number))?{...q,answer_unmatched:true}:q);
           const nRepaired=fixed.filter(q=>q&&q.options_repaired).length;
           admit(seen,allQ,fixed.map(q=>({...q,id:uid()})),track);
           addLog(`    ✓ ${result.length} → ${allQ.length} unique${nRepaired?` (${nRepaired} choice list${nRepaired!==1?'s':''} restored from the page)`:''}`);
@@ -8694,6 +8823,7 @@ function n2aMarks(s,lookbehind){
   while((m=rx.exec(s))){
     const start=m.index+(/\s/.test(m[0].slice(0,1))?1:0),nl=s.lastIndexOf('\n',start-1);
     out.push({label:m[1],rank:n2aRank(m[1]),numeric:/\d/.test(m[1]),at:m.index+m[0].length,from:start,line_start:start===0||/^[ \t]*$/.test(s.slice(nl+1,start))});
+    rx.lastIndex=m.index+m[0].replace(/\s+$/,'').length;
   }
   return out;
 }
@@ -8702,16 +8832,21 @@ function n2aSplitStemOptions(s,lookbehind){
   for(const pool of [marks.filter(x=>x.line_start),marks.filter(x=>!x.line_start)]){
     pool.forEach((mk,i)=>{
       if(mk.rank!==1)return;
-      let j=i;while(j+1<pool.length&&pool[j+1].rank===pool[j].rank+1&&pool[j+1].numeric===mk.numeric)j++;
-      const n=j-i+1;
-      if(n>=3&&(!best||n>best[2]||(n===best[2]&&mk.from>best[3]))){best=[i,j,n,mk.from];bestPool=pool;}
+      // v19.0: skip out-of-turn marks (such as "101.3 F." inside an inline option) instead of breaking the choice run.
+      const run=[i];
+      for(let k=i+1;k<pool.length;k++){
+        const want=pool[run[run.length-1]].rank+1;
+        if(pool[k].rank===want&&pool[k].numeric===mk.numeric)run.push(k);
+        else if(pool[k].numeric===mk.numeric&&pool[k].rank<=want)break;
+      }
+      const n=run.length;
+      if(n>=3&&(!best||n>best.len||(n===best.len&&mk.from>best.start))){best={run,len:n,start:mk.from};bestPool=pool;}
     });
   }
   // v18.0 (review L26): stem and choices keep U+FEFF, as the scripts do (n2aTrim).
   if(!best)return [n2aTrim(s),[]];
-  const [i,j,,start]=best,options=[];
-  for(let k=i;k<=j;k++){const end=k<j?bestPool[k+1].from:s.length;options.push([bestPool[k].label.toUpperCase(),n2aTrim(s.slice(bestPool[k].at,end).replace(/[^\S\uFEFF]+/g,' '))]);}
-  return [n2aTrim(s.slice(0,start)),options];
+  const options=best.run.map((k,idx)=>{const end=idx+1<best.run.length?bestPool[best.run[idx+1]].from:s.length;return [bestPool[k].label.toUpperCase(),n2aTrim(s.slice(bestPool[k].at,end).replace(/[^\S\uFEFF]+/g,' '))];});
+  return [n2aTrim(s.slice(0,best.start)),options];
 }
 const N2A_OK_STYLE='margin:.45em 0;padding:.4em .6em;border-left:4px solid #2e9e48;background:rgba(46,158,72,.13);border-radius:4px';
 const N2A_NO_STYLE='margin:.45em 0;padding:.4em .6em;border-left:4px solid #c94040;background:rgba(201,64,64,.07);border-radius:4px';
@@ -8734,8 +8869,9 @@ function n2aSplitBlocks(text){
   // a skipped number no longer folds every later entry into the one before it, and an entry printed
   // twice under the same number comes back as a separate block marked duplicate (third element).
   const lines=text.split('\n');let head,answers=false;
-  if(lines.some(l=>N2A_BOLD_HEAD.test(l)))head=l=>{const m=l.match(N2A_BOLD_HEAD);return m?parseInt(m[1],10):null;};
-  else if(lines.some(l=>N2A_ANS_HEAD.test(l))){answers=true;head=l=>{const m=l.match(N2A_ANS_HEAD);return m?parseInt(m[1],10):null;};}
+  // v19.0: check N2A_ANS_HEAD before N2A_BOLD_HEAD so bolded "**1.** ANSWER:" blocks still enable answer-key gap/duplicate handling.
+  if(lines.some(l=>N2A_ANS_HEAD.test(l))){answers=true;head=l=>{const m=l.match(N2A_ANS_HEAD);return m?parseInt(m[1],10):null;};}
+  else if(lines.some(l=>N2A_BOLD_HEAD.test(l)))head=l=>{const m=l.match(N2A_BOLD_HEAD);return m?parseInt(m[1],10):null;};
   else{
     // v17.15 (review H1): a header counted only at the first question's indentation. The Generator's own export mixes
     // them: the prompt indents questions "  1.", each batch's first question loses that indent when PART 3 is
@@ -8814,20 +8950,25 @@ function n2aParseKey(block){
 // Worksheet C-numbers only resolve inside that worksheet's PART 1, so they are dropped. The
 // verbatim anchor quote on the correct answer is kept and returned separately.
 function n2aStripSources(text){
-  let quote='';const m=text.match(/\(\s*Sources?\s*:\s*(.*)\)\s*$/i);
-  if(m){const q=m[1].match(/["“](.+)["”]/);quote=q?q[1].trim():'';text=text.slice(0,m.index);}
+  // v19.0: match only the trailing parenthesized "(Source: ...)" block (including an optional trailing period) without spanning across earlier parentheses.
+  let quote='';const m=text.match(/\(\s*Sources?\s*:\s*([^)]*)\)\s*(\.?)\s*$/i);
+  if(m){const q=m[1].match(/["“](.+)["”]/);quote=q?q[1].trim():'';const head=text.slice(0,m.index).trimEnd();text=m[2]&&head&&!/[.!?]$/.test(head)?head+'.':head;}
   // v18.0 (review M25): any "source(s):" in prose was taken for a citation and everything after it deleted ("good
   // sources: bananas, oranges…" became "good"). A trailing citation names a concept, C-number first.
   return [text.replace(/\(\s*Sources?\s*:[^)]*\)|\bSources?\s*:\s*C\d+\b.*$/gi,'').trim(),quote];
 }
 function n2aAnswerLabels(answer,options){
-  const [value]=n2aStripSources(answer);
-  const m=value.match(/^([A-Z1-9])((?:(?:[ \t]*[,;/&][ \t]*(?:and[ \t]+)?|[ \t]+and[ \t]+|[ \t]+)[A-Z1-9]\b)*)(?=$|[ \t:—–(\-]|\.(?!\d))/i);
+  const [value]=n2aStripSources(answer),v=value.trim();
+  // v19.0: require punctuation/dash/end after a single label so "2 mL" or "A client with..." is not misread as choice 2 or A; preserve decimals and word boundaries in text matching.
+  const m=v.match(/^([A-Z1-9])(?:(?:[ \t]*[,;/&][ \t]*(?:and[ \t]+)?|[ \t]+and[ \t]+|[ \t]+)[A-Z1-9]\b)+(?=$|[ \t:—–(\-]|\.(?!\d))/i)||v.match(/^([A-Z1-9])(?=$|[ \t]*[:—–(\-]|\.(?!\d)|\))/i);
   const valid=new Set(options.map(([l])=>l));
   const labels=m?(m[0].match(/\b[A-Z1-9]\b/gi)||[]).map(x=>x.toUpperCase()):[];
   if(labels.length&&(!valid.size||labels.every(l=>valid.has(l))))return labels;
-  const norm=s=>s.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
-  const hits=options.filter(([,t])=>norm(t)&&norm(value).includes(norm(t))).map(([l])=>l);
+  const norm=s=>s.toLowerCase().replace(/(?<=\d)\.(?=\d)|[^a-z0-9]+/g,ch=>ch==='.'?'.':' ').trim();
+  const nv=norm(v),exact=nv?options.filter(([,t])=>norm(t)===nv).map(([l])=>l):[];
+  if(exact.length===1)return exact;
+  const has=(hay,needle)=>Boolean(needle)&&(' '+hay+' ').includes(' '+needle+' ');
+  const hits=options.filter(([,t])=>{const nt=norm(t);return nt&&(has(nv,nt)||(nv.length>=4&&has(nt,nv)));}).map(([l])=>l);
   return hits.length===1?hits:labels;
 }
 function n2aRenderFront(q){
@@ -9026,7 +9167,8 @@ const X2A_RULE=/^[ \t]*-{3,}[ \t]*$/;
 const X2A_MD_META=[['tip',/^>[ \t]*\S*[ \t]*\*\*Tip:\*\*[ \t]*(.*)$/],['strategy',/^>[ \t]*\S*[ \t]*\*\*Strategy:\*\*[ \t]*(.*)$/],['cj',/^>[ \t]*\S*[ \t]*\*\*CJ:\*\*[ \t]*(.*)$/],['conditions',/^Conditions:[ \t]*(.*)$/]];
 const X2A_TXT_META=[['tip',/^Tip:[ \t]*(.*)$/],['strategy',/^Strategy:[ \t]*(.*)$/],['cj',/^CJ:[ \t]*(.*)$/],['conditions',/^Conditions:[ \t]*(.*)$/]];
 function x2aBlocks(text,headRe){
-  const kept=[...text.matchAll(headRe)];
+  // v19.0: require ascending block numbers and reject lines preceded by a Markdown hard-break ("  \n") so inline "**1.**" / "**2.**" ordering rationales cannot split an Answer Key block.
+  let last=0;const kept=[...text.matchAll(headRe)].filter(m=>{const n=parseInt(m[1],10);if(n>last&&!(m.index>=3&&text.slice(m.index-3,m.index)==='  \n')){last=n;return true;}return false;});
   return kept.map((m,i)=>[parseInt(m[1],10),text.slice(m.index+m[0].length,i+1<kept.length?kept[i+1].index:text.length)]);
 }
 function x2aTxtQuestionBlocks(text){
@@ -9086,6 +9228,8 @@ function x2aParseExport(text){
       if(cut<0){rec.answer=lines.map(l=>l.trim()).join(' ').trim();rec.rationale='';}
       else{rec.answer=lines.slice(0,cut).map(l=>l.trim()).join(' ').trim();rec.rationale=[lines[cut].slice('Rationale:'.length).trim(),...lines.slice(cut+1)].join('\n').trim();}
     }
+    // v19.0: the Extractor writes "(not extracted)" when an answer is missing; normalize to '' so x2aConvertText skips or flags it instead of rendering "Answer: (not extracted)".
+    if(/^\(not extracted\)$/i.test(rec.answer||''))rec.answer='';
     answers.set(n,rec);
   }
   const records=[];
@@ -9104,11 +9248,13 @@ const X2A_LABEL_LIST=/^([A-Z1-9])((?:(?:[ \t]*[,;/&][ \t]*(?:and[ \t]+)?|[ \t]+a
 // v18.0 (review M24): "1.5 mL" (and "2.5 mL/min") read as choice 1 (2) because a label may be followed by "."; a decimal
 // point is not a label separator. The same holds in n2aAnswerLabels and i2aAnswerLabels.
 const X2A_LABEL_ONE=/^([A-Z1-9])(?:\.(?!\d)|[):]|[ \t]+[-–—][ \t]|$)/i;
-function x2aNorm(s){return s.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();}
+// v19.0: preserve decimal points between digits ("0.5 mg" != "5 mg") and require token boundaries in text hits ("productive" != "nonproductive").
+function x2aNorm(s){return s.toLowerCase().replace(/(?<=\d)\.(?=\d)|[^a-z0-9]+/g,ch=>ch==='.'?'.':' ').trim();}
 function x2aTextHits(text,options){
   const t=x2aNorm(text);if(t.length<3)return [];
   const exact=options.filter(([,o])=>x2aNorm(o)===t).map(([l])=>l);if(exact.length)return exact;
-  return options.filter(([,o])=>x2aNorm(o).length>=4&&(t.includes(x2aNorm(o))||(t.length>=8&&x2aNorm(o).includes(t)))).map(([l])=>l);
+  const has=(hay,needle)=>Boolean(needle)&&(' '+hay+' ').includes(' '+needle+' ');
+  return options.filter(([,o])=>{const no=x2aNorm(o);return no.length>=4&&(has(t,no)||(t.length>=8&&has(no,t)));}).map(([l])=>l);
 }
 // Returns [labels, note, trusted]; trusted=false means a guess that needs review.
 function x2aResolveAnswer(answer,options){
@@ -9143,8 +9289,9 @@ function x2aResolveAnswer(answer,options){
   }
   return [[],'could not tell which choice the answer '+n2aRepr(a.slice(0,60))+' is',false];
 }
-const X2A_TRAILER=/(?:^|(?<=\n)|(?<=[.!?])[ \t]+)(?=(?:TEST[- ]TAKING (?:HINT|STRATEGY|TIP)S?\b|CONTENT[ \t]*[–—:-]|CLIENT NEEDS?\b|COGNITIVE LEVEL\b|INTEGRATED NURSING PROCESS\b|NURSING PROCESS[ \t]*[–—:-]|CONCEPTS?[ \t]*[–—:-]|PRIORITY CONCEPTS?\b|References?[ \t]*:|Ref[ \t]*:))/;
-const X2A_OPTION_WORD=/(?:^|(?<=\n)|(?<=[.!?][ \t])|(?<=[.!?][ \t][ \t]))(?:Option|Choice|Answer)[ \t]+\(?([A-Z1-9])\)?(?![A-Za-z0-9])/g;
+// v19.0: case-insensitive trailer and option-word matching ("Test-Taking Strategy:", "option A"), plus the Extractor's unmatched-answer notice and non-contiguous inline mark tolerance.
+const X2A_TRAILER=/(?:^|(?<=\n)|(?<=[.!?])[ \t]+)(?=(?:TEST[- ]TAKING (?:HINT|STRATEGY|TIP)S?\b|CONTENT[ \t]*[–—:-]|CLIENT NEEDS?\b|COGNITIVE LEVEL\b|INTEGRATED NURSING PROCESS\b|NURSING PROCESS[ \t]*[–—:-]|CONCEPTS?[ \t]*[–—:-]|PRIORITY CONCEPTS?\b|References?[ \t]*:|Ref[ \t]*:|⚠[ \t]*No answer for this question was found on the answer pages\b))/i;
+const X2A_OPTION_WORD=/(?:^|(?<=\n)|(?<=[.!?][ \t])|(?<=[.!?][ \t][ \t]))(?:Option|Choice|Answer)[ \t]+\(?([A-Z1-9])\)?(?![A-Za-z0-9])/gi;
 // Returns [preface, Map(label->text) or null, trailer].
 function x2aSplitRationale(rationale,options){
   const m=rationale.match(X2A_TRAILER);
@@ -9156,7 +9303,12 @@ function x2aSplitRationale(rationale,options){
     marks=marks.filter(x=>labels.includes(x.label.toUpperCase())&&/^\d$/.test(x.label)===numeric);
     for(let i=0;i<marks.length;i++){
       if(marks[i].label.toUpperCase()!==labels[0])continue;
-      const seq=marks.slice(i,i+labels.length);
+      const seq=[marks[i]];
+      for(let k=i+1;k<marks.length&&seq.length<labels.length;k++){
+        const up=marks[k].label.toUpperCase();
+        if(up===labels[seq.length])seq.push(marks[k]);
+        else if(labels.indexOf(up)<=seq.length)break;
+      }
       if(seq.map(x=>x.label.toUpperCase()).join('\x00')===labels.join('\x00')){
         const segs=new Map();
         seq.forEach((x,k)=>{const end=k+1<seq.length?seq[k+1].from:body.length;segs.set(x.label.toUpperCase(),body.slice(stripLabel?x.at:x.from,end).replace(/[ \t]*\n[ \t]*/g,' ').trim());});
@@ -9166,9 +9318,9 @@ function x2aSplitRationale(rationale,options){
     return null;
   };
   const marks=n2aMarks(body,true);
-  for(const pool of [marks.filter(x=>x.line_start),marks.filter(x=>!x.line_start)]){const got=tryMarks(pool,true);if(got)return [got[0],got[1],trailer.trim()];}
+  for(const pool of [marks.filter(x=>x.line_start),marks.filter(x=>!x.line_start),marks]){const got=tryMarks(pool,true);if(got)return [got[0],got[1],trailer.trim()];}
   const words=[...body.matchAll(X2A_OPTION_WORD)].map(w=>({label:w[1],from:w.index,at:w.index+w[0].length}));
-  if(words.filter(w=>labels.includes(w.label.toUpperCase())).length===labels.length){const got=tryMarks(words,false);if(got)return [got[0],got[1],trailer.trim()];}
+  if(words.filter(w=>labels.includes(w.label.toUpperCase())).length>=labels.length){const got=tryMarks(words,false);if(got)return [got[0],got[1],trailer.trim()];}
   return [body.trim(),null,trailer.trim()];
 }
 const X2A_ORDER_WORDS=/\b(in (?:what|which|the correct|the proper|priority) order|order of priority|in sequence|correct sequence|sequence (?:of|the)|arrange|place .* in order|prioriti[sz]e (?:the following|these))\b/i;
@@ -9207,7 +9359,10 @@ function x2aBuildCard(rec,source,extraTags){
   const answer=(rec.answer||'').trim();
   const [labels,note,trusted]=answer?x2aResolveAnswer(answer,options):[[],'',true];
   if(note)warnings.push(note);
-  flag=flag||!trusted;
+  // v19.0: also flag and warn on cards whose rationale carries the Extractor's unmatched-answer notice.
+  const unmatchedNotice=/No answer for this question was found on the answer pages/i.test(rec.rationale||'');
+  if(unmatchedNotice)warnings.push('no answer on the answer pages; answer was written by the model');
+  flag=flag||!trusted||unmatchedNotice;
   let qtype;
   if(options.length&&labels.length&&labels.length===options.length&&options.length>=3&&[...labels].sort().join()===options.map(([l])=>l).sort().join()&&X2A_ORDER_WORDS.test(stem))qtype='Ordering';
   else if(options.length&&(/select all that apply/i.test(stem)||labels.length>1))qtype='SATA';
@@ -9687,11 +9842,15 @@ function i2aAssemble(transcripts){
 }
 // 'B' / 'A, C, and E' / '1 and 4' -> labels; falls back to matching the choice text.
 function i2aAnswerLabels(answer,options){
-  const m=answer.trim().match(/^\(?([A-Z1-9])\)?((?:(?:[ \t]*[,;/&][ \t]*(?:and[ \t]+)?|[ \t]+and[ \t]+|[ \t]+)\(?[A-Z1-9]\b\)?)*)(?=$|[ \t:—–(\-]|\.(?!\d))/i);
+  const v=answer.trim();
+  const m=v.match(/^\(?([A-Z1-9])\)?(?:(?:[ \t]*[,;/&][ \t]*(?:and[ \t]+)?|[ \t]+and[ \t]+|[ \t]+)\(?[A-Z1-9]\b\)?)+(?=$|[ \t:—–(\-]|\.(?!\d))/i)||v.match(/^\(?([A-Z1-9])\)?(?=$|[ \t]*[:—–(\-]|\.(?!\d))/i);
   const valid=new Set(options.map(([l])=>l)),labels=m?(m[0].match(/\b[A-Z1-9]\b/gi)||[]).map(x=>x.toUpperCase()):[];
   if(labels.length&&(!valid.size||labels.every(l=>valid.has(l))))return labels;
-  const norm=s=>s.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
-  const hits=options.filter(([,t])=>norm(t)&&norm(answer).includes(norm(t))).map(([l])=>l);
+  const norm=s=>s.toLowerCase().replace(/(?<=\d)\.(?=\d)|[^a-z0-9]+/g,ch=>ch==='.'?'.':' ').trim();
+  const nv=norm(v),exact=nv?options.filter(([,t])=>norm(t)===nv).map(([l])=>l):[];
+  if(exact.length===1)return exact;
+  const has=(hay,needle)=>Boolean(needle)&&(' '+hay+' ').includes(' '+needle+' ');
+  const hits=options.filter(([,t])=>{const nt=norm(t);return nt&&(has(nv,nt)||(nv.length>=4&&has(nt,nv)));}).map(([l])=>l);
   return hits.length===1?hits:labels;
 }
 // 'answer' = no answer anywhere; 'rationale' = keyed but nothing explains it.
@@ -9719,7 +9878,8 @@ function i2aApplyAi(questions,cache,model){
   for(const q of questions.filter(i2aNeedsAi)){
     const a=cache[i2aQid(q)+model];
     if(!a||typeof a!=='object'||Array.isArray(a))continue;
-    const whys=(Array.isArray(a.option_rationales)?a.option_rationales:[]).filter(w=>w&&typeof w==='object'&&i2aS(w.text)).map(w=>[i2aS(w.label).toUpperCase(),i2aS(w.verdict).toLowerCase(),i2aS(w.text)]);
+    // v19.0: strip trailing punctuation from AI rationale labels ("A." or "A)" -> "A") so option matching succeeds.
+    const whys=(Array.isArray(a.option_rationales)?a.option_rationales:[]).filter(w=>w&&typeof w==='object'&&i2aS(w.text)).map(w=>[i2aS(w.label).replace(/[.)]+$/,'').toUpperCase(),i2aS(w.verdict).toLowerCase(),i2aS(w.text)]);
     q.ai={mode:i2aNeedsAi(q),answer:i2aS(a.answer),whys,rationale:i2aS(a.rationale),strategy:i2aS(a.strategy),agrees:a.agrees_with_key,dispute:i2aS(a.key_dispute)};
     if(q.ai.mode==='answer'){q.answer=q.ai.answer;q.answer_evidence='ai';}
     else{
@@ -9773,7 +9933,7 @@ function i2aBuildCards(questions,sourceTag,extraTags=[]){
     const where='Q'+(q.number||'?')+' ('+q.images[0]+')';
     if(!q.stem){warnings.push(where+': SKIPPED - no question stem was readable.');continue;}
     if(!q.answer){
-      const why=q.exhibit?' (has an exhibit, so it is not sent for an AI answer)':q.format==='other'?' (unsupported format)':' - tick "Have Gemini answer" to have Gemini answer it';
+      const why=q.exhibit?' (has an exhibit, so it is not sent for an AI answer)':q.format==='other'?' (unsupported format)':q.ai?' (AI returned no answer for it)':' - tick "Have Gemini answer" to have Gemini answer it';
       warnings.push(where+': SKIPPED - no answer in the images'+why+'.');continue;
     }
     const flags=[...q.flags],tags=[];
@@ -9828,7 +9988,7 @@ function i2aWorksheetMd(questions){
   out+='<div class="pagebreak"></div>\n\n## Answer Key\n\n';
   list.forEach((q,i)=>{
     const ai=q.ai,aiAnswer=!!(ai&&ai.mode==='answer');
-    if(!q.answer){out+='**'+(i+1)+'.** No answer in the images'+(q.exhibit||q.format==='other'?'.':'; tick "Have Gemini answer" to have Gemini answer it.')+'\n\n---\n\n';return;}
+    if(!q.answer){out+='**'+(i+1)+'.** No answer in the images'+(q.exhibit||q.format==='other'?'.':ai?'; AI returned no answer for it.':'; tick "Have Gemini answer" to have Gemini answer it.')+'\n\n---\n\n';return;}
     const labels=q.options.length&&q.format!=='ordering'?i2aAnswerLabels(q.answer,q.options):[],opts=new Map(q.options);
     let head=q.answer;
     if(labels.length===1&&opts.has(labels[0])&&!q.answer.toLowerCase().includes(opts.get(labels[0]).toLowerCase()))head+=' — '+opts.get(labels[0]);
@@ -9918,8 +10078,9 @@ async function i2aConvert({images,gemini,halts,model,cache,deck,extraTags=[],sou
         for(const q of batch){if(got.has(i2aQid(q)))cache.ai[i2aQid(q)+model]=got.get(i2aQid(q));else warnings.push('Q'+(q.number||'?')+' ('+q.images[0]+'): AI returned no answer for it.');}
       }
     }catch(e){warnings.unshift((e.name==='AbortError'?'Cancelled.':e.message)+' AI answers unfinished; run again later to finish them.');}
-    warnings.push(...i2aApplyAi(questions,cache.ai,model));
   }
+  // v19.0: apply cached AI answers even when image reading stopped early so previously cached answers are not lost.
+  if(todo.length&&aiAnswers)warnings.push(...i2aApplyAi(questions,cache.ai,model));
   const built=i2aBuildCards(questions,sourceTag,extraTags);
   warnings.push(...built.warnings);
   result.cards=built.cards;result.needsReview=built.cards.filter(c=>c.tags.includes('NeedsReview')).length;result.ai=built.cards.filter(c=>c.tags.includes('AI_Answer')).length;
@@ -9928,9 +10089,10 @@ async function i2aConvert({images,gemini,halts,model,cache,deck,extraTags=[],sou
 }
 
 // v17.10: one pass of the suite's own page walk; each page's text items keep their positions for n2aPdfBlocks.
-async function n2aReadPdfPages(file){
+// v19.0: forward abort signal so unmounting NCLEXToAnki stops an in-flight multi-page PDF export read.
+async function n2aReadPdfPages(file,signal){
   const pages=[];
-  try{await pdfWalkPages(file,{onPage:(text,i,pg,total,tc)=>{pages.push(n2aPdfPageLines(tc.items));}});}
+  try{await pdfWalkPages(file,{onPage:(text,i,pg,total,tc)=>{pages.push(n2aPdfPageLines(tc.items));},signal});}
   finally{destroyPdfDoc(file);}
   return pages;
 }
@@ -9997,30 +10159,34 @@ function NCLEXToAnki(){
       setTextFiles(p=>{const have=new Set(p[mode].map(fileKey));return {...p,[mode]:[...p[mode],...ok.filter(f=>!have.has(fileKey(f)))]};});
     }
   };
-  const removeFile=i=>mode==='images'?setImages(p=>p.filter((_,j)=>j!==i)):setTextFiles(p=>({...p,[mode]:p[mode].filter((_,j)=>j!==i)}));
-  const clearFiles=()=>{if(mode==='images')setImages([]);else{setTextFiles(p=>({...p,[mode]:[]}));setPasted('');}setNote('');};
+  const removeFile=i=>{if(busy||reading)return;mode==='images'?setImages(p=>p.filter((_,j)=>j!==i)):setTextFiles(p=>({...p,[mode]:p[mode].filter((_,j)=>j!==i)}));};
+  const clearFiles=()=>{if(busy||reading)return;if(mode==='images')setImages([]);else{setTextFiles(p=>({...p,[mode]:[]}));setPasted('');}setNote('');};
   const base=f=>f.name.replace(/\.[^.]*$/,'');
 
   const convertText=async()=>{
     if(reading)return;
     setError('');setReading(true);
+    const ac=new AbortController();abortRef.current=ac;
     const runMode=mode,list=textFiles[runMode],sources=[],readWarnings=[];
-    for(const f of list){
-      if(f.size>50*1024*1024){readWarnings.push(f.name+': could not read (larger than 50 MB).');continue;}
-      try{
-        // v17.10: a PDF export is rebuilt into the text a converter already reads; it routes itself.
-        if(/\.pdf$/i.test(f.name||'')){
-          const r=n2aPdfToWorksheetText(n2aPdfBlocks(await n2aReadPdfPages(f)),f.name);
-          readWarnings.push(...r.warnings);if(r.text)sources.push({name:base(f),text:r.text,reviewAll:r.reviewAll,pdf:true});
-        }else sources.push({name:base(f),text:await f.text()});
-      }catch(e){readWarnings.push(f.name+': could not read ('+(e.message||e)+').');}
-    }
-    setReading(false);
-    if(pasted.trim())sources.push({name:'clipboard',text:pasted});
-    const r=n2aConvertExports(sources,extraTags),cards=r.cards;
-    const outName=list.length===1&&sources.length===1?base(list[0])+'_anki.txt':'nclex_anki.txt';
-    const read=r.kinds.map((k,i)=>k.name+(sources[i].pdf?' (PDF)':'')+': '+N2A_KIND_LABEL[k.kind]+', '+k.cards+' card'+(k.cards===1?'':'s'));
-    setResults(p=>({...p,[runMode]:{cards,warnings:[...readWarnings,...r.warnings],deck,outName,read,text:cards.length?n2aAnkiFileText(cards,deck,false):'',needsReview:cards.filter(c=>c.tags.includes('NeedsReview')).length,ai:0}}));
+    try{
+      for(const f of list){
+        if(ac.signal.aborted)return;
+        if(f.size>50*1024*1024){readWarnings.push(f.name+': could not read (larger than 50 MB).');continue;}
+        try{
+          // v17.10: a PDF export is rebuilt into the text a converter already reads; it routes itself.
+          if(/\.pdf$/i.test(f.name||'')){
+            const r=n2aPdfToWorksheetText(n2aPdfBlocks(await n2aReadPdfPages(f,ac.signal)),f.name);
+            readWarnings.push(...r.warnings);if(r.text)sources.push({name:base(f),text:r.text,reviewAll:r.reviewAll,pdf:true});
+          }else sources.push({name:base(f),text:await f.text()});
+        }catch(e){if(ac.signal.aborted)return;readWarnings.push(f.name+': could not read ('+(e.message||e)+').');}
+      }
+      if(ac.signal.aborted)return;
+      if(pasted.trim())sources.push({name:'clipboard',text:pasted});
+      const r=n2aConvertExports(sources,extraTags),cards=r.cards;
+      const outName=list.length===1&&sources.length===1?base(list[0])+'_anki.txt':'nclex_anki.txt';
+      const read=r.kinds.map((k,i)=>k.name+(sources[i].pdf?' (PDF)':'')+': '+N2A_KIND_LABEL[k.kind]+', '+k.cards+' card'+(k.cards===1?'':'s'));
+      setResults(p=>({...p,[runMode]:{cards,warnings:[...readWarnings,...r.warnings],deck,outName,read,text:cards.length?n2aAnkiFileText(cards,deck,false):'',needsReview:cards.filter(c=>c.tags.includes('NeedsReview')).length,ai:0}}));
+    }finally{if(abortRef.current===ac)abortRef.current=null;setReading(false);}
   };
 
   const runImages=async()=>{
@@ -10032,7 +10198,9 @@ function NCLEXToAnki(){
     if(fresh){cacheRef.current=i2aEmptyCache();setCacheCount(0);}
     try{
       const ordered=[...images].sort((a,b)=>i2aNaturalCompare(a.name,b.name)),prepared=[];
-      for(const f of ordered)prepared.push({name:f.name,key:await i2aFileKey(f),payload:()=>i2aImagePayload(f)});
+      // v19.0: check abort signal during SHA-256 image hashing so cancel/unmount stops before reading remaining files.
+      for(const f of ordered){if(ac.signal.aborted)throw new DOMException('Aborted','AbortError');prepared.push({name:f.name,key:await i2aFileKey(f),payload:()=>i2aImagePayload(f)});}
+      if(ac.signal.aborted)throw new DOMException('Aborted','AbortError');
       const gemini=async(parts,level)=>{
         // v18.0 (review dead code): a post-call "last.truncated" check could never fire. Since v17.13 geminiRequest rejects
         // JSON cut off at the output limit before returning, so the last meta of a returned reply is never truncated.
@@ -10042,12 +10210,13 @@ function NCLEXToAnki(){
       const r=await i2aConvert({images:prepared,gemini,halts:geminiHaltsBatch,model,cache:cacheRef.current,deck,extraTags,sourceTag:sourceTag.trim(),aiAnswers,thinking,log:m=>pushLog(m),onProgress:(current,total)=>setProgress({current,total})});
       setCacheCount(Object.keys(cacheRef.current.images).length);
       setResults(p=>({...p,images:{...r,outName:'nclex_images_anki.txt',text:r.cards.length?n2aAnkiFileText(r.cards,deck,true):''}}));
-    }catch(e){setError(e.message||String(e));}
+    }catch(e){if(e?.name==='AbortError'||ac.signal.aborted){if(!results.images?.cards?.length)setError('Cancelled.');}else setError(e.message||String(e));}
     finally{abortRef.current=null;setBusy(false);}
   };
 
   const saveTranscripts=()=>downloadBlob(new Blob([JSON.stringify(cacheRef.current,null,1)],{type:'application/json'}),'nclex_images_anki_transcripts.json');
   const loadTranscripts=async fl=>{
+    if(busy||reading)return;
     const f=fl&&fl[0];if(!f)return;setNote('');
     try{const n=i2aMergeCache(cacheRef.current,JSON.parse(await f.text()));setCacheCount(Object.keys(cacheRef.current.images).length);setNote('Loaded '+n+' cached transcript(s) from '+f.name+'. Images that match are not sent to Gemini again.');}
     catch(e){setNote(f.name+': '+(e.message||String(e)));}
@@ -10104,7 +10273,7 @@ function NCLEXToAnki(){
         <label style={{display:'flex',gap:7,alignItems:'center',fontSize:12,color:'var(--text)',cursor:'pointer',marginTop:10}}><input type="checkbox" checked={fresh} onChange={e=>setFresh(e.target.checked)}/>Ignore cached transcripts and re-read every image</label>
         <div className="act-row" style={{marginTop:10}}>
           <button className="btn-secondary" onClick={saveTranscripts} disabled={!cacheCount}>⬇ Save transcripts</button>
-          <button className="btn-secondary" onClick={()=>cacheFileRef.current?.click()} disabled={busy}>⬆ Load transcripts</button>
+          <button className="btn-secondary" onClick={()=>cacheFileRef.current?.click()} disabled={busy||reading}>⬆ Load transcripts</button>
           <input aria-label="Transcripts file" ref={cacheFileRef} type="file" accept=".json" style={{display:'none'}} onChange={e=>{loadTranscripts(e.target.files);e.target.value='';}}/>
         </div>
         <div style={{fontSize:12,color:'var(--text-dim)',marginTop:6,lineHeight:1.5}}>Transcripts are kept while this page is open, so a run stopped by a quota limit resumes where it stopped. Save them to resume another day; img2anki.py's _transcripts.json loads here too.</div>
@@ -10115,10 +10284,10 @@ function NCLEXToAnki(){
         <button className="btn-primary" disabled={mode==='images'?!canRun:!canConvert} onClick={mode==='images'?runImages:convertText}>
           {mode==='images'?(busy?'⏳ Reading images...':'📷 Read '+images.length+' image'+(images.length!==1?'s':'')+' → Anki'):reading?'⏳ Reading PDF...':'🔄 Convert to Anki'}
         </button>
-        {busy&&mode==='images'&&<button className="btn-danger" onClick={()=>abortRef.current?.abort()}>Cancel</button>}
+        {((busy&&mode==='images')||(reading&&mode==='export'))&&<button className="btn-danger" onClick={()=>abortRef.current?.abort()}>Cancel</button>}
       </div>
       <div className="act-row">
-        {(files.length>0||(mode==='export'&&pasted))&&!busy&&<button className="btn-secondary" onClick={clearFiles}>Clear</button>}
+        {(files.length>0||(mode==='export'&&pasted))&&!busy&&!reading&&<button className="btn-secondary" onClick={clearFiles}>Clear</button>}
         {mode==='images'&&!cfg.apiKey&&<span className="act-note">Add your Gemini API key in Settings to read images.</span>}
       </div>
     </>}
@@ -10738,7 +10907,8 @@ function ngPoolSize(groups){return groups.reduce((n,g)=>n+g.facts.length,0);}
 // the walk and count toward their group's perCondition in its first round, so a batch keeps the v18.5 shape. A first
 // round in which every group still holding facts was already full gets the second round the walk would have had.
 function ngAllocateBatch(groups,usedIds,{want,perCondition=4,neighborCap=2,start=0,first=[]}={}){
-  const targets=[],taken=new Set(),n=groups.length,from=n?((Math.floor(Number(start))||0)%n+n)%n:0,order=groups.map((_,i)=>groups[(from+i)%n]);
+  const targets=[],taken=new Set(),hitGroups=[],seenGroups=new Set(),n=groups.length,from=n?((Math.floor(Number(start))||0)%n+n)%n:0,order=groups.map((_,i)=>groups[(from+i)%n]);
+  const markGroup=g=>{if(g&&!seenGroups.has(g)){seenGroups.add(g);hitGroups.push(g);}};
   const credit=new Map(),firstIds=new Set(Array.isArray(first)?first:[]);
   if(firstIds.size){
     const at=new Map();
@@ -10746,8 +10916,9 @@ function ngAllocateBatch(groups,usedIds,{want,perCondition=4,neighborCap=2,start
     for(const id of firstIds){
       if(targets.length>=want)break;
       const g=at.get(id);
-      if(!g||usedIds.has(id)||taken.has(id))continue;
-      taken.add(id);targets.push({...g.facts.find(f=>f.id===id),condition:g.condition});credit.set(g,(credit.get(g)||0)+1);
+      // v19.0: enforce perCondition on pre-filled focus facts so multiple Points on one condition cannot crowd out round 0.
+      if(!g||usedIds.has(id)||taken.has(id)||(credit.get(g)||0)>=perCondition)continue;
+      taken.add(id);targets.push({...g.facts.find(f=>f.id===id),condition:g.condition});credit.set(g,(credit.get(g)||0)+1);markGroup(g);
     }
   }
   let progressed=true;
@@ -10759,22 +10930,21 @@ function ngAllocateBatch(groups,usedIds,{want,perCondition=4,neighborCap=2,start
       for(const f of g.facts){
         if(n>=perCondition||targets.length>=want)break;
         if(usedIds.has(f.id)||taken.has(f.id))continue;
-        taken.add(f.id);targets.push({...f,condition:g.condition});n++;progressed=true;
+        taken.add(f.id);targets.push({...f,condition:g.condition});n++;progressed=true;markGroup(g);
       }
     }
   }
   // Same-condition neighbours for clinical realism. A good SATA or prioritization item
   // integrates several facts; targets alone can starve the model of the material that
   // makes distractors plausible. Context facts are explicitly NOT question targets.
+  // v19.0: iterate actual hit group objects so two groups sharing a condition name each supply their own context facts.
   const context=[],ctxSeen=new Set();
-  const hitConds=[...new Set(targets.map(t=>t.condition))];
-  for(const cond of hitConds){
-    const g=groups.find(x=>x.condition===cond);if(!g)continue;
+  for(const g of hitGroups){
     let n=0;
     for(const f of g.facts){
       if(n>=neighborCap)break;
       if(taken.has(f.id)||ctxSeen.has(f.id))continue;
-      ctxSeen.add(f.id);context.push({...f,condition:cond});n++;
+      ctxSeen.add(f.id);context.push({...f,condition:g.condition});n++;
     }
   }
   return{targets,context};
@@ -10801,7 +10971,9 @@ function ngFocusWords(s){
 }
 // One item per line or ';'-separated part, with any bullet or list number removed.
 function ngFocusItems(text){
-  return String(text||'').split(/\r?\n|;/).map(s=>s.replace(/^\s*(?:[-–—•*·>]+|\(?\d{1,3}[.)](?=\s))/,'').trim()).filter(s=>(s.match(/[A-Za-z]/g)||[]).length>=2);
+  // v19.0: skip Markdown/bold/colon section headings and strip dotted ("2.1") and Point ("P1:") prefixes.
+  const isHead=s=>/^#/.test(s)||/^\*\*[^*]+\*\*:?$/.test(s)||/:\s*$/.test(s);
+  return String(text||'').split(/\r?\n|;/).map(s=>s.trim()).filter(s=>s&&!isHead(s)).map(s=>s.replace(/^\s*(?:[-–—•*·>]+|\(?\d{1,3}(?:\.\d+)+[.)]?(?=\s)|\(?\d{1,3}[.)](?=\s)|P\d+\s*[:.)—–-](?=\s))/i,'').trim()).filter(s=>!isHead(s)&&(s.match(/[A-Za-z]/g)||[]).length>=2);
 }
 // Word sets, word counts and group labels for one pool, built once per run.
 function ngFocusIndex(groups){
@@ -10837,27 +11009,32 @@ function ngFocusMatch(ix,item,{words=true}={}){
 // (k mod batches)+1 with up to perItem facts no earlier item took. All items together take at most `cap` facts (the
 // generator passes half the run's target facts); the per-item quota shrinks to fit, to no less than 1, so the v18.5
 // walk keeps at least half of a run.
-function ngFocusPlan(groups,{points='',outcomes='',batches=1,perItem=3,cap=Infinity}={}){
+function ngFocusPlan(groups,{points='',outcomes='',batches=1,perItem=3,cap=Infinity,batchCaps=null}={}){
   const items=[...ngFocusItems(points).map(text=>({kind:'point',text})),...ngFocusItems(outcomes).map(text=>({kind:'outcome',text}))];
   const nb=Math.max(1,Math.floor(Number(batches))||1),plan=Array.from({length:nb},()=>[]);
   if(!items.length)return {plan,items};
   const ix=ngFocusIndex(groups),limit=Number.isFinite(Number(cap))?Math.max(0,Math.floor(Number(cap))):Infinity;
   const quota=Math.max(1,Math.min(Math.floor(Number(perItem))||1,Math.floor(limit/items.length))),claimed=new Set();
+  // v19.0: when per-batch capacity limits are provided (e.g. for a short final batch), route overflow focus picks to batches with remaining capacity.
+  const caps=Array.isArray(batchCaps)&&batchCaps.length===nb?batchCaps.map(c=>Number.isFinite(Number(c))?Math.max(0,Math.floor(Number(c))):Infinity):null;
   items.forEach((it,k)=>{
     const m=ngFocusMatch(ix,it.text,{words:it.kind==='point'});
     it.matched=m.facts.length>0;
-    it.facts=m.facts.filter(x=>!claimed.has(x.f.id)).slice(0,Math.max(0,Math.min(quota,limit-claimed.size))).map(x=>x.f.id);
-    it.facts.forEach(id=>{claimed.add(id);plan[k%nb].push(id);});
+    let b=k%nb;
+    if(caps){for(let d=0;d<nb;d++){const cand=(k+d)%nb;if(plan[cand].length<caps[cand]){b=cand;break;}}}
+    const room=caps?Math.max(0,caps[b]-plan[b].length):Infinity;
+    it.facts=m.facts.filter(x=>!claimed.has(x.f.id)).slice(0,Math.max(0,Math.min(quota,limit-claimed.size,room))).map(x=>x.f.id);
+    it.facts.forEach(id=>{claimed.add(id);plan[b].push(id);});
   });
   return {plan,items};
 }
 // v18.6: the run log's line on what the Points and Outcomes matched, naming up to five Points that matched nothing.
 function ngFocusSummary(items){
   if(!(items||[]).length)return null;
-  const points=items.filter(i=>i.kind==='point'),outcomes=items.filter(i=>i.kind==='outcome'),missed=points.filter(i=>!i.matched);
+  const points=items.filter(i=>i.kind==='point'),outcomes=items.filter(i=>i.kind==='outcome'),missed=points.filter(i=>!i.matched),allOutcomesMissed=outcomes.length>0&&!outcomes.some(i=>i.matched);
   const part=(list,one,many)=>list.length?list.filter(i=>i.matched).length+' of '+list.length+' '+(list.length===1?one:many):'';
   const picked=items.reduce((n,i)=>n+(i.facts||[]).length,0);
-  return {t:missed.length?'warn':'ok',text:'Focus: '+[part(points,'Point','Points'),part(outcomes,'Outcome','Outcomes')].filter(Boolean).join(' and ')
+  return {t:(missed.length||allOutcomesMissed)?'warn':'ok',text:'Focus: '+[part(points,'Point','Points'),part(outcomes,'Outcome','Outcomes')].filter(Boolean).join(' and ')
     +' matched Knowledge Base facts; '+picked+' of those fact(s) go first in their batches.'
     +(missed.length?' No match for '+missed.slice(0,5).map(i=>'"'+(i.text.length>60?i.text.slice(0,60)+'…':i.text)+'"').join(', ')+(missed.length>5?' and '+(missed.length-5)+' more':'')
       +'. To steer those, use a condition, medication or test name as the Knowledge Base spells it.':'')};
@@ -11774,6 +11951,8 @@ ${kbPacket}`});
           // Reserve before the call: a failed batch must not silently release its facts
           // back into the pool and let a later batch duplicate it.
           alloc.targets.forEach(f=>{usedFactIds.add(f.id);allocatedAll.add(f.id);});
+          // v19.0: carry any focus picks deferred by perCondition or batch size into the next batch so claimed focus facts are not silently dropped.
+          if(b<numBatches&&focus.plan[b-1]?.length){const deferred=focus.plan[b-1].filter(id=>!usedFactIds.has(id));if(deferred.length)focus.plan[b]=[...deferred,...(focus.plan[b]||[])];}
           const focusTargets=alloc.targets.filter(f=>(focus.plan[b-1]||[]).includes(f.id)).length;
           owned_log(`  Allocated ${alloc.targets.length} target fact(s) across ${[...new Set(alloc.targets.map(t=>t.condition))].length} condition(s) + ${alloc.context.length} context fact(s).`+(focusTargets?` ${focusTargets} of the targets were picked for your Points and Outcomes.`:''));
         }
@@ -11864,6 +12043,10 @@ ${NG_GROUNDING_ADAPTER}
         };
         publishBatch();
         if(runAudit&&!wsErr){
+          // v19.0: once QuotaStop fires on an earlier batch, skip per-item audit and repair calls on remaining batches.
+          if(auditInterrupted){
+            owned_log('  Audit skipped for this batch: Gemini API quota was exhausted on an earlier batch.','warn');
+          }else{
           const {model:aModel,level:aLevel}=cfg.forTool('itemAudit');
           const parsedItems=ngSplitNumbered(ngSplitParts(workRaw).p3).map(ngParseItem);
           const keyItems=new Map(ngSplitNumbered(ngSplitParts(workRaw).p4).map(k=>[k.num,ngParseKeyItem(k)]));
@@ -11917,7 +12100,7 @@ ${NG_GROUNDING_ADAPTER}
             for(const r of accuracy)
               owned_log('    ⚠ Q'+r.num+' failed on answer accuracy — NOT auto-repaired. The key here is the model\'s own and there is no reference standard; check it yourself.','err');
             const repairable=fails.filter(r=>r.autoRepairable);
-            if(repairable.length){
+            if(repairable.length&&!auditInterrupted){
               owned_log('  Repairing '+repairable.length+' item(s), one round, no re-audit...','warn');
               const {model:gModel,level:gLevel}=cfg.forTool('nclexgen');
               await itemRunPool(repairable,AUDIT_POOL_WIDTH,async(r)=>{
@@ -11928,7 +12111,13 @@ ${NG_GROUNDING_ADAPTER}
                   const fixed=extractJSON(out);
                   const repairShape=ngRepairShapeIssues(fixed);if(repairShape.length)throw new Error(repairShape.map(i=>i.msg).join('; '));
                   if(fixed.options.map(o=>o.label).join('|')!==r.item.options.map(o=>o.label).join('|'))throw new Error('repair changed the original option labels');
-                  const strat=(keyRaw.match(/^\s*Strategy:[^\n]*$/m)||[])[0]||'';
+                  // v19.0: reject no-op repairs (retain FAIL when normalized [stem, options, answer, rationales] did not change) and preserve multi-line Strategy blocks.
+                  const _normRepair=s=>String(s||'').replace(/\s+/g,' ').trim();
+                  const origAns=_normRepair((String(keyRaw||'').match(/^\s*(?:\d+[.)]\s*)?ANSWER:\s*([^\n]+)/im)||[])[1]||'');
+                  const origWhys=[...String(keyRaw||'').matchAll(/^\s*Why\s+([A-Z])\s+is\s+(?:correct|wrong|incorrect)\s*:\s*([^\n]+)$/gim)].map(m=>{const body=m[2].replace(/\(\s*Sources?\s*:[^)]*\)\s*$/i,'').trim();return m[1].toUpperCase()+':'+_normRepair(body);}).join('|');
+                  const fixedWhys=fixed.rationales.map(x=>String(x.label||'').trim().toUpperCase()+':'+_normRepair(String(x.text||'').replace(/\(\s*Sources?\s*:[^)]*\)\s*$/i,''))).join('|');
+                  if(_normRepair(fixed.stem)===_normRepair(r.item.stem)&&fixed.options.map(o=>_normRepair(o.text)).join('|')===r.item.options.map(o=>_normRepair(o.text)).join('|')&&_normRepair(fixed.correctLabel).toUpperCase()===origAns.toUpperCase()&&fixedWhys===origWhys)throw new Error('repair returned an unchanged item');
+                  const strat=(keyRaw.match(/^\s*Strategy:[\s\S]*?(?=\n\s*Tags:|(?![\s\S]))/m)||[])[0]||'';
                   const tags=(keyRaw.match(/^\s*Tags:[^\n]*$/m)||[])[0]||'';
                   const parts=ngSplitParts(workRaw);
                   const newP3=ngSpliceBlock(parts.p3,r.num,ngRenderQuestionBlock(r.num,fixed));
@@ -11956,8 +12145,13 @@ ${NG_GROUNDING_ADAPTER}
               // deliberately NOT re-audited: one round, and anything still failing surfaces.
               wsIssues=validateNCLEXWorksheet(workRaw,size,worksheetContract);
               wsErr=wsIssues.filter(x=>x.sev==='error').length;
+              if(allocMode&&alloc){
+                const RP2=ngSplitParts(workRaw),allocIds=new Set(alloc.targets.map(f=>f.id));
+                for(const id of ngCitedFactIds(RP2.p1,RP2.p3,RP2.p4))if(allocIds.has(id))citedAll.add(id);
+              }
               owned_log('  Re-checked after repair: '+wsErr+' error(s), '+(wsIssues.length-wsErr)+' warning(s).',wsErr?'err':'ok');
             }
+          }
           }
         }else if(runAudit&&wsErr){
           owned_log('  Audit skipped for this batch: fix the '+wsErr+' structural error(s) first — auditing a broken worksheet spends quota to grade a known failure.','warn');
@@ -12006,7 +12200,7 @@ ${NG_GROUNDING_ADAPTER}
       for(const q of bq){
         const k=bk.find(x=>x.num===q.num);
         qs.push(ngRenumber(q.text,n));
-        ks.push(k?ngRenumber(k.text,n):n+'. ANSWER: [not parsed — see Raw view]');
+        ks.push(k?ngRenumber(k.text,n):n+'. ANSWER: [not parsed — see Audit Trail view]');
         n++;
       }
     }
@@ -13116,7 +13310,10 @@ function validateCaseStudy(caseStudy,factIndex,allowedFactIds,expectedCondition)
       const derived=q.type==='Calculation'?caseCalculationEvidence(q,factIndex,questionIds,presentedValues):new Set();
       const explanationValues=derived.size?new Set([...presentedValues,...derived]):presentedValues;
       if(q.type==='Calculation'&&derived.size){
-        const answer=(q.correctAnswers||[])[0]||'';
+        const rawAns=String((q.correctAnswers||[])[0]||'');
+        // v19.0: when a Calculation item supplies lettered options and keys the option label ("B"), resolve the option's text before checking the computed value.
+        const optMatch=(q.options||[]).find(o=>String(o.label||'').trim()===rawAns.trim());
+        const answer=optMatch&&!caseNumericTokens(rawAns).tokens.length&&!/\d/.test(rawAns)?String(optMatch.text||''):rawAns;
         caseAuditTextValues(answer,questionIds.length?questionIds:[''],factIndex,qn+' answer',issues,'calculation',explanationValues,neutralValues);
         const answerTokens=caseNumericTokens(answer);
         const answerMatches=/^[+−-]?(?:(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|\.\d+)$/.test(answer)?[...derived].some(key=>key.match(/^[+-]?[\d.]+/)[0]===caseDecimal(answer)):answerTokens.tokens.length===1&&!answerTokens.unsupported.length&&derived.has(answerTokens.tokens[0].key);
@@ -13367,13 +13564,14 @@ function caseShuffleQuestion(q,random=Math.random){
   const strings=[q.stem,...opts.map(o=>o.text),...rats.map(r=>r.text)].map(String);
   // Only singular "option/choice/answer A" is relabelled. Any other naming of a label or position keeps the written
   // order with an advisory (v17.15: the shared itemRefersByLetter, also used by the worksheet shuffle).
-  const ref=/\b([Oo]ption|[Cc]hoice|[Aa]nswer)\s+([A-Z])\b/g;
+  // v19.0: match horizontal whitespace only (never newlines) and preserve exact separator spacing, matching ngShuffleWorksheetOptions.
+  const ref=/\b([Oo]ption|[Cc]hoice|[Aa]nswer)([ \t]+)([A-Z])\b/g;
   const unsafe=strings.some(text=>itemRefersByLetter(text,labels));
   if(unsafe)return {...q,shuffleNotice:'Answer options retained in original order: label/order-dependent wording requires review.'};
   const shuffled=opts.map(o=>({...o}));
   for(let i=shuffled.length-1;i>0;i--){const value=random();if(!Number.isFinite(value)||value<0||value>=1)throw Error('Invalid shuffle random value');const j=Math.floor(value*(i+1));[shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]];}
   const mapping=new Map(shuffled.map((o,i)=>[o.label,String.fromCharCode(65+i)]));
-  const remap=text=>String(text).replace(ref,(whole,kind,label)=>kind+' '+mapping.get(label));
+  const remap=text=>String(text).replace(ref,(whole,kind,sep,label)=>mapping.has(label)?kind+sep+mapping.get(label):whole);
   const result={...q,stem:remap(q.stem),options:shuffled.map(o=>({...o,label:mapping.get(o.label),text:remap(o.text)})),correctAnswers:answers.map(a=>mapping.get(a)).sort(),rationales:rats.map(r=>({...r,option:mapping.get(r.option),text:remap(r.text),factIds:[...(r.factIds||[])]})).sort((a,b)=>a.option.localeCompare(b.option))};
   delete result.shuffleNotice;return result;
 }
@@ -13699,8 +13897,8 @@ function CaseStudyGenerator(){
   // v18.4: a medication, diagnostic or scoring-tool entry with facts can be a case topic too (kbFactView).
   const conditions=useMemo(()=>kbFactView(K.knowledgeBase).conditions,[K.knowledgeBase]);
   const activeCondition=conditions.find(c=>c.id===conditionId)||conditions[0]||null;
-  // Auto-select the first condition once the KB is available.
-  useEffect(()=>{if(!conditionId&&conditions[0])setConditionId(conditions[0].id);},[conditions,conditionId]);
+  // Auto-select the first condition once the KB is available or when a replaced KB no longer contains conditionId; clear conditionId if the KB has no conditions.
+  useEffect(()=>{if((!conditionId||!conditions.some(c=>c.id===conditionId))&&conditions[0])setConditionId(conditions[0].id);else if(!conditions.length&&conditionId)setConditionId('');},[conditions,conditionId]);
 
   const selectedFacts=useMemo(()=>activeCondition?selectCaseFacts(activeCondition,{includeTier2,includeTier3,includeCalculation:types.calculation,includeEducation:types.education}):[],[activeCondition,includeTier2,includeTier3,types.calculation,types.education]);
   // v15.8: the requested shape drives the sufficiency check, so the warning updates live as
@@ -14237,9 +14435,10 @@ function ConfigSidebar({onClose,activeTool}){
           <div style={{marginTop:6}}>
             <div className="sb-hint" style={{marginBottom:6}}>Each tool uses its own model and thinking level. The manual toggle is paused.</div>
             {/* v18.0 (review L4): NCLEX to Anki has no profile row, so this badge showed the Flash · low fallback. That tab always
-                runs the Flash model, reads images at the level chosen in the tab and answers at high. The header now says seven tools. */}
-            {(()=>{const r=activeTool==='nclex2anki'?{model:cfg.flashModel,level:'level set in tab',family:'flash'}:cfg.forTool(activeTool);return(
-              <div className="model-badge"><div className={`model-dot ${r.family==='argon'?'argon':''}`}/><span style={{flex:1}}>{r.model}</span><span style={{fontSize:12,color:'var(--text-dim)'}}>{r.level}</span></div>
+                runs the Flash model, reads images at the level chosen in the tab and answers at high. The header now says seven tools.
+                v19.0: Priority runs both Stage-1 harvest (priorityHarvest) and Stage-2 synthesis (priority); display both in the badge. */}
+            {(()=>{const r=activeTool==='nclex2anki'?{model:cfg.flashModel,level:'level set in tab',family:'flash'}:cfg.forTool(activeTool);const h=activeTool==='priority'?cfg.forTool('priorityHarvest'):null;return(
+              <div className="model-badge"><div className={`model-dot ${r.family==='argon'?'argon':''}`}/><span style={{flex:1}}>{h?`${h.model} (${h.level}) → ${r.model}`:r.model}</span><span style={{fontSize:12,color:'var(--text-dim)'}}>{r.level}</span></div>
             );})()}
             <div style={{fontSize:12,color:'var(--text-dim)',marginTop:3,marginBottom:7}}>↑ what the open tab will use</div>
             <button className="btn-secondary" aria-expanded={showProfiles} aria-controls="suite-profiles" style={{width:'100%'}} onClick={()=>setShowProfiles(s=>!s)}>{showProfiles?'Hide':'Customize'} per-tool profiles</button>

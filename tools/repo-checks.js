@@ -29,6 +29,8 @@ const DOCUMENTED_PROMPTS = Object.freeze([
   'I2A_ANSWER_PROMPT',
   // v18.1: the shared priority order sent to the NCLEX Generator and the case prompt (not frozen).
   'PRIORITY_ORDER_RULES',
+  // v19.0: the Point-ID source and anchor rules appended by kbBuildFocusBlock (not frozen).
+  'KB_SOURCE_ANCHOR_RULES',
 ]);
 
 function listSuiteFiles(rootDir = process.cwd()) {
@@ -50,6 +52,12 @@ function resolveSuiteFile({ rootDir = process.cwd(), explicit = '' } = {}) {
     }
     if (NAME_CLASH_RE.test(path.basename(full))) {
       throw new Error('Refusing Proton Drive Name clash file: ' + path.basename(full));
+    }
+    if (path.dirname(full) === root && fs.existsSync(root)) {
+      const clashes = listSuiteFiles(root).filter(name => NAME_CLASH_RE.test(name));
+      if (clashes.length) {
+        throw new Error('Proton Drive Name clash file(s) require manual diffing: ' + clashes.join(', '));
+      }
     }
     return full;
   }
@@ -199,6 +207,16 @@ function parseMeasurementArgs(argv, kind) {
   if (config.appProfile && (seen.has('--model') || seen.has('--level'))) throw new Error('--app-profile cannot be combined with --model or --level');
   if (davis && !config.images.length && !config.help) throw new Error('Pass at least one image path');
   if (seen.has('--only') && !config.only.length) throw new Error('--only requires at least one item ID');
+  if (config.out) {
+    const outResolved = path.resolve(config.out).toLowerCase();
+    const collidesWithInput = config.images.some(img => path.resolve(img).toLowerCase() === outResolved) ||
+      (config.suite && path.resolve(config.suite).toLowerCase() === outResolved);
+    const isProtectedFile = /\.(?:html?|m?js|md)$/i.test(config.out) ||
+      /^(?:neia-fixture|prompt-baseline)\.json$/i.test(path.basename(config.out));
+    if (collidesWithInput || isProtectedFile) {
+      throw new Error('--out cannot overwrite an input or repository source file');
+    }
+  }
   return config;
 }
 
@@ -237,6 +255,35 @@ function createMeasurementPacer(rpm, { now = Date.now, sleep = ms => new Promise
   };
 }
 
+function parseCliArgs(argv, { flags = [], options = [] } = {}) {
+  const flagSet = new Set(flags);
+  const optSet = new Set(options);
+  const values = {};
+  const seenFlags = new Set();
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (!arg.startsWith('--')) {
+      throw new Error('Unexpected positional argument: ' + arg);
+    }
+    const name = arg.slice(2);
+    if (flagSet.has(name)) {
+      if (seenFlags.has(name)) throw new Error('Duplicate option: --' + name);
+      seenFlags.add(name);
+      continue;
+    }
+    if (optSet.has(name)) {
+      if (Object.prototype.hasOwnProperty.call(values, name)) throw new Error('Duplicate option: --' + name);
+      const val = argv[i + 1];
+      if (!val || val.startsWith('--')) throw new Error('Missing value for --' + name);
+      values[name] = val;
+      i++;
+      continue;
+    }
+    throw new Error('Unknown option: ' + arg);
+  }
+  return { flags: seenFlags, values };
+}
+
 module.exports = {
   measurementOutputCap,
   DOCUMENTED_PROMPTS,
@@ -250,6 +297,7 @@ module.exports = {
   listSuiteFiles,
   resolveSuiteFile,
   measurementPlan,
+  parseCliArgs,
   parseMeasurementArgs,
   resolveMeasurementProfile,
   sha256,

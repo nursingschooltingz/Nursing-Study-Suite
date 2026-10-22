@@ -74,6 +74,10 @@ module.exports=function worksheetRemediationTests(S,t){
   const goodResult=apply(good);t('valid repair publishes a fully revalidated candidate',!goodResult.error&&goodResult.raw.includes('Which action fits?'));
   const badShape=apply({...good,options:[null]});t('malformed repair preserves the original worksheet',!!badShape.error&&badShape.raw===original);
   const badRefs=apply({...good,rationales:good.rationales.map(r=>({...r,source:'C999'}))});t('post-repair grounding uses the same immutable packet and preserves original on failure',!!badRefs.error&&badRefs.raw===original);
+  const noopRepair=apply({stem:'What should the nurse do?',options:opts.map((text,i)=>({label:'ABCD'[i],text})),correctLabel:'A',rationales:opts.map((text,i)=>({label:'ABCD'[i],text:'Reasoning is provided.',source:i?'C2':'C1'}))});
+  const multiStratWs=original.replace('Strategy: General strategy.','Strategy: First strategy line.\n     Second strategy line.');
+  const multiStratRes=repair(multiStratWs,good,{num:1,item},W.ngSplitParts(multiStratWs).p4,1,contract,...helperNames.map(n=>W[n]));
+  t('no-op worksheet repair is rejected while multi-line Strategy blocks survive valid repair',noopRepair.error==='repair returned an unchanged item'&&noopRepair.raw===original&&!multiStratRes.error&&multiStratRes.raw.includes('Second strategy line.'));
   const caseShort={stages:[{stageNumber:1,data:[],questions:[]}],debrief:{notes:'The supplied facts support fewer questions.'}};
   t('a declared short case remains warning-only',C.caseCompletenessIssues(caseShort,{stages:2,questionsPerStage:2}).every(i=>i.sev==='warn')&&C.caseCompletenessIssues(caseShort,{stages:2,questionsPerStage:2})[0].msg.includes('explanation is present'));
   t('unexplained short case reports the missing explanation',C.caseCompletenessIssues({...caseShort,debrief:{}},{stages:2,questionsPerStage:2})[0].msg.includes('No shortfall explanation'));

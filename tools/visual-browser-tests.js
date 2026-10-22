@@ -15,7 +15,8 @@ const widths=[360,768,1024,1440];
 const tabs=[
   ['knowledge','LATTE Knowledge Base'],['priority','Pyramid Priority Analyzer'],
   ['anki','LATTE Anki Generator'],['nclex','NCLEX Question Extractor'],
-  ['nclexgen','NCLEX Question Generator'],['cases','Clinical Case Study Generator']
+  ['nclexgen','NCLEX Question Generator'],['cases','Clinical Case Study Generator'],
+  ['nclex2anki','NCLEX to Anki']
 ];
 
 async function settle(page){await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));}
@@ -66,7 +67,7 @@ async function ankiLabels(page){
   }));
   assert.deepEqual(wraps,[],'Anki column headings and Preview label stay on one line');
 }
-// v17.0: the rail lays its six tools out in a scrolling strip below 1080px. A stage group that
+// v17.0 / v19.0: the rail lays its seven tools (including v17.9 NCLEX to Anki) out in a scrolling strip below 1080px. A stage group that
 // shrinks below its own content silently prints the next group on top of the previous label, and
 // a scrolling container hides that from the overflow check — so measure the boxes directly.
 async function toolStrip(page){
@@ -74,7 +75,7 @@ async function toolStrip(page){
     const r=node.getBoundingClientRect();
     return {label:node.innerText.split('\n').join(' '),left:Math.round(r.left),right:Math.round(r.right),top:Math.round(r.top),bottom:Math.round(r.bottom)};
   }));
-  assert.equal(boxes.length,6,'every tool stays reachable from the rail');
+  assert.equal(boxes.length,tabs.length,'every tool stays reachable from the rail');
   const overlaps=[];
   for(let i=0;i<boxes.length;i++)for(let j=i+1;j<boxes.length;j++){
     const a=boxes[i],b=boxes[j];
@@ -239,4 +240,4 @@ async function main(args=process.argv.slice(2)){
   console.log('Visual browser acceptance passed at 360, 768, 1024 and 1440px. No live Gemini calls or private material.');
 }
 if(require.main===module)main().catch(e=>{console.error(e.stack||e.message);process.exitCode=1;});
-module.exports={visualTests,layout,main};
+module.exports={tabs,visualTests,layout,main};

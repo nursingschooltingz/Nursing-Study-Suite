@@ -5,7 +5,7 @@
 // from the shipped HTML and run on synthetic text with stubbed model replies; the unmount cleanups are source contracts.
 
 function span(S,start,end){
-  const a=S.indexOf(start);if(a<0)throw Error('Low-extractor anchor missing: '+start);
+  const a=S.indexOf(start);if(a<0||S.indexOf(start,a+start.length)>=0)throw Error('Low-extractor anchor missing or ambiguous: '+start);
   const b=S.indexOf(end,a+start.length);if(b<0)throw Error('Low-extractor end anchor missing after: '+start);
   return S.slice(a,b);
 }
@@ -76,7 +76,7 @@ module.exports=async function run(S,t){
   let split=await splitRun([{questions:[]}]);
   t('L23: split mode counts a non-array JSON reply as a failed batch, not a success',
     split.track.attempted===1&&split.track.succeeded===0&&split.track.failed.join()==='Batch 1');
-  split=await splitRun([[{question_number:1,question:'A client with heart failure asks about sodium intake.'},{question_number:3,question:'A client with asthma uses an inhaler.'}]]);
+  split=await splitRun([[{question_number:'Q1',question:'A client with heart failure asks about sodium intake.'},{question_number:3,question:'A client with asthma uses an inhaler.'}]]);
   t('L21: in a split run the misnumbered bare stem stays bare while the matching one gets its own choices back',
     split.track.succeeded===1&&split.kept.length===2&&split.kept[0].options_repaired===true&&/Choice 1c/.test(split.kept[0].question)&&
     !split.kept[1].options_repaired&&split.kept[1].question==='A client with asthma uses an inhaler.');

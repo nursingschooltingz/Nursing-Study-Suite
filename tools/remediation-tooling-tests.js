@@ -43,6 +43,10 @@ async function runTests({ source, test = (name, value) => assert.ok(value, name)
   }
   t('Davis excludes output image filename from inputs', JSON.stringify(parseD(['--out', 'foo.png']).images) === '["synthetic.jpg"]');
   t('Davis preserves multiple positional images', JSON.stringify(davis.parseArgs(['a.jpg', '--out', 'foo.png', 'b.png']).images) === '["a.jpg","b.png"]');
+  t('Davis and NEIA reject --out that overwrites an input image or protected repo file',
+    throws(() => davis.parseArgs(['a.jpg', '--out', 'a.jpg']), /--out cannot overwrite/) &&
+    throws(() => neia.parseArgs(['--out', 'neia-fixture.json']), /--out cannot overwrite/) &&
+    throws(() => neia.parseArgs(['--out', 'verify-repo.js']), /--out cannot overwrite/));
   t('Davis supports option-like paths after --', davis.parseArgs(['--', '--photo.jpg']).images[0] === '--photo.jpg');
   t('Davis requires at least one image', throws(() => davis.parseArgs(['--dry-run']), /at least one image/));
   t('NEIA rejects positional input', throws(() => neia.parseArgs(['foo.png']), /Unexpected input/));
@@ -187,6 +191,68 @@ async function runTests({ source, test = (name, value) => assert.ok(value, name)
   const emptyCard = source.replace(cardLiteral.declaration, 'const CARD_TRANSCRIBE_PROMPT=\`\`;');
   t('Prompt documentation fails an empty live card prompt specifically', throws(() => render.buildGeneratedAppendix(emptyCard), /Empty documented prompt body: CARD_TRANSCRIBE_PROMPT/));
 
+  const os = require('os');
+  const clashDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nss-clash-test-'));
+  try {
+    const mainHtml = path.join(clashDir, 'Nursing-Study-Suite v19.0.html');
+    const clashHtml = path.join(clashDir, 'Nursing-Study-Suite v19.0 (Name clash 2026-10-21).html');
+    fs.writeFileSync(mainHtml, '<!-- v19.0 (2026-10-21) -->');
+    fs.writeFileSync(clashHtml, '<!-- v19.0 (2026-10-21) -->');
+    t('resolveSuiteFile rejects explicit --html when a Proton Drive Name-clash file exists in rootDir',
+      throws(() => checks.resolveSuiteFile({ rootDir: clashDir, explicit: 'Nursing-Study-Suite v19.0.html' }), /Proton Drive Name clash/));
+    t('DOCUMENTED_PROMPTS includes v19.0 KB_SOURCE_ANCHOR_RULES (16 total)',
+      checks.DOCUMENTED_PROMPTS.length === 16 && checks.DOCUMENTED_PROMPTS.includes('KB_SOURCE_ANCHOR_RULES'));
+    t('parseCliArgs rejects unknown flags, duplicate options, missing values, and unexpected positional arguments',
+      throws(() => checks.parseCliArgs(['--bogus'], { flags: ['check'], options: ['html'] }), /Unknown option: --bogus/) &&
+      throws(() => checks.parseCliArgs(['--check', '--check'], { flags: ['check'], options: ['html'] }), /Duplicate option: --check/) &&
+      throws(() => checks.parseCliArgs(['--html'], { flags: ['check'], options: ['html'] }), /Missing value for --html/) &&
+      throws(() => checks.parseCliArgs(['extra.html'], { flags: ['check'], options: ['html'] }), /Unexpected positional argument: extra\.html/) &&
+      checks.parseCliArgs(['--check', '--html', 'file.html'], { flags: ['check'], options: ['html'] }).values.html === 'file.html');
+  } finally {
+    fs.rmSync(clashDir, { recursive: true, force: true });
+  }
+
+  // v19.0: offline verification for browser fixtures, visual rail tool coverage, and Anki pilot spec builder.
+  const browserFixture = require('./remediation-browser-fixture');
+  const browserTests = require('./remediation-browser-tests');
+  const ankiFixture = require('./anki-browser-fixture');
+  const ankiSourceReviewBrowser = require('./anki-source-review-browser-tests');
+  const ankiGenQualityBrowser = require('./anki-generation-quality-browser-tests');
+  const ankiV166Browser = require('./anki-v166-browser-tests');
+  const visualBrowser = require('./visual-browser-tests');
+  const { makeAnkiPilotSpec } = require('./anki-pilot-spec');
+
+  const realAppFixtureHtml = browserFixture.page({ hold: ['load'], local: browserFixture.syntheticKB('A') });
+  t('Real-App browser fixture mounts shipped App and RemediationProbe without anchor drift',
+    realAppFixtureHtml.includes('<BootErrorBoundary><App/></BootErrorBoundary>') &&
+    !realAppFixtureHtml.includes('SyntheticAnkiApp') &&
+    realAppFixtureHtml.includes('<RemediationProbe/>') &&
+    !browserFixture.page({ label: '</script><script>bad</script>' }).includes('const remediationConfig={"label":"</script>'));
+  t('Real-App browser fixture once() rejects missing and duplicate anchors',
+    throws(() => browserFixture.once('duplicate duplicate', 'duplicate', 'replacement'), /exactly once/) &&
+    throws(() => browserFixture.once('missing', 'absent', 'replacement'), /exactly once/));
+  const resources = browserTests.approvedResources(realAppFixtureHtml);
+  t('Browser fixture approvedResources accounts for all 8 pinned CDN scripts and 2 PDF workers',
+    resources.scripts.size === 8 && resources.workers.size === 2 && resources.styles.size === 1);
+  t('All four Anki browser fixtures build cleanly against the live suite HTML without anchor drift',
+    [ankiFixture, ankiSourceReviewBrowser, ankiGenQualityBrowser, ankiV166Browser].every(mod => {
+      const html = mod.page();
+      return html.includes('<BootErrorBoundary><SyntheticAnkiApp/></BootErrorBoundary>') && !html.includes('<RemediationProbe/>');
+    }));
+  const liveToolIds = Array.from(source.matchAll(/\{id:'([^']+)',stage:'(?:source|plan|practice)',label:'[^']+',step:'[^']+',title:'([^']+)'/g), m => [m[1], m[2]]);
+  t('visual-browser-tests tabs list matches all 7 shipped TOOLS in the rail',
+    liveToolIds.length === 7 && JSON.stringify(visualBrowser.tabs) === JSON.stringify(liveToolIds));
+  const kbClean = browserFixture.syntheticKB('A');
+  const kbTagged = JSON.parse(JSON.stringify(kbClean));
+  kbTagged.conditions[0].facts[0].text += ' [P1]';
+  kbTagged.medications = [{ name: 'Synthetic med A', mechanism: 'Blocks receptor Z [P2]' }];
+  const kbCleanWithMed = JSON.parse(JSON.stringify(kbClean));
+  kbCleanWithMed.medications = [{ name: 'Synthetic med A', mechanism: 'Blocks receptor Z' }];
+  const specTagged = makeAnkiPilotSpec(kbTagged, source);
+  const specClean = makeAnkiPilotSpec(kbCleanWithMed, source);
+  t('makeAnkiPilotSpec strips v19.0 [P#] tags from condition and derived entity facts before hashing Anki packet',
+    specTagged.packetSha256 === specClean.packetSha256 && specTagged.facts === 2 && specTagged.entries === 1 && specTagged.chunkCount === 1);
+
   // Fresh process proves module import cannot read fixtures, emit output, call exit, or
   // fetch. Its read hook allows only Node's module-loader reads of .js source files.
   const probe = [
@@ -195,7 +261,7 @@ async function runTests({ source, test = (name, value) => assert.ok(value, name)
     "fs.writeFileSync=()=>{throw Error('Import wrote file')};",
     "global.fetch=()=>{throw Error('Import fetched')}; process.exit=()=>{throw Error('Import exited')};",
     "console.log=console.error=()=>{throw Error('Import emitted output')};",
-    "require('./davis-transcribe-test');require('./neia-retest');"
+    "require('./davis-transcribe-test');require('./neia-retest');require('./tools/remediation-browser-tests');require('./tools/visual-browser-tests');require('./tools/anki-pilot-spec');require('./tools/anki-example-proposal');"
   ].join('\n');
   const imported = spawnSync(process.execPath, ['-e', probe], { cwd: path.resolve(__dirname, '..'),
     encoding: 'utf8', env: { ...process.env, GEMINI_API_KEY: '' } });

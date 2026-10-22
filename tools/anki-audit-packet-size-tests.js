@@ -43,6 +43,12 @@ function runAnkiAuditPacketSizeTests({S,t,section}){
   t('V4 partitioned unmapped notes retain complete origin-chunk source evidence',unlinked.length>1&&unlinked.every(g=>g.notes.some(n=>n.id==='unmapped')&&g.facts.length===unlinkedFacts.length));
   t('V4 unresolved source links remain explicit rather than invented',unlinked.every(g=>g.notes.find(n=>n.id==='unmapped').unresolvedFactIds[0]==='unknown-source'));
   t('V4 overlapping support packets still honor their actual wire size',unlinked.every(g=>packetSize(g)<=24000));
+  const largeChunkFacts=Array.from({length:22},(_,i)=>fact('large-fact-'+i,'Marker '+i+' '+('independent detail '.repeat(65))));
+  const largeChunkNotes=[...largeChunkFacts.map((f,i)=>note('large-note-'+i,[f.id],{sourceLine:i+1})),note('large-unmapped',[])];
+  const largeUnmappedGroups=H.ankiAuditGroups(largeChunkNotes,batch(largeChunkFacts),'all',4);
+  t('V4 large chunk with an unmapped note drops redundant chunk-wide supportFactIds per unit instead of failing the 24000-character cap',
+    largeUnmappedGroups.length>1&&largeUnmappedGroups.every(g=>packetSize(g)<=24000&&g.notes.some(n=>n.id==='large-unmapped'))&&
+    largeUnmappedGroups.flatMap(g=>g.sourceFactIds).length===largeChunkFacts.length);
 
   const failure=fn=>{try{fn();return null;}catch(error){return error;}};
   const veryLong=fact('long','marker '+('x'.repeat(14000)));

@@ -6,6 +6,7 @@ const path = require('path');
 const {
   FROZEN_PROMPTS,
   extractPromptLiteral,
+  parseCliArgs,
   resolveSuiteFile,
   sha256,
 } = require('./repo-checks');
@@ -37,12 +38,16 @@ function checkFrozenPrompts({ suiteFile, baselineFile = BASELINE_FILE }) {
 
 function argValue(argv, name) {
   const at = argv.indexOf('--' + name);
-  return at >= 0 ? argv[at + 1] || '' : '';
+  if (at < 0) return '';
+  const val = argv[at + 1];
+  if (!val || val.startsWith('--')) throw new Error('Missing value for --' + name);
+  return val;
 }
 
 if (require.main === module) {
   try {
     const argv = process.argv.slice(2);
+    parseCliArgs(argv, { options: ['html'] });
     const suiteFile = resolveSuiteFile({ rootDir: REPO_ROOT, explicit: argValue(argv, 'html') });
     const count = checkFrozenPrompts({ suiteFile });
     console.log('PASS  ' + count + ' frozen prompt constants are byte-identical to prompt-baseline.json');

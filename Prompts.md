@@ -1,8 +1,8 @@
 # Nursing Study Suite — Prompt Library
 
-The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, the item-quality auditor, and the NCLEX to Anki image reader, **extracted verbatim from the shipped v19.0 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
+The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, the item-quality auditor, and the NCLEX to Anki image reader, **extracted verbatim from the shipped v19.1 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
 
-> **Coverage.** All 15 named prompt constants are represented from live HTML bytes. Eleven are byte-frozen; `CARD_TRANSCRIBE_PROMPT` is deliberately tunable but requires two transcription runs per card after an edit. `I2A_TRANSCRIBE_PROMPT` and `I2A_ANSWER_PROMPT` (NCLEX to Anki, v17.9) are copied from img2anki.py and are not frozen. `PRIORITY_ORDER_RULES` (v18.1) is not frozen; a harness assertion keeps it in step with the Priority cascade. The generated appendix is maintained by `node tools/render-prompts.js --write` and checked by `node verify-repo.js`.
+> **Coverage.** All 16 named prompt constants are represented from live HTML bytes. Eleven are byte-frozen; `CARD_TRANSCRIBE_PROMPT` is deliberately tunable but requires two transcription runs per card after an edit. `I2A_TRANSCRIBE_PROMPT` and `I2A_ANSWER_PROMPT` (NCLEX to Anki, v17.9) are copied from img2anki.py and are not frozen. `PRIORITY_ORDER_RULES` (v18.1) and `KB_SOURCE_ANCHOR_RULES` (v19.0) are not frozen; harness assertions keep them in step with the Priority cascade and Point-ID anchoring workflow. The generated appendix is maintained by `node tools/render-prompts.js --write` and checked by `node verify-repo.js`.
 
 How to read them: text inside `${...}` is filled in at runtime by the app (your settings, your Knowledge Base, the current chunk). The Priority, Case, and audit prompts are shown as their complete builder functions because the assembly logic is part of the design.
 
@@ -2072,6 +2072,19 @@ Return ONLY JSON:
 
 QUESTIONS:
 `;
+````
+
+### `KB_SOURCE_ANCHOR_RULES` (1,461 source chars; tunable; v19.0 Point-ID anchoring rules appended by kbBuildFocusBlock)
+
+SHA-256 of the raw template-literal body: `1b73100a0a91dc68aeb052cd0b45c5109314c99a8741a14172d0837435ec73b1`
+
+````js
+const KB_SOURCE_ANCHOR_RULES=`SOURCE & ANCHOR RULES:
+1. Strict Point-ID Mapping (With [NONE] Escape Hatch): Every extracted fact must map to one or more exact Point IDs from the Points list (e.g., [P1] or [P3, P4]). Never invent Point IDs. If an extracted fact does not directly fit any listed Point ID, tag it [NONE] rather than forcing a loose match. Only include a page number if an explicit [Page X] marker appears in the extracted text stream; otherwise omit page numbers entirely.
+2. Keep Tags Out of Fact Prose: Place the Point ID tag at the very end of the fact entry (or in its dedicated metadata field), never woven into the sentence, so downstream audio/TTS and flashcards remain clean.
+3. Preserve Causal Context: When a Point covers a condition, lab, or intervention, include the underlying mechanism/pathophysiology from the textbook if it directly explains that Point. Do not use a broad Point ID as a dumping ground for adjacent textbook subsections.
+4. Inverse Consolidation (Multi-Anchor Allowed): Merge opposing states into a single comparative fact and tag both Point IDs (e.g., contrast Hypokalemia and Hyperkalemia ECG changes in one entry tagged [P3, P4]).
+5. Zero-Tolerance Exclusion List: Never extract epidemiological statistics (incidence, prevalence, mortality percentages), historical background, cost-of-care data, general wellness platitudes, or universal nursing actions (hand hygiene, emotional support, routine documentation, generic "educate the patient").`;
 ````
 <!-- END GENERATED: EXTRACTOR_AND_TRANSCRIBER_PROMPTS -->
 

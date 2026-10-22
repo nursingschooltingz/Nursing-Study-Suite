@@ -1,8 +1,18 @@
 # Current maintainer state
 
+## v19.1 Production code review remediation (Phases 1–10) (2026-10-22)
+
+The canonical application is `Nursing-Study-Suite v19.1.html`. All 11 frozen prompt constants remain byte-identical (`prompt-baseline.json` unchanged).
+- **Clinical answer-keying (`C1`).** `n2aAnswerLabels`, `x2aResolveAnswer` (`x2aNorm`, `x2aTextHits`), and `i2aAnswerLabels` preserve decimal points between digits (`0.5 mg` $\neq$ `5 mg`), require word boundaries on option text matches (`Productive cough` $\neq$ `Nonproductive cough`), and require an explicit label separator or end-of-string on single-character label matching so `"2 mL"` and `"A client..."` are not misread as choice `2` or `A`.
+- **Point-ID & entity normalization (`H1`–`H6`, `M2`, `M3`, `M12`).** `parseAndNumberPoints` filters bare prefixes and bulleted headings; `kbStripPointTags`, `ankiParseCards`, and `ankiSourceSnapshot` strip `[P#]` / `[NONE]` tags without corrupting leading-dot decimals (`Administer .5 mg`) and normalize embedded newlines in tagged facts; `kbExtractPointAnchors` normalizes bracketed/comma anchors and drops `NONE` when paired with real `P#` IDs; `mergeLatteParts` and `normalizeKbEntities` strip `[P#]` tags from medication/diagnostic/scoring-tool fields into `pointAnchors`, bind chunk `sourcePointer` for derived facts, and preserve non-ASCII condition slugs across IndexedDB restore; `KnowledgeBaseBuilder` blocks builds while card photos remain untranscribed, isolates `importJSON` from source-chip removal aborts, and preserves persisted `numberedPoints` in Step 6 audit and `AnkiGenerator`.
+- **Audit, repair, transport, converter & CLI gates (`H7`–`H11`, `M1`–`M15`, `L1`, `L2`, Phases 3–10).** Fixed across `Nursing-Study-Suite v19.1.html`, `verify-repo.js`, `latte-tests.js`, `tools/repo-checks.js`, `tools/render-prompts.js`, `tools/check-prompts.js`, `tools/visual-browser-tests.js`, `tools/remediation-tooling-tests.js`, `tools/v18-0-low-*.js`, `neia-retest.js`, `davis-transcribe-test.js`, and `.gitignore`.
+- **Prompt documentation & verification.** All 16 named prompt constants (including `KB_SOURCE_ANCHOR_RULES`) are documented in `Prompts.md` and enforced by `verify-repo.js`, and `3,901` regression assertions pass (`0 failed`).
+
+Verification: see the [release verification record](docs/reviews/v19.1-release.md).
+
 ## v19.0 Point-ID anchoring, Step 6 atomic Point KB audit, and Step 7 4-category Anki workflow (2026-10-18)
 
-The canonical application is `Nursing-Study-Suite v19.0.html`. All 11 frozen prompt constants remain byte-identical (`prompt-baseline.json` unchanged).
+The application was `Nursing-Study-Suite v19.0.html`. All 11 frozen prompt constants remain byte-identical (`prompt-baseline.json` unchanged).
 - **Plain-JS (`text/babel`-safe) Point-ID helpers (`parseAndNumberPoints`, `formatPointsForPrompt`, `buildKbFactItemSchema`, `auditKbFacts`, `runPointAnchorHarness`).**
   - Strips Markdown headings, bold-only headers, and bare colon-terminated headers before numbering `P1…Pn`.
   - Requires trailing whitespace after dotted/numbered prefixes (`2.1 Hypokalemia` → `Hypokalemia`) so clinical numbers (`12-lead ECG`, `2 L/min O2`) are preserved.

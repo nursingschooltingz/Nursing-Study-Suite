@@ -4,7 +4,7 @@ This is the task map for maintainers and coding agents. `AGENTS.md` remains the 
 
 ## Repository shape
 
-- `Nursing-Study-Suite v19.0.html` is the complete application.
+- `Nursing-Study-Suite v19.1.html` is the complete application.
 - `latte-tests.js` is the deterministic regression harness and extracts live functions by anchor.
 - `verify-repo.js` is the only ordinary repository verification entry point.
 - `prompt-baseline.json` stores the 11 frozen prompt hashes.
@@ -34,7 +34,7 @@ This is the task map for maintainers and coding agents. `AGENTS.md` remains the 
 - The approved v16.2 structured-KB adapter change is recorded in `docs/history/ANKI-v16.2-adapter.diff`; its harness pin is deliberately updated separately from the unchanged frozen baseline.
 - The approved v16.3 dynamic source-check suggestion constraints are recorded in `docs/history/ANKI-v16.3-audit-builder.diff`; generation prompts and baseline are unchanged.
 - The approved v16.4 dynamic source-check contract uses a source-first token inventory, exact note/source addresses and role-separated references. Its exact builder diff is `docs/history/ANKI-v16.4-audit-builder.diff`; the frozen constants and generation adapter remain unchanged. The legacy parser remains strict for historical regression checks; the new decoder validates independent records before retaining them.
-- `Prompts.md` also documents dynamic prompt builders; the generated appendix guarantees that all 12 named constants appear verbatim.
+- `Prompts.md` also documents dynamic prompt builders; the generated appendix and prompt-doc check guarantee that all 16 named constants appear verbatim.
 - The focused v16.1 Extra change is recorded in `docs/history/ANKI-v16.1-extra-default.diff`; the preceding source/retrieval change is in `docs/history/ANKI-source-retrieval-update.diff`. These approved diffs do not authorize further prompt changes. Empty Extra must retain the same two pipe separators and third-field Tags.
 
 The approved v18.4 change to `KB_EXTRACTION_PROMPT` and `KB_VERIFY_PROMPT` (schema 1.2 box and table provenance, one fact per table row and box bullet) is recorded in `docs/history/KB-v18.4-box-table-provenance.diff`; only those two baseline hashes changed.

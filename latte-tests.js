@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 3865;
+const EXPECTED_ASSERTIONS = 3901;
 
 let file;
 try {
@@ -214,12 +214,13 @@ t('v18.0: the app script asks Babel for the react preset only', S.split('type="t
 // name in the app, plus an example of each computed name, is checked against .gitignore with git itself.
 {
   const { spawnSync } = require('child_process');
-  const literal = [...S.matchAll(/(?:downloadBlob\([^;]{0,200}?|exportAs(?:Md|Txt|Pdf)\([^;]{0,200}?|outName=[^;]{0,120}?)'([A-Za-z0-9_.-]+\.(?:txt|md|json|csv))'/g)].map(m => m[1]).filter(n => /^[A-Za-z0-9]/.test(n)); // a leading '-' or '.' is the tail of a computed name
+  const literal = [...S.matchAll(/(?:downloadBlob\([^;]{0,220}|exportAs(?:Md|Txt|Pdf)\([^;]{0,220}|outName=[^;]{0,120})/g)]
+    .flatMap(m => [...m[0].matchAll(/'([A-Za-z0-9][A-Za-z0-9_.-]*\.(?:txt|md|json|csv))'/g)].map(x => x[1]));
   const computed = ['LATTE-Knowledge-Base-recovery-1.json', 'LATTE-Knowledge-Base-recovery-1-raw.txt', 'LATTE-Extraction-Diagnostics-2026-10-13.json', 'card-transcripts-2026-10-13.json',
     'anki-source-report-complete.json', 'latte_anki_import.txt', 'latte_anki_import_tier1.txt', 'Exam1_anki.txt'];
   const names = [...new Set([...literal, ...computed])];
   const exposed = names.filter(n => spawnSync('git', ['check-ignore', '-q', '--no-index', n], { cwd: __dirname }).status !== 0);
-  t('v18.0: every export name the app writes is ignored by git (' + names.length + ' names, ' + literal.length + ' found in the app)', literal.length >= 12 && exposed.length === 0);
+  t('v18.0: every export name the app writes is ignored by git (' + names.length + ' names, ' + literal.length + ' found in the app)', literal.length >= 13 && exposed.length === 0);
   if (exposed.length) console.log('      not ignored: ' + exposed.join(', '));
 }
 // v17.15 (review H4): a choice run 1..k may not swallow the question numbered k+1.
@@ -2463,10 +2464,10 @@ section('generation input pins and bounded pilot');
 {
   // v16.6/v19.0: approved exact canonical input tokens, [P#] stripping, numbered Points focus, and Step 7 4-category adapter have deliberate pins.
   const inputs=[
-    ['source packet','function kbForAnki(kb){','// ── KB source chunking','d20a020713be8e0432c30fe4212f0d68bc6e6960c6171deed7997e9472fbdf6e'],
+    ['source packet','function kbForAnki(kb){','// ── KB source chunking','d8effcc4f8c804546a2bf4989e5144079320aa8b0411d0fe0e937784b39b35e1'],
     ['chunking','function splitOversizedConditionBlock(block,max){','function ankiParseCards(raw','b3d15fb1e63a7b1cdd49eb105db827debac59bd0340c282fdae5049989e42002'],
-    ['focus block','  function buildFocusBlock(){','  const run=useCallback(async()=>{','f97fa95eb4b7602943e0f26b851cb8c635dac90f2c6c000bca2812423162db53'],
-    ['mapping adapter','        const kbAdapter=','        parts.push({text:ANKI_MASTER_PROMPT','ae8ec4d8a10aa6e518b8fbc6be33189d56c4ba0978250464b95c345f439b42d9']
+    ['focus block','  function buildFocusBlock(){','  const run=useCallback(async()=>{','58f32216a66f2119a1c38451d110d70b82cb0b4417fb7db2a4c31cf87ae4f728'],
+    ['mapping adapter','        const kbAdapter=','        parts.push({text:ANKI_MASTER_PROMPT','0ec080fcdb9745b04bef1f7be0fdd28c06df76bb72a2d912182565beefe69761']
   ];
   const {sha256}=require('./tools/repo-checks');
   for(const [name,start,end,hash] of inputs){const a=S.indexOf(start,name==='focus block'?S.indexOf('function AnkiGenerator()'):0),b=S.indexOf(end,a);t('generation input matches its approved pin: '+name,a>=0&&b>a&&sha256(S.slice(a,b).trim())===hash);}

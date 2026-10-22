@@ -188,7 +188,8 @@ async function main(argv = process.argv.slice(2), deps = {}) {
     const report = { at: new Date().toISOString(), model: config.model, level: config.level,
       runs: config.runs, suite: path.basename(suiteFile), plan, ...summary };
     // A locally thrown error may include the key; reports must never retain it.
-    const reportText = JSON.stringify(report, null, 2).split(key).join('[REDACTED]');
+    const redact = text => (key && key.trim().length >= 8 ? String(text).split(key).join('[REDACTED]') : String(text));
+    const reportText = redact(JSON.stringify(report, null, 2));
     writeFile(config.out, reportText, 'utf8');
     printSummary(JSON.parse(reportText), log);
     log('Full private report: ' + config.out + '; observed HTTP attempts: ' + summary.observedAttempts);
@@ -196,7 +197,7 @@ async function main(argv = process.argv.slice(2), deps = {}) {
   } catch (error) {
     const key = (deps.env || process.env).GEMINI_API_KEY || '';
     const message = String(error.message || error);
-    errorLog(key ? message.split(key).join('[REDACTED]') : message);
+    errorLog(key && key.trim().length >= 8 ? message.split(key).join('[REDACTED]') : message);
     return measuring ? 1 : 2;
   }
 }

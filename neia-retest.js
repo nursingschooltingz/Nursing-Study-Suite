@@ -278,7 +278,8 @@ async function main(argv = process.argv.slice(2), deps = {}) {
       caveat: fixture.referenceStandardCaveat,
       noPublishedComparison: 'No figure here may be compared to any published ICC or accuracy value. The June 2026 study tested zero Gemini configurations.',
       ...summary };
-    const reportText = JSON.stringify(report, null, 2).split(key).join('[REDACTED]');
+    const redact = text => (key && key.trim().length >= 8 ? String(text).split(key).join('[REDACTED]') : String(text));
+    const reportText = redact(JSON.stringify(report, null, 2));
     writeFile(config.out, reportText, 'utf8');
     printSummary(JSON.parse(reportText), log);
     log('Full private report: ' + config.out);
@@ -286,7 +287,7 @@ async function main(argv = process.argv.slice(2), deps = {}) {
   } catch (error) {
     const key = (deps.env || process.env).GEMINI_API_KEY || '';
     const message = String(error.message || error);
-    errorLog(key ? message.split(key).join('[REDACTED]') : message);
+    errorLog(key && key.trim().length >= 8 ? message.split(key).join('[REDACTED]') : message);
     return measuring ? 1 : 2;
   }
 }

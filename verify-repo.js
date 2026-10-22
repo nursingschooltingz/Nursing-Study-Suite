@@ -7,7 +7,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const { checkFrozenPrompts } = require('./tools/check-prompts');
 const { checkPromptDoc } = require('./tools/render-prompts');
-const { resolveSuiteFile, suiteVersionFromFilename } = require('./tools/repo-checks');
+const { parseCliArgs, resolveSuiteFile, suiteVersionFromFilename } = require('./tools/repo-checks');
 
 const REPO_ROOT = __dirname;
 const BABEL_VERSION = '7.23.9';
@@ -16,7 +16,10 @@ const TEMP_BABEL = path.join(TEMP_TOOL_ROOT, 'node_modules', '@babel', 'standalo
 
 function argValue(argv, name) {
   const at = argv.indexOf('--' + name);
-  return at >= 0 ? argv[at + 1] || '' : '';
+  if (at < 0) return '';
+  const val = argv[at + 1];
+  if (!val || val.startsWith('--')) throw new Error('Missing value for --' + name);
+  return val;
 }
 
 function installBabel() {
@@ -70,6 +73,13 @@ function preflightSuite(suiteFile) {
   if (!source.includes('<!-- v' + version + ' (')) {
     throw new Error('Filename version v' + version + ' has no matching release comment in the HTML');
   }
+  const changelogFile = path.join(REPO_ROOT, 'CHANGELOG.md');
+  if (path.dirname(path.resolve(suiteFile)) === REPO_ROOT && fs.existsSync(changelogFile)) {
+    const changelog = fs.readFileSync(changelogFile, 'utf8');
+    if (!changelog.includes('## [' + version + ']') && !changelog.includes('## [v' + version + ']')) {
+      throw new Error('Filename version v' + version + ' has no matching heading in CHANGELOG.md');
+    }
+  }
   return source;
 }
 
@@ -80,7 +90,9 @@ function preflightSuite(suiteFile) {
 function bootSmoke(code, source) {
   const vm = require('vm');
   new vm.Script(code, { filename: 'suite-babel-block.js' });
-  const inline = [...source.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
+  const babelStart = source.indexOf('<script type="text/babel"');
+  const headSource = babelStart >= 0 ? source.slice(0, babelStart) : source;
+  const inline = [...headSource.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
   if (inline.length < 2) throw new Error('Expected the boot and DOMPurify head scripts; found ' + inline.length + ' plain <script> blocks');
   inline.forEach((body, i) => new vm.Script(body, { filename: 'head-script-' + (i + 1) + '.js' }));
   const noop = () => {};
@@ -107,6 +119,7 @@ function runHarness(suiteFile, babelFile) {
 
 function main() {
   const argv = process.argv.slice(2);
+  parseCliArgs(argv, { flags: ['setup-babel'], options: ['html', 'babel'] });
   const suiteFile = resolveSuiteFile({ rootDir: REPO_ROOT, explicit: argValue(argv, 'html') });
   const source = preflightSuite(suiteFile);
   const babel = loadBabel(argv);

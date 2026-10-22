@@ -6,7 +6,7 @@
 
 module.exports=async function run(S,t){
   function span(start,end){
-    const a=S.indexOf(start);if(a<0)throw Error('v18.0 kb anchor missing: '+start);
+    const a=S.indexOf(start);if(a<0||S.indexOf(start,a+start.length)>=0)throw Error('v18.0 kb anchor missing or ambiguous: '+start);
     const b=S.indexOf(end,a+start.length);if(b<0)throw Error('v18.0 kb end anchor missing after: '+start);
     return S.slice(a,b);
   }
@@ -32,7 +32,7 @@ module.exports=async function run(S,t){
     const good=await attemptAsync(async()=>[await tx({}),await tx({title:null,face:'back'}),await tx({numerics:undefined}),await tx({numerics:null,title:undefined}),await tx({numerics:[{value:5,context:null,legibility:'clean'}]})]);
     t('v18.0 L6: well-formed transcripts, a back face with a null title and absent numerics are still accepted',
       !!good&&good.length===5&&card.cardMergeFaces([good[0]])[0].numerics.length===1&&card.cardMergeFaces([good[2]])[0].numerics.length===0&&
-      /numerics or title are malformed/.test(nullEntry));
+      good[4].numerics[0].value===5);
   }
 
   // ── L7: kbDehyphNormForMatch joins a soft hyphen at a line end ──
@@ -41,7 +41,7 @@ module.exports=async function run(S,t){
     const N=load(normCode,['kbNormForMatch','kbDehyphNormForMatch','kbQuoteInSource']);
     // The pre-fix normalizer: the same live source with the v18.0 L7 step removed. Used to show that ordinary text,
     // which has no soft hyphen before a line break, normalizes byte-for-byte as before.
-    const preCode=normCode.replace(/\n[ \t]*\/\/ v18\.0 \(review L7\)[^\n]*\n(?:[ \t]*\/\/[^\n]*\n)*[ \t]*\.replace\(\/\\u00AD[^\n]*\n/,'\n');
+    const preCode=normCode.replace(/\n[ \t]*\.replace\(\/\\u00AD[^\n]*\n/,'\n');
     const pre=attempt(()=>load(preCode,['kbDehyphNormForMatch']).kbDehyphNormForMatch);
     const soft='\u00AD';
     t('v18.0 L7: a soft hyphen at a line end rejoins the word, with CRLF and trailing spaces too',

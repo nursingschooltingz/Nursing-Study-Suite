@@ -6,6 +6,7 @@ const path = require('path');
 const {
   DOCUMENTED_PROMPTS,
   extractPromptLiteral,
+  parseCliArgs,
   resolveSuiteFile,
   sha256,
   suiteVersionFromFilename,
@@ -22,6 +23,7 @@ const APPENDIX_PROMPTS = [
   'CARD_TRANSCRIBE_PROMPT',
   'I2A_TRANSCRIBE_PROMPT',
   'I2A_ANSWER_PROMPT',
+  'KB_SOURCE_ANCHOR_RULES',
 ];
 
 function promptBlock(literal, status) {
@@ -42,7 +44,9 @@ function buildGeneratedAppendix(source) {
       ? 'tunable; remeasure with 2 runs per card after edits'
       : name.startsWith('I2A_')
         ? 'tunable; copied from img2anki.py, bump I2A_PROMPT_VERSION after edits'
-        : 'byte-frozen';
+        : name === 'KB_SOURCE_ANCHOR_RULES'
+          ? 'tunable; v19.0 Point-ID anchoring rules appended by kbBuildFocusBlock'
+          : 'byte-frozen';
     return promptBlock(extractPromptLiteral(source, name), status);
   });
   return [
@@ -115,12 +119,19 @@ function writePromptDoc({ suiteFile, promptsFile = PROMPTS_FILE }) {
 
 function argValue(argv, name) {
   const at = argv.indexOf('--' + name);
-  return at >= 0 ? argv[at + 1] || '' : '';
+  if (at < 0) return '';
+  const val = argv[at + 1];
+  if (!val || val.startsWith('--')) throw new Error('Missing value for --' + name);
+  return val;
 }
 
 if (require.main === module) {
   try {
     const argv = process.argv.slice(2);
+    const cli = parseCliArgs(argv, { flags: ['check', 'write'], options: ['html'] });
+    if (cli.flags.has('check') && cli.flags.has('write')) {
+      throw new Error('Choose either --check or --write, not both');
+    }
     const suiteFile = resolveSuiteFile({ rootDir: REPO_ROOT, explicit: argValue(argv, 'html') });
     if (argv.includes('--write')) {
       writePromptDoc({ suiteFile });
