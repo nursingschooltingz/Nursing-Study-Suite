@@ -31,6 +31,12 @@ const DOCUMENTED_PROMPTS = Object.freeze([
   'PRIORITY_ORDER_RULES',
   // v19.0: the Point-ID source and anchor rules appended by kbBuildFocusBlock (not frozen).
   'KB_SOURCE_ANCHOR_RULES',
+  // v20.0: the concept-curriculum LATTE + P rules appended by kbBuildFocusBlock (not frozen).
+  'KB_CONCEPT_CURRICULUM_RULES',
+  // v20.0: the HESI/ATI/NGN Exam Trap mapping rules appended by kbBuildFocusBlock (not frozen).
+  'KB_EXAM_TRAP_RULES',
+  // v20.0: the strict verbatim Anki-to-Gizmo chunk formatter prompt (not frozen).
+  'GIZMO_CONVERT_PROMPT',
 ]);
 
 function listSuiteFiles(rootDir = process.cwd()) {

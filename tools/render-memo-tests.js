@@ -28,7 +28,7 @@ function run(S,t){
   t('the config context no longer carries the active tool',!!cfgMemo&&!/\bactiveTool\b/.test(cfgMemo[1])&&!/\bactiveTool\b/.test(cfgMemo[2]));
   t('the settings drawer receives the active tool as a prop',app.includes('<ConfigSidebar onClose={closeSettings} activeTool={activeTool}/>')&&S.includes('function ConfigSidebar({onClose,activeTool}){')&&!S.includes('cfg.activeTool'));
   const tools=S.match(/const TOOL_COMPONENTS=\{([^}]*)\}/);
-  t('all six tools are memoized components',!!tools&&['KnowledgeBaseBuilder','PriorityAnalyzer','AnkiGenerator','NCLEXExtractor','NCLEXGenerator','CaseStudyGenerator'].every(name=>tools[1].includes('React.memo('+name+')')));
+  t('all eight tools are memoized components',!!tools&&['KnowledgeBaseBuilder','PriorityAnalyzer','AnkiGenerator','NCLEXExtractor','NCLEXGenerator','CaseStudyGenerator','NCLEXToAnki','GizmoImporter'].every(name=>tools[1].includes('React.memo('+name+')')));
   const renderer=span(S,'function mdToSafeHtml(md){','\n}\n');
   t('sanitized study links open in a new tab without an opener',renderer.includes("for(const anchor of fragment.querySelectorAll('a[href]')){anchor.setAttribute('target','_blank');anchor.setAttribute('rel','noopener noreferrer');}"));
 }

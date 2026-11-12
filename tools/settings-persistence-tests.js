@@ -48,15 +48,16 @@ function run(S,t){
   t('unknown tool ids are dropped and the audit-key migration still applies',!Object.hasOwn(loaded,'unknownTool')&&!Object.hasOwn(loaded,'casesAudit')&&loaded.itemAudit.m==='argon'&&loaded.itemAudit.lv==='medium');
   t('every tool row survives with only recognized values',Object.keys(defaultsTable).every(id=>['flash','argon'].includes(loaded[id].m)&&['low','medium','high'].includes(loaded[id].lv)));
   // v17.13: a row saved as 'pro' chose the second slot, now Argon; without the shim it would fall back to Flash.
-  // v17.14: nclexgen ships as Flash/high, so a Pro/low row loading as Argon/low can only come from the shim.
-  const legacyRows=loadProfiles(JSON.stringify({nclexgen:{m:'pro',lv:'low'},nclex:{m:'argon',lv:'low'},priority:{m:'gpt',lv:'high'}}));
-  t('a profile row saved as Pro loads as Argon; an unknown family still falls back',defaultsTable.nclexgen.m==='flash'&&legacyRows.nclexgen.m==='argon'&&legacyRows.nclexgen.lv==='low'&&legacyRows.nclex.m==='argon'&&legacyRows.priority.m===defaultsTable.priority.m&&legacyRows.priority.lv===defaultsTable.priority.lv);
+  // v19.2: knowledge still ships as Flash/medium, so a Pro/low row loading as Argon/low can only come from the shim.
+  const legacyRows=loadProfiles(JSON.stringify({knowledge:{m:'pro',lv:'low'},nclexgen:{m:'pro',lv:'low'},nclex:{m:'argon',lv:'low'},priority:{m:'gpt',lv:'high'}}));
+  t('a profile row saved as Pro loads as Argon; an unknown family still falls back',defaultsTable.knowledge.m==='flash'&&legacyRows.knowledge.m==='argon'&&legacyRows.knowledge.lv==='low'&&legacyRows.nclexgen.m==='argon'&&legacyRows.nclexgen.lv==='low'&&legacyRows.nclex.m==='argon'&&legacyRows.priority.m===defaultsTable.priority.m&&legacyRows.priority.lv===defaultsTable.priority.lv);
 
-  // v17.14: the Auto profile ships Argon for the three reasoning-heavy rows with bounded output; the rest stay on Flash.
+  // v17.14 + v19.2: the Auto profile ships Argon for Priority synthesis, NCLEX generate, Case studies and the item audit; the other seven stay on Flash.
   const shipped=Object.fromEntries(Object.entries(defaultsTable).map(([id,row])=>[id,row.m+'/'+row.lv]));
-  t('the Auto profile ships Argon for Priority synthesis, Case studies and the item audit, Flash elsewhere',JSON.stringify(shipped)===JSON.stringify({knowledge:'flash/medium',knowledgeAudit:'flash/medium',cardTranscribe:'flash/low',priorityHarvest:'flash/low',priority:'argon/medium',anki:'flash/medium',nclex:'flash/medium',nclexgen:'flash/high',cases:'argon/high',itemAudit:'argon/high'}));
-  const savedFlash=loadProfiles(JSON.stringify({priority:{m:'flash',lv:'medium'},cases:{m:'flash',lv:'high'},itemAudit:{m:'flash',lv:'high'}}));
-  t('saved Flash rows from before v17.14 are kept until Reset to recommended',['priority','cases','itemAudit'].every(id=>savedFlash[id].m==='flash'&&savedFlash[id].lv===defaultsTable[id].lv));
+  t('the Auto profile ships Argon for Priority synthesis, NCLEX generate, Case studies and the item audit, Flash elsewhere',JSON.stringify(shipped)===JSON.stringify({knowledge:'flash/medium',knowledgeAudit:'flash/medium',cardTranscribe:'flash/low',priorityHarvest:'flash/low',priority:'argon/medium',anki:'flash/medium',nclex:'flash/medium',nclexgen:'argon/high',cases:'argon/high',itemAudit:'argon/high',gizmo:'flash/low'}));
+  t('NCLEX generate ships as Argon high while keeping a saved Flash high override until Reset to recommended',defaultsTable.nclexgen.m==='argon'&&defaultsTable.nclexgen.lv==='high'&&loadProfiles(JSON.stringify({nclexgen:{m:'flash',lv:'high'}})).nclexgen.m==='flash'&&loadProfiles(JSON.stringify({nclexgen:{m:'flash',lv:'high'}})).nclexgen.lv==='high');
+  const savedFlash=loadProfiles(JSON.stringify({priority:{m:'flash',lv:'medium'},nclexgen:{m:'flash',lv:'high'},cases:{m:'flash',lv:'high'},itemAudit:{m:'flash',lv:'high'}}));
+  t('saved Flash rows from before v17.14/v19.2 are kept until Reset to recommended',['priority','nclexgen','cases','itemAudit'].every(id=>savedFlash[id].m==='flash'&&savedFlash[id].lv===defaultsTable[id].lv));
 }
 
 module.exports=run;

@@ -200,8 +200,8 @@ async function runTests({ source, test = (name, value) => assert.ok(value, name)
     fs.writeFileSync(clashHtml, '<!-- v19.0 (2026-10-21) -->');
     t('resolveSuiteFile rejects explicit --html when a Proton Drive Name-clash file exists in rootDir',
       throws(() => checks.resolveSuiteFile({ rootDir: clashDir, explicit: 'Nursing-Study-Suite v19.0.html' }), /Proton Drive Name clash/));
-    t('DOCUMENTED_PROMPTS includes v19.0 KB_SOURCE_ANCHOR_RULES (16 total)',
-      checks.DOCUMENTED_PROMPTS.length === 16 && checks.DOCUMENTED_PROMPTS.includes('KB_SOURCE_ANCHOR_RULES'));
+    t('DOCUMENTED_PROMPTS includes v19.0 KB_SOURCE_ANCHOR_RULES and v19.2 KB_CONCEPT_CURRICULUM_RULES + KB_EXAM_TRAP_RULES + GIZMO_CONVERT_PROMPT (19 total)',
+      checks.DOCUMENTED_PROMPTS.length === 19 && checks.DOCUMENTED_PROMPTS.includes('KB_SOURCE_ANCHOR_RULES') && checks.DOCUMENTED_PROMPTS.includes('KB_CONCEPT_CURRICULUM_RULES') && checks.DOCUMENTED_PROMPTS.includes('KB_EXAM_TRAP_RULES') && checks.DOCUMENTED_PROMPTS.includes('GIZMO_CONVERT_PROMPT'));
     t('parseCliArgs rejects unknown flags, duplicate options, missing values, and unexpected positional arguments',
       throws(() => checks.parseCliArgs(['--bogus'], { flags: ['check'], options: ['html'] }), /Unknown option: --bogus/) &&
       throws(() => checks.parseCliArgs(['--check', '--check'], { flags: ['check'], options: ['html'] }), /Duplicate option: --check/) &&
@@ -240,8 +240,8 @@ async function runTests({ source, test = (name, value) => assert.ok(value, name)
       return html.includes('<BootErrorBoundary><SyntheticAnkiApp/></BootErrorBoundary>') && !html.includes('<RemediationProbe/>');
     }));
   const liveToolIds = Array.from(source.matchAll(/\{id:'([^']+)',stage:'(?:source|plan|practice)',label:'[^']+',step:'[^']+',title:'([^']+)'/g), m => [m[1], m[2]]);
-  t('visual-browser-tests tabs list matches all 7 shipped TOOLS in the rail',
-    liveToolIds.length === 7 && JSON.stringify(visualBrowser.tabs) === JSON.stringify(liveToolIds));
+  t('visual-browser-tests tabs list matches all 8 shipped TOOLS in the rail',
+    liveToolIds.length === 8 && JSON.stringify(visualBrowser.tabs) === JSON.stringify(liveToolIds));
   const kbClean = browserFixture.syntheticKB('A');
   const kbTagged = JSON.parse(JSON.stringify(kbClean));
   kbTagged.conditions[0].facts[0].text += ' [P1]';

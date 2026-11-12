@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 3901;
+const EXPECTED_ASSERTIONS = 3984;
 
 let file;
 try {
@@ -217,7 +217,7 @@ t('v18.0: the app script asks Babel for the react preset only', S.split('type="t
   const literal = [...S.matchAll(/(?:downloadBlob\([^;]{0,220}|exportAs(?:Md|Txt|Pdf)\([^;]{0,220}|outName=[^;]{0,120})/g)]
     .flatMap(m => [...m[0].matchAll(/'([A-Za-z0-9][A-Za-z0-9_.-]*\.(?:txt|md|json|csv))'/g)].map(x => x[1]));
   const computed = ['LATTE-Knowledge-Base-recovery-1.json', 'LATTE-Knowledge-Base-recovery-1-raw.txt', 'LATTE-Extraction-Diagnostics-2026-10-13.json', 'card-transcripts-2026-10-13.json',
-    'anki-source-report-complete.json', 'latte_anki_import.txt', 'latte_anki_import_tier1.txt', 'Exam1_anki.txt'];
+    'anki-source-report-complete.json', 'latte_anki_import.txt', 'latte_anki_import_tier1.txt', 'Exam1_anki.txt', 'gizmo_import.txt', 'latte_anki_gizmo.txt'];
   const names = [...new Set([...literal, ...computed])];
   const exposed = names.filter(n => spawnSync('git', ['check-ignore', '-q', '--no-index', n], { cwd: __dirname }).status !== 0);
   t('v18.0: every export name the app writes is ignored by git (' + names.length + ' names, ' + literal.length + ' found in the app)', literal.length >= 13 && exposed.length === 0);
@@ -2462,12 +2462,12 @@ section('v15.17 — approved rollback, historical examples and replay evidence')
 
 section('generation input pins and bounded pilot');
 {
-  // v16.6/v19.0: approved exact canonical input tokens, [P#] stripping, numbered Points focus, and Step 7 4-category adapter have deliberate pins.
+  // v16.6/v19.0/v19.2: approved exact canonical input tokens, [P#] stripping, numbered Points focus, Step 7 4-category adapter, and concept-curriculum + exam-trap Anki roles/scopes/traps have deliberate pins.
   const inputs=[
-    ['source packet','function kbForAnki(kb){','// ── KB source chunking','d8effcc4f8c804546a2bf4989e5144079320aa8b0411d0fe0e937784b39b35e1'],
-    ['chunking','function splitOversizedConditionBlock(block,max){','function ankiParseCards(raw','b3d15fb1e63a7b1cdd49eb105db827debac59bd0340c282fdae5049989e42002'],
+    ['source packet','function kbForAnki(kb){','// ── KB source chunking','c78e78f1d2c255c93a32f2f1b5ac9ae62a7483e8927d585832ad32f59cf65702'],
+    ['chunking','function splitOversizedConditionBlock(block,max){','function ankiParseCards(raw','4103527206fc71cf27beb31f3fc1ccd09a19a759a684be053662b2a261fa4514'],
     ['focus block','  function buildFocusBlock(){','  const run=useCallback(async()=>{','58f32216a66f2119a1c38451d110d70b82cb0b4417fb7db2a4c31cf87ae4f728'],
-    ['mapping adapter','        const kbAdapter=','        parts.push({text:ANKI_MASTER_PROMPT','0ec080fcdb9745b04bef1f7be0fdd28c06df76bb72a2d912182565beefe69761']
+    ['mapping adapter','        const kbAdapter=','        parts.push({text:ANKI_MASTER_PROMPT','8f5e846a8b92029198570b7110d595ecc89cefdb4f9a1bdbf005efc2dde67592']
   ];
   const {sha256}=require('./tools/repo-checks');
   for(const [name,start,end,hash] of inputs){const a=S.indexOf(start,name==='focus block'?S.indexOf('function AnkiGenerator()'):0),b=S.indexOf(end,a);t('generation input matches its approved pin: '+name,a>=0&&b>a&&sha256(S.slice(a,b).trim())===hash);}
@@ -2565,11 +2565,13 @@ section('v15.14 — tier 3');
   // rendered every entry as an index-keyed div.
   // v17.3: one useCappedLog hook (definition plus five tools) replaced the six copies.
   // v17.9: the NCLEX to Anki tab's image log is the seventh use of the same hook.
-  t('all five tool logs and the KB-replacement notice are capped', S.split('useCappedLog(').length - 1 === 7 && S.split('p.slice(-cap)').length - 1 === 1 && !S.includes('p.slice(-200)'));
+  // v19.2: the Import to Gizmo tab's AI chunk log is the eighth use of the same hook.
+  t('all seven tool logs and the hook definition are capped', S.split('useCappedLog(').length - 1 === 8 && S.split('p.slice(-cap)').length - 1 === 1 && !S.includes('p.slice(-200)'));
   // T3.13i — ten positional parameters, one of them inert since v15.
   t('callGemini takes an options object', S.includes('async function callGemini(apiKey,model,parts,opts={}){'));
   // v17.9: the NCLEX to Anki image reader adds one options-object call site (13 -> 14).
-  t('no positional call site survives the migration, including source-owned wrappers', !S.includes('],true,') && [...S.matchAll(/\b(?:ownedCallGemini|callGemini)\(/g)].length === 14);
+  // v19.2: Import to Gizmo adds one options-object call site (14 -> 15).
+  t('no positional call site survives the migration, including source-owned wrappers', !S.includes('],true,') && [...S.matchAll(/\b(?:ownedCallGemini|callGemini)\(/g)].length === 15);
   t('a missed migration fails loudly instead of binding a boolean to opts',
     S.includes("throw new Error('callGemini: pass an options object"));
   t('the inert useThinking parameter is gone from the signature and every call site',
@@ -2908,6 +2910,18 @@ section('v15.14 — clamps, backoff, storage');
 
   section('v19.0 Point-ID anchoring, Step 6 atomic Point KB audit, and Step 7 4-category Anki rules');
   require('./tools/v19-0-point-anchor-tests')(S,t);
+
+  section('v19.2 concept-based curriculum LATTE + P layer and downstream connectors');
+  await require('./tools/concept-curriculum-tests')(S,t);
+
+  section('v19.2 Exam Trap Blocks & active-recall trap pipeline (LATTE + P + Traps)');
+  await require('./tools/exam-trap-block-tests')(S,t);
+
+  section('v19.2 Unified Giddens Concept + Condition scope & mixing across NCLEX and Case Studies');
+  await require('./tools/scope-mixing-tests')(S,t);
+
+  section('v19.2 Import to Gizmo AI-driven chunked Anki converter');
+  require('./tools/gizmo-import-tests')(S,t);
 
   console.log('\n════════════════════════════');
   const total = pass + fail;

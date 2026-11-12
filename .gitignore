@@ -50,6 +50,8 @@ nclex_questions*.txt
 *_anki*.txt
 nclex_images_anki_transcripts*.json
 latte_anki_import*.txt
+gizmo_import*.txt
+*_gizmo.txt
 anki-source-*.json
 LATTE-Knowledge-Base-recovery-*.txt
 LATTE-Case-Study*.txt

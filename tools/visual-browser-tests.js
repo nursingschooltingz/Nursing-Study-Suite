@@ -16,7 +16,7 @@ const tabs=[
   ['knowledge','LATTE Knowledge Base'],['priority','Pyramid Priority Analyzer'],
   ['anki','LATTE Anki Generator'],['nclex','NCLEX Question Extractor'],
   ['nclexgen','NCLEX Question Generator'],['cases','Clinical Case Study Generator'],
-  ['nclex2anki','NCLEX to Anki']
+  ['nclex2anki','NCLEX to Anki'],['gizmo','Import to Gizmo']
 ];
 
 async function settle(page){await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));}

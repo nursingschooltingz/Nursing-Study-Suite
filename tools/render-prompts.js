@@ -24,6 +24,9 @@ const APPENDIX_PROMPTS = [
   'I2A_TRANSCRIBE_PROMPT',
   'I2A_ANSWER_PROMPT',
   'KB_SOURCE_ANCHOR_RULES',
+  'KB_CONCEPT_CURRICULUM_RULES',
+  'KB_EXAM_TRAP_RULES',
+  'GIZMO_CONVERT_PROMPT',
 ];
 
 function promptBlock(literal, status) {
@@ -46,7 +49,13 @@ function buildGeneratedAppendix(source) {
         ? 'tunable; copied from img2anki.py, bump I2A_PROMPT_VERSION after edits'
         : name === 'KB_SOURCE_ANCHOR_RULES'
           ? 'tunable; v19.0 Point-ID anchoring rules appended by kbBuildFocusBlock'
-          : 'byte-frozen';
+          : name === 'KB_CONCEPT_CURRICULUM_RULES'
+            ? 'tunable; v20.0 concept-curriculum LATTE + P rules appended by kbBuildFocusBlock'
+            : name === 'KB_EXAM_TRAP_RULES'
+              ? 'tunable; v20.0 HESI/ATI/NGN Exam Trap mapping rules appended by kbBuildFocusBlock'
+              : name === 'GIZMO_CONVERT_PROMPT'
+                ? 'tunable; v20.0 Anki-to-Gizmo strict verbatim chunk formatter'
+                : 'byte-frozen';
     return promptBlock(extractPromptLiteral(source, name), status);
   });
   return [

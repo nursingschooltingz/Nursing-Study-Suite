@@ -119,7 +119,7 @@ module.exports=async function run(S,t){
   const SET=['L5: a typed model ID is trimmed before it is used and saved',
     'L5: an invalid model ID is not used; the field keeps it, marked invalid, and names the ID still running',
     'L4: the auto badge for NCLEX to Anki names the Flash model and the level set in that tab; other tabs unchanged',
-    'L4: the drawer counts seven tools and the manual hint names the NCLEX to Anki exception'];
+    'L4: the drawer counts eight tools and the manual hint names the NCLEX to Anki exception'];
   await section(t,SET,()=>{
     const Babel=loadBabel();
     const constants=span(S,'const TOOL_PROFILE_DEFAULTS={','\n};')+'\n};\n'+span(S,'const PROFILE_ROWS=[','\n];')+'\n];\n'+span(S,'const MODEL_ID_RE=','\n')+'\n';
@@ -151,7 +151,7 @@ module.exports=async function run(S,t){
     const n2a=textOf(badge(auto({activeTool:'nclex2anki'}))),cases=textOf(badge(auto({activeTool:'cases'})));
     out[SET[2]]=n2a.includes('synthetic-flash')&&n2a.includes('level set in tab')&&!/low$/.test(n2a)&&cases==='synthetic-argonhigh';
     const manualText=textOf(mount({...base,autoProfile:false})({activeTool:'knowledge'}));
-    out[SET[3]]=manualText.includes('Shared across all seven tools')&&!manualText.includes('six tools')&&manualText.includes('except NCLEX to Anki, which always uses the Flash model');
+    out[SET[3]]=manualText.includes('Shared across all eight tools')&&!manualText.includes('six tools')&&!manualText.includes('seven tools')&&manualText.includes('except NCLEX to Anki, which always uses the Flash model');
     return out;
   });
 
@@ -177,7 +177,7 @@ module.exports=async function run(S,t){
     return {
       [NUM[0]]:el.type==='input'&&el.props.type==='number'&&el.props.min===5&&afterOne[0]==='1'&&afterOne[1]===5&&afterTwelve[0]==='12'&&afterTwelve[1]===12&&blurred===12,
       [NUM[1]]:cleared[0]===''&&cleared[1]===50&&el.props.value===50,
-      [NUM[2]]:fields===12&&!/<input [^>]*type="number"/.test(S)&&['kb-runs','kb-chunk-size','kb-overlap','priority-chunk-size','priority-overlap','extract-chunk-size','extract-overlap','extract-batch-size','nclex-total','nclex-facts-per-question'].every(id=>S.includes('<NumberInput id="'+id+'" type="number"'))&&
+      [NUM[2]]:fields===17&&!/<input [^>]*type="number"/.test(S)&&['kb-runs','kb-chunk-size','kb-overlap','priority-chunk-size','priority-overlap','extract-chunk-size','extract-overlap','extract-batch-size','nclex-total','nclex-facts-per-question','gizmo-pages-per-chunk','gizmo-ai-batch-size','gizmo-cards-per-page','gizmo-range-start','gizmo-range-end'].every(id=>S.includes('<NumberInput id="'+id+'" type="number"'))&&
         S.includes("<NumberInput aria-label={sLabel+' range '+(i+1)+' start page'}")&&S.includes("<NumberInput aria-label={sLabel+' range '+(i+1)+' end page'}"),
     };
   });
