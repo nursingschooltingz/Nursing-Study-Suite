@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 3984;
+const EXPECTED_ASSERTIONS = 3998;
 
 let file;
 try {
@@ -2922,6 +2922,9 @@ section('v15.14 — clamps, backoff, storage');
 
   section('v19.2 Import to Gizmo AI-driven chunked Anki converter');
   require('./tools/gizmo-import-tests')(S,t);
+
+  section('v20.1 Case Packet booklet exports & sequential Batch Queue');
+  await require('./tools/case-packet-batch-tests')(S,t);
 
   console.log('\n════════════════════════════');
   const total = pass + fail;

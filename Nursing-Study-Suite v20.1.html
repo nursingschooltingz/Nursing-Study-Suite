@@ -12,7 +12,15 @@
      policy and uses only its own inline style block and system fonts. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com">
 <title>LATTE Study Suite</title>
-<!-- v20.0 (2026-11-12): Concept-based curriculum (LATTE + P), HESI/ATI Exam Trap Blocks (LATTE + P + Traps),
+<!-- v20.1 (2026-11-12): Multi-case Session Packet (Exam Booklet & Paired exports) + Walk-Away Sequential Batch Queue
+     in 06 · Clinical Case Study Generator (CaseStudyGenerator, caseSplitMarkdown, casePacketToMarkdown,
+     casePacketJsonExport, caseBuildBatchTargets, caseRunBatchQueue, MAX_CASE_BATCH = 8). Retains generated cases in a
+     session Case Packet tray with pill switching (CaseRenderer keyed by activePacketId), unverified/earlier-KB stamps,
+     and 1-click Booklet (all clean student worksheets 1..N first -> all Answer Keys, Debriefs & Review Appendices at
+     back) or Paired (Case -> Key) PDF/.md/.json exports; adds Select >=8 facts and sequential Batch Queue runs (1 per
+     entry or 1 mixed case per Giddens Concept) reusing single-case grounding, Fisher-Yates shuffle, NEIA MCQ audit, and
+     1-round repair with quota/cancel partial retention. All 11 frozen prompt constants are unchanged.
+     v20.0 (2026-11-12): Concept-based curriculum (LATTE + P), HESI/ATI Exam Trap Blocks (LATTE + P + Traps),
      unified Giddens Concept + Condition scope mixing, and the 08 · Import to Gizmo AI-driven chunked converter.
      (1) CONCEPT-BASED CURRICULUM (LATTE + P): Step 01 adds optional Overarching concept(s) and Auto-detect toggles
      (KB_CONCEPT_CURRICULUM_RULES via kbBuildFocusBlock, independent of Focus SCOPE/PRIORITIZE modes). Conditions carry
@@ -8031,7 +8039,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '20.0';}
+function suiteVersion(){return '20.1';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -15344,6 +15352,114 @@ function itemAuditSummary(results){
     warns:results.reduce((a,r)=>a+((r.warns||[]).length),0)};
 }
 
+// v20.1: multi-case session packet & walk-away batch queue helpers. Splitting caseToMarkdown at its own
+// `<div class="pagebreak"></div>` boundary (the same invariant caseAuditPayload relies on) prevents formatting
+// drift between single-case exports and multi-case Exam Booklet / Paired packets.
+const MAX_CASE_BATCH=8;
+function caseSplitMarkdown(cs,opts={}){
+  const full=caseToMarkdown(cs,opts),marker='\n<div class="pagebreak"></div>\n\n',cut=full.indexOf(marker);
+  return cut>=0?{worksheet:full.slice(0,cut),keyAndDebrief:full.slice(cut+marker.length)}:{worksheet:full,keyAndDebrief:''};
+}
+function casePacketToMarkdown(entries,{activeKB=null,layout='booklet',worksheetFactIds=true,includeProvenance=false}={}){
+  const valid=(entries||[]).filter(e=>e&&e.caseStudy);
+  if(!valid.length)return'';
+  const total=valid.length;
+  const prepared=valid.map((entry,idx)=>{
+    const num=idx+1,cs=entry.caseStudy,issues=entry.issues||[],errs=issues.filter(x=>x.sev==='error');
+    const auditState=entry.auditState||'disabled',rows=caseReviewRows(cs,entry.audit,auditState);
+    const actual=(cs.stages||[]).reduce((n,s)=>n+((s.questions||[]).length),0);
+    const stale=!!(entry.artifactSource&&typeof artifactSourceCurrent==='function'&&!artifactSourceCurrent(entry.artifactSource,activeKB));
+    const notice=(entry.artifactSource&&typeof artifactExportNotice==='function')?artifactExportNotice({source:entry.artifactSource,activeKB,requested:entry.artifactSource.requested,actual,auditRequested:entry.artifactSource.auditRequested,auditState,rows}):'';
+    const stamp=caseValidationStamp(issues);
+    const prov=(includeProvenance&&entry.provenance)?latteProvenanceStamp(entry.provenance):'';
+    const appendix=caseReviewAppendix(cs,issues,rows);
+    const parts=caseSplitMarkdown(cs,{worksheetFactIds});
+    const title=cs.title||'Clinical Case Study';
+    const worksheet=parts.worksheet.replace(/^# [^\n]*/,()=>'# Case '+num+' of '+total+' — '+title);
+    const keyBlock='# Answer Key — Case '+num+' of '+total+': '+title+'\n**Condition:** '+(cs.condition||'—')+'  |  **Difficulty:** '+(cs.difficulty||'—')+'\n\n'+parts.keyAndDebrief;
+    return{num,cs,errs,actual,stale,notice,stamp,prov,appendix,worksheet,keyBlock};
+  });
+  const failedCases=prepared.filter(p=>p.errs.length>0);
+  const head=[];
+  if(failedCases.length){
+    head.push('> **\u26a0 PACKET CONTAINS UNVERIFIED CASE(S) \u2014 '+failedCases.map(f=>'Case '+f.num+' ('+(f.cs.title||f.cs.condition||'Untitled')+': '+f.errs.length+' error(s))').join('; ')+'**');
+    head.push('> One or more cases in this packet failed deterministic source-grounding checks. Do not use flagged cases as verified study content until corrected.');
+    head.push('');
+  }
+  head.push('**Case Packet ('+total+' '+(total===1?'case':'cases')+' \u00b7 '+(layout==='paired'?'Paired: each case followed by its answer key':'Booklet: all student worksheets first, answer keys at back')+'):**');
+  for(const p of prepared)head.push('- **Case '+p.num+':** '+(p.cs.title||'Clinical Case Study')+' \u2014 *'+(p.cs.condition||'—')+'* ('+(p.cs.difficulty||'—')+', '+p.actual+' Qs)'+(p.errs.length?' \u26a0 FAILED VALIDATION':'')+(p.stale?' \u00b7 earlier KB':''));
+  head.push('\n---\n');
+  const pb='\n<div class="pagebreak"></div>\n\n';
+  if(layout==='paired'){
+    return head.join('\n')+prepared.map((p,idx)=>(idx>0?pb:'')+p.notice+p.stamp+p.prov+p.worksheet+pb+p.stamp+p.keyBlock+p.appendix).join('\n');
+  }
+  const worksheets=prepared.map((p,idx)=>(idx>0?pb:'')+p.notice+p.stamp+p.worksheet).join('\n');
+  const keys=prepared.map((p,idx)=>(idx>0?pb:'')+p.notice+p.stamp+p.prov+p.keyBlock+p.appendix).join('\n');
+  return head.join('\n')+worksheets+pb+keys;
+}
+function casePacketJsonExport(entries,activeKB=null){
+  const valid=(entries||[]).filter(e=>e&&e.caseStudy);
+  const cases=valid.map((entry,idx)=>{
+    const cs=entry.caseStudy,issues=entry.issues||[],auditState=entry.auditState||'disabled';
+    const rows=caseReviewRows(cs,entry.audit,auditState);
+    const actual=(cs.stages||[]).reduce((n,s)=>n+((s.questions||[]).length),0);
+    const notice=(entry.artifactSource&&typeof artifactExportNotice==='function')?artifactExportNotice({source:entry.artifactSource,activeKB,requested:entry.artifactSource.requested,actual,auditRequested:entry.artifactSource.auditRequested,auditState,rows}):'';
+    return typeof artifactJsonExport==='function'?JSON.parse(artifactJsonExport({...cs,_packetNumber:idx+1},notice,issues,rows)):{...cs,_packetNumber:idx+1};
+  });
+  return JSON.stringify({packetVersion:1,caseCount:cases.length,cases},null,2);
+}
+function caseBuildBatchTargets({conditions=[],resolvedConditions=[],concepts=[],mixConceptExemplars=true,includeRelated=false,mixMode='comorbid',batchUnit='conditions',factOpts={},stages=4,questionsPerStage=3,maxBatch=MAX_CASE_BATCH}={}){
+  const candidates=[];
+  if(batchUnit==='concepts'&&concepts.length>0){
+    const coveredIds=new Set();
+    for(const cn of concepts){
+      const singleScope={concepts:[cn],conditionIds:[],mixConceptExemplars,includeRelated};
+      const group=kbResolveScopeGroups({conditions},singleScope);
+      group.forEach(c=>coveredIds.add(c.id));
+      if(group.length===1)candidates.push(group[0]);
+      else if(group.length>1){
+        const desc=kbDescribeScopeSelection(group,singleScope);
+        candidates.push({id:'mixed:'+group.map(c=>c.id).join('+'),name:desc.label,isMixed:true,mixMode,allowedNames:desc.allowedNames,scopeEntries:desc.entryNames,conditions:group});
+      }
+    }
+    for(const c of resolvedConditions)if(!coveredIds.has(c.id))candidates.push(c);
+  }else{
+    for(const c of resolvedConditions)candidates.push(c);
+  }
+  const eligible=[],skipped=[],fOpts={...factOpts,allConditions:conditions};
+  for(const cond of candidates){
+    const facts=cond.isMixed?selectCaseFactsMulti(cond.conditions,fOpts):selectCaseFacts(cond,fOpts);
+    if(!facts.length){skipped.push({condition:cond,reason:'no facts at selected tiers'});continue;}
+    eligible.push({condition:cond,facts,sufficiency:caseFactSufficiency(facts,stages*questionsPerStage)});
+  }
+  const targets=eligible.slice(0,Math.max(1,maxBatch));
+  return{targets,skipped,overflowCount:Math.max(0,eligible.length-targets.length),totalEligible:eligible.length};
+}
+async function caseRunBatchQueue({targets=[],skipped=[],overflowCount=0,maxBatch=MAX_CASE_BATCH,runOne,isCancelled=()=>false,log=()=>{},onStatus=()=>{}}){
+  for(const s of skipped)log('⚠ Skipped '+s.condition.name+': '+s.reason+'.','warn');
+  if(overflowCount>0)log('ⓘ Batch capped at '+maxBatch+' cases ('+overflowCount+' additional entry/entries left out to protect API quota).','warn');
+  const total=targets.length;
+  let completedCount=0,halted='';
+  for(let i=0;i<total;i++){
+    if(isCancelled()){halted='abort';break;}
+    const t=targets[i];
+    onStatus({done:i,total,currentName:t.condition.name});
+    log((i>0?'\n':'')+'═══ Batch case '+(i+1)+' of '+total+': '+t.condition.name+' ═══','warn');
+    const res=await runOne(t,i,total);
+    if(res&&res.completed)completedCount++;
+    if(isCancelled()||(res&&res.halted==='abort')){halted='abort';break;}
+    if(res&&res.halted==='quota'){
+      halted='quota';
+      if(i+1<total)log('⚠ Batch queue stopped after case '+(i+1)+' of '+total+' due to API quota/rate limit. Completed cases remain in your Case Packet.','err');
+      break;
+    }
+  }
+  onStatus(null);
+  if(halted==='abort')log('Batch queue cancelled ('+completedCount+' of '+total+' case(s) completed and kept in packet).','warn');
+  else if(!halted)log('═══ Batch complete: '+completedCount+' of '+total+' case(s) generated in packet. ═══',completedCount===total?'ok':'warn');
+  return{completedCount,total,halted};
+}
+
 function CaseStudyGenerator(){
   // v16.0: named controls, visible selection states, and reflowing groups replace inaccessible fixed layouts.
   const cfg=useConfig();const K=useKnowledge();
@@ -15355,6 +15471,17 @@ function CaseStudyGenerator(){
   const [caseMixMode,setCaseMixMode]=useState('comorbid');
   const [caseFilterText,setCaseFilterText]=useState('');
   const [showCaseMixer,setShowCaseMixer]=useState(false);
+  // v20.1: session Case Packet tray & sequential Batch Queue state so multiple cases can be generated without
+  // overwriting earlier runs and printed together as a single Exam Booklet or Paired packet.
+  const [caseRunMode,setCaseRunMode]=useState('mixed');
+  const [caseBatchUnit,setCaseBatchUnit]=useState('conditions');
+  const [batchBusy,setBatchBusy]=useState(false);
+  const [batchStatus,setBatchStatus]=useState(null);
+  const [casePacket,setCasePacket]=useState([]);
+  const [activePacketId,setActivePacketId]=useState('');
+  const [packetLayout,setPacketLayout]=useState('booklet');
+  const batchOverrideRef=useRef(null),batchCancelRef=useRef(false),casePacketRef=useRef([]),caseStudyRef=useRef(null);
+  casePacketRef.current=casePacket;caseStudyRef.current=caseStudy;
   const [difficulty,setDifficulty]=useState('exam');
   const [stages,setStages]=useState(4);
   const [questionsPerStage,setQuestionsPerStage]=useState(3);
@@ -15411,13 +15538,21 @@ function CaseStudyGenerator(){
   const generatorSlot=useRef(createOperationSlot()),currentSourceKB=useRef(K.knowledgeBase);
   currentSourceKB.current=K.knowledgeBase;
   const [artifactSource,setArtifactSource]=useState(null),[auditState,setAuditState]=useState('disabled');
-  useEffect(()=>{const op=generatorSlot.current.active;if(op&&op.sourceKB!==K.knowledgeBase){generatorSlot.current.cancel();setBusy(false);setAbortCtl(null);setLiveKB(0);setAuditState('interrupted');}},[K.knowledgeBase]);
-  useEffect(()=>()=>generatorSlot.current.cancel(),[]);
+  useEffect(()=>{const op=generatorSlot.current.active;if(op&&op.sourceKB!==K.knowledgeBase){batchCancelRef.current=true;generatorSlot.current.cancel();setBusy(false);setBatchBusy(false);setBatchStatus(null);setAbortCtl(null);setLiveKB(0);setAuditState('interrupted');}},[K.knowledgeBase]);
+  useEffect(()=>()=>{batchCancelRef.current=true;generatorSlot.current.cancel();},[]);
   const run=useCallback(async()=>{
+    // v20.1: batchOverrideRef lets sequential batch runs reuse the full grounding/shuffle/audit/repair pipeline
+    // without duplicating logic, while staying a transparent no-op in isolated single-case harnesses.
+    const _ovr=(typeof batchOverrideRef!=='undefined'&&batchOverrideRef.current)||null;
+    const runCond=_ovr?_ovr.condition:activeCondition;
+    const runFacts=_ovr?_ovr.facts:selectedFacts;
+    const runSuff=_ovr?_ovr.sufficiency:sufficiency;
     if(!cfg.apiKey){log('Enter your API key in the config sidebar.','err');return;}
-    if(!activeCondition){log('Build the LATTE Knowledge Base first, then pick a condition.','err');return;}
-    if(!selectedFacts.length){log('This condition has no facts at the selected tiers. Include Tier 2/3 or pick another condition.','err');return;}
+    if(!runCond){log('Build the LATTE Knowledge Base first, then pick a condition.','err');return;}
+    if(!runFacts.length){log('This condition has no facts at the selected tiers. Include Tier 2/3 or pick another condition.','err');return;}
     if(generatorSlot.current.active)return;
+    const runPid=(_ovr&&_ovr.packetId)||('pkt-'+Date.now().toString(36)+'-'+uid().slice(0,5));
+    if(typeof setActivePacketId==='function')setActivePacketId(runPid);
     const operation=generatorSlot.current.start(),ctl=operation.ctl,source=artifactSourceSnapshot(K.knowledgeBase);
     operation.sourceKB=K.knowledgeBase;setArtifactSource({...source,requested:stages*questionsPerStage,auditRequested:runAudit});setAuditState(runAudit?'running':'disabled');
     const current=()=>generatorSlot.current.current(operation)&&(K.isCurrentSource?K.isCurrentSource(source.sourceKB):source.sourceKB===currentSourceKB.current);
@@ -15425,7 +15560,7 @@ function CaseStudyGenerator(){
     const [owned_setBusy,owned_setLogs,owned_setCaseStudy,owned_setIssues,owned_setCoverage,owned_setLiveKB,owned_setAudit,owned_setAuditPhase,owned_setProvenance,owned_setInvalidCaseRaw,owned_setAbortCtl,owned_log]=[setBusy,setLogs,setCaseStudy,setIssues,setCoverage,setLiveKB,setAudit,setAuditPhase,setProvenance,setInvalidCaseRaw,setAbortCtl,log].map(guard);
     const ownedCallGemini=async(...args)=>{if(!current())throw new DOMException('Aborted','AbortError');const result=await callGemini(...args);if(!current())throw new DOMException('Aborted','AbortError');return result;};
     const publishArtifact=(kind,entries,options={})=>{if(current())K.registerArtifact(kind,entries,{...options,sourceKB:source.sourceKB});};
-    owned_setBusy(true);owned_setLogs([]);owned_setCaseStudy(null);owned_setIssues([]);owned_setCoverage(null);owned_setLiveKB(0);
+    owned_setBusy(true);if(!(_ovr&&_ovr.keepLogs))owned_setLogs([]);owned_setCaseStudy(null);owned_setIssues([]);owned_setCoverage(null);owned_setLiveKB(0);
     owned_setAudit(null);owned_setAuditPhase('');owned_setProvenance(null);owned_setInvalidCaseRaw('');
     owned_setAbortCtl(ctl);
     const {model,level}=cfg.forTool('cases');
@@ -15437,11 +15572,11 @@ function CaseStudyGenerator(){
     owned_setProvenance({genModel:model,genLevel:level,promptLabel:'case builder v17.3',
       auditModel:runAudit?_aud.model:'',auditLevel:runAudit?_aud.level:''});
     try{
-      owned_log('Selected '+selectedFacts.length+' grounded fact(s) for '+activeCondition.name+'.','ok');
+      owned_log('Selected '+runFacts.length+' grounded fact(s) for '+runCond.name+'.','ok');
       owned_log('Model: '+model+' [Thinking: '+level+']'+(cfg.autoProfile?' (auto)':''),'warn');
-      for(const w of sufficiency.warnings)owned_log('ⓘ '+w,'warn');
+      for(const w of runSuff.warnings)owned_log('ⓘ '+w,'warn');
       const caseContract=Object.freeze({stages,questionsPerStage});
-      const prompt=caseBuildPrompt({conditionName:activeCondition.name,facts:selectedFacts,difficulty,stages,questionsPerStage,includeTypes:types,mixMode:activeCondition.mixMode,scopeEntries:activeCondition.scopeEntries});
+      const prompt=caseBuildPrompt({conditionName:runCond.name,facts:runFacts,difficulty,stages,questionsPerStage,includeTypes:types,mixMode:runCond.mixMode,scopeEntries:runCond.scopeEntries});
       owned_log('Generating unfolding case ('+stages+' stages · '+questionsPerStage+' Q/stage)...','warn');
       let meta=null,raw;
       // v17.13: a case cut off at the ceiling is now rejected by geminiRequest instead of returned. It still lands in
@@ -15465,9 +15600,9 @@ function CaseStudyGenerator(){
       // Deterministic validation against the real KB.
       // Validate against the PACKET, not the whole KB. A fact that exists somewhere in the
       // Knowledge Base but was never sent to this run is not grounding — it is coincidence.
-      const allowedFactIds=new Set(selectedFacts.map(f=>String(f.id).toLowerCase()));
+      const allowedFactIds=new Set(runFacts.map(f=>String(f.id).toLowerCase()));
       const revalidate=cs=>{
-        const s=activeCondition.allowedNames?validateCaseStudy(cs,source.factIndex,allowedFactIds,activeCondition.name,activeCondition.allowedNames):validateCaseStudy(cs,source.factIndex,allowedFactIds,activeCondition.name);
+        const s=runCond.allowedNames?validateCaseStudy(cs,source.factIndex,allowedFactIds,runCond.name,runCond.allowedNames):validateCaseStudy(cs,source.factIndex,allowedFactIds,runCond.name);
         return[...s,...validateStageTiming(cs),...caseCompletenessIssues(cs,caseContract),...caseShuffleIssues(cs)];
       };
       let allIssues=revalidate(parsed);
@@ -15483,6 +15618,7 @@ function CaseStudyGenerator(){
       // panel popped in fully-formed at the end. The object is fully parsed and validated by
       // this point; the registry below still gates on the post-repair errCount.
       owned_setCaseStudy(parsed);
+      if(_ovr)_ovr.completed=true;
 
       // ── v15.6 item 4: NEIA audit pass ──
       // Code validation runs FIRST, deliberately: a structurally broken case must never
@@ -15556,7 +15692,7 @@ function CaseStudyGenerator(){
               try{
                 const visible=caseAuditPayload(parsed,r.stageNumber,r.q);
                 const out=await ownedCallGemini(cfg.apiKey,model,[{text:caseBuildRepairPrompt({
-                  conditionName:activeCondition.name,facts:selectedFacts,stageNumber:r.stageNumber,
+                  conditionName:runCond.name,facts:runFacts,stageNumber:r.stageNumber,
                   q:r.q,criterion:r.criterion,visibleContext:visible})}],
                   {thinkingLevel:level,signal:ctl.signal,retries:1,generationConfig:{responseMimeType:'application/json'}});
                 let fixed=extractJSON(out);
@@ -15609,6 +15745,7 @@ function CaseStudyGenerator(){
             }
           }
           owned_setAuditPhase('');
+          if(_ovr&&auditInterrupted)_ovr.halted='quota';
         }
       }else if(runAudit&&errCount){
         owned_log('Audit skipped: the case has '+errCount+' structural error(s). Fix grounding first — a rubric review of an ungrounded item spends quota to grade a known failure.','warn');
@@ -15618,8 +15755,8 @@ function CaseStudyGenerator(){
       const cited=new Set(caseAllFactIds(parsed));
       const usedSelected=new Set([...cited].filter(id=>allowedFactIds.has(id)));
       const outOfPacket=[...cited].filter(id=>!allowedFactIds.has(id));
-      owned_setCoverage({selected:selectedFacts.length,used:usedSelected.size,outOfPacket,
-        uncovered:selectedFacts.filter(f=>!usedSelected.has(String(f.id).toLowerCase()))});
+      owned_setCoverage({selected:runFacts.length,used:usedSelected.size,outOfPacket,
+        uncovered:runFacts.filter(f=>!usedSelected.has(String(f.id).toLowerCase()))});
       // A case that failed validation is still shown and exportable (you may want to inspect
       // or hand-correct it), but it must NOT enter the registry: once a fact badge appears in
       // the inspector it reads as verified provenance, and linking an invalid case there would
@@ -15628,7 +15765,7 @@ function CaseStudyGenerator(){
         // Namespaced per case. Models reuse ids like "q1" for every case they write, so an
         // un-namespaced key would silently merge two different questions' provenance.
         const caseId='case-'+Date.now().toString(36)+'-'+uid().slice(0,6);
-        const title=parsed.title||activeCondition.name;
+        const title=parsed.title||runCond.name;
         // v15.1: stage data and question rationales get SEPARATE registry entries. v15
         // seeded every question's entry with the whole stage's data facts, so the Inspector
         // claimed all of a stage's findings were "used in" each question. Now "Stage N
@@ -15657,11 +15794,12 @@ function CaseStudyGenerator(){
         publishArtifact('caseStudies',entries,{merge:true});
       }
       owned_log('✅ Case generated: '+parsed.stages.length+' stages, '+(parsed.stages||[]).reduce((n,s)=>n+((s.questions||[]).length),0)+' questions.','ok');
-      owned_log('Validation: '+errCount+' error(s), '+(allIssues.length-errCount)+' warning(s). Coverage: '+usedSelected.size+'/'+selectedFacts.length+' supplied facts grounded.',errCount?'err':'ok');
+      owned_log('Validation: '+errCount+' error(s), '+(allIssues.length-errCount)+' warning(s). Coverage: '+usedSelected.size+'/'+runFacts.length+' supplied facts grounded.',errCount?'err':'ok');
       if(outOfPacket.length)owned_log('⚠ '+outOfPacket.length+' cited fact ID(s) were never supplied to this run: '+outOfPacket.slice(0,6).join(', ')+(outOfPacket.length>6?'…':''),'err');
       if(errCount)owned_log('Case failed validation — it is shown and exportable, but was NOT linked into the Fact Inspector. Fix the errors or regenerate before using it as study content.','err');
       if(generatorSlot.current.current(operation))setAuditState(runAudit?(auditInterrupted?'interrupted':'complete'):'disabled');
     }catch(e){
+      if(_ovr){if(e&&e.name==='AbortError')_ovr.halted='abort';else if((typeof geminiHaltsBatch==='function'&&geminiHaltsBatch(e))||isQuotaError(e))_ovr.halted='quota';}
       if(generatorSlot.current.owns(operation))setAuditState(e.name==='AbortError'?'interrupted':'failed');
       // v18.0 (review L34): see the NCLEX generator; "Cancelled." was dropped with every other line of an aborted run.
       if(e.name==='AbortError'){if(generatorSlot.current.owns(operation))log('Cancelled.','warn');}else owned_log('Error: '+(e.message||String(e)),'err');
@@ -15688,9 +15826,73 @@ function CaseStudyGenerator(){
   const exportNotice=useMemo(()=>artifactExportNotice({source:artifactSource,activeKB:K.knowledgeBase,requested:artifactSource?.requested,actual:(caseStudy?.stages||[]).reduce((n,s)=>n+(s.questions||[]).length,0),auditRequested:artifactSource?.auditRequested,auditState,rows:auditRows}),[artifactSource,K.knowledgeBase,caseStudy,auditState,auditRows]);
   const caseMd=useMemo(()=>caseStudy?exportNotice+caseValidationStamp(issues)+(provenance?latteProvenanceStamp(provenance):'')+caseToMarkdown(caseStudy)+caseReviewAppendix(caseStudy,issues,auditRows):'',[caseStudy,issues,provenance,exportNotice,auditRows]);
   const casePrintMd=useMemo(()=>caseStudy?exportNotice+caseValidationStamp(issues)+caseToMarkdown(caseStudy,{worksheetFactIds:false})+caseReviewAppendix(caseStudy,issues,auditRows):'',[caseStudy,issues,exportNotice,auditRows]);
+  // v20.1: synchronize the active Case Packet entry with live generation, NEIA audit verdicts, and 1-round repairs.
+  useEffect(()=>{
+    if(!activePacketId||!caseStudy)return;
+    setCasePacket(prev=>{
+      const snap={id:activePacketId,caseStudy,issues,coverage,audit,auditState,provenance,artifactSource};
+      const ix=prev.findIndex(x=>x.id===activePacketId);
+      if(ix<0)return[...prev,snap];
+      const cur=prev[ix];
+      if(cur.caseStudy===caseStudy&&cur.issues===issues&&cur.coverage===coverage&&cur.audit===audit&&cur.auditState===auditState&&cur.provenance===provenance&&cur.artifactSource===artifactSource)return prev;
+      const next=prev.slice();next[ix]=snap;return next;
+    });
+  },[activePacketId,caseStudy,issues,coverage,audit,auditState,provenance,artifactSource]);
+  const selectPacketEntry=useCallback(entry=>{
+    if(!entry)return;
+    setActivePacketId(entry.id);setCaseStudy(entry.caseStudy);setIssues(entry.issues||[]);
+    setCoverage(entry.coverage||null);setAudit(entry.audit||null);setAuditState(entry.auditState||'disabled');
+    setProvenance(entry.provenance||null);setArtifactSource(entry.artifactSource||null);setInvalidCaseRaw('');
+  },[]);
+  const removePacketEntry=useCallback(id=>{
+    const remaining=casePacketRef.current.filter(x=>x.id!==id);
+    setCasePacket(remaining);
+    if(activePacketId===id){
+      const next=remaining[remaining.length-1]||null;
+      if(next)selectPacketEntry(next);
+      else{setActivePacketId('');setCaseStudy(null);setIssues([]);setCoverage(null);setAudit(null);setAuditState('disabled');setProvenance(null);setArtifactSource(null);setInvalidCaseRaw('');}
+    }
+  },[activePacketId,selectPacketEntry]);
+  const clearPacket=useCallback(()=>{
+    setCasePacket([]);setActivePacketId('');setCaseStudy(null);setIssues([]);setCoverage(null);
+    setAudit(null);setAuditState('disabled');setProvenance(null);setArtifactSource(null);setInvalidCaseRaw('');
+  },[]);
+  const isBatchMode=hasCustomCaseScope&&resolvedCaseConditions.length>1&&caseRunMode==='batch';
+  const batchPlan=useMemo(()=>isBatchMode?caseBuildBatchTargets({conditions,resolvedConditions:resolvedCaseConditions,concepts:validCaseConcepts,mixConceptExemplars:caseMixExemplars,includeRelated:caseIncludeRelated,mixMode:caseMixMode,batchUnit:(validCaseConcepts.length>0&&caseMixExemplars)?caseBatchUnit:'conditions',factOpts:{includeTier2,includeTier3,includeCalculation:types.calculation,includeEducation:types.education},stages,questionsPerStage,maxBatch:MAX_CASE_BATCH}):{targets:[],skipped:[],overflowCount:0,totalEligible:0},[isBatchMode,conditions,resolvedCaseConditions,validCaseConcepts,caseMixExemplars,caseIncludeRelated,caseMixMode,caseBatchUnit,includeTier2,includeTier3,types.calculation,types.education,stages,questionsPerStage]);
+  const runBatch=useCallback(async()=>{
+    if(!cfg.apiKey){log('Enter your API key in the config sidebar.','err');return;}
+    if(!batchPlan.targets.length){log('No queued entries have facts at the selected tiers. Include Tier 2/3 or adjust your selection.','err');return;}
+    if(generatorSlot.current.active||batchBusy)return;
+    const startKB=K.knowledgeBase;
+    batchCancelRef.current=false;setBatchBusy(true);setLogs([]);
+    try{
+      await caseRunBatchQueue({
+        targets:batchPlan.targets,skipped:batchPlan.skipped,overflowCount:batchPlan.overflowCount,maxBatch:MAX_CASE_BATCH,
+        isCancelled:()=>batchCancelRef.current||currentSourceKB.current!==startKB,
+        log,onStatus:setBatchStatus,
+        runOne:async(t,idx)=>{
+          const ovr={condition:t.condition,facts:t.facts,sufficiency:t.sufficiency,keepLogs:true,packetId:'pkt-'+Date.now().toString(36)+'-'+idx+'-'+uid().slice(0,4),completed:false,halted:''};
+          batchOverrideRef.current=ovr;
+          try{await run();}finally{batchOverrideRef.current=null;}
+          await new Promise(r=>setTimeout(r,0));
+          return{completed:ovr.completed,halted:ovr.halted};
+        }
+      });
+      if(!caseStudyRef.current&&casePacketRef.current.length>0){
+        selectPacketEntry(casePacketRef.current[casePacketRef.current.length-1]);
+      }
+    }finally{batchOverrideRef.current=null;setBatchBusy(false);setBatchStatus(null);}
+  },[cfg.apiKey,batchPlan,batchBusy,K.knowledgeBase,log,setLogs,run,selectPacketEntry]);
+  const cancelCaseRun=useCallback(()=>{batchCancelRef.current=true;abortCtl?.abort();},[abortCtl]);
+  const packetMd=useMemo(()=>casePacket.length?casePacketToMarkdown(casePacket,{activeKB:K.knowledgeBase,layout:packetLayout,worksheetFactIds:true,includeProvenance:true}):'',[casePacket,K.knowledgeBase,packetLayout]);
+  const packetPrintMd=useMemo(()=>casePacket.length?casePacketToMarkdown(casePacket,{activeKB:K.knowledgeBase,layout:packetLayout,worksheetFactIds:false,includeProvenance:false}):'',[casePacket,K.knowledgeBase,packetLayout]);
+  const packetSubtitle=useMemo(()=>casePacket.map((p,i)=>(i+1)+'. '+(p.caseStudy?.condition||p.caseStudy?.title||'Case')).join(' · '),[casePacket]);
+  const thinBatchCount=useMemo(()=>batchPlan.targets.filter(t=>t.sufficiency.warnings.length>0).length,[batchPlan]);
+  const estMcqPerCase=types.mcq?Math.max(1,Math.ceil(stages*questionsPerStage*0.5)):0;
   // Every checkbox can be unchecked, which would send the model an empty type list.
   const enabledTypeCount=Object.values(types).filter(Boolean).length;
-  const canRun=cfg.apiKey&&!!activeCondition&&enabledTypeCount>0&&!busy;
+  const isBusy=busy||batchBusy;
+  const canRun=cfg.apiKey&&(isBatchMode?batchPlan.targets.length>0:!!activeCondition)&&enabledTypeCount>0&&!isBusy;
   const errCount=issues.filter(x=>x.sev==='error').length;
 
   // v17.0: condition scope, case shape, logs, validation, the item audit and the case itself
@@ -15704,7 +15906,7 @@ function CaseStudyGenerator(){
     setupLabel="Case generation scope and shape"
     resultsLabel="Generated clinical case"
     setup={<>
-      <Step n="01" title="Condition & fact scope" note={conditions.length?(activeCondition?(activeCondition.isMixed?activeCondition.conditions.length+' entries · ':'')+selectedFacts.length+' facts in scope':'no matching scope'):'no Knowledge Base'}>
+      <Step n="01" title="Condition & fact scope" note={conditions.length?(isBatchMode?batchPlan.targets.length+' queued case(s)':activeCondition?(activeCondition.isMixed?activeCondition.conditions.length+' entries · ':'')+selectedFacts.length+' facts in scope':'no matching scope'):'no Knowledge Base'}>
         <div className="field-block" style={{marginBottom:10}}>
           <label htmlFor="case-condition">Condition {hasCustomCaseScope&&<span className="badge-opt">multi-scope active below</span>}</label>
           <select id="case-condition" value={conditionId} onChange={e=>{setConditionId(e.target.value);setCaseSelectedConcepts([]);setCaseExtraConditionIds([]);}} style={hasCustomCaseScope?{opacity:.72}:undefined}>
@@ -15742,10 +15944,12 @@ function CaseStudyGenerator(){
               const matchesFilter=c=>!fq||validCaseCondIds.includes(c.id)||String(c.name||'').toLowerCase().includes(fq)||String(c.concept||'').toLowerCase().includes(fq)||(c.aliases||[]).some(a=>String(a||'').toLowerCase().includes(fq));
               const visGroups=caseCatalog.groups.map(g=>({...g,items:g.items.filter(matchesFilter)})).filter(g=>g.items.length);
               const visIds=visGroups.flatMap(g=>g.items.map(c=>c.id));
+              const visSubstantialIds=visGroups.flatMap(g=>g.items.filter(c=>(c.facts||[]).length>=8).map(c=>c.id));
               return <div style={{marginTop:6,padding:8,borderRadius:6,border:'1px solid var(--border)',background:'var(--bg-input)',maxHeight:220,overflowY:'auto'}}>
                 <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap',marginBottom:6}}>
                   <input id="case-mix-filter" type="text" aria-label="Filter conditions to mix" value={caseFilterText} onChange={e=>setCaseFilterText(e.target.value)} placeholder="Filter conditions, concepts, or meds…" style={{flex:'1 1 160px',padding:'4px 8px',fontSize:11.5}}/>
                   {singleCondition&&!validCaseCondIds.includes(singleCondition.id)&&<button type="button" className="btn-secondary" style={{padding:'2px 7px',fontSize:11}} onClick={()=>toggleCaseCondId(singleCondition.id)}>+ Current</button>}
+                  {visSubstantialIds.length>0&&<button type="button" className="btn-secondary" title="Check visible entries with at least 8 facts (skips thin stubs)" style={{padding:'2px 7px',fontSize:11}} onClick={()=>setCaseExtraConditionIds(p=>[...new Set([...p,...visSubstantialIds])])}>Select ≥8 facts</button>}
                   {visIds.length>0&&<button type="button" className="btn-secondary" style={{padding:'2px 7px',fontSize:11}} onClick={()=>setCaseExtraConditionIds(p=>[...new Set([...p,...visIds])])}>Select visible</button>}
                   {validCaseCondIds.length>0&&<button type="button" className="btn-secondary" style={{padding:'2px 7px',fontSize:11}} onClick={()=>setCaseExtraConditionIds([])}>Uncheck all</button>}
                 </div>
@@ -15769,16 +15973,37 @@ function CaseStudyGenerator(){
             ⚠ No standalone Concept Overview entry exists for the selected concept(s) with exemplar mixing turned off. Enable <b>Mix conditions / exemplars</b> above or check specific conditions below.
           </div>}
           {activeCondition&&activeCondition.isMixed&&<div style={{marginTop:8,padding:8,borderRadius:6,border:'1px solid var(--border)',background:'var(--bg-input)'}}>
-            <div style={{fontSize:11,fontWeight:700,letterSpacing:.5,textTransform:'uppercase',color:'var(--text-dim)',marginBottom:5}}>Multi-Entry Case Framing ({activeCondition.conditions.length} entries)</div>
-            <div role="group" aria-label="Case mix framing" style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-              {[['comorbid','Comorbid / Evolving Trajectory','Integrates or progresses across selected conditions/concepts'],['differential','Differential / Twin Tie-Breaker','Stage 1–2 overlapping cues → Stage 3–4 definitive care']].map(([m,lbl,hint])=>{
-                const active=caseMixMode===m;
-                return <button key={m} type="button" className="btn-secondary" aria-pressed={active} title={hint} style={{padding:'3px 9px',fontSize:11.5,borderColor:active?'var(--accent)':undefined,color:active?'var(--accent)':undefined,background:active?'rgba(99,179,237,.12)':undefined}} onClick={()=>setCaseMixMode(m)}>{lbl}</button>;
+            <div style={{fontSize:11,fontWeight:700,letterSpacing:.5,textTransform:'uppercase',color:'var(--text-dim)',marginBottom:5}}>Multi-Entry Run Mode ({activeCondition.conditions.length} entries)</div>
+            <div role="group" aria-label="Multi-entry run mode" style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:7}}>
+              {[['mixed','Combine into 1 mixed case','Builds one integrated comorbid or differential case across the selected entries'],['batch','Batch Queue: separate cases','Generates standalone cases sequentially and collects them into one printable packet']].map(([m,lbl,hint])=>{
+                const active=caseRunMode===m;
+                return <button key={m} type="button" className="btn-secondary" aria-pressed={active} title={hint} style={{padding:'3px 9px',fontSize:11.5,borderColor:active?'var(--accent)':undefined,color:active?'var(--accent)':undefined,background:active?'rgba(99,179,237,.12)':undefined}} onClick={()=>setCaseRunMode(m)}>{lbl}</button>;
               })}
             </div>
-            <div style={{fontSize:11.5,color:'var(--text-dim)',marginTop:5,lineHeight:1.45}}>
+            {caseRunMode==='batch'&&validCaseConcepts.length>0&&caseMixExemplars&&<div style={{marginBottom:7}}>
+              <div style={{fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:'uppercase',color:'var(--text-dim)',marginBottom:4}}>Batch Queue Grouping</div>
+              <div role="group" aria-label="Batch queue grouping" style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                {[['conditions','1 standalone case per entry','Queues a separate case for each resolved condition/entry'],['concepts','1 mixed case per concept','Queues one mixed case for each selected Giddens Concept']].map(([u,lbl,hint])=>{
+                  const active=caseBatchUnit===u;
+                  return <button key={u} type="button" className="btn-secondary" aria-pressed={active} title={hint} style={{padding:'3px 9px',fontSize:11.5,borderColor:active?'var(--accent)':undefined,color:active?'var(--accent)':undefined,background:active?'rgba(99,179,237,.12)':undefined}} onClick={()=>setCaseBatchUnit(u)}>{lbl}</button>;
+                })}
+              </div>
+            </div>}
+            {(caseRunMode==='mixed'||(caseRunMode==='batch'&&validCaseConcepts.length>0&&caseMixExemplars&&caseBatchUnit==='concepts'))&&<>
+              <div style={{fontSize:11,fontWeight:700,letterSpacing:.5,textTransform:'uppercase',color:'var(--text-dim)',marginBottom:5}}>Multi-Entry Case Framing</div>
+              <div role="group" aria-label="Case mix framing" style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                {[['comorbid','Comorbid / Evolving Trajectory','Integrates or progresses across selected conditions/concepts'],['differential','Differential / Twin Tie-Breaker','Stage 1–2 overlapping cues → Stage 3–4 definitive care']].map(([m,lbl,hint])=>{
+                  const active=caseMixMode===m;
+                  return <button key={m} type="button" className="btn-secondary" aria-pressed={active} title={hint} style={{padding:'3px 9px',fontSize:11.5,borderColor:active?'var(--accent)':undefined,color:active?'var(--accent)':undefined,background:active?'rgba(99,179,237,.12)':undefined}} onClick={()=>setCaseMixMode(m)}>{lbl}</button>;
+                })}
+              </div>
+            </>}
+            {caseRunMode==='mixed'?<div style={{fontSize:11.5,color:'var(--text-dim)',marginTop:5,lineHeight:1.45}}>
               Active scope: <b style={{color:'var(--text)'}}>{activeCondition.name}</b> — round-robin packet across {activeCondition.conditions.length} entries ({selectedFacts.length} facts).
-            </div>
+            </div>:<div style={{fontSize:11.5,color:'var(--text-dim)',marginTop:5,lineHeight:1.5}}>
+              <div>Queue ready: <b style={{color:'var(--text)'}}>{batchPlan.targets.length}</b> separate {batchPlan.targets.length===1?'case':'cases'}{batchPlan.overflowCount>0?<span style={{color:'var(--accent-warm)'}}> (capped at {MAX_CASE_BATCH}/run · {batchPlan.overflowCount} extra omitted)</span>:null}{batchPlan.skipped.length>0?<span style={{color:'var(--accent-warm)'}}> · {batchPlan.skipped.length} skipped (0 facts at selected tiers)</span>:null}.</div>
+              <div style={{fontFamily:'JetBrains Mono',fontSize:11,marginTop:2}}>Est. API load: {batchPlan.targets.length} generation call(s){runAudit&&estMcqPerCase>0?' + up to ~'+(batchPlan.targets.length*estMcqPerCase)+' MCQ audit calls':' (item audit off)'}</div>
+            </div>}
           </div>}
         </div>
         <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center',marginBottom:8}}>
@@ -15787,8 +16012,9 @@ function CaseStudyGenerator(){
           <button type="button" className={'tier-btn t2'+(includeTier2?' active':'')} aria-pressed={includeTier2} onClick={()=>setIncludeTier2(v=>!v)}><b>Tier 2</b> context</button>
           <button type="button" className={'tier-btn t3'+(includeTier3?' active':'')} aria-pressed={includeTier3} onClick={()=>setIncludeTier3(v=>!v)}><b>Tier 3</b> background</button>{/* v18.1: the label said "distractors", but distractors come from any tier (see the help text below) */}
         </div>
-        <div style={{fontSize:12,color:'var(--text-dim)',lineHeight:1.5}}>Tier 1 facts drive the critical decisions. Tier 2 adds realistic context; Tier 3 adds lower-priority background detail. Distractors are built from contextually plausible near-misses at any tier, not from Tier 3. <b style={{color:'var(--text)'}}>{selectedFacts.length}</b> fact(s) selected for this case.</div>
-        {sufficiency.warnings.length>0&&<div className="tip-banner" style={{marginTop:10,marginBottom:0,fontSize:12,lineHeight:1.5}}>⚠ {sufficiency.warnings.join(' · ')} The generator will not invent to fill these gaps.</div>}
+        <div style={{fontSize:12,color:'var(--text-dim)',lineHeight:1.5}}>Tier 1 facts drive the critical decisions. Tier 2 adds realistic context; Tier 3 adds lower-priority background detail. Distractors are built from contextually plausible near-misses at any tier, not from Tier 3. {isBatchMode?<>Queued cases select facts per entry independently.</>:<> <b style={{color:'var(--text)'}}>{selectedFacts.length}</b> fact(s) selected for this case.</>}</div>
+        {!isBatchMode&&sufficiency.warnings.length>0&&<div className="tip-banner" style={{marginTop:10,marginBottom:0,fontSize:12,lineHeight:1.5}}>⚠ {sufficiency.warnings.join(' · ')} The generator will not invent to fill these gaps.</div>}
+        {isBatchMode&&thinBatchCount>0&&<div className="tip-banner" style={{marginTop:10,marginBottom:0,fontSize:12,lineHeight:1.5}}>⚠ {thinBatchCount} of {batchPlan.targets.length} queued case(s) have thin fact pools for {stages*questionsPerStage} questions. Include Tier 2/3 or fewer questions/stage if needed; the generator will not invent to fill gaps.</div>}
         <div style={{marginTop:12,paddingTop:12,borderTop:'1px solid var(--border)'}}>
           <label style={{display:'flex',alignItems:'flex-start',gap:8,fontSize:12,cursor:'pointer'}}>
             <input type="checkbox" checked={runAudit} onChange={()=>setRunAudit(v=>!v)} style={{marginTop:2}} />
@@ -15829,11 +16055,12 @@ function CaseStudyGenerator(){
     </>}
     action={<>
       <div className="act-row">
-        <button className="btn-primary" disabled={!canRun} onClick={run}>
-        {busy?'⟳ Generating case...':!cfg.apiKey?'Enter API Key':!enabledTypeCount?'Select at least one question type':'▶ Generate Case Study'}
+        <button className="btn-primary" disabled={!canRun} onClick={isBatchMode?runBatch:run}>
+        {isBusy?(batchStatus?'⟳ Case '+(batchStatus.done+1)+'/'+batchStatus.total+'...':'⟳ Generating case...'):!cfg.apiKey?'Enter API Key':!enabledTypeCount?'Select at least one question type':isBatchMode?('▶ Generate '+batchPlan.targets.length+' Case '+(batchPlan.targets.length===1?'Study':'Studies')):'▶ Generate Case Study'}
         </button>
-        {busy&&<button className="btn-danger" onClick={()=>abortCtl?.abort()}>Cancel</button>}
+        {isBusy&&<button className="btn-danger" onClick={cancelCaseRun}>Cancel</button>}
       </div>
+      {batchStatus&&<div style={{marginTop:8}}><RunStatus label="Case study batch" value={batchStatus.done} max={batchStatus.total} caption={batchStatus.done+'/'+batchStatus.total} detail={'Case '+Math.min(batchStatus.total,batchStatus.done+1)+': '+batchStatus.currentName}/></div>}
       {!enabledTypeCount&&<div style={{fontSize:12,color:'var(--accent-warm)',marginTop:6}}>Select at least one question type above.</div>}
       {busy&&liveKB>0&&<div style={{fontSize:12,color:'var(--accent-cyan)',fontFamily:'JetBrains Mono',marginTop:6}}>▼ receiving {liveKB} KB</div>}
       {busy&&auditPhase&&<div style={{fontSize:12,color:'var(--accent-warm)',fontFamily:'JetBrains Mono',marginTop:6}}>⚖ {auditPhase==='repair'?'repairing failed items':auditPhase.startsWith('audit ')?'item-quality audit '+auditPhase.slice(6):'item-quality audit'}</div>}
@@ -15843,6 +16070,46 @@ function CaseStudyGenerator(){
     {invalidCaseRaw&&<div className="error-banner"><div><strong>Invalid case response</strong><ul>{issues.map((x,i)=><li key={i}>{x.msg}</li>)}</ul><button className="btn-secondary" onClick={()=>downloadBlob(new Blob(['VALIDATION FAILED\n'+invalidCaseRaw],{type:'text/plain'}),'LATTE-Case-Study-invalid.txt')/* v17.15 (review M7): exportAsTxt stripped Markdown and broke the raw JSON */}>Export invalid response</button><pre style={{whiteSpace:'pre-wrap',maxHeight:400,overflow:'auto'}}>{invalidCaseRaw}</pre></div></div>}
     {!conditions.length&&!caseStudy&&<div className="tip-banner" style={{color:'var(--accent-warm)'}}>No Knowledge Base loaded. Open <strong>Knowledge&nbsp;Base</strong> and build it from your source files first — the case generator reads facts, never PDFs.</div>}
     <div className="note-info">Reuses the NCLEX Generator's item-quality rules (distractor plausibility, per-option rationales, anchor grounding, completeness) plus a strict source-boundary policy so the model cannot invent labs, doses, comorbidities, or diagnoses.</div>
+    {casePacket.length>0&&<div style={{marginTop:12,padding:'10px 12px',borderRadius:8,border:'1px solid var(--border)',background:'var(--bg-card-alt)'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8,marginBottom:8}}>
+        <div style={{fontSize:12,fontWeight:600,color:'var(--text-bright)'}}>
+          📚 Case Packet ({casePacket.length} {casePacket.length===1?'case saved — generate more to print a booklet':'cases in packet'})
+        </div>
+        <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
+          {casePacket.length>1&&<>
+            <div role="group" aria-label="Packet print order" style={{display:'inline-flex',gap:4}}>
+              {[['booklet','Booklet (Worksheets → Keys)','All student worksheets first, followed by all answer keys at the back'],['paired','Paired (Case → Key)','Each case worksheet immediately followed by its answer key']].map(([ly,lbl,hint])=>{
+                const active=packetLayout===ly;
+                return <button key={ly} type="button" className="btn-secondary" aria-pressed={active} title={hint} style={{padding:'2px 8px',fontSize:11,borderColor:active?'var(--accent)':undefined,color:active?'var(--accent)':undefined,background:active?'rgba(99,179,237,.12)':undefined}} onClick={()=>setPacketLayout(ly)}>{lbl}</button>;
+              })}
+            </div>
+            <button type="button" className="btn-secondary" style={{padding:'3px 9px',fontSize:11.5}} onClick={()=>exportAsPdf(packetPrintMd,'Clinical Case Study Packet ('+casePacket.length+' Cases)',packetSubtitle)}>🖨 Packet PDF ({casePacket.length})</button>
+            <button type="button" className="btn-secondary" style={{padding:'3px 9px',fontSize:11.5}} onClick={()=>exportAsMd(packetMd,'LATTE-Case-Packet-'+casePacket.length+'-Cases.md')}>⬇ Packet .md</button>
+            <button type="button" className="btn-secondary" style={{padding:'3px 9px',fontSize:11.5}} onClick={()=>downloadBlob(new Blob([casePacketJsonExport(casePacket,K.knowledgeBase)],{type:'application/json'}),'LATTE-Case-Packet-'+casePacket.length+'-Cases.json')}>⬇ Packet .json</button>
+          </>}
+          <button type="button" className="btn-secondary" disabled={isBusy} style={{padding:'3px 9px',fontSize:11.5}} onClick={clearPacket}>Clear packet</button>
+        </div>
+      </div>
+      <div role="group" aria-label="Session case packet" style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+        {casePacket.map((p,idx)=>{
+          const pErrs=(p.issues||[]).filter(x=>x.sev==='error').length;
+          const pRows=caseReviewRows(p.caseStudy,p.audit,p.auditState||'disabled');
+          const pFail=pRows.some(r=>r.status==='FAIL');
+          const pWarn=(p.issues||[]).length>0||(p.auditState!=='complete'&&p.auditState!=='disabled')||pRows.some(r=>['PENDING','UNSCORED','ERROR','REVIEW','REPAIRED'].includes(r.status));
+          const pStale=!!(p.artifactSource&&!artifactSourceCurrent(p.artifactSource,K.knowledgeBase));
+          const active=activePacketId===p.id;
+          const badge=pErrs||pFail?'⚠':pWarn?'⚑':'✓';
+          const badgeColor=pErrs||pFail?'var(--accent-red)':pWarn?'var(--accent-warm)':'var(--accent-green)';
+          const label=(p.caseStudy.condition||p.caseStudy.title||'Case')+(pStale?' (earlier KB)':'');
+          return <div key={p.id} style={{display:'inline-flex',alignItems:'center'}}>
+            <button type="button" className="btn-secondary" aria-pressed={active} disabled={isBusy} onClick={()=>selectPacketEntry(p)} style={{padding:'3px 8px',fontSize:11.5,borderTopRightRadius:0,borderBottomRightRadius:0,borderColor:active?'var(--accent)':undefined,color:active?'var(--accent)':undefined,background:active?'rgba(99,179,237,.12)':undefined}}>
+              <span style={{color:badgeColor,marginRight:4}}>{badge}</span>{idx+1}. {label}
+            </button>
+            <button type="button" className="btn-secondary" aria-label={'Remove case '+(idx+1)+' from packet'} disabled={isBusy} onClick={()=>removePacketEntry(p.id)} style={{padding:'3px 6px',fontSize:11,borderLeft:0,borderTopLeftRadius:0,borderBottomLeftRadius:0,color:'var(--text-dim)'}}>✕</button>
+          </div>;
+        })}
+      </div>
+    </div>}
     {logs.length>0&&<Disclose summary="Generation log" open={logs.some(l=>l.t==='err')} note={logs.length+' line(s)'+(logs.filter(l=>l.t==='err').length?' · '+logs.filter(l=>l.t==='err').length+' error(s)':'')}>
       <div className="log-stream">
         {logs.map((l,i)=><div key={i} style={{color:l.t==='err'?'var(--accent-red)':l.t==='ok'?'var(--accent-green)':l.t==='warn'?'var(--accent-warm)':'var(--text-dim)'}}>{l.msg}</div>)}
@@ -15897,11 +16164,11 @@ function CaseStudyGenerator(){
         <div className="output-body">
           {view==='json'
             ?<pre style={{whiteSpace:'pre-wrap',fontFamily:'JetBrains Mono',fontSize:12,lineHeight:1.55,color:'var(--text)',margin:0}}>{JSON.stringify(caseStudy,null,2)}</pre>
-            :<CaseRenderer caseStudy={caseStudy}/>}
+            :<CaseRenderer key={activePacketId||'single'} caseStudy={caseStudy}/>}
         </div>
       </div>
     </>}
-    {!caseStudy&&!busy&&conditions.length>0&&<EmptyState mark="✚" title="No case generated yet" note="An unfolding case presents a patient one stage at a time. Every clinical value, answer and rationale is checked against real fact IDs in code before the case renders." steps={['Pick the condition and which fact tiers the case may use.','Choose how many stages and questions per stage you want.','Generate — answers and rationales stay hidden until you reveal them.']}/>}
+    {!caseStudy&&!isBusy&&conditions.length>0&&<EmptyState mark="✚" title="No case generated yet" note="An unfolding case presents a patient one stage at a time. Every clinical value, answer and rationale is checked against real fact IDs in code before the case renders." steps={['Pick a condition, Giddens Concept, or batch queue of conditions and which fact tiers the case may use.','Choose how many stages and questions per stage you want.','Generate — answers stay hidden until revealed, and completed cases collect in your Case Packet to print together.']}/>}
     </Workbench></ArtifactSourceCtx.Provider>
   );
 }

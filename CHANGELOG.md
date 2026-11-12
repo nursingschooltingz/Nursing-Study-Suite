@@ -9,6 +9,23 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [20.1] — 2026-11-12
+
+Multi-case Session Packet (Exam Booklet & Paired exports) and Walk-Away Sequential Batch Queue inside **06 · Clinical Case Study Generator**.
+
+### Added
+
+- **Session Case Packet tray & 1-click Booklet / Paired printing (`caseSplitMarkdown`, `casePacketToMarkdown`, `casePacketJsonExport`, `CaseStudyGenerator`).** Generated cases now accumulate in an ordered session **Case Packet** tray instead of overwriting earlier runs, with pill switching (`CaseRenderer` keyed on `activePacketId` so revealed answers never bleed across cases), per-case removal, and **Clear packet**. Splits `caseToMarkdown` at its `<div class="pagebreak"></div>` boundary to support 1-click multi-case exports (**🖨 Packet PDF (N)**, **⬇ Packet .md**, **⬇ Packet .json**) in **Booklet (Worksheets → Keys)** order (default: all clean student worksheets `1..N` first with `[fact-*]` omitted on PDF, followed by all Answer Keys, Clinical Debriefs, and Review Appendices `1..N` at the back) or **Paired (Case → Key)** order. Stamps unverified cases (`error` findings) at the packet header, table of contents, worksheet, and answer key, and preserves per-case earlier-KB disclosures (`v15.17`).
+- **Walk-Away Sequential Batch Queue (`caseBuildBatchTargets`, `caseRunBatchQueue`, `MAX_CASE_BATCH = 8`, `CaseStudyGenerator.runBatch`).** Adds a **Select ≥8 facts** quick-pick button inside **Mix specific conditions**, a **Multi-entry run mode** toggle (**Combine into 1 mixed case** vs. **Batch Queue: separate cases**), and a **Batch queue grouping** toggle (**1 standalone case per entry** vs. **1 mixed case per concept**). Enforces `MAX_CASE_BATCH = 8`, skips 0-fact entries cleanly without wasting a batch slot, shows upfront estimated API calls and `<RunStatus label="Case study batch" .../>`, executes each queued target sequentially through `CaseStudyGenerator.run` via `batchOverrideRef` (reusing deterministic grounding validation, Fisher–Yates option shuffling, NEIA MCQ audit pool, 1-round repair, and Fact Inspector registration), and halts remaining items on Cancel or API quota exhaustion while keeping completed cases `1..k` in `casePacket`.
+
+### Verification
+
+- **14 new assertions (3,998 total)** in `tools/case-packet-batch-tests.js`.
+- **Prompt bytes.** All 11 frozen hashes unchanged. `Prompts.md` regenerated (19 documented prompt constants).
+- **SRI.** All eight SRI-pinned scripts and both PDF worker copies were re-hashed against their CDNs and match.
+
+See the [release verification record](docs/reviews/v20.1-release.md).
+
 ## [20.0] — 2026-11-12
 
 Concept-based curriculum (`LATTE + P`), HESI/ATI/NGN Exam Trap Blocks (`LATTE + P + Traps` Phase 1), unified Giddens Concept + Condition multi-select scope & mixing across NCLEX and Case Studies, and the **08 · Import to Gizmo** AI-driven chunked Anki-to-Gizmo.ai converter.
