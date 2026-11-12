@@ -9,6 +9,28 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [20.2] — 2026-11-12
+
+Gemini 4 Hydrogen (`gemini-4-hydrogen`) default fast-slot model, `xhigh` thinking level, automatic migration of saved retired Flash model IDs, and Gemini 4 transport guards.
+
+### Added
+
+- **`xhigh` thinking level (`THINKING_LEVELS`, `ConfigSidebar`, `AnkiGenerator`, `NCLEXToAnki`, `tools/repo-checks.js`).** Expands `THINKING_LEVELS` to `['low','medium','high','xhigh']` and exposes `xhigh` across **Study settings** (per-tool Auto profile rows and Manual mode), the **Anki Source Checker** thinking selector, **NCLEX → Anki** image-reading thinking selector, and CLI `--level` parsing. Because `gemini-4-argon` supports `low` / `medium` / `high` only, `xhigh` is disabled on Argon rows in **Study settings**, clamped to `high` if a row switches from Hydrogen to Argon, and refused before network send if passed directly to an Argon model.
+- **Model IDs reset action (`ConfigSidebar`).** Adds a one-click **Reset defaults** button beside **Model IDs** when either model string differs from `gemini-4-hydrogen` / `gemini-4-argon`.
+
+### Changed
+
+- **Default fast-slot model & saved-storage auto-migration (`MODEL_SETTINGS_DEFAULTS.flashModel`, `LEGACY_FLASH_DEFAULTS`, `loadModelSettings`).** Upgrades the shipped fast-slot default from retiring `gemini-3.8-flash` (shutting down August 18, 2026) to `gemini-4-hydrogen`, updates **Study settings** and **Anki Source Checker** labels from **Flash** to **Hydrogen**, and automatically migrates saved retired default Flash IDs (`gemini-3.5-flash` through `gemini-3.8-flash`) in `localStorage` to `gemini-4-hydrogen` on reload while preserving custom user-typed model IDs.
+- **Gemini 4 transport guards (`geminiIsHydrogen`, `geminiGenerationConfig`, `geminiRequest`).** Requires an explicit `thinkingLevel` on Hydrogen requests as well as Argon requests so an omitted level cannot silently fall back to Hydrogen's `high` built-in default, and increases default HTTP client watchdog timeout (`timeoutMs`) from 10 minutes (`600,000 ms`) to 15 minutes (`900,000 ms`) per Google's Gemini 4 migration checklist.
+
+### Verification
+
+- **5 new assertions (4,003 total)** across `tools/transport-regression-tests.js`, `tools/settings-persistence-tests.js`, `tools/v18-0-low-transport-tests.js`, `tools/remediation-tooling-tests.js`, and `latte-tests.js`.
+- **Prompt bytes.** All 11 frozen hashes unchanged. `Prompts.md` regenerated (19 documented prompt constants).
+- **SRI.** All eight SRI-pinned scripts and both PDF worker copies were re-hashed against their CDNs and match.
+
+See the [release verification record](docs/reviews/v20.2-release.md).
+
 ## [20.1] — 2026-11-12
 
 Multi-case Session Packet (Exam Booklet & Paired exports) and Walk-Away Sequential Batch Queue inside **06 · Clinical Case Study Generator**.

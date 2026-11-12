@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 3998;
+const EXPECTED_ASSERTIONS = 4003;
 
 let file;
 try {
@@ -539,7 +539,7 @@ t('all three former walkers go through it',
   S.includes('await pdfWalkPages(file,{signal,onPage:async(text,i,pg,total)=>{'));
 t('the inline NCLEX read is cancellable, not just the chunk loop',
   S.includes('await extractPdfTextSpaced(file,signal)'));
-t('default Flash model is gemini-3.8-flash', /const MODEL_SETTINGS_DEFAULTS=Object\.freeze\(\{flashModel:'gemini-3\.8-flash'/.test(S)); // v17.3: the shipped default moved into MODEL_SETTINGS_DEFAULTS
+t('default Hydrogen/Flash slot model is gemini-4-hydrogen', /const MODEL_SETTINGS_DEFAULTS=Object\.freeze\(\{flashModel:'gemini-4-hydrogen'/.test(S)); // v17.3 + v20.2: shipped default moved from gemini-3.8-flash to gemini-4-hydrogen
 
 /* ── 10d. v15.10: quote-miss classification + benchmark instrumentation ── */
 section('v15.10 — quote-miss classification');
@@ -2473,7 +2473,7 @@ section('generation input pins and bounded pilot');
   for(const [name,start,end,hash] of inputs){const a=S.indexOf(start,name==='focus block'?S.indexOf('function AnkiGenerator()'):0),b=S.indexOf(end,a);t('generation input matches its approved pin: '+name,a>=0&&b>a&&sha256(S.slice(a,b).trim())===hash);}
   const F=ankiSyntheticFixture(),before=JSON.stringify(F.kb),spec=require('./tools/anki-pilot-spec').makeAnkiPilotSpec(F.kb,S);
   t('pilot planner derives exact call counts from the live chunker',spec.facts===5&&spec.chunkCount===1&&spec.expectedGenerationCalls===1&&spec.maximumAttempts===3);
-  t('pilot planner preserves the recommended model and token contract',spec.model==='gemini-3.8-flash'&&spec.thinkingLevel==='medium'&&spec.maxOutputTokensPerAttempt===65536&&spec.additionalAuditCalls===0);
+  t('pilot planner preserves the recommended model and token contract',spec.model==='gemini-4-hydrogen'&&spec.thinkingLevel==='medium'&&spec.maxOutputTokensPerAttempt===65536&&spec.additionalAuditCalls===0);
   t('pilot planning does not modify source facts or authorize execution',JSON.stringify(F.kb)===before&&spec.status.startsWith('PLANNED ONLY'));
 }
 

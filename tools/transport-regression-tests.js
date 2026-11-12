@@ -110,7 +110,13 @@ module.exports=async function transportRegressionTests(S,t){
   h=make([]);e=await rejected(h.call({},{body:{contents:[],generationConfig:{thinkingConfig:{thinkingLevel:'low',thinkingBudget:1024}}}}));
   t('a thinkingBudget is refused before any request is sent',e?.status===400&&e.isFatal===true&&h.calls()===0&&/thinkingBudget/.test(e.message));
   h=make([]);e=await rejected(h.call({},{model:argon,body:{contents:[],generationConfig:{thinkingConfig:{thinkingLevel:'minimal'}}}}));
-  t('a level outside low, medium and high is refused before any request is sent',e?.status===400&&h.calls()===0&&/low, medium or high/.test(e.message));
+  t('a level outside low, medium, high and xhigh is refused before any request is sent',e?.status===400&&h.calls()===0&&/low, medium, high or xhigh/.test(e.message));
+  h=make([response([ev('ok','STOP')])]);await h.call({},{model:'gemini-4-hydrogen',body:{contents:[],generationConfig:{thinkingConfig:{thinkingLevel:'xhigh'}}}});
+  t('a Hydrogen request with xhigh thinking sends xhigh and 65,536 maxOutputTokens',h.bodies[0].generationConfig.thinkingConfig.thinkingLevel==='xhigh'&&h.bodies[0].generationConfig.maxOutputTokens===65536);
+  h=make([]);e=await rejected(h.call({},{model:argon,body:{contents:[],generationConfig:{thinkingConfig:{thinkingLevel:'xhigh'}}}}));
+  t('an Argon request with xhigh is refused before any request is sent',e?.status===400&&e.isFatal===true&&h.calls()===0&&/Argon does not support thinking level xhigh/.test(e.message));
+  h=make([]);e=await rejected(h.call({},{model:'gemini-4-hydrogen',body:{contents:[]}}));
+  t('a Hydrogen request without a thinking level is refused instead of falling back to high',e?.status===400&&h.calls()===0&&/Hydrogen/.test(e.message)&&h.halts(e));
   h=make([]);e=await rejected(h.call({},{model:argon,body:{contents:[]}}));
   t('an Argon request without a thinking level is refused instead of falling back to medium',e?.status===400&&h.calls()===0&&/Argon/.test(e.message)&&h.halts(e));
   t('no call site sets its own ceiling; geminiRequest is the only place it is chosen',!S.includes('maxOutputTokens:65536')&&S.includes('body.generationConfig=geminiGenerationConfig(model,body.generationConfig||{});'));

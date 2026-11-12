@@ -119,7 +119,8 @@ module.exports=async function run(S,t){
   const SET=['L5: a typed model ID is trimmed before it is used and saved',
     'L5: an invalid model ID is not used; the field keeps it, marked invalid, and names the ID still running',
     'L4: the auto badge for NCLEX to Anki names the Flash model and the level set in that tab; other tabs unchanged',
-    'L4: the drawer counts eight tools and the manual hint names the NCLEX to Anki exception'];
+    'L4: the drawer counts eight tools and the manual hint names the NCLEX to Anki exception',
+    'v20.2: xhigh pill is enabled on Hydrogen rows, disabled on Argon rows, and Reset defaults restores gemini-4-hydrogen/argon'];
   await section(t,SET,()=>{
     const Babel=loadBabel();
     const constants=span(S,'const TOOL_PROFILE_DEFAULTS={','\n};')+'\n};\n'+span(S,'const PROFILE_ROWS=[','\n];')+'\n];\n'+span(S,'const MODEL_ID_RE=','\n')+'\n';
@@ -151,7 +152,21 @@ module.exports=async function run(S,t){
     const n2a=textOf(badge(auto({activeTool:'nclex2anki'}))),cases=textOf(badge(auto({activeTool:'cases'})));
     out[SET[2]]=n2a.includes('synthetic-flash')&&n2a.includes('level set in tab')&&!/low$/.test(n2a)&&cases==='synthetic-argonhigh';
     const manualText=textOf(mount({...base,autoProfile:false})({activeTool:'knowledge'}));
-    out[SET[3]]=manualText.includes('Shared across all eight tools')&&!manualText.includes('six tools')&&!manualText.includes('seven tools')&&manualText.includes('except NCLEX to Anki, which always uses the Flash model');
+    out[SET[3]]=manualText.includes('Shared across all eight tools')&&!manualText.includes('six tools')&&!manualText.includes('seven tools')&&manualText.includes('except NCLEX to Anki, which always uses the Hydrogen model');
+    const profPatches=[],resets={flash:null,argon:null};
+    const autoDrawer=mount({...base,autoProfile:true,profiles:{knowledge:{m:'flash',lv:'xhigh'},cases:{m:'argon',lv:'high'}},setProfile:(id,p)=>profPatches.push([id,p]),setFlashModel:v=>{resets.flash=v;},setArgonModel:v=>{resets.argon=v;}});
+    let pTree=autoDrawer({activeTool:'knowledge'});
+    find(pTree,n=>n.type==='button'&&n.props['aria-controls']==='suite-profiles').props.onClick();
+    pTree=autoDrawer({activeTool:'knowledge'});
+    const hXhigh=find(pTree,n=>n.type==='button'&&n.props['aria-label']==='Knowledge · extract: xhigh thinking');
+    const aXhigh=find(pTree,n=>n.type==='button'&&n.props['aria-label']==='Case studies: xhigh thinking');
+    const switchToArgon=find(pTree,n=>n.type==='button'&&n.props['aria-label']==='Knowledge · extract: use Argon');
+    switchToArgon.props.onClick();
+    const resetModelsBtn=find(pTree,n=>n.type==='button'&&textOf(n)==='Reset defaults');
+    resetModelsBtn.props.onClick();
+    const manualArgonXhigh=find(mount({...base,autoProfile:false,thinkingMode:true})({activeTool:'knowledge'}),n=>n.type==='button'&&n.props['aria-label']==='xhigh thinking level');
+    out[SET[4]]=!!hXhigh&&hXhigh.props.disabled===false&&hXhigh.props['aria-pressed']===true&&!!aXhigh&&aXhigh.props.disabled===true&&!!manualArgonXhigh&&manualArgonXhigh.props.disabled===true&&
+      JSON.stringify(profPatches)==='[["knowledge",{"m":"argon","lv":"high"}]]'&&resets.flash==='gemini-4-hydrogen'&&resets.argon==='gemini-4-argon';
     return out;
   });
 

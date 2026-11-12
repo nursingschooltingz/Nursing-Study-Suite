@@ -8,7 +8,7 @@ Turn your lecture PDFs and PowerPoints into a complete, source-cited study syste
 
 The whole suite is **one HTML file**. There is nothing to install, no account to create, and no website collecting your data. You open the file in your web browser, paste in a free Google Gemini API key, upload your study materials, and go.
 
-**Published release: v20.1.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v20.1/Nursing-Study-Suite.v20.1.html) or open the [repository HTML](Nursing-Study-Suite%20v20.1.html).
+**Published release: v20.2.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v20.2/Nursing-Study-Suite.v20.2.html) or open the [repository HTML](Nursing-Study-Suite%20v20.2.html).
 
 The left rail lists the eight tools in the order you use them, grouped by stage. **Source:** *Knowledge Base* builds or imports the cited facts everything else reads from. **Plan:** *Priority* ranks those facts by clinical urgency into its own Tier 1/2/3. **Practice:** *Anki* for recall, *NCLEX Extract* for questions out of a review book you already own, *NCLEX Generate* for new ones written from your facts, *Case Studies* for unfolding cases, *NCLEX to Anki* to turn NCLEX questions into Anki cards, and *Import to Gizmo* to convert Anki decks into Gizmo.ai tab-separated flashcards.
 
@@ -79,17 +79,17 @@ Open **Settings** from the bottom of the left rail. The panel that slides in fro
 
 **Auto profile (recommended — the default).** Toggle showing **✋ Manual / Auto profile**. In Auto mode, each tool uses a tuned model + "thinking level" combination — fast models for bulk extraction, more thinking for rule-heavy work like priority synthesis. There's a **Reset to recommended** button if you experiment and want the defaults back. If you don't know what to pick: leave Auto on and never think about this again.
 
-**Manual.** Flip the toggle and you get one global switch — **⚡ Flash** or **🧠 Argon** — plus **Thinking Level** pills (low / medium / high). Every tool then uses whatever you set.
+**Manual.** Flip the toggle and you get one global switch — **⚡ Hydrogen** or **🧠 Argon** — plus **Thinking Level** pills (`low` / `medium` / `high` / `xhigh`, with `xhigh` enabled on Hydrogen). Every tool then uses whatever you set.
 
-**Flash vs. Argon, practically:**
+**Hydrogen vs. Argon, practically:**
 
-- **Flash** (`gemini-3.8-flash` by default) — fast, cheap, generous free-tier limits. It handles extraction, Anki cards, and Q&A parsing very well.
-- **Argon** (`gemini-4-argon` by default; it replaced 3.1 Pro in v17.13) — deeper reasoning, noticeably slower, paid-key tier. Auto uses it for Priority synthesis, NCLEX question generation, Case Studies and the item-quality audit; it is overkill for extraction. Argon defaults to **high** thinking here. Each Argon request has 65,536 output tokens, the same as Flash (32,768 before v18.2), and thinking counts against them. Argon costs roughly 2.7× Flash per token on a paid key.
-- **Thinking level** trades speed for care. "Low" is fine for most work; bump to "medium/high" when output quality matters more than waiting.
+- **Hydrogen** (`gemini-4-hydrogen` by default; replaced retiring `gemini-3.8-flash`) — Google's fast Gemini 4 workhorse with a 1M context window, 65,536 output ceiling, and `low` / `medium` / `high` / `xhigh` thinking levels. It handles extraction, card OCR, Anki cards, Gizmo conversion, and Q&A parsing rapidly and economically.
+- **Argon** (`gemini-4-argon` by default; it replaced 3.1 Pro in v17.13) — flagship deep reasoning (`low` / `medium` / `high`), noticeably slower, paid-key tier. Auto uses it for Priority synthesis, NCLEX question generation, Case Studies and the item-quality audit; it is overkill for per-chunk extraction. Argon defaults to **high** thinking here. Each Argon request has 65,536 output tokens, the same as Hydrogen (32,768 before v18.2), and thinking counts against them.
+- **Thinking level** trades speed for care. `low` and `medium` keep bulk passes snappy; bump to `high` (or `xhigh` on Hydrogen) when output depth matters more than waiting.
 
-The **Flash Model / Argon Model** text boxes exist so the suite doesn't go stale: when Google ships new model names, type them in — no update to the file needed. If your key rejects `gemini-4-argon`, type the ID Google lists for you. Settings saved before v17.13 carry over: your Pro thinking level becomes the Argon level, and any per-tool row set to Pro becomes Argon.
+The **Hydrogen model / Argon model** text boxes exist so the suite doesn't go stale: when Google ships new model names, type them in — no update to the file needed, and **Reset defaults** restores `gemini-4-hydrogen` and `gemini-4-argon`. Saved retired Flash defaults (`gemini-3.8-flash` and earlier) upgrade automatically to `gemini-4-hydrogen` on reload while keeping any custom model ID you typed.
 
-**Auto profile defaults.** Four rows now default to Argon: **Priority · synthesis** (medium), **NCLEX · generate** (high), **Case studies** (high) and **Item quality · audit** (high). Extraction, card reading, the Priority harvest, Anki and **NCLEX · extract** stay on Flash. Your browser keeps the profile rows it already saved, so click **Reset to recommended** once under **Customize per-tool profiles** to switch to the new defaults. On a free-tier key, set the Argon rows back to Flash. These defaults are reasoned choices and have not yet been measured on Argon.
+**Auto profile defaults.** Four rows default to Argon: **Priority · synthesis** (medium), **NCLEX · generate** (high), **Case studies** (high) and **Item quality · audit** (high). Extraction, card reading, the Priority harvest, Anki, **NCLEX · extract**, and **Import to Gizmo** stay on Hydrogen (`low` or `medium`). Your browser keeps custom profile rows it already saved, so click **Reset to recommended** once under **Customize per-tool profiles** if you want the shipped table back. On a free-tier key, set the Argon rows back to Hydrogen.
 
 ---
 

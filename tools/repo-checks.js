@@ -206,9 +206,9 @@ function parseMeasurementArgs(argv, kind) {
   number('width', 1, 100, true);
   number('retryms', 0, 600000, true);
   number('rpm', 0, 60000, false);
-  if (!['minimal', 'low', 'medium', 'high'].includes(config.level)) throw new Error('--level must be minimal, low, medium, or high');
+  if (!['minimal', 'low', 'medium', 'high', 'xhigh'].includes(config.level)) throw new Error('--level must be minimal, low, medium, high, or xhigh');
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(config.model)) throw new Error('Invalid model ID');
-  if (config.level === 'minimal' && /argon/i.test(config.model)) throw new Error('Argon does not accept --level minimal; use low, medium, or high');
+  if ((config.level === 'minimal' || config.level === 'xhigh') && /argon/i.test(config.model)) throw new Error('Argon does not accept --level ' + config.level + '; use low, medium, or high');
   if (config.dryRun && config.live) throw new Error('Choose --dry-run or --live, not both');
   if (config.appProfile && (seen.has('--model') || seen.has('--level'))) throw new Error('--app-profile cannot be combined with --model or --level');
   if (davis && !config.images.length && !config.help) throw new Error('Pass at least one image path');
