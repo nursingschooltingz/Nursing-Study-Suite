@@ -3,7 +3,7 @@
  * NEIA audit: manually authorized, quota-consuming Gemini test-retest measurement.
  * node neia-retest.js --dry-run [--app-profile] [--only sound-1,sound-2]
  * GEMINI_API_KEY=... node neia-retest.js --live [--runs 3] [--width 3]
- * Options: --runs 2..100, --width 1..100, --model ID, --level minimal|low|medium|high,
+ * Options: --runs 2..100, --width 1..100, --model ID, --level low|medium|high|xhigh,
  * --html <suite.html>, --app-profile, --only <id,id>, --out <report.json>,
  * --retryms 0..600000, --rpm 0..60000 (0 = unthrottled; fractional rates allowed).
  *
@@ -67,6 +67,7 @@ function prepareJobs(items, runs, audit) {
 function createAuditCaller(config, key, deps = {}) {
   const fetchFn = deps.fetch || globalThis.fetch;
   const sleep = deps.sleep || (ms => new Promise(resolve => setTimeout(resolve, ms)));
+  const rand = deps.random || Math.random;
   const now = deps.now || Date.now, pace = createMeasurementPacer(config.rpm, { now, sleep });
   return async function callOnce(prompt, observation) {
     if (!config.live || config.dryRun) throw new Error('Live audit requires --live and per-run human authorization');
@@ -82,7 +83,8 @@ function createAuditCaller(config, key, deps = {}) {
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body: JSON.stringify(body) });
       if (resp.ok) break;
       if ((resp.status !== 429 && resp.status < 500) || attempt === 3) throw new Error('HTTP ' + resp.status);
-      await sleep(config.retryms * Math.pow(2, attempt));
+      const jitter = config.retryms > 0 ? Math.floor(rand() * Math.min(1000, config.retryms)) : 0;
+      await sleep(config.retryms * Math.pow(2, attempt) + jitter);
     }
     const response = await resp.json(), candidate = (response.candidates || [])[0] || {};
     observation.finishReason = candidate.finishReason || '';

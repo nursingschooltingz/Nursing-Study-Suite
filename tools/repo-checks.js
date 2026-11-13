@@ -167,7 +167,7 @@ function measurementOutputCap(model) {
 function parseMeasurementArgs(argv, kind) {
   if (!['davis', 'neia'].includes(kind)) throw new Error('Unknown measurement tool: ' + kind);
   const davis = kind === 'davis';
-  const config = { runs: davis ? 2 : 3, model: davis ? 'gemini-3.7-flash' : 'gemini-4-argon',
+  const config = { runs: davis ? 2 : 3, model: davis ? 'gemini-4-hydrogen' : 'gemini-4-argon',
     level: davis ? 'low' : 'high', width: davis ? 1 : 3, retryms: 20000, rpm: davis ? 15 : 0,
     out: davis ? 'davis-transcribe-report.json' : 'neia-retest-report.json',
     suite: '', only: [], images: [], dryRun: false, live: false, appProfile: false, help: false };
@@ -206,9 +206,10 @@ function parseMeasurementArgs(argv, kind) {
   number('width', 1, 100, true);
   number('retryms', 0, 600000, true);
   number('rpm', 0, 60000, false);
-  if (!['minimal', 'low', 'medium', 'high', 'xhigh'].includes(config.level)) throw new Error('--level must be minimal, low, medium, high, or xhigh');
+  if (!['low', 'medium', 'high', 'xhigh'].includes(config.level)) throw new Error('--level must be low, medium, high, or xhigh');
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(config.model)) throw new Error('Invalid model ID');
-  if ((config.level === 'minimal' || config.level === 'xhigh') && /argon/i.test(config.model)) throw new Error('Argon does not accept --level ' + config.level + '; use low, medium, or high');
+  if (config.level === 'xhigh' && /argon/i.test(config.model)) throw new Error('Argon does not accept --level xhigh; use low, medium, or high');
+  if (config.level === 'xhigh' && !/hydrogen/i.test(config.model)) config.level = 'high';
   if (config.dryRun && config.live) throw new Error('Choose --dry-run or --live, not both');
   if (config.appProfile && (seen.has('--model') || seen.has('--level'))) throw new Error('--app-profile cannot be combined with --model or --level');
   if (davis && !config.images.length && !config.help) throw new Error('Pass at least one image path');
@@ -231,7 +232,7 @@ function resolveMeasurementProfile(config, source, tool) {
   if (!['cardTranscribe', 'itemAudit'].includes(tool)) throw new Error('Unknown app profile: ' + tool);
   const profiles = source.match(/const TOOL_PROFILE_DEFAULTS=\{([\s\S]*?)\n\};/);
   if (!profiles) throw new Error('App profile registry anchor missing');
-  const row = profiles[1].match(new RegExp('\\b' + tool + ":\\{m:'(flash|argon)',lv:'([^']+)'\\}"));
+  const row = profiles[1].match(new RegExp('\\b' + tool + ":\\{m:'(hydrogen|argon)',lv:'([^']+)'\\}"));
   if (!row) throw new Error('App profile row missing: ' + tool);
   const family = row[1];
   // v17.3: the shipped defaults live in MODEL_SETTINGS_DEFAULTS; the App hydrates its state from saved settings.

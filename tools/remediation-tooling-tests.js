@@ -51,12 +51,12 @@ async function runTests({ source, test = (name, value) => assert.ok(value, name)
   t('Davis requires at least one image', throws(() => davis.parseArgs(['--dry-run']), /at least one image/));
   t('NEIA rejects positional input', throws(() => neia.parseArgs(['foo.png']), /Unexpected input/));
   t('NEIA rejects empty only selection', throws(() => neia.parseArgs(['--only', ',']), /at least one item ID/));
-  t('Historical Davis baseline remains Flash 3.7 low', parseD([]).model === 'gemini-3.7-flash' && parseD([]).level === 'low' && parseD([]).rpm === 15);
+  t('Davis baseline is Hydrogen low', parseD([]).model === 'gemini-4-hydrogen' && parseD([]).level === 'low' && parseD([]).rpm === 15);
   t('NEIA baseline is Argon high since v17.13', neia.parseArgs([]).model === 'gemini-4-argon' && neia.parseArgs([]).level === 'high' && neia.parseArgs([]).width === 3);
-  t('Argon measurement refuses minimal and xhigh levels while Hydrogen accepts xhigh', throws(() => neia.parseArgs(['--level', 'minimal']), /Argon does not accept/) && throws(() => neia.parseArgs(['--level', 'xhigh']), /Argon does not accept/) && neia.parseArgs(['--model', 'gemini-3.8-flash', '--level', 'minimal']).level === 'minimal' && neia.parseArgs(['--model', 'gemini-4-hydrogen', '--level', 'xhigh']).level === 'xhigh');
+  t('Measurement refuses minimal and Argon xhigh while Hydrogen accepts xhigh', throws(() => neia.parseArgs(['--level', 'minimal']), /--level must be low, medium, high, or xhigh/) && throws(() => parseD(['--level', 'minimal']), /--level must be low, medium, high, or xhigh/) && throws(() => neia.parseArgs(['--level', 'xhigh']), /Argon does not accept/) && neia.parseArgs(['--model', 'gemini-4-hydrogen', '--level', 'xhigh']).level === 'xhigh');
   const plan = checks.measurementPlan(parseD(['--runs', '3']), 2, { model: 'gemini-test', level: 'low', profile: 'synthetic' });
   t('Plan separates logical operations and retry ceiling', plan.logicalOperations === 6 && plan.maximumAttempts === 24 && plan.maxAttemptsPerOperation === 4 && plan.maxOutputTokens === 65536);
-  t('Plan uses the same per-model output ceiling as the suite', checks.measurementPlan(parseD([]), 1, { model: 'gemini-4-argon', level: 'high', profile: 'synthetic' }).maxOutputTokens === 65536 && checks.measurementOutputCap('gemini-4-argon') === 65536 && checks.measurementOutputCap('gemini-3.7-flash') === 65536); // v18.2: Argon is 65,536
+  t('Plan uses the same per-model output ceiling as the suite', checks.measurementPlan(parseD([]), 1, { model: 'gemini-4-argon', level: 'high', profile: 'synthetic' }).maxOutputTokens === 65536 && checks.measurementOutputCap('gemini-4-argon') === 65536 && checks.measurementOutputCap('gemini-4-hydrogen') === 65536); // v18.2: Argon is 65,536
   t('Plan rejects zero selected inputs', throws(() => checks.measurementPlan(parseD([]), 0, {}), /No measurement inputs/));
 
   const transcript = { face: 'front', category: 'Synthetic', cardNumber: '1', overallLegibility: 'clean',
@@ -153,12 +153,12 @@ async function runTests({ source, test = (name, value) => assert.ok(value, name)
   if (typeof source !== 'string') throw new Error('Tooling regressions require the live suite source');
   const profileD = checks.resolveMeasurementProfile(parseD(['--app-profile']), source, 'cardTranscribe');
   const profileN = checks.resolveMeasurementProfile(neia.parseArgs(['--app-profile']), source, 'itemAudit');
-  // v17.14: card OCR ships on Flash and the item audit on Argon, so the two app profiles resolve to different shipped models.
-  t('App-matching profiles use each row\'s shipped model and tool level', profileD.family === 'flash' && profileN.family === 'argon' &&
-    source.includes("flashModel:'" + profileD.model + "'") && source.includes("argonModel:'" + profileN.model + "'") && profileD.level === 'low' && profileN.level === 'high');
-  const flashSource = source.replace(/itemAudit:\{m:'argon',lv:'high'\}/, "itemAudit:{m:'flash',lv:'high'}");
-  const profileFlash = checks.resolveMeasurementProfile(neia.parseArgs(['--app-profile']), flashSource, 'itemAudit');
-  t('A Flash profile row resolves to the shipped Flash default', flashSource !== source && profileFlash.family === 'flash' && profileFlash.model === profileD.model && profileFlash.level === 'high');
+  // v17.14 + v20.2: card OCR ships on Hydrogen and the item audit on Argon, so the two app profiles resolve to different shipped models.
+  t('App-matching profiles use each row\'s shipped model and tool level', profileD.family === 'hydrogen' && profileN.family === 'argon' &&
+    source.includes("hydrogenModel:'" + profileD.model + "'") && source.includes("argonModel:'" + profileN.model + "'") && profileD.level === 'low' && profileN.level === 'high');
+  const hydrogenSource = source.replace(/itemAudit:\{m:'argon',lv:'high'\}/, "itemAudit:{m:'hydrogen',lv:'high'}");
+  const profileHydrogen = checks.resolveMeasurementProfile(neia.parseArgs(['--app-profile']), hydrogenSource, 'itemAudit');
+  t('A Hydrogen profile row resolves to the shipped Hydrogen default', hydrogenSource !== source && profileHydrogen.family === 'hydrogen' && profileHydrogen.model === profileD.model && profileHydrogen.level === 'high');
   t('Missing app registry fails explicitly', throws(() => checks.resolveMeasurementProfile(parseD(['--app-profile']), '', 'cardTranscribe'), /App profile registry anchor missing/));
   const liveAudit = neia.extractAudit(source);
   t('Audit extraction includes non-vacuous tail behavior', liveAudit.itemAuditSummary([{ status: 'PASS', warns: [] }]).pass === 1);

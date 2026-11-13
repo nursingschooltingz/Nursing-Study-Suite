@@ -96,12 +96,12 @@ async function settings(page,directory,width){
   // v17.3: typing a model name used to re-run the drawer's entry-focus effect on every App
   // re-render and move the caret into the API key field after each character. Use the real
   // keyboard path, then restore the field so later scenarios see the fixture's model name.
-  const flash=page.getByLabel('Hydrogen model',{exact:true}),originalModel=await flash.inputValue(),originalKey=await page.getByLabel('Gemini API key',{exact:true}).inputValue();
-  await flash.click();await page.keyboard.type('xyz');
-  assert(await flash.evaluate(node=>node===document.activeElement),'typing a model name keeps focus in the model field');
-  assert.equal(await flash.inputValue(),originalModel+'xyz','every typed character reaches the model field');
+  const hydrogen=page.getByLabel('Hydrogen model',{exact:true}),originalModel=await hydrogen.inputValue(),originalKey=await page.getByLabel('Gemini API key',{exact:true}).inputValue();
+  await hydrogen.click();await page.keyboard.type('xyz');
+  assert(await hydrogen.evaluate(node=>node===document.activeElement),'typing a model name keeps focus in the model field');
+  assert.equal(await hydrogen.inputValue(),originalModel+'xyz','every typed character reaches the model field');
   assert.equal(await page.getByLabel('Gemini API key',{exact:true}).inputValue(),originalKey,'no typed character leaks into the API key field');
-  await flash.fill(originalModel);
+  await hydrogen.fill(originalModel);
   await layout(page,width+'px settings');await capture(page,directory,width+'-settings');
   await page.getByRole('button',{name:'Close study settings',exact:true}).click();
   assert.equal(await trigger.getAttribute('aria-expanded'),'false','settings close state is announced');

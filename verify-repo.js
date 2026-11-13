@@ -93,18 +93,21 @@ function bootSmoke(code, source) {
   const babelStart = source.indexOf('<script type="text/babel"');
   const headSource = babelStart >= 0 ? source.slice(0, babelStart) : source;
   const inline = [...headSource.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
-  if (inline.length < 2) throw new Error('Expected the boot and DOMPurify head scripts; found ' + inline.length + ' plain <script> blocks');
+  if (inline.length < 3) throw new Error('Expected the boot, DOMPurify, and core plain <script> blocks; found ' + inline.length + ' plain <script> blocks');
   inline.forEach((body, i) => new vm.Script(body, { filename: 'head-script-' + (i + 1) + '.js' }));
   const noop = () => {};
   const R = new Proxy({}, { get: (_, k) => k === 'createContext' ? () => ({ Provider: 'P' })
     : k === 'memo' || k === 'forwardRef' ? f => f : k === 'Component' ? class {} : k === 'Fragment' ? 'F' : () => [undefined, noop] });
-  const g = { React: R, ReactDOM: { createRoot: () => ({ render: noop }) }, document: { getElementById: () => ({}), addEventListener: noop },
-    addEventListener: noop, removeEventListener: noop, localStorage: { getItem: () => null, setItem: noop }, sessionStorage: { getItem: () => null, setItem: noop },
-    fetch: () => { throw new Error('no network in verify'); }, pdfjsLib: { GlobalWorkerOptions: {}, OPS: {} }, JSZip: function () {}, marked: { parse: x => x, use: noop },
-    DOMPurify: { sanitize: x => x, addHook: noop }, console, setTimeout, clearTimeout, TextEncoder, TextDecoder, URL, Blob, AbortController, DOMException,
+  const g = { Babel: {}, React: R, ReactDOM: { createRoot: () => ({ render: noop }) }, document: { getElementById: () => ({}), addEventListener: noop, write: noop },
+    addEventListener: noop, removeEventListener: noop, stop: noop, localStorage: { getItem: () => null, setItem: noop }, sessionStorage: { getItem: () => null, setItem: noop, removeItem: noop },
+    fetch: () => { throw new Error('no network in verify'); }, pdfjsLib: { GlobalWorkerOptions: {}, OPS: {}, getDocument: () => ({ promise: new Promise(noop), destroy: noop }) }, JSZip: function () {}, marked: { parse: x => x, use: noop },
+    DOMPurify: { sanitize: x => x, addHook: noop }, console, setTimeout: () => 0, clearTimeout: noop, TextEncoder, TextDecoder, URL, Blob, AbortController, DOMException,
     crypto: globalThis.crypto, indexedDB: { open: () => ({}) } };
   g.window = g;
-  vm.runInNewContext(code, g, { filename: 'suite-babel-block.js', timeout: 10000 });
+  const ctx = vm.createContext(g);
+  inline.forEach((body, i) => vm.runInContext(body, ctx, { filename: 'head-script-' + (i + 1) + '.js', timeout: 10000 }));
+  vm.runInContext(code, ctx, { filename: 'suite-babel-block.js', timeout: 10000 });
+  if (g.__latteMounted !== true) throw new Error('App failed to mount cleanly in bootSmoke');
 }
 
 function runHarness(suiteFile, babelFile) {

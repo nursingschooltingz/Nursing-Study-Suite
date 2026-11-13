@@ -37,7 +37,7 @@ module.exports = function runGizmoImportTests(S, t) {
   const toolComponents = S.match(/const TOOL_COMPONENTS=\{([^}]*)\}/);
   t('Import to Gizmo is registered in TOOLS, TOOL_PROFILE_DEFAULTS, PROFILE_ROWS, and memoized TOOL_COMPONENTS',
     toolsBlock.includes("{id:'gizmo',stage:'practice',label:'Import to Gizmo',step:'Send cards to Gizmo',title:'Import to Gizmo',") &&
-    profileDefaults.includes("gizmo:{m:'flash',lv:'low'}") &&
+    profileDefaults.includes("gizmo:{m:'hydrogen',lv:'low'}") &&
     profileRows.includes("{id:'gizmo',label:'Import to Gizmo'}") &&
     !!toolComponents && toolComponents[1].includes('gizmo:React.memo(GizmoImporter)'));
 

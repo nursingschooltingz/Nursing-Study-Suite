@@ -12,7 +12,17 @@
      policy and uses only its own inline style block and system fonts. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com">
 <title>LATTE Study Suite</title>
-<!-- v20.2 (2026-11-12): Gemini 4 Hydrogen default model, xhigh thinking level, and Gemini 4 transport guards
+<!-- v20.3 (2026-11-12): Complete Hydrogen identifier cutover and Production-Readiness Remediation (Phases 1–10).
+     Completes removal of legacy fast-slot identifiers across state, storage schema v2, Auto profiles (m: 'hydrogen'),
+     Anki Source Checker, NCLEX to Anki, and CLI tools; hardens DOMPurify CSS property allowlisting, Markdown href scheme
+     filtering, print-popup sessionStorage isolation + opener click binding, and PDF.js isEvalSupported:false; adds API-key
+     error redaction, retry jitter, SSE streaming keep-alives, and systemInstruction / static-first prompt prefix caching;
+     splits core ES2020 utilities into a native plain script block and lazy-mounts unvisited tabs until first visit; fixes
+     IndexedDB open watchdog/blocked handling, recovery archive quota fallback, standalone entity bucket coercion + dedup,
+     deterministic Case Packet commits + artifactRegistry pruning, persisted-Point inheritance + batchCaps routing in
+     NCLEXGenerator, bloated-exemplar concept auditing, O(1) nclexAccumulate indexing, and binary/PPTX intake ceilings.
+     All 11 frozen prompt constants unchanged.
+     v20.2 (2026-11-12): Gemini 4 Hydrogen default model, xhigh thinking level, and Gemini 4 transport guards
      (MODEL_SETTINGS_DEFAULTS, THINKING_LEVELS, LEGACY_FLASH_DEFAULTS, loadModelSettings, geminiIsHydrogen,
      geminiGenerationConfig, geminiRequest, ConfigSidebar). Upgrades the fast-slot default from retiring
      gemini-3.8-flash to gemini-4-hydrogen (auto-migrating saved 3.5-3.8 Flash defaults in localStorage while keeping
@@ -257,7 +267,7 @@
      v15.10 is measurement, not behavior. quoteMiss was a bare count, which could not answer the question the v16 build decision turns on: whether a failed quote is line-break hyphenation (fixable by normalizing the matcher, no vision needed) or column-major reading-order scrambling (which only seeing the page fixes). Misses are now retained and classified, kbTextQuality names which pages are sparse, an opt-in probe counts raster/vector/text ops per page, and the diagnostics panel exports to JSON. kbQuoteInSource is byte-identical: no fact's fate changed.
      v15.11 acts on what v15.10 measured. A real cardiovascular chapter produced 190 failed quotes: 83 line-break hyphenation/ligature, 107 column reading order, and zero 'partial' or 'absent' — not one fabricated quote in the run. De-hyphenation is therefore promoted into kbQuoteInSource as a strictly additive fallback (plain match first; the fallback can only turn a FAIL into a PASS), recovering the 83 without loosening anything. Reading-order failures are left alone by design: the fact is sound, only its proof fails. The same run exposed a reporting bug — pass-1 misses and pass-2 discards shared one rollup printed beneath the first-pass count, so a breakdown summing to 190 sat under a sentence saying 182. They now roll up separately.
      v15.12 adds flashcard ingestion. Photographs of printed cards have no text layer at all, so they take a two-pass path: pass 1 transcribes the image to structured verbatim text, pass 2 is the EXISTING frozen extractor reading that text. Because pass 2 reads text, kbQuoteInSource verifies its quotes with no new machinery — which is why none of the v16 spec's evidence states, routers or visual safety gates were needed. The transcript is therefore the trust boundary: a number misread in pass 1 is verified flawlessly against the wrong transcript by everything downstream, so transcripts are reviewed before use and every clinical number is surfaced for an eye check. Front and back pair on category + card number, because a Davis back face carries no condition name.
-     Release history: CHANGELOG.md · decisions: DECISIONS.md · regression harness: latte-tests.js (1,372 assertions) · test-retest: neia-retest.js -->
+     Release history: CHANGELOG.md · decisions: DECISIONS.md · regression harness: latte-tests.js (enforced by verify-repo.js) · test-retest: neia-retest.js -->
 <!-- v15.3: crossorigin added (SRI-ready — paste the verified sha384 integrity attrs from
      the changelog after a local hash check; applying unverified hashes would hard-block
      every script). DOMPurify 3.4.16 loads through a no-downgrade chain: cdnjs, then the
@@ -905,43 +915,44 @@ input[aria-invalid="true"],textarea[aria-invalid="true"],select[aria-invalid="tr
 })();
 </script>
 <!-- v18.0 (review M1): data-presets="react" stops @babel/standalone from also running preset-env, which compiled
-     the app to ES5 with regenerator on every load (about 4 s) and ran code the verifier never tested. -->
-<script type="text/babel" data-presets="react">
+     the app to ES5 with regenerator on every load (about 4 s) and ran code the verifier never tested.
+     v20.2: plain ES2020 core utilities, transport, PDF/PPTX intake, and print/export run natively in V8 before the JSX block. -->
+<script>
 const {useState,useRef,useCallback,useEffect,useMemo,createContext,useContext}=React;
 
 // ── Recommended per-tool profiles (Auto mode) ──
 // Starting points synthesized from the model-routing discussion, NOT measured results.
-// 'flash'/'argon' resolve against whatever is typed in the Flash/Argon model fields, so
+// 'hydrogen'/'argon' resolve against whatever is typed in the Hydrogen/Argon model fields, so
 // these stay correct when model names change. Every value is user-editable.
 const TOOL_PROFILE_DEFAULTS={
-  knowledge:{m:'flash',lv:'medium'},      // extraction — completeness-critical; pending A/B
-  knowledgeAudit:{m:'flash',lv:'medium'}, // omission audit — comparison task
+  knowledge:{m:'hydrogen',lv:'medium'},      // extraction — completeness-critical; pending A/B
+  knowledgeAudit:{m:'hydrogen',lv:'medium'}, // omission audit — comparison task
   // v15.12: reading printed text off a photograph is transcription, not reasoning. Low
-  // thinking, and Flash — the constraint is legibility, which more deliberation does not
+  // thinking, and Hydrogen — the constraint is legibility, which more deliberation does not
   // improve. Raise it only if measured output drifts between identical runs.
-  cardTranscribe:{m:'flash',lv:'low'},    // flashcard photo -> verbatim transcript
-  priorityHarvest:{m:'flash',lv:'low'},   // stage-1 inventory — same default v14 hardcoded
+  cardTranscribe:{m:'hydrogen',lv:'low'},    // flashcard photo -> verbatim transcript
+  priorityHarvest:{m:'hydrogen',lv:'low'},   // stage-1 inventory — same default v14 hardcoded
   // v17.14: the R1–R9 cascade is the reasoning-heavy half of Priority, so it moved to Argon; its parts are already half
   // size there (paSynthPartChars). Medium, not high: the v17.7 run spent 62,914 tokens thinking in one request, and
-  // Argon's whole budget is 32,768. The harvest above stays on Flash: it is a bulk sweep over many chunks.
-  // v18.2: Argon's ceiling is now 65,536 and its parts are full size, as on Flash. Medium stays until measured.
-  priority:{m:'argon',lv:'medium'},       // stage-2 R1–R9 cascade, needs rule evaluation
+  // Argon's whole budget is 32,768. The harvest above stays on Hydrogen: it is a bulk sweep over many chunks.
+  // v18.2: Argon's ceiling is now 65,536 and its parts are full size, as on Hydrogen. Medium stays until measured.
+  priority:{m:'argon',lv:'medium'},          // stage-2 R1–R9 cascade, needs rule evaluation
   // v16.2: paired exports showed fewer shared-index gap bundles with Medium; saved overrides still win.
-  anki:{m:'flash',lv:'medium'},           // recommended Anki Auto profile
-  nclex:{m:'flash',lv:'medium'},          // parsing existing Q&A out of messy PDF text
-  // v19.2: upgraded from Flash · high to Argon · high on paid keys — SATA/Ordering/Calculation skip the MCQ-only NEIA audit,
+  anki:{m:'hydrogen',lv:'medium'},           // recommended Anki Auto profile
+  nclex:{m:'hydrogen',lv:'medium'},          // parsing existing Q&A out of messy PDF text
+  // v19.2: upgraded from high fast-slot to Argon · high on paid keys — SATA/Ordering/Calculation skip the MCQ-only NEIA audit,
   // and MCQ answer-accuracy FAILs are never auto-repaired, so multi-cue stem and distractor synthesis belongs on Argon.
-  nclexgen:{m:'argon',lv:'high'},         // distractor plausibility + multi-cue synthesis
+  nclexgen:{m:'argon',lv:'high'},            // distractor plausibility + multi-cue synthesis
   // v17.14: one request per case, the most reasoning-heavy task, and bounded output (at most 5 stages x 4 questions),
   // so it is the safest place for Argon at high within its 32,768-token ceiling.
   // v18.2: that ceiling is now 65,536 (geminiOutputCap), so a high-thinking case has twice the room.
-  cases:{m:'argon',lv:'high'},            // unfolding clinical reasoning + strict grounding
+  cases:{m:'argon',lv:'high'},               // unfolding clinical reasoning + strict grounding
   // v15.6: applying a rubric to a rendered artifact is a JUDGMENT task, not a grounded
   // extraction task, so high reasoning is appropriate here and specifically NOT in the
   // ingestion stages — this does not contradict the earlier finding that high thinking
   // degrades grounded summarization. Both top-performing raters in the June study were
   // reasoning-enhanced configurations.
-  // v15.7: defaulted to FLASH, not the second slot (then 3.1 Pro).
+  // v15.7: originally defaulted to the first slot (now Hydrogen), not the second slot (then 3.1 Pro).
   // That was a COST decision, not a quality one: the audit runs once per MCQ, and a real
   // free-tier key exhausted its 3.1 Pro allowance after ~26 calls.
   // v17.14: the shipped default is now Argon at high. The cost reason assumed a free-tier key;
@@ -949,10 +960,10 @@ const TOOL_PROFILE_DEFAULTS={
   // (2026-08-20: ten fixture items, three runs, zero verdict flips) was 3.1 Pro at high, which
   // Argon replaced. Each call judges one rendered item, so output stays far below Argon's
   // 32,768-token ceiling (65,536 since v18.2). Not yet measured on Argon. On a free-tier key, switch this row back
-  // to Flash in the per-tool profiles; nothing else needs to change.
-  itemAudit:{m:'argon',lv:'high'},       // NEIA item-quality review of a rendered item
-  // v19.2: Anki-to-Gizmo chunk formatting is strict verbatim cleaning (no clinical synthesis), so Flash · low avoids over-thinking rewrites and minimizes cost across multi-chunk decks.
-  gizmo:{m:'flash',lv:'low'},            // Anki -> Gizmo verbatim tab-separated chunk formatter
+  // to Hydrogen in the per-tool profiles; nothing else needs to change.
+  itemAudit:{m:'argon',lv:'high'},           // NEIA item-quality review of a rendered item
+  // v19.2: Anki-to-Gizmo chunk formatting is strict verbatim cleaning (no clinical synthesis), so Hydrogen · low avoids over-thinking rewrites and minimizes cost across multi-chunk decks.
+  gizmo:{m:'hydrogen',lv:'low'},             // Anki -> Gizmo verbatim tab-separated chunk formatter
 };
 const PROFILE_ROWS=[
   {id:'knowledge',label:'Knowledge · extract'},
@@ -981,26 +992,31 @@ const PROFILE_ROWS=[
 const MODEL_SETTINGS_KEY='latte_model_settings_v1';
 // v17.13: the second slot is Argon, not Pro. Argon's own default thinking level is medium; the suite keeps sending
 // high explicitly, as it did for Pro, so switching models does not silently reduce reasoning.
-// v20.2: the fast slot ships on Gemini 4 Hydrogen (replacing retiring gemini-3.8-flash), and THINKING_LEVELS adds xhigh.
-const MODEL_SETTINGS_DEFAULTS=Object.freeze({flashModel:'gemini-4-hydrogen',argonModel:'gemini-4-argon',thinkingMode:false,flashLevel:'low',argonLevel:'high'});
+// v20.2: the first slot ships on Gemini 4 Hydrogen (hydrogenModel / hydrogenLevel), and THINKING_LEVELS adds xhigh.
+const MODEL_SETTINGS_SCHEMA_VERSION=2;
+const MODEL_SETTINGS_DEFAULTS=Object.freeze({hydrogenModel:'gemini-4-hydrogen',argonModel:'gemini-4-argon',thinkingMode:false,hydrogenLevel:'low',argonLevel:'high'});
 const THINKING_LEVELS=Object.freeze(['low','medium','high','xhigh']);
 const MODEL_ID_RE=/^[A-Za-z0-9][A-Za-z0-9._-]*$/;
-const LEGACY_FLASH_DEFAULTS=Object.freeze(['gemini-3.8-flash','gemini-3.7-flash','gemini-3.6-flash','gemini-3.5-flash']);
 function loadModelSettings(storage,defaults=MODEL_SETTINGS_DEFAULTS){
   const out={...defaults};let saved=null;
   try{saved=JSON.parse(storage.getItem(MODEL_SETTINGS_KEY)||'null');}catch(e){saved=null;}
   if(!saved||typeof saved!=='object'||Array.isArray(saved))return out;
-  for(const key of ['flashModel','argonModel'])if(typeof saved[key]==='string'&&MODEL_ID_RE.test(saved[key]))out[key]=saved[key];
-  // v20.2: App writes MODEL_SETTINGS_KEY on every mount, so existing browsers carry the retired default 'gemini-3.8-flash'.
-  // Auto-upgrade retired Flash defaults to defaults.flashModel ('gemini-4-hydrogen') while preserving any custom model ID.
-  if(LEGACY_FLASH_DEFAULTS.includes(out.flashModel))out.flashModel=defaults.flashModel;
+  // v20.2: gate legacy slot shims behind MODEL_SETTINGS_SCHEMA_VERSION so explicit user model overrides survive reloads untouched.
+  const needsMigration=(Number(saved.schemaVersion)||0)<MODEL_SETTINGS_SCHEMA_VERSION;
+  // v20.2: hydrogenModel and hydrogenLevel own the first slot; earlier saves without those keys fall back to defaults.
+  for(const key of ['hydrogenModel','argonModel'])if(typeof saved[key]==='string'&&MODEL_ID_RE.test(saved[key]))out[key]=saved[key];
   // v17.13: a pre-v17.13 save has proModel/proLevel. The saved Pro model ID names a Pro model, so it is not carried into
   // the Argon slot; the saved Pro thinking level was the user's explicit choice for that slot, so it is. Keep this shim.
-  if(!THINKING_LEVELS.includes(saved.argonLevel)&&THINKING_LEVELS.includes(saved.proLevel))out.argonLevel=saved.proLevel;
-  for(const key of ['flashLevel','argonLevel'])if(THINKING_LEVELS.includes(saved[key]))out[key]=saved[key];
+  if(needsMigration&&!THINKING_LEVELS.includes(saved.argonLevel)&&THINKING_LEVELS.includes(saved.proLevel))out.argonLevel=saved.proLevel;
+  for(const key of ['hydrogenLevel','argonLevel'])if(THINKING_LEVELS.includes(saved[key]))out[key]=saved[key];
   if(out.argonLevel==='xhigh')out.argonLevel='high'; // v20.2: Argon supports low/medium/high only
   if(typeof saved.thinkingMode==='boolean')out.thinkingMode=saved.thinkingMode;
   return out;
+}
+function saveModelSettings(storage,settings){
+  if(!storage||typeof storage.setItem!=='function')return;
+  const clean=loadModelSettings({getItem:()=>JSON.stringify(settings)});
+  storage.setItem(MODEL_SETTINGS_KEY,JSON.stringify({...clean,schemaVersion:MODEL_SETTINGS_SCHEMA_VERSION}));
 }
 
 const ConfigCtx=createContext();
@@ -1079,12 +1095,42 @@ const STUDY_OUTPUT_POLICY=Object.freeze({
   ALLOWED_ATTR:['href','title','colspan','rowspan','scope','start','class'],
   ALLOW_DATA_ATTR:false,ALLOW_ARIA_ATTR:false,RETURN_DOM_FRAGMENT:true,
 });
+// v20.2: restrict inline style declarations on sanitized Anki card previews (N2A_CARD_POLICY) to safe typography properties
+// so model-authored or imported HTML cannot inject position:fixed/z-index UI-redressing overlays or CSS url() fetches.
+const N2A_SAFE_STYLE_PROP=/^(?:text-align|margin(?:-top|-bottom)?|padding(?:-top|-bottom)?|font-size|font-weight|font-style|line-height|color|opacity)$/i;
+const N2A_SAFE_STYLE_VAL=/^[#a-zA-Z0-9.,% \t-]+$/;
+function n2aSanitizeStyle(raw){
+  return String(raw||'').split(';').map(decl=>{
+    const idx=decl.indexOf(':');if(idx<=0)return '';
+    const prop=decl.slice(0,idx).trim().toLowerCase(),val=decl.slice(idx+1).trim();
+    if(!N2A_SAFE_STYLE_PROP.test(prop)||!val||!N2A_SAFE_STYLE_VAL.test(val)||/\b(?:url|expression|javascript|import)\b/i.test(val))return '';
+    return prop+':'+val;
+  }).filter(Boolean).join(';');
+}
+let _n2aStyleHookInstalled=false;
+function ensureDomPurifyHooks(){
+  if(_n2aStyleHookInstalled||typeof DOMPurify==='undefined'||typeof DOMPurify?.addHook!=='function')return;
+  _n2aStyleHookInstalled=true;
+  DOMPurify.addHook('uponSanitizeAttribute',(_node,data)=>{
+    if(data&&data.attrName==='style'){
+      const clean=n2aSanitizeStyle(data.attrValue);
+      if(clean)data.attrValue=clean;else data.keepAttr=false;
+    }
+  });
+}
+ensureDomPurifyHooks();
 function mdToSafeHtml(md){
   if(!DOMPurify||!DOMPurify.isSupported)throw new Error('The required HTML sanitizer is unavailable.');
+  ensureDomPurifyHooks();
   const fragment=DOMPurify.sanitize(marked.parse(md||''),STUDY_OUTPUT_POLICY);
   for(const node of fragment.querySelectorAll('[class]')){
     if(node.tagName==='DIV'&&node.classList.contains('pagebreak'))node.setAttribute('class','pagebreak');
     else node.removeAttribute('class');
+  }
+  // v20.2: allow only explicit https?:// or fragment (#) hrefs on rendered study links, stripping file:// or custom URI schemes.
+  for(const anchor of fragment.querySelectorAll('a[href]')){
+    const href=String((typeof anchor.getAttribute==='function'?anchor.getAttribute('href'):anchor.attrs?.href)||'').trim();
+    if(!/^(?:https?:\/\/|#)/i.test(href)){if(typeof anchor.removeAttribute==='function')anchor.removeAttribute('href');else if(anchor.attrs)delete anchor.attrs.href;}
   }
   // v17.3: a model-written link rendered as a live same-tab anchor, and one click replaced the
   // app with every unsaved artifact. Links open in a new tab with no opener; DOMPurify already
@@ -1138,8 +1184,13 @@ function _pptxAssertXml(doc){
   if(doc&&typeof doc.getElementsByTagName==='function'&&doc.getElementsByTagName('parsererror').length)throw new Error('PPTX contains malformed XML. Repair the deck or convert it to PDF.');
   return doc;
 }
+function _pptxParseXml(xml){
+  // v20.2: reject XML DTD/ENTITY declarations ("Billion Laughs" internal entity bombs) before DOMParser expands entities in memory.
+  if(/<!\s*(?:DOCTYPE|ENTITY)\b/i.test(String(xml||'')))throw new Error('PPTX XML contains a disallowed DOCTYPE or ENTITY declaration. Convert the deck to PDF.');
+  return _pptxAssertXml(new DOMParser().parseFromString(xml,'application/xml'));
+}
 function _pptxRunText(xml,maxChars=PPTX_LIMITS.textChars) {
-  const doc = _pptxAssertXml(new DOMParser().parseFromString(xml, 'application/xml'));
+  const doc = _pptxParseXml(xml);
   let runs = doc.getElementsByTagNameNS(_OOXML_A_NS, 't');
   if (!runs || !runs.length) runs = doc.getElementsByTagName('a:t');
   const out = [];let chars=0;
@@ -1172,7 +1223,7 @@ function _xmlElementsByLocalName(doc,name){
   return Array.from(doc.getElementsByTagName('*')).filter(el=>el.localName===name||el.nodeName.split(':').pop()===name);
 }
 function _relsMap(xml){
-  const doc=_pptxAssertXml(new DOMParser().parseFromString(xml,'application/xml'));const map=new Map();
+  const doc=_pptxParseXml(xml);const map=new Map();
   for(const rel of _xmlElementsByLocalName(doc,'Relationship'))map.set(rel.getAttribute('Id'),{target:rel.getAttribute('Target')||'',type:rel.getAttribute('Type')||''});
   return map;
 }
@@ -1215,28 +1266,49 @@ function pptxReadXml(entry,budget,signal){
     if(signal?.aborted)abort();else stream.resume();
   });
 }
+function _pptxZipEocdEntries(bytes){
+  // v20.2: inspect the ZIP End-of-Central-Directory (EOCD) entry count in the file tail before JSZip.loadAsync allocates objects for central-directory floods.
+  if(!(bytes instanceof Uint8Array)||bytes.length<22)return 0;
+  for(let pos=bytes.length-22;pos>=0;pos--){
+    if(bytes[pos]===0x50&&bytes[pos+1]===0x4b&&bytes[pos+2]===0x05&&bytes[pos+3]===0x06){
+      const commentLen=bytes[pos+20]|(bytes[pos+21]<<8);
+      if(pos+22+commentLen===bytes.length)return bytes[pos+10]|(bytes[pos+11]<<8);
+    }
+  }
+  return 0;
+}
 async function extractPptxText(file,{signal}={}) {
   pptxCheckAbort(signal);
   if (typeof JSZip === 'undefined') throw new Error('JSZip failed to load — cannot read PPTX. Convert the deck to PDF and re-upload.');
   if(!Number.isFinite(file.size)||file.size>PPTX_LIMITS.fileBytes)throw new Error('PPTX exceeds the 64 MiB source limit. Split the deck or convert it to PDF.');
+  if(typeof file.slice==='function'){
+    const tailBlob=file.slice(Math.max(0,file.size-65557),file.size);
+    if(tailBlob&&typeof tailBlob.arrayBuffer==='function'){
+      const tailBuf=await pptxAwait(tailBlob.arrayBuffer(),signal);
+      pptxCheckAbort(signal);
+      if(_pptxZipEocdEntries(new Uint8Array(tailBuf))>PPTX_LIMITS.entries)throw new Error('PPTX contains too many ZIP entries. Split the deck or convert it to PDF.');
+    }
+  }
   // JSZip metadata parsing is not interruptible; its input is bounded first, then entries are capped.
   const zip = await pptxAwait(JSZip.loadAsync(file),signal);
   pptxCheckAbort(signal);
   const entries=Object.keys(zip.files),budget={bytes:0};
   if(entries.length>PPTX_LIMITS.entries)throw new Error('PPTX contains too many ZIP entries. Split the deck or convert it to PDF.');
+  // v20.2: guard zip.files lookups with Object.prototype.hasOwnProperty so OPC targets like "toString" or "constructor" never resolve prototype properties.
+  const hasZipEntry=name=>Boolean(name&&Object.prototype.hasOwnProperty.call(zip.files,name)&&zip.files[name]);
   const read=name=>pptxReadXml(zip.files[name],budget,signal);
   let slides=[];
   // PowerPoint presentation order is defined by presentation.xml relationships, not slide filenames.
-  if(zip.files['ppt/presentation.xml']&&zip.files['ppt/_rels/presentation.xml.rels']){
+  if(hasZipEntry('ppt/presentation.xml')&&hasZipEntry('ppt/_rels/presentation.xml.rels')){
     const presXml=await read('ppt/presentation.xml');
-    const presDoc=_pptxAssertXml(new DOMParser().parseFromString(presXml,'application/xml'));
+    const presDoc=_pptxParseXml(presXml);
     const rels=_relsMap(await read('ppt/_rels/presentation.xml.rels'));
     const references=_xmlElementsByLocalName(presDoc,'sldId');
     if(references.length>PPTX_LIMITS.slides)throw new Error('PPTX contains more than 2,000 slide references. Split the deck before importing.');
     slides=references.map(el=>{
       const rid=el.getAttribute('r:id')||el.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id');
       const rel=rels.get(rid);return rel?_zipNormalizePath('ppt/presentation.xml',rel.target):null;
-    }).filter(n=>n&&zip.files[n]);
+    }).filter(n=>hasZipEntry(n));
   }
   // Fallback for malformed decks. Repeated valid references retain presentation order.
   if(!slides.length)slides=entries.filter(n=>/^ppt\/slides\/slide\d+\.xml$/.test(n)).sort((a,b)=>parseInt(a.match(/slide(\d+)/)[1])-parseInt(b.match(/slide(\d+)/)[1]));
@@ -1255,11 +1327,11 @@ async function extractPptxText(file,{signal}={}) {
     const slash=slidePath.lastIndexOf('/'),slideDir=slash>=0?slidePath.slice(0,slash+1):'',slideBase=slash>=0?slidePath.slice(slash+1):slidePath;
     const relPath=slideDir+'_rels/'+slideBase+'.rels';
     let notes = '';
-    if(zip.files[relPath]){
+    if(hasZipEntry(relPath)){
       const rels=_relsMap(await read(relPath));
       const noteRel=[...rels.values()].find(r=>/\/notesSlide$/i.test(r.type));
       const notesPath=noteRel?_zipNormalizePath(slidePath,noteRel.target):'';
-      if(notesPath&&zip.files[notesPath]){
+      if(hasZipEntry(notesPath)){
         const prefix='\n[Speaker notes] ';
         const n=_pptxRunText(await read(notesPath),Math.max(0,remaining-body.length-prefix.length));
         if(n.length)notes=prefix+n.join(' ');
@@ -1383,20 +1455,28 @@ function geminiGenerationConfig(model,gc){
     if('thinkingBudget' in tc)throw refuse('thinkingBudget is never sent; set a thinking level of low, medium, high or xhigh instead.');
     if(!THINKING_LEVELS.includes(tc.thinkingLevel))throw refuse('Thinking level must be low, medium, high or xhigh (got '+String(tc.thinkingLevel)+').');
     if(geminiIsArgon(model)&&tc.thinkingLevel==='xhigh')throw refuse('Argon does not support thinking level xhigh; choose low, medium or high.');
-    out.thinkingConfig={...tc};
+    // v20.2: only Gemini 4 Hydrogen accepts xhigh; clamp xhigh to high on custom non-Hydrogen models while preserving Argon's explicit preflight refusal.
+    out.thinkingConfig=!geminiIsHydrogen(model)&&tc.thinkingLevel==='xhigh'?{...tc,thinkingLevel:'high'}:{...tc};
   }else if(geminiIsArgon(model))throw refuse('Argon requests must name a thinking level; without one Argon falls back to medium.');
   else if(geminiIsHydrogen(model))throw refuse('Hydrogen requests must name a thinking level; without one Hydrogen falls back to high.');
   return out;
 }
-async function geminiRequest(apiKey,model,body,{signal,retries=2,onUpdate,onMeta,timeoutMs=900000}={}){
+// v20.2: scrub echoed API keys and AIza... tokens from provider error messages and diagnostics metadata before UI or file export.
+function redactApiSecrets(msg,apiKey){
+  let out=String(msg??'');
+  const key=typeof apiKey==='string'?apiKey.trim():'';
+  if(key.length>=12)out=out.split(key).join('[REDACTED]');
+  return out.replace(/AIza[0-9A-Za-z_-]{20,}/g,'[REDACTED_GEMINI_KEY]');
+}
+async function geminiRequest(apiKey,model,body,{signal,retries=2,onUpdate,onMeta,timeoutMs=900000,stream=false}={}){
   body=Object.assign({},body,{safetySettings:SAFETY_SETTINGS}); // v15.14: never mutate the caller's body
   body.generationConfig=geminiGenerationConfig(model,body.generationConfig||{});
   const cap=body.generationConfig.maxOutputTokens,jsonMode=body.generationConfig.responseMimeType==='application/json';
-  const streaming=typeof onUpdate==='function';
+  const hasOnUpdate=typeof onUpdate==='function',streaming=hasOnUpdate||Boolean(stream);
   // v18.0 (review L5): the model ID went into the URL unencoded. Settings now admit only MODEL_ID_RE IDs, which
   // encoding leaves unchanged; anything else can no longer alter the request path.
   const url=`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(String(model))}:${streaming?'streamGenerateContent?alt=sse':'generateContent'}`;
-  const meta=m=>{if(typeof onMeta==='function')try{onMeta({...m,model,maxOutputTokens:cap});}catch(e){}};
+  const meta=m=>{if(typeof onMeta==='function')try{const safe=m&&typeof m.error==='string'?{...m,error:redactApiSecrets(m.error,apiKey)}:m;onMeta({...safe,model,maxOutputTokens:cap});}catch(e){}};
   let bestPartial='';
   for(let attempt=0;attempt<=retries;attempt++){
     if(signal?.aborted)throw new DOMException('Aborted','AbortError');
@@ -1408,10 +1488,10 @@ async function geminiRequest(apiKey,model,body,{signal,retries=2,onUpdate,onMeta
     arm();
     try{
       // Each retry owns a new preview; diagnostic metadata retains the prior attempt's partial text.
-      if(streaming&&attempt){onUpdate('');lastEmitted='';}
+      if(hasOnUpdate&&attempt){onUpdate('');lastEmitted='';}
       const resp=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':apiKey},body:JSON.stringify(body),signal:wd.signal});
       if(!resp.ok){
-        const err=await resp.json().catch(()=>({})),msg=err.error?.message||'API error '+resp.status;
+        const err=await resp.json().catch(()=>({})),msg=redactApiSecrets(err.error?.message||'API error '+resp.status,apiKey);
         const retryable=resp.status===429||resp.status===408||resp.status>=500;
         const e=Object.assign(new Error(msg),{status:resp.status,retryable,isFatal:!retryable});
         if(retryable)e.retryDelayMs=geminiRetryDelayMs(err,resp.headers,attempt);
@@ -1425,7 +1505,7 @@ async function geminiRequest(apiKey,model,body,{signal,retries=2,onUpdate,onMeta
         // v19.0: also map canonical gRPC integer/string status codes (8 / RESOURCE_EXHAUSTED -> 429, 14 / UNAVAILABLE -> 503, etc.).
         if(d.error&&typeof d.error==='object'){
           const grpcMap={3:400,4:504,7:403,8:429,13:500,14:503,16:401,INVALID_ARGUMENT:400,DEADLINE_EXCEEDED:504,PERMISSION_DENIED:403,RESOURCE_EXHAUSTED:429,INTERNAL:500,UNAVAILABLE:503,UNAUTHENTICATED:401};
-          const code=Number(d.error.code),status=(Number.isInteger(code)&&code>=400?code:0)||grpcMap[code]||grpcMap[String(d.error.status||'').toUpperCase()]||0,msg=d.error.message||'API error '+(status||'in stream');
+          const code=Number(d.error.code),status=(Number.isInteger(code)&&code>=400?code:0)||grpcMap[code]||grpcMap[String(d.error.status||'').toUpperCase()]||0,msg=redactApiSecrets(d.error.message||'API error '+(status||'in stream'),apiKey);
           if(!status)throw Object.assign(new Error(msg),{incomplete:true});
           const retryable=status===429||status===408||status>=500;
           const e=Object.assign(new Error(msg),{status,retryable,isFatal:!retryable});
@@ -1438,7 +1518,7 @@ async function geminiRequest(apiKey,model,body,{signal,retries=2,onUpdate,onMeta
         if(typeof c?.finishReason==='string'&&c.finishReason&&c.finishReason!=='FINISH_REASON_UNSPECIFIED')finish=c.finishReason;
         if(c?.content?.parts){if(!Array.isArray(c.content.parts))throw Object.assign(new Error('Malformed response content parts.'),{incomplete:true});for(const p of c.content.parts)if(p&&p.text&&!p.thought)text+=String(p.text);}
       };
-      if(streaming){
+      if(streaming&&(hasOnUpdate||resp.body?.getReader)){
         if(!resp.body?.getReader)throw Object.assign(new Error('Streaming response has no readable body.'),{incomplete:true});
         reader=resp.body.getReader();const dec=new TextDecoder('utf-8',{fatal:true});let lastEmit=0;
         const parser=geminiSSEParser(payload=>{
@@ -1450,7 +1530,7 @@ async function geminiRequest(apiKey,model,body,{signal,retries=2,onUpdate,onMeta
           if(wd.signal.aborted)throw new DOMException('Aborted','AbortError');
           const {done,value}=await reader.read();if(done){readerDone=true;break;}
           arm();parser.feed(dec.decode(value,{stream:true}));
-          const now=Date.now();if(text&&now-lastEmit>150){lastEmit=now;lastEmitted=text;onUpdate(text);}
+          const now=Date.now();if(hasOnUpdate&&text&&now-lastEmit>150){lastEmit=now;lastEmitted=text;onUpdate(text);}
         }
         parser.feed(dec.decode(),true);
       }else accept(await resp.json());
@@ -1473,19 +1553,25 @@ async function geminiRequest(apiKey,model,body,{signal,retries=2,onUpdate,onMeta
         const think=usage?.thoughtsTokenCount||0;
         throw Object.assign(new Error('Output hit the '+cap.toLocaleString()+'-token ceiling before the JSON was complete'+(think?' (thinking used '+think.toLocaleString()+' tokens)':'')+'. Lower the Thinking Level for this tool, or reduce the input size.'),{isFatal:true,truncated:true,finishReason:'MAX_TOKENS'});
       }
-      if(streaming){lastEmitted=text;onUpdate(text);}
+      if(hasOnUpdate){lastEmitted=text;onUpdate(text);}
       meta({attempt:attempt+1,status:finish==='MAX_TOKENS'?'truncated':'complete',complete:finish!=='MAX_TOKENS',finishReason:finish,truncated:finish==='MAX_TOKENS',usage});
       result=text;
     }catch(err){
       failure=err;
       // v19.0: flush any unthrottled trailing stream delta before failing, and retain the best partial text across retries.
-      if(streaming&&text&&text!==lastEmitted){try{onUpdate(text);}catch(e){}lastEmitted=text;}
+      if(hasOnUpdate&&text&&text!==lastEmitted){try{onUpdate(text);}catch(e){}lastEmitted=text;}
       if(text)bestPartial=text;
       if(timedOut&&!signal?.aborted)failure=Object.assign(new Error('No response data for '+Math.round(timeoutMs/1000)+'s — request timed out.'),{incomplete:true,retryable:true});
       if(signal?.aborted&&failure.name!=='AbortError')failure=new DOMException('Aborted','AbortError');
+      // v20.2: never assign .message on AbortError or getter-only DOMException instances in strict mode unless redaction changed the string.
+      if(failure&&typeof failure.message==='string'&&failure.name!=='AbortError'){
+        const cleanMsg=redactApiSecrets(failure.message,apiKey);
+        if(cleanMsg!==failure.message){try{failure.message=cleanMsg;}catch(e2){failure=Object.assign(new Error(cleanMsg),failure,{name:failure.name||'Error'});}}
+      }
       failure.partialText=text||bestPartial;failure.attempt=attempt+1;
       meta({attempt:attempt+1,status:failure.name==='AbortError'?'interrupted':'incomplete',complete:false,incomplete:true,finishReason:finish,truncated:finish==='MAX_TOKENS',usage,partialText:text,error:failure.message,httpStatus:failure.status});
-      retryDelay=failure.retryDelayMs??Math.pow(2,attempt+1)*1000;
+      // v20.2: add uniform 0..999 ms jitter on network/timeout retries where no provider RetryInfo floor was returned.
+      retryDelay=failure.retryDelayMs??(Math.pow(2,attempt+1)*1000+Math.floor((typeof Math.random==='function'?Math.random():0)*1000));
     }finally{
       // v15.17: close the attempt before backoff. Cleanup failures cannot replace its diagnostic.
       clearTimeout(timer);if(signal)signal.removeEventListener('abort',onOuterAbort);
@@ -1520,14 +1606,16 @@ async function callGemini(apiKey,model,parts,opts={}){
   // a stray boolean to opts and silently losing every option after it.
   if(typeof opts!=='object'||opts===null||Array.isArray(opts))
     throw new Error('callGemini: pass an options object - the positional signature was removed in v15.14');
-  const {thinkingLevel,signal,retries=2,onUpdate,onMeta,generationConfig}=opts;
+  const {thinkingLevel,signal,retries=2,onUpdate,onMeta,generationConfig,systemInstruction}=opts;
   // generationConfig: optional per-request overrides (e.g. responseMimeType) so a call site
   // can opt in without forking the wrapper. NOTE: never set a JSON mime here globally —
   // Priority/Anki/NCLEXgen consume markdown / code-block / plain-text from this same wrapper.
   // v17.13: no maxOutputTokens here; geminiRequest sets the called model's ceiling (geminiOutputCap).
   const body={contents:[{parts}],generationConfig:Object.assign({},generationConfig||{})};
+  // v20.2: support optional systemInstruction so static prompt prefixes sit at token 0 for Gemini implicit context caching.
+  if(systemInstruction!=null)body.systemInstruction=typeof systemInstruction==='string'?{parts:[{text:systemInstruction}]}:systemInstruction;
   // The level is applied as given — it is no longer forced to 'low' when the Argon toggle is
-  // off. cfg.thinkingLevel already resolves to the active model's level, so Flash+medium/high
+  // off. cfg.thinkingLevel already resolves to the active model's level, so Hydrogen+medium/high/xhigh
   // is expressible.
   // v18.0 (review L2): a missing level was sent as 'low', so an Argon call without one ran at low instead of being
   // refused by geminiGenerationConfig. The level is now set only when given. Every caller passes one from a validated
@@ -1625,14 +1713,20 @@ function pdfEnsureVerifiedWorker(){
   })().catch(error=>{pdfReleaseWorkerOwner(owner);if(_pdfWorkerOwner===owner)_pdfWorkerOwner=null;throw error;});
   return owner.promise;
 }
+const MAX_PDF_BYTES=150*1024*1024;
+// v20.2: enforce isEvalSupported:false unconditionally on every PDF.js document descriptor (defense-in-depth for CVE-2024-4367).
+function pdfSafeDocParams(params){return Object.assign({},params,{isEvalSupported:false});}
 function getPdfDoc(file){
+  // v20.2: enforce a 150 MB PDF intake ceiling before reading the file into an ArrayBuffer.
+  if(Number.isFinite(file?.size)&&file.size>MAX_PDF_BYTES)return Promise.reject(new Error((file.name||'PDF')+' exceeds the 150 MB PDF limit. Split the PDF into chapters before opening.'));
   const cached=_pdfDocCache.get(file);
   if(cached&&cached.owner===_pdfWorkerOwner&&!cached.disposed)return cached.promise;
   const workerPromise=pdfEnsureVerifiedWorker();
   const entry={owner:_pdfWorkerOwner,disposed:false,task:null,promise:null};
   entry.promise=Promise.all([file.arrayBuffer(),workerPromise]).then(([ab,worker])=>{
+    if(ab&&ab.byteLength>MAX_PDF_BYTES)throw new Error((file?.name||'PDF')+' exceeds the 150 MB PDF limit. Split the PDF into chapters before opening.');
     if(entry.disposed||entry.owner!==_pdfWorkerOwner||entry.owner.closed)throw new Error('PDF opening was cancelled.');
-    const task=pdfjsLib.getDocument({data:ab,isEvalSupported:false,worker});entry.task=task;_pdfLoadingTasks.add(task);
+    const task=pdfjsLib.getDocument(pdfSafeDocParams({data:ab,isEvalSupported:false,worker}));entry.task=task;_pdfLoadingTasks.add(task);
     return task.promise.finally(()=>{_pdfLoadingTasks.delete(task);entry.task=null;});
   }).then(doc=>{
     if(entry.disposed||entry.owner!==_pdfWorkerOwner||entry.owner.closed){Promise.resolve(doc.destroy()).catch(()=>{});throw new Error('PDF opening was cancelled.');}
@@ -1745,7 +1839,8 @@ function markdownToPlainText(md){
 }
 
 // Shared export helpers
-function downloadBlob(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),5000);}
+// v20.2: hold the Blob object URL for 60 s so slow Save-As dialogs or large multi-MB KB/Anki writes never revoke mid-download.
+function downloadBlob(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),60000);}
 function exportAsMd(content,filename){downloadBlob(new Blob([content],{type:'text/markdown'}),filename);}
 function exportAsTxt(content,filename){downloadBlob(new Blob([markdownToPlainText(content)],{type:'text/plain'}),filename);}
 // ── Native print-to-PDF (replaces html2pdf canvas rasterization) ──
@@ -1877,13 +1972,12 @@ function printViaIframe(html){
   frame.setAttribute('sandbox','allow-same-origin allow-modals');
   frame.style.cssText='position:fixed;left:-10000px;top:0;width:8.5in;height:11in;border:0;';
   frame.onload=()=>{
-    // Remove as soon as the print dialog closes. The old flat 120s hold meant several
-    // full-document iframes could pile up if you exported repeatedly.
+    // Remove as soon as the print dialog closes, with a 3-minute safety ceiling so slow Save-as-PDF dialogs never lose the frame mid-preview.
     let gone=false;
     const cleanup=()=>{if(gone)return;gone=true;try{frame.remove();}catch(e){}};
     try{frame.contentWindow.addEventListener('afterprint',cleanup,{once:true});}catch(e){}
     try{frame.contentWindow.focus();frame.contentWindow.print();}catch(e){console.error('Print failed',e);}
-    setTimeout(cleanup,15000);
+    setTimeout(cleanup,180000);
   };
   frame.srcdoc=html;
   document.body.appendChild(frame);
@@ -1897,10 +1991,12 @@ function exportAsPdf(mdContent,title,subtitle){
   // (COOP governs cross-origin), but the read is wrapped so any exotic blocker/embedding
   // environment falls back to iframe printing instead of dying mid-export.
   // v16.7: retained external links may navigate the preview; their destination must have no opener.
-  try{win=window.open('','_blank');if(win)win.opener=null;winDoc=win?win.document:null;}catch(e){win=null;winDoc=null;}
+  // v20.2: clear cloned sessionStorage on the child about:blank tab immediately so suite_key is never retained in print tabs.
+  try{win=window.open('','_blank');if(win){win.opener=null;try{win.sessionStorage?.clear();}catch(e){}}winDoc=win?win.document:null;}catch(e){win=null;winDoc=null;}
   if(!win||!winDoc){printViaIframe(html);return;}
   // v19.0: fall back to printViaIframe if open/write/close throws under popup extensions or WebView restrictions, and wire #lp-print immediately.
-  try{win.document.open();win.document.write(html);win.document.close();const btn=win.document.getElementById('lp-print');if(btn)btn.onclick=()=>win.print();}
+  // v20.2: also listen from opener context so #lp-print triggers win.print() even when child default-src 'none' blocks element handler attributes.
+  try{win.document.open();win.document.write(html);win.document.close();try{win.addEventListener?.('click',ev=>{if(ev?.target?.id==='lp-print')win.print();});}catch(e){}const btn=win.document.getElementById('lp-print');if(btn)btn.onclick=()=>win.print();}
   catch(e){try{win.close();}catch(err){}printViaIframe(html);return;}
   const fire=()=>{
     try{
@@ -1915,6 +2011,9 @@ function exportAsPdf(mdContent,title,subtitle){
   else win.addEventListener('load',()=>setTimeout(fire,350),{once:true});
 }
 
+/* ═══ JSX UI & APPLICATION SHELL ═══ */
+</script>
+<script type="text/babel" data-presets="react">
 /* ═══════════════════════════════════════════════════════
    NAV ICONS (SVG)
    ═══════════════════════════════════════════════════════ */
@@ -1939,7 +2038,7 @@ function TruncationNotice({meta,label}){
       <div style={{fontSize:12,marginTop:5,lineHeight:1.65,color:'var(--text-dim)'}}>
         The response stopped because it ran out of room, not because it finished. Content is missing from the end.
         {(think>0||out>0||inp>0)&&<div style={{fontFamily:'JetBrains Mono',fontSize:12,marginTop:6,color:'var(--text)'}}>
-          input {inp.toLocaleString()} · thinking {think.toLocaleString()} · output {out.toLocaleString()} · ceiling {(meta.maxOutputTokens||65536).toLocaleString()}{/* v18.2: the ceiling is per model (geminiOutputCap); Flash and Argon are both 65,536 */}
+          input {inp.toLocaleString()} · thinking {think.toLocaleString()} · output {out.toLocaleString()} · ceiling {(meta.maxOutputTokens||65536).toLocaleString()}{/* v18.2: the ceiling is per model (geminiOutputCap); Hydrogen and Argon are both 65,536 */}
         </div>}
         {think>0
           ? <div style={{marginTop:6}}>Thinking tokens draw from the same budget as the document. Dropping Thinking Level (or switching to Standard) would free about <b style={{color:'var(--text)'}}>{think.toLocaleString()}</b> tokens for content.</div>
@@ -1954,9 +2053,20 @@ function TruncationNotice({meta,label}){
 // v15.17: old fact IDs must never resolve against a replacement KB with reused numbering.
 const ArtifactSourceCtx=React.createContext(null);
 function artifactSourceSnapshot(sourceKB){
+  // v20.2: memoize frozen KB snapshots and factIndex per sourceKB object via WeakMap so multi-case batch runs do not deep-clone the entire KB per case.
   const freeze=value=>{if(value&&typeof value==='object'){Object.values(value).forEach(freeze);Object.freeze(value);}return value;};
-  const kb=freeze(JSON.parse(JSON.stringify(sourceKB)));
-  return Object.freeze({sourceKB,kb,factIndex:buildFactIndex(kb)});
+  if(!sourceKB||typeof sourceKB!=='object'){
+    const kb=freeze(JSON.parse(JSON.stringify(sourceKB||{})));
+    return Object.freeze({sourceKB,kb,factIndex:buildFactIndex(kb)});
+  }
+  const cache=artifactSourceSnapshot._cache||(artifactSourceSnapshot._cache=new WeakMap());
+  let snap=cache.get(sourceKB);
+  if(!snap){
+    const kb=freeze(JSON.parse(JSON.stringify(sourceKB)));
+    snap=Object.freeze({sourceKB,kb,factIndex:buildFactIndex(kb)});
+    cache.set(sourceKB,snap);
+  }
+  return snap;
 }
 function artifactSourceCurrent(source,kb){return !!source&&source.sourceKB===kb;}
 function artifactExportNotice({source,activeKB,requested,actual,auditRequested,auditState,rows=[]}){
@@ -2594,14 +2704,19 @@ function auditKbConcepts(kbOrView){
     const hasBridge=(c.facts||[]).some(f=>f&&f.latteBucket==='BriefPatho'&&String(f.text||'').trim());
     if(!hasBridge)missingBridgeExemplars.push(c.name);
   }
-  const missingDifferentiatorExemplars=[],nearDuplicateOverlaps=[];
+  const missingDifferentiatorExemplars=[],nearDuplicateOverlaps=[],bloatedExemplars=[];
   const stopWords=new Set('the and for with from into onto that this client nurse patient care monitor assess administer report sign symptom risk'.split(' '));
   const tokSet=t=>new Set(String(t||'').toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>=4&&!stopWords.has(w)));
   for(const fam of conceptMap.values()){
     if(fam.exemplars.length<2)continue;
+    // v20.2: flag bloated exemplars whose fact count exceeds max(2× sibling median, 4) (warn-only Step 6 check).
+    const exCounts=fam.exemplars.map(ex=>(ex.facts||[]).length).sort((a,b)=>a-b),mid=Math.floor(exCounts.length/2);
+    const medianCount=exCounts.length%2?exCounts[mid]:(exCounts[mid-1]+exCounts[mid])/2,bloatCutoff=Math.max(medianCount*2,4);
     for(const ex of fam.exemplars){
       const hasDiff=(ex.facts||[]).some(f=>f&&f.conceptScope==='differentiator'&&(f.latteBucket==='Assess'||f.latteBucket==='Treatments'));
       if(!hasDiff)missingDifferentiatorExemplars.push({name:ex.name,concept:fam.name});
+      const cnt=(ex.facts||[]).length;
+      if(cnt>bloatCutoff)bloatedExemplars.push({name:ex.name,concept:fam.name,factCount:cnt,medianCount,bloatCutoff});
     }
     for(let i=0;i<fam.exemplars.length;i++){
       for(let j=i+1;j<fam.exemplars.length;j++){
@@ -2631,8 +2746,8 @@ function auditKbConcepts(kbOrView){
   }));
   const unlinkedEntities=entityGroups.filter(e=>!e.concept).map(e=>e.name);
   const linkedEntityCount=entityGroups.length-unlinkedEntities.length;
-  const issueCount=orphanExemplars.length+missingBridgeExemplars.length+missingDifferentiatorExemplars.length+nearDuplicateOverlaps.length+concepts.filter(c=>!c.hasBriefPatho).length;
-  return {concepts,exemplarCount:exemplars.length,orphanExemplars,missingBridgeExemplars,missingDifferentiatorExemplars,nearDuplicateOverlaps,linkedEntityCount,unlinkedEntities,issueCount};
+  const issueCount=orphanExemplars.length+missingBridgeExemplars.length+missingDifferentiatorExemplars.length+nearDuplicateOverlaps.length+bloatedExemplars.length+concepts.filter(c=>!c.hasBriefPatho).length;
+  return {concepts,exemplarCount:exemplars.length,orphanExemplars,missingBridgeExemplars,missingDifferentiatorExemplars,nearDuplicateOverlaps,bloatedExemplars,linkedEntityCount,unlinkedEntities,issueCount};
 }
 // v19.2: Exam Trap Mapping (LATTE + P + Traps) for HESI Bowtie, HESI Trend, ATI, and NGN partial-credit guardrails.
 // Appended by kbBuildFocusBlock when kbExamTraps is active so Pass 1 & Pass 2 tag source-supported twin contrasts,
@@ -2905,8 +3020,22 @@ function kbEntityValueTexts(value){
     :Array.isArray(v)?v.map(one).filter(Boolean).join(', '):typeof v==='object'?Object.values(v).map(one).filter(Boolean).join(' — '):'';
   return (Array.isArray(value)?value:[value]).map(one).filter(Boolean);
 }
+// v17.15 (review H11): KB_FACT_BUCKETS must equal KB_BUCKETS; placed ahead of normalizeKbEntities so entity fact normalization shares the same bucket allowlist.
+const KB_FACT_BUCKETS=['BriefPatho','Look','Assess','Tests','Treatments','Educate'];
+function kbCoerceEntityBucket(bucket,collection){
+  if(KB_FACT_BUCKETS.includes(bucket))return bucket;
+  const s=typeof bucket==='string'?bucket.trim():'';
+  if(/^(?:brief\s*)?patho/i.test(s))return 'BriefPatho';
+  if(/^(?:look|sign|symptom|cue|present|manifest)/i.test(s))return 'Look';
+  if(/^(?:assess|monitor|vital)/i.test(s))return 'Assess';
+  if(/^(?:test|lab|diag|imag|score|thresh)/i.test(s))return 'Tests';
+  if(/^(?:treat|med|interven|pharm|therap|admin|manage|action|nurs)/i.test(s))return 'Treatments';
+  if(/^(?:educ|teach|discharg|instruct|counsel)/i.test(s))return 'Educate';
+  return collection==='medications'?'Treatments':'Tests';
+}
 function normalizeKbEntities(kb,{rekey=false}={}){
-  const report={entries:0,withoutFactsBefore:0,withoutFactsAfter:0,factsWritten:0,factsRepaired:0,unmapped:{},summary:''};
+  // v20.2: null-prototype unmapped map blocks prototype-key pollution, and entity facts coerce invalid latteBucket values onto KB_FACT_BUCKETS.
+  const report={entries:0,withoutFactsBefore:0,withoutFactsAfter:0,factsWritten:0,factsRepaired:0,unmapped:Object.create(null),summary:''};
   if(!kb||typeof kb!=='object'||Array.isArray(kb))return{kb,report};
   // v19.0: require typeof f.text==='string', filter invalid elements from e.facts, sanitize f.sources, and extract [P#] tags on entity facts.
   const isObj=v=>!!v&&typeof v==='object'&&!Array.isArray(v),hasText=f=>isObj(f)&&typeof f.text==='string'&&!!f.text.trim(),factId=id=>typeof id==='string'&&/^fact-\d+$/.test(id);
@@ -2931,12 +3060,13 @@ function normalizeKbEntities(kb,{rekey=false}={}){
           const textChanged=cleanText!==f.text;
           const anchorsChanged=hadAnchors&&(!Array.isArray(f.pointAnchors)||f.pointAnchors.length!==pointAnchors.length||f.pointAnchors.some((a,idx)=>a!==pointAnchors[idx]));
           const keepId=!rekey&&owner.get(f.id)===f,tier=[1,2,3].includes(Number(f.tier))?Number(f.tier):(f.safetyCritical?1:2);
+          const bucket=kbCoerceEntityBucket(f.latteBucket,key),bucketChanged=bucket!==f.latteBucket;
           const badSources=Array.isArray(f.sources)&&f.sources.some(s=>!pointer(s));
           const needsSources=!Array.isArray(f.sources)||badSources;
-          if(keepId&&tier===f.tier&&!needsSources&&!textChanged&&!anchorsChanged)return f;
-          if(!factId(f.id)||tier!==f.tier||needsSources||textChanged||anchorsChanged)report.factsRepaired++;
+          if(keepId&&tier===f.tier&&!bucketChanged&&!needsSources&&!textChanged&&!anchorsChanged)return f;
+          if(!factId(f.id)||tier!==f.tier||bucketChanged||needsSources||textChanged||anchorsChanged)report.factsRepaired++;
           touched=true;
-          const g={...f,id:keepId?f.id:nextId(),text:cleanText,tier,...(hadAnchors?{pointAnchors}:{})};
+          const g={...f,id:keepId?f.id:nextId(),text:cleanText,latteBucket:bucket,tier,...(hadAnchors?{pointAnchors}:{})};
           if(needsSources){const cleanSrc=Array.isArray(f.sources)?f.sources.map(pointer).filter(Boolean):[];const p=pointer(f.sourcePointer)||source;g.sources=cleanSrc.length?cleanSrc:(p?[p]:[]);}
           return g;
         }).filter(f=>!!f.text.trim());
@@ -2957,16 +3087,89 @@ function normalizeKbEntities(kb,{rekey=false}={}){
             safetyCritical,tier:1,sourceQuote:null,sources:source?[source]:[],derived:true,derivedFrom:{collection:key,field},...(hadAnchors?{pointAnchors}:{})});
         }
       }
-      for(const field of Object.keys(e))if(!mapped.has(field)&&!KB_ENTITY_META_FIELDS.includes(field)&&kbEntityValueTexts(e[field]).length)report.unmapped[field]=(report.unmapped[field]||0)+1;
+      for(const field of Object.keys(e)){if(field==='__proto__'||field==='constructor'||field==='prototype')continue;if(!mapped.has(field)&&!KB_ENTITY_META_FIELDS.includes(field)&&kbEntityValueTexts(e[field]).length)report.unmapped[field]=(Object.hasOwn(report.unmapped,field)?report.unmapped[field]:0)+1;}
       if(!facts.length){report.withoutFactsAfter++;return e;}
       report.factsWritten+=facts.length;changed=true;return{...e,facts};
     });
   }
   const unmapped=Object.entries(report.unmapped).sort((a,b)=>b[1]-a[1]||(a[0]<b[0]?-1:1)).map(([field,n])=>field+' ('+n+')');
   if(report.withoutFactsBefore||report.factsRepaired||unmapped.length)report.summary='Medication, diagnostic and scoring-tool entries: '+report.withoutFactsBefore+' of '+report.entries
-    +' had no facts, and '+report.factsWritten+' fact(s) were written from their fields (Tier 1, marked derived)'+(report.factsRepaired?'; '+report.factsRepaired+' existing fact(s) gained a missing ID, source or tier':'')
+    +' had no facts, and '+report.factsWritten+' fact(s) were written from their fields (Tier 1, marked derived)'+(report.factsRepaired?'; '+report.factsRepaired+' existing fact(s) gained a missing ID, bucket, source or tier':'')
     +'. '+report.withoutFactsAfter+' entr'+(report.withoutFactsAfter===1?'y still has':'ies still have')+' no facts.'+(unmapped.length?' Fields kept but not turned into facts: '+unmapped.join(', ')+'.':'');
   return{kb:changed?out:kb,report};
+}
+// v20.2: deduplicate standalone medications, diagnostics, and scoringTools across chunks/imports by normalized name+aliases,
+// unioning sources, flat fields, and facts while keeping entity fact-N IDs contiguous after condition facts.
+function kbDedupEntities(kb){
+  if(!kb||typeof kb!=='object'||Array.isArray(kb))return kb;
+  const isObj=v=>!!v&&typeof v==='object'&&!Array.isArray(v);
+  const normKey=s=>String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+  const ptr=p=>isObj(p)&&(p.filename||p.location)?{filename:String(p.filename||''),location:String(p.location||'')}:null;
+  const entFactKey=f=>[f.latteBucket||'',f.subtype||'',String(f.text||'').replace(/\s+/g,' ').trim().toLowerCase()].join('|');
+  const out={...kb};let mergedAny=false;
+  for(const col of KB_ENTITY_COLLECTIONS){
+    if(!Array.isArray(kb[col])||kb[col].length<2)continue;
+    const list=[],entries=[];let colMerged=false;
+    for(const e of kb[col]){
+      if(!isObj(e)){list.push(e);continue;}
+      const eName=String(e.name||'').replace(/\s+/g,' ').trim();
+      const eAliases=Array.isArray(e.aliases)?e.aliases.map(a=>String(a||'').replace(/\s+/g,' ').trim()).filter(Boolean):[];
+      const names=[eName,...eAliases].map(normKey).filter(Boolean);
+      const hit=names.length?entries.find(row=>names.some(n=>row.keys.has(n))):null;
+      if(!hit){
+        const clone={...e};
+        if(Array.isArray(e.facts))clone.facts=e.facts.map(f=>isObj(f)?{...f}:f);
+        const keys=new Set(names);
+        entries.push({target:clone,keys});
+        list.push(clone);
+        continue;
+      }
+      colMerged=true;mergedAny=true;
+      const target=hit.target,tName=String(target.name||'').replace(/\s+/g,' ').trim();
+      names.forEach(n=>hit.keys.add(n));
+      const mergedAliases=[...new Set([...(Array.isArray(target.aliases)?target.aliases.map(a=>String(a||'').trim()).filter(Boolean):[]),...eAliases,...(eName&&normKey(eName)!==normKey(tName)?[eName]:[])])];
+      if(mergedAliases.length||Array.isArray(target.aliases))target.aliases=mergedAliases;
+      const tSrc=[...(Array.isArray(target.sources)?target.sources.map(ptr).filter(Boolean):[]),...(ptr(target.sourcePointer)?[ptr(target.sourcePointer)]:[])];
+      const eSrc=[...(Array.isArray(e.sources)?e.sources.map(ptr).filter(Boolean):[]),...(ptr(e.sourcePointer)?[ptr(e.sourcePointer)]:[])];
+      if(tSrc.length||eSrc.length)target.sources=[...new Map([...tSrc,...eSrc].map(x=>[x.filename+'|'+x.location,x])).values()];
+      for(const field of Object.keys(e)){
+        if(field==='__proto__'||field==='constructor'||field==='prototype'||KB_ENTITY_META_FIELDS.includes(field))continue;
+        if(!Object.hasOwn(target,field)||target[field]==null||target[field]==='')target[field]=e[field];
+        else if(Array.isArray(target[field])&&Array.isArray(e[field]))target[field]=[...new Set([...target[field],...e[field]])];
+      }
+      if(!target.concept&&typeof e.concept==='string'&&e.concept.trim())target.concept=e.concept.replace(/\s+/g,' ').trim();
+      if(e.relatedConcepts!=null){const rc=kbSanitizeRelatedConcepts([...(target.relatedConcepts||[]),...(Array.isArray(e.relatedConcepts)?e.relatedConcepts:[e.relatedConcepts])],target.concept||'',tName);if(rc.length)target.relatedConcepts=rc;}
+      if(e.contrastPartners!=null){const cp=kbSanitizeContrastPartners([...(target.contrastPartners||[]),...(Array.isArray(e.contrastPartners)?e.contrastPartners:[e.contrastPartners])],tName,target.aliases||[]);if(cp.length)target.contrastPartners=cp;}
+      if(Array.isArray(e.facts)&&e.facts.length){
+        if(!Array.isArray(target.facts))target.facts=[];
+        const byKey=new Map(target.facts.filter(isObj).map(f=>[entFactKey(f),f]));
+        for(const rf of e.facts){
+          if(!isObj(rf)||typeof rf.text!=='string'||!rf.text.trim())continue;
+          let f={...rf};
+          if(f.derived&&tName&&eName&&normKey(tName)!==normKey(eName)){
+            if(f.text.startsWith(eName+' — '))f.text=tName+f.text.slice(eName.length);
+            else if(f.text.startsWith(eName+' is '))f.text=tName+f.text.slice(eName.length);
+          }
+          const fk=entFactKey(f),prev=byKey.get(fk);
+          if(prev){
+            prev.tier=Math.min(Number(prev.tier)||2,Number(f.tier)||2);
+            if(f.safetyCritical)prev.safetyCritical=true;
+            const uSrc=[...new Map([...(Array.isArray(prev.sources)?prev.sources.map(ptr).filter(Boolean):[]),...(Array.isArray(f.sources)?f.sources.map(ptr).filter(Boolean):[])].map(x=>[x.filename+'|'+x.location,x])).values()];
+            if(uSrc.length||Array.isArray(prev.sources))prev.sources=uSrc;
+            if(Array.isArray(f.pointAnchors)&&f.pointAnchors.length){const ma=[...new Set([...(prev.pointAnchors||[]),...f.pointAnchors])];prev.pointAnchors=ma.length>1&&ma.some(id=>/^P\d+$/.test(id))?ma.filter(id=>id!=='NONE'):ma;}
+            if(!prev.sourceQuote&&f.sourceQuote)prev.sourceQuote=f.sourceQuote;
+            if(!f.derived&&prev.derived){delete prev.derived;delete prev.derivedFrom;}
+          }else{target.facts.push(f);byKey.set(fk,f);}
+        }
+      }
+    }
+    if(colMerged)out[col]=list;
+  }
+  if(!mergedAny)return kb;
+  let max=0;
+  for(const c of Array.isArray(out.conditions)?out.conditions:[])for(const f of isObj(c)&&Array.isArray(c.facts)?c.facts:[])if(isObj(f)&&typeof f.id==='string'&&/^fact-\d+$/.test(f.id))max=Math.max(max,Number(f.id.slice(5)));
+  for(const col of KB_ENTITY_COLLECTIONS)for(const e of Array.isArray(out[col])?out[col]:[])if(isObj(e)&&Array.isArray(e.facts))for(const f of e.facts)if(isObj(f))f.id='fact-'+(++max);
+  return out;
 }
 // v15.14: the class kept ASCII < and > but DELETED the Unicode operators and '+', so "↑ BUN"
 // and "↓ BUN" produced an IDENTICAL key and mergeLatteParts silently merged two opposite
@@ -2986,7 +3189,6 @@ function kbFactKey(f){return [f.latteBucket||'',f.subtype||'',String(f.text||'')
 // into recovery mode with every tool empty. Such a fact is now left out of the build and listed (never re-filed under
 // a guessed category), and a condition with no usable slug gets the id "condition". KB_FACT_BUCKETS must equal
 // KB_BUCKETS; a harness assertion pins the two together.
-const KB_FACT_BUCKETS=['BriefPatho','Look','Assess','Tests','Treatments','Educate'];
 function mergeLatteParts(parts,course='',exam='',numberedPoints=null,conceptOpts=null){
   const map=new Map();let factN=0;const usedCondIds=new Set(),dropped=[],coerced=[]; // v15.14: see below
   const scopeRank={differentiator:3,delta:2,shared:1};
@@ -3180,7 +3382,8 @@ function mergeLatteParts(parts,course='',exam='',numberedPoints=null,conceptOpts
   // v19.2 (Decision 2): omit metadata.examTraps whenever no trap metadata exists on any condition or entity so plain KBs keep exact legacy keys.
   const hasAnyTrapMeta=orderedConditions.some(c=>(Array.isArray(c.contrastPartners)&&c.contrastPartners.length)||(c.facts||[]).some(f=>f&&(f.trapRole||f.contrastWith)))||[medsOut,diagsOut,toolsOut].some(arr=>arr.some(e=>e&&((Array.isArray(e.contrastPartners)&&e.contrastPartners.length)||(Array.isArray(e.facts)&&e.facts.some(f=>f&&(f.trapRole||f.contrastWith))))));
   const out={metadata:{course,exam,createdAt:new Date().toISOString(),schemaVersion:'1.2',...(explicitConcepts.length?{concepts:explicitConcepts}:{}),...(conceptAutoFlag?{conceptAuto:true}:{}),...(hasAnyTrapMeta?{examTraps:true}:{})},...(cleanPoints.length?{numberedPoints:cleanPoints}:{}),sources:parts.map(p=>p.source).filter(Boolean),conditions:orderedConditions,medications:medsOut,diagnostics:diagsOut,scoringTools:toolsOut,formulas:parts.flatMap(p=>p.formulas||[]),contradictions:parts.flatMap(p=>p.contradictions||[])};
-  const {kb:merged,report}=normalizeKbEntities(out);
+  const {kb:normKb,report}=normalizeKbEntities(out);
+  const merged=kbDedupEntities(normKb);
   Object.defineProperty(merged,'dropped',{value:dropped}); // not saved: diagnostics for this build only
   Object.defineProperty(merged,'coerced',{value:coerced}); // v18.4: facts whose unknown sourceKind was read as prose
   Object.defineProperty(merged,'entityReport',{value:report}); // v18.4: what normalizeKbEntities wrote
@@ -3350,20 +3553,31 @@ function kbNormalizeImported(raw,{restore=false}={}){
     scoringTools:toolsNorm,
     formulas:arr('formulas'),contradictions:arr('contradictions'),
   },{rekey:!restore});
-  return {kb:normalized.kb,dropped,warnings,entityReport:normalized.report};
+  return {kb:restore?normalized.kb:kbDedupEntities(normalized.kb),dropped,warnings,entityReport:normalized.report};
 }
 // ── Durable Knowledge Base persistence (IndexedDB; localStorage is migration fallback only) ──
 const KB_DB_NAME='latte-study-suite';
 const KB_DB_VERSION=1;
 const KB_DB_STORE='knowledge';
 const KB_DB_KEY='active';
-function kbOpenDB(){
+function kbOpenDB(timeoutMs=4000){
+  // v20.2: guard blocked upgrades, versionchange locks, and hung IndexedDB open calls with a 4s watchdog so hydration falls back instead of hanging.
   return new Promise((resolve,reject)=>{
-    if(!('indexedDB' in window))return reject(new Error('IndexedDB is unavailable in this browser.'));
-    const req=indexedDB.open(KB_DB_NAME,KB_DB_VERSION);
+    if(typeof indexedDB==='undefined'||!indexedDB)return reject(new Error('IndexedDB is unavailable in this browser.'));
+    let settled=false;
+    const timer=setTimeout(()=>{if(!settled){settled=true;reject(new Error('IndexedDB open timed out.'));}},timeoutMs);
+    const done=(ok,val)=>{if(settled)return false;settled=true;clearTimeout(timer);ok?resolve(val):reject(val);return true;};
+    let req;
+    try{req=indexedDB.open(KB_DB_NAME,KB_DB_VERSION);}
+    catch(e){done(false,e);return;}
     req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains(KB_DB_STORE))db.createObjectStore(KB_DB_STORE);};
-    req.onsuccess=()=>resolve(req.result);
-    req.onerror=()=>reject(req.error||new Error('Could not open IndexedDB.'));
+    req.onblocked=()=>done(false,new Error('IndexedDB upgrade is blocked by another open tab.'));
+    req.onsuccess=()=>{
+      const db=req.result;
+      if(db)db.onversionchange=()=>{try{db.close();}catch(e){}};
+      if(!done(true,db)){try{db?.close();}catch(e){}}
+    };
+    req.onerror=()=>done(false,req.error||new Error('Could not open IndexedDB.'));
   });
 }
 // v15.14: one transaction runner, so every path settles AND closes.
@@ -3448,11 +3662,12 @@ async function kbDeletePersisted(record,expected=null){
 }
 function kbReconcileStored(records){
   // v16.7: unreadable raw fallback copies are recovery evidence, never equivalent to empty KB tombstones.
-  const damaged=records.filter(record=>record?.recoveryError),choices=[];
+  // v20.2: serialize each candidate KB once via seenByJson instead of re-stringifying inside an O(n^2) find loop.
+  const damaged=records.filter(record=>record?.recoveryError),choices=[],seenByJson=new Map();
   for(const record of records.filter(record=>record&&!record.recoveryError)){
-    const same=choices.find(x=>JSON.stringify(x.kb)===JSON.stringify(record.kb));
+    const key=JSON.stringify(record.kb),same=seenByJson.get(key);
     if(same){if(!same.meta&&record.meta){same.meta=record.meta;}continue;}
-    choices.push({...record});
+    const copy={...record};seenByJson.set(key,copy);choices.push(copy);
   }
   if(damaged.length)return {record:null,choices:[...choices,...damaged]};
   if(choices.length<2)return {record:choices[0]||null,choices:[]};
@@ -3495,14 +3710,33 @@ const KB_RECOVERY_ARCHIVES=5;
 function kbStaleArchives(keys){return keys.filter(k=>typeof k==='string'&&k.startsWith('recovery-')).sort().slice(0,-KB_RECOVERY_ARCHIVES);}
 async function kbArchiveRecovery(records){
   // Preserve both candidates before a recovery choice may overwrite either active store.
+  // v20.2: prune stale localStorage recovery archives BEFORE writing, retry after full archive eviction on quota errors,
+  // and fall back to an automatic JSON file download so a full localStorage never deadlocks chooseRecovery.
   const key='recovery-'+Date.now()+'-'+Math.random().toString(36).slice(2);
   try{const db=await kbOpenDB();await kbRunTx(db,'readwrite',store=>store.put(records,key));}
   catch(e){
-    localStorage.setItem('latte_'+key,JSON.stringify(records));
-    try{const keys=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(typeof k==='string'&&k.startsWith('latte_recovery-'))keys.push(k.slice(6));}for(const old of kbStaleArchives(keys))localStorage.removeItem('latte_'+old);}catch(e2){}
-    return;
+    const payload=JSON.stringify(records);
+    const listArchived=()=>{
+      const out=[];
+      try{
+        if(typeof localStorage.length==='number'&&typeof localStorage.key==='function'){
+          for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(typeof k==='string'&&k.startsWith('latte_recovery-'))out.push(k.slice(6));}
+        }else{for(const k of Object.keys(localStorage||{}))if(k.startsWith('latte_recovery-'))out.push(k.slice(6));}
+      }catch(e2){}
+      return out;
+    };
+    try{for(const old of kbStaleArchives([...listArchived(),key]))localStorage.removeItem('latte_'+old);}catch(e2){}
+    try{localStorage.setItem('latte_'+key,payload);return{archived:'localStorage',key};}
+    catch(e2){
+      try{for(const old of listArchived())localStorage.removeItem('latte_'+old);localStorage.setItem('latte_'+key,payload);return{archived:'localStorage',key};}
+      catch(e3){
+        if(typeof downloadBlob==='function'&&typeof Blob==='function'){downloadBlob(new Blob([payload],{type:'application/json;charset=utf-8'}),'LATTE-Knowledge-Base-'+key+'.json');return{archived:'download',key};}
+        throw e3;
+      }
+    }
   }
   try{const db=await kbOpenDB();await kbRunTx(db,'readwrite',store=>{const all=store.getAllKeys();all.onsuccess=()=>{for(const old of kbStaleArchives(all.result||[]))store.delete(old);};});}catch(e){}
+  return{archived:'indexedDB',key};
 }
 function kbCreateSaveQueue({write,remove,writeFallback,captureFallbacks,clearFallbacks,writer}){
   let tail=Promise.resolve(),sequence=0,head=null,blocked=false,acceptedFallbacks;
@@ -4444,32 +4678,86 @@ function cardFileToBase64(file){
 // Treat any edit to these three numbers as a CARD_TRANSCRIBE_PROMPT-class change and
 // re-measure with 2 runs per card. Legibility is the thing being traded here.
 const CARD_MAX_EDGE=3000, CARD_JPEG_QUALITY=0.92, CARD_RESIZE_ABOVE_BYTES=3*1024*1024;
+// v20.2: intake safety ceilings — reject >25 MB image files, >64 MP header/decoded dimensions before rasterization, and >15 MB unresized inline fallbacks.
+const CARD_MAX_FILE_BYTES=25*1024*1024, CARD_MAX_INLINE_BYTES=15*1024*1024, CARD_MAX_PIXELS=64000000;
+function probeImageDimensions(bytes){
+  if(!(bytes instanceof Uint8Array)||bytes.length<10)return null;
+  if(bytes.length>=24&&bytes[0]===0x89&&bytes[1]===0x50&&bytes[2]===0x4E&&bytes[3]===0x47&&bytes[4]===0x0D&&bytes[5]===0x0A&&bytes[6]===0x1A&&bytes[7]===0x0A){
+    return{width:((bytes[16]<<24)|(bytes[17]<<16)|(bytes[18]<<8)|bytes[19])>>>0,height:((bytes[20]<<24)|(bytes[21]<<16)|(bytes[22]<<8)|bytes[23])>>>0};
+  }
+  if(bytes[0]===0x47&&bytes[1]===0x49&&bytes[2]===0x46&&bytes[3]===0x38&&(bytes[4]===0x37||bytes[4]===0x39)&&bytes[5]===0x61){
+    return{width:bytes[6]|(bytes[7]<<8),height:bytes[8]|(bytes[9]<<8)};
+  }
+  if(bytes.length>=30&&bytes[0]===0x52&&bytes[1]===0x49&&bytes[2]===0x46&&bytes[3]===0x46&&bytes[8]===0x57&&bytes[9]===0x45&&bytes[10]===0x42&&bytes[11]===0x50){
+    const c0=bytes[12],c1=bytes[13],c2=bytes[14],c3=bytes[15];
+    if(c0===0x56&&c1===0x50&&c2===0x38&&c3===0x20&&bytes[23]===0x9D&&bytes[24]===0x01&&bytes[25]===0x2A)return{width:(bytes[26]|(bytes[27]<<8))&0x3fff,height:(bytes[28]|(bytes[29]<<8))&0x3fff};
+    if(c0===0x56&&c1===0x50&&c2===0x38&&c3===0x4C&&bytes[20]===0x2F){const b0=bytes[21],b1=bytes[22],b2=bytes[23],b3=bytes[24];return{width:1+(b0|((b1&0x3F)<<8)),height:1+(((b1&0xC0)>>6)|(b2<<2)|((b3&0x0F)<<10))};}
+    if(c0===0x56&&c1===0x50&&c2===0x38&&c3===0x58)return{width:1+(bytes[24]|(bytes[25]<<8)|(bytes[26]<<16)),height:1+(bytes[27]|(bytes[28]<<8)|(bytes[29]<<16))};
+  }
+  if(bytes[0]===0xFF&&bytes[1]===0xD8){
+    let pos=2;
+    while(pos+4<=bytes.length){
+      if(bytes[pos]!==0xFF){pos++;continue;}
+      while(pos<bytes.length&&bytes[pos]===0xFF)pos++;
+      if(pos>=bytes.length)break;
+      const marker=bytes[pos++];
+      if(marker===0xD9||marker===0xDA)break;
+      if(marker===0xD8||marker===0x01||(marker>=0xD0&&marker<=0xD7))continue;
+      if(pos+2>bytes.length)break;
+      const segLen=(bytes[pos]<<8)|bytes[pos+1];
+      if(segLen<2)break;
+      if(marker>=0xC0&&marker<=0xCF&&marker!==0xC4&&marker!==0xC8&&marker!==0xCC){
+        if(pos+7<=bytes.length)return{width:(bytes[pos+5]<<8)|bytes[pos+6],height:(bytes[pos+3]<<8)|bytes[pos+4]};
+        break;
+      }
+      pos+=segLen;
+    }
+  }
+  return null;
+}
+async function cardValidateImageSafety(file){
+  if(file&&Number.isFinite(file.size)&&file.size>CARD_MAX_FILE_BYTES)throw Object.assign(new Error('Image exceeds 25 MB limit ('+(file.size/1048576).toFixed(1)+' MB). Export or capture a smaller image.'),{isSafetyLimit:true});
+  if(file&&typeof file.slice==='function'){
+    const head=file.slice(0,65536);
+    if(head&&typeof head.arrayBuffer==='function'){
+      const dims=probeImageDimensions(new Uint8Array(await head.arrayBuffer()));
+      if(dims&&dims.width*dims.height>CARD_MAX_PIXELS)throw Object.assign(new Error('Image dimensions ('+dims.width+'×'+dims.height+') exceed the 64 MP safety limit.'),{isSafetyLimit:true});
+    }
+  }
+}
 // Returns {mimeType,data,resized?} ready for inlineData. Falls back to the original bytes on
-// ANY failure, deliberately: HEIC decodes in Safari but not in Chrome, and passing the
-// original through to Gemini (which accepts image/heic) is strictly better than a canvas step
-// that throws. Every early return is a passthrough, never an error.
+// non-safety decode failure, deliberately: HEIC decodes in Safari but not in Chrome, and passing
+// a <=15 MB original through to Gemini (which accepts image/heic) is strictly better than a canvas step
+// that throws.
 async function cardFilePayload(file){
+  await cardValidateImageSafety(file);
   const ext=getExt(file&&file.name||''),mimeType=CARD_MIME[ext]||'image/jpeg';
-  const original=async()=>({mimeType,data:await cardFileToBase64(file)});
+  const original=async()=>{
+    if(file&&Number.isFinite(file.size)&&file.size>CARD_MAX_INLINE_BYTES)throw Object.assign(new Error('Image is '+(file.size/1048576).toFixed(1)+' MB and could not be resized below the 15 MB inline limit. Export a smaller JPEG or PNG.'),{isSafetyLimit:true});
+    return{mimeType,data:await cardFileToBase64(file)};
+  };
   if(!file||!(file.size>CARD_RESIZE_ABOVE_BYTES))return original();
+  let bmp=null,cv=null;
   try{
     if(typeof createImageBitmap!=='function'||typeof document==='undefined')return original();
-    const bmp=await createImageBitmap(file);
+    bmp=await createImageBitmap(file);
     const ow=bmp.width,oh=bmp.height;                       // read BEFORE close(); a closed bitmap reports 0
+    if(ow*oh>CARD_MAX_PIXELS)throw Object.assign(new Error('Image dimensions ('+ow+'×'+oh+') exceed the 64 MP safety limit.'),{isSafetyLimit:true});
     const scale=Math.min(1,CARD_MAX_EDGE/Math.max(ow||1,oh||1));
-    if(!(scale<1)){try{bmp.close();}catch(e){}return original();}
+    if(!(scale<1))return original();
     const w=Math.max(1,Math.round(ow*scale)),h=Math.max(1,Math.round(oh*scale));
-    const cv=document.createElement('canvas');cv.width=w;cv.height=h;
+    cv=document.createElement('canvas');cv.width=w;cv.height=h;
     const ctx=cv.getContext('2d');
-    if(!ctx){try{bmp.close();}catch(e){}return original();}
+    if(!ctx)return original();
     ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
     ctx.drawImage(bmp,0,0,w,h);
-    try{bmp.close();}catch(e){}
+    try{bmp.close();bmp=null;}catch(e){}
     const url=cv.toDataURL('image/jpeg',CARD_JPEG_QUALITY);
     const i=url.indexOf(',');
     if(i<0||url.slice(0,15)!=='data:image/jpeg')return original();
     return{mimeType:'image/jpeg',data:url.slice(i+1),resized:{from:ow+'x'+oh,to:w+'x'+h}};
-  }catch(e){return original();}
+  }catch(e){if(e&&e.isSafetyLimit)throw e;return original();}
+  finally{if(bmp){try{bmp.close();}catch(e){}}if(cv){cv.width=0;cv.height=0;}}
 }
 // NOT one of the 11 frozen constants. This is new surface and may be tuned freely — but
 // every rule below exists to stop the model doing what it otherwise does, which is tidy
@@ -4535,7 +4823,8 @@ async function cardTranscribe(apiKey,model,level,file,opts){
   // v15.14: bounded payload, with the resize reported so the log can say it happened.
   const payload=await cardFilePayload(file);
   if(opts&&typeof opts.onPayload==='function'){try{opts.onPayload(payload);}catch(e){}}
-  const raw=await geminiRequest(apiKey,model,{contents:[{parts:[{inlineData:{mimeType:payload.mimeType,data:payload.data}},{text:CARD_TRANSCRIBE_PROMPT}]}],
+  // v20.2: place static CARD_TRANSCRIBE_PROMPT in systemInstruction before per-image bytes for Gemini implicit prefix caching.
+  const raw=await geminiRequest(apiKey,model,{systemInstruction:{parts:[{text:CARD_TRANSCRIBE_PROMPT}]},contents:[{parts:[{inlineData:{mimeType:payload.mimeType,data:payload.data}}]}],
     generationConfig:{responseMimeType:'application/json',thinkingConfig:{thinkingLevel:level}}},opts); // v17.13: the ceiling comes from geminiRequest
   const p=extractJSON(raw);
   if(!p||!Array.isArray(p.sections))throw new Error('response was not a card transcript');
@@ -5001,6 +5290,8 @@ function KnowledgeBaseBuilder(){
             }
           }});if(!chunks.length)problems.push(f.name+': no readable text');for(const c of chunks)queue.push({file:f,chunk:c,depth:0,order:[queue.length]});}
         catch(e){if(e.name==='AbortError')throw e;problems.push(f.name+': '+(e.message||String(e)));}
+        // v20.2: release PDF.js worker memory as soon as source chunking finishes for each PDF.
+        finally{if(typeof destroyPdfDoc==='function'&&(/\.pdf$/i.test(f.name||'')||f.type==='application/pdf'))destroyPdfDoc(f);}
       }
       if(!queue.length)throw new Error(problems[0]||'No readable source chunks were found.');
       owned_addLog(`${queue.length} chunk(s) · ${model} [${level}]${cfg.autoProfile?' (auto)':''}${laneCount>1?' · 2 lanes':''}${verifyPass?` · audit: ${auditCfg.model} [${auditCfg.level}]`:''}${hasFocusText?` · focus: ${scoped?'SCOPE (out-of-scope content skipped)':'prioritize (nothing skipped)'}`:''}${(_concepts.trim()||_conceptAuto)?` · concept: ${_concepts.trim()&&_conceptAuto?'named + auto-detect':_concepts.trim()?'named':'auto-detect'}`:''}${_examTraps?' · traps: on':''}`,'warn');
@@ -5049,8 +5340,9 @@ function KnowledgeBaseBuilder(){
         let meta=null,parsed=null,primaryResponse=null;
         // ---- Pass 1: extraction ----
         try{
-          const prompt=KB_EXTRACTION_PROMPT.replace('ONE supplied source file',()=>'ONE supplied source chunk named "'+file.name+'" ('+chunk.label+')')+focusBlock;
-          const raw=await geminiRequest(cfg.apiKey,model,{contents:[{parts:[{text:'SOURCE FILE: '+file.name+'\nSOURCE RANGE: '+chunk.label+'\n'+chunk.text},{text:prompt}]}],generationConfig:{responseMimeType:'application/json',thinkingConfig:{thinkingLevel:level}}},{signal:laneSignal,retries:2,onMeta:m=>{meta=m;}});
+          // v20.2: place static KB_EXTRACTION_PROMPT + focusBlock in systemInstruction for implicit prefix caching across all chunks,
+          // and opt into SSE streaming transport (stream:true) so slow Hydrogen xhigh / Argon high reasoning re-arms the 900s watchdog per SSE frame.
+          const raw=await geminiRequest(cfg.apiKey,model,{systemInstruction:{parts:[{text:KB_EXTRACTION_PROMPT+focusBlock}]},contents:[{parts:[{text:'SOURCE CHUNK SCOPE: ONE supplied source chunk named "'+file.name+'" ('+chunk.label+')\nSOURCE FILE: '+file.name+'\nSOURCE RANGE: '+chunk.label+'\n'+chunk.text}]}],generationConfig:{responseMimeType:'application/json',thinkingConfig:{thinkingLevel:level}}},{signal:laneSignal,retries:2,stream:true,onMeta:m=>{meta=m;}});
           // v16.7: retain raw model evidence when shape validation quarantines a response.
           primaryResponse={text:raw,meta};
           parsed=kbValidateExtractionEnvelope(extractJSON(raw));
@@ -5107,7 +5399,8 @@ function KnowledgeBaseBuilder(){
           let vmeta=null;
           try{
             const inventory=(parsed.conditions||[]).map(c=>`# ${c.name}${c.entryRole==='concept'?' [CONCEPT OVERVIEW]':c.concept?' [Exemplar of '+c.concept+']':''}\n`+(c.facts||[]).map(f=>`- [${f.latteBucket}]${typeof f.sourceLabel==='string'&&f.sourceLabel.trim()?' ['+f.sourceLabel.trim()+']':''}${f.trapRole?' [trap:'+f.trapRole+']':''} ${f.text}`).join('\n')).join('\n\n')||'(nothing was extracted from this chunk)';
-            const vraw=await geminiRequest(cfg.apiKey,auditCfg.model,{contents:[{parts:[{text:'(A) SOURCE CHUNK — '+file.name+' ('+chunk.label+')\n'+chunk.text},{text:'(B) FACTS ALREADY EXTRACTED FROM THIS CHUNK\n'+inventory},{text:KB_VERIFY_PROMPT+focusBlock}]}],generationConfig:{responseMimeType:'application/json',thinkingConfig:{thinkingLevel:auditCfg.level}}},{signal:laneSignal,retries:1,onMeta:m=>{vmeta=m;}});
+            // v20.2: place static KB_VERIFY_PROMPT + focusBlock in systemInstruction and enable SSE keep-alive streaming (stream:true).
+            const vraw=await geminiRequest(cfg.apiKey,auditCfg.model,{systemInstruction:{parts:[{text:KB_VERIFY_PROMPT+focusBlock}]},contents:[{parts:[{text:'(A) SOURCE CHUNK — '+file.name+' ('+chunk.label+')\n'+chunk.text},{text:'(B) FACTS ALREADY EXTRACTED FROM THIS CHUNK\n'+inventory}]}],generationConfig:{responseMimeType:'application/json',thinkingConfig:{thinkingLevel:auditCfg.level}}},{signal:laneSignal,retries:1,stream:true,onMeta:m=>{vmeta=m;}});
             // v16.7: a missing/wrong-shaped omission inventory is unresolved evidence, not zero omissions.
             auditResponse={text:vraw,meta:vmeta};
             const vp=kbValidateExtractionEnvelope(extractJSON(vraw),true),missed=vp.missed;
@@ -5551,6 +5844,9 @@ function KnowledgeBaseBuilder(){
         {conceptAudit.nearDuplicateOverlaps.length>0&&<div style={{fontSize:12,color:'var(--accent-warm)',marginTop:6,lineHeight:1.5}}>
           <b>Possible Shared Care Left on Siblings ({conceptAudit.nearDuplicateOverlaps.length}):</b> {conceptAudit.nearDuplicateOverlaps.slice(0,4).map(o=>`${o.exemplars[0]} / ${o.exemplars[1]} ("${o.sample}")`).join(' · ')}{conceptAudit.nearDuplicateOverlaps.length>4?` · +${conceptAudit.nearDuplicateOverlaps.length-4} more`:''} — review whether these belong on the parent Concept Overview.
         </div>}
+        {conceptAudit.bloatedExemplars?.length>0&&<div style={{fontSize:12,color:'var(--accent-warm)',marginTop:6,lineHeight:1.5}}>
+          <b>Bloated Exemplar(s) (&gt; 2× Sibling Median) ({conceptAudit.bloatedExemplars.length}):</b> {conceptAudit.bloatedExemplars.map(b=>`${b.name} (${b.factCount} facts vs. median ${b.medianCount} in ${b.concept})`).join(' · ')} — review whether shared baseline facts belong on the parent Concept Overview.
+        </div>}
         {conceptAudit.unlinkedEntities.length>0&&<div style={{fontSize:12,color:'var(--text-dim)',marginTop:6,lineHeight:1.5}}>
           <b>Unlinked Medications/Tests/Tools ({conceptAudit.unlinkedEntities.length}):</b> {conceptAudit.unlinkedEntities.slice(0,6).join(', ')}{conceptAudit.unlinkedEntities.length>6?` (+${conceptAudit.unlinkedEntities.length-6} more)`:''} — shared across multiple concepts or no single concept match.
         </div>}
@@ -5905,10 +6201,10 @@ function paParseTiers(text){
 // part needs roughly 16k thinking plus its guide text, about half the ceiling. An inventory at or under the
 // limit is one part: the same single request, prompt and output as before.
 const PA_SYNTH_PART_CHARS=40000;
-// v17.13: Argon's ceiling is 32,768, half of Flash's, so a full 40,000-character part would spend about half of it on
-// thinking alone. The part size scales with the synthesis model's ceiling: 40,000 on Flash, 20,000 on Argon, which
+// v17.13: Argon's ceiling was 32,768, half of Hydrogen's, so a full 40,000-character part would spend about half of it on
+// thinking alone. The part size scales with the synthesis model's ceiling: 40,000 at 65,536, 20,000 at 32,768, which
 // keeps the safety margin the v17.7 run established.
-// v18.2: Argon's ceiling is 65,536 like Flash's, so this now returns 40,000 on both; the scaling stays for any model
+// v18.2: Argon's ceiling is 65,536 like Hydrogen's, so this now returns 40,000 on both; the scaling stays for any model
 // with a lower ceiling.
 function paSynthPartChars(model){return Math.round(PA_SYNTH_PART_CHARS*geminiOutputCap(model)/GEMINI_OUTPUT_CAP);}
 // joins[i] marks an extraction that continues extraction i-1's condition (paChunkJoins). Joined runs stay in
@@ -6091,7 +6387,7 @@ function PriorityAnalyzer(){
         try{
           const prompt=paBuildExtractPrompt(textChunks[i],i,total,prevSummary);
           // v15: harvest resolves through the profile table like every other stage,
-          // instead of a hardcoded flashModel + forced 'low' the UI could not express.
+          // instead of a hardcoded hydrogenModel + forced 'low' the UI could not express.
           const hCfg=cfg.forTool('priorityHarvest');
           let harvestMeta=null;
           const result=await callGemini(cfg.apiKey,hCfg.model,[{text:prompt}],{thinkingLevel:hCfg.level,signal:controller.signal,onMeta:m=>{harvestMeta=m;}});
@@ -6205,7 +6501,7 @@ function PriorityAnalyzer(){
             <textarea id="priority-context" value={context} onChange={e=>setContext(e.target.value)} placeholder="e.g. 'Exam is on cardiac meds only'" rows={3}/>
       </Disclose>
       <Disclose summary="Chunking" note={Math.round(chunkSize/1000)+'k · '+overlapSize+' overlap'}>
-            <div className="sb-field"><label htmlFor="priority-chunk-size">Chunk size</label><NumberInput id="priority-chunk-size" type="number" value={chunkSize} onChange={e=>setChunkSize(Math.max(2000,parseInt(e.target.value)||12000))}/></div>
+            <div className="sb-field"><label htmlFor="priority-chunk-size">Chunk size</label><NumberInput id="priority-chunk-size" type="number" min={2000} max={60000} value={chunkSize} onChange={e=>setChunkSize(Math.min(60000,Math.max(2000,parseInt(e.target.value)||12000)))}/></div>
             <div className="sb-field"><label htmlFor="priority-overlap">Overlap</label><NumberInput id="priority-overlap" type="number" value={overlapSize} onChange={e=>setOverlapSize(paParseOverlap(e.target.value))}/></div>
       </Disclose>
     </>}
@@ -8060,7 +8356,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '20.2';}
+function suiteVersion(){return '20.3';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -8570,9 +8866,9 @@ function AnkiGenerator(){
   const [reviewDecisions,setReviewDecisions]=useState([]);
   const [auditBusy,setAuditBusy]=useState(false);
   // v16.2: source checking has its own explicit settings; changing generation settings is not an audit experiment.
-  const [auditFamily,setAuditFamily]=useState('flash'),[auditLevel,setAuditLevel]=useState('medium');
+  const [auditFamily,setAuditFamily]=useState('hydrogen'),[auditLevel,setAuditLevel]=useState('medium');
   const [savingEvidence,setSavingEvidence]=useState(false),[evidenceError,setEvidenceError]=useState('');
-  const auditModel=auditFamily==='argon'?cfg.argonModel:cfg.flashModel;
+  const auditModel=auditFamily==='argon'?cfg.argonModel:cfg.hydrogenModel;
   const auditRun=useRef(null),auditInputs=useRef(null);
   const [batch,setBatch]=useState(null);
   const [interruptedRun,setInterruptedRun]=useState(null);
@@ -9018,7 +9314,7 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
       <div className="act-row">
         <button className="btn-primary" onClick={run} disabled={busy||!cfg.apiKey||!(K.knowledgeBase.conditions||[]).length}>{busy?'⟳ Processing...':!cfg.apiKey?'Enter API Key':!(K.knowledgeBase.conditions||[]).length?'Build Knowledge Base':'▶ Generate Cards'}</button>{busy&&<button className="btn-danger" onClick={()=>abortCtl?.abort()}>Cancel</button>}
       </div>
-      <p className="act-note">Recommended Anki profile: Flash / Medium. Current: {model} / {toolLevel}.{cfg.autoProfile&&(cfg.profiles?.anki?.m!=='flash'||toolLevel!=='medium')&&<button className="btn-secondary" onClick={()=>cfg.setProfile('anki',{m:'flash',lv:'medium'})}>Use recommended Anki profile</button>}{!cfg.autoProfile&&' Manual settings are active; switch to Auto in Settings to use per-tool profiles.'}</p>
+      <p className="act-note">Recommended Anki profile: Hydrogen / Medium. Current: {model} / {toolLevel}.{cfg.autoProfile&&(cfg.profiles?.anki?.m!=='hydrogen'||toolLevel!=='medium')&&<button className="btn-secondary" onClick={()=>cfg.setProfile('anki',{m:'hydrogen',lv:'medium'})}>Use recommended Anki profile</button>}{!cfg.autoProfile&&' Manual settings are active; switch to Auto in Settings to use per-tool profiles.'}</p>
     </>}
   >
     {busy&&<RunStatus label="Anki generation" value={prog} detail={<>{logs.length?('['+logs[logs.length-1].ts+'] '+logs[logs.length-1].msg):'Starting…'}{liveKB>0&&<span> · receiving {liveKB} KB</span>}</>}/>}
@@ -9083,7 +9379,7 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
           <p>Checks source meaning, missing recall targets, duplicate targets and priority loss. Uses the captured fact text and all note tiers, with Tier {tierFilter==='all'?'1–3':tierFilter} selected for export. Findings are suggestions, not clinical validation. This checks against the captured KB, so a mistake already in that KB can survive the check; compare questionable facts with the original source.</p>
           {/* v16.2: preparation and a completed AI check must not share an ambiguous download label. */}
           <p>Prepare a review packet locally, then run the check explicitly. The checker accounts for source words as targets or context, then compares complete note claims. Valid records survive an incomplete check; unresolved records remain available for review and retry.</p>
-          <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:8}}><label>Checker model <select aria-label="Source checker model" value={auditFamily} disabled={auditBusy} onChange={e=>{const fam=e.target.value;setAuditFamily(fam);if(fam==='argon'&&auditLevel==='xhigh')setAuditLevel('high');}}><option value="flash">Hydrogen</option><option value="argon">Argon</option></select></label><label>Checker thinking <select aria-label="Source checker thinking" value={auditLevel} disabled={auditBusy} onChange={e=>setAuditLevel(e.target.value)}>{(auditFamily==='argon'?['low','medium','high']:['low','medium','high','xhigh']).map(level=><option key={level} value={level}>{level}</option>)}</select></label></div>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:8}}><label>Checker model <select aria-label="Source checker model" value={auditFamily} disabled={auditBusy} onChange={e=>{const fam=e.target.value;setAuditFamily(fam);if(fam==='argon'&&auditLevel==='xhigh')setAuditLevel('high');}}><option value="hydrogen">Hydrogen</option><option value="argon">Argon</option></select></label><label>Checker thinking <select aria-label="Source checker thinking" value={auditLevel} disabled={auditBusy} onChange={e=>setAuditLevel(e.target.value)}>{(auditFamily==='argon'?['low','medium','high']:['low','medium','high','xhigh']).map(level=><option key={level} value={level}>{level}</option>)}</select></label></div>
           <button className="btn-secondary" onClick={prepareSourceAudit} disabled={!current||busy||auditBusy}>Prepare review packet — no AI check yet</button>
           {sourceAudit&&<div>
             <p role="status">{ankiSourceAuditLabel(sourceAudit,ankiSourceAuditCurrent(sourceAudit,auditInputsValue))}{!ankiSourceAuditCurrent(sourceAudit,auditInputsValue)&&' · outdated for the current notes or source'}</p>
@@ -9204,7 +9500,11 @@ function nclexAdmitRecord(q){
   if(typeof q.id==='string'&&q.id)out.id=q.id;
   return out;
 }
+// v20.2: WeakMap index per target array makes duplicate/overlap lookup O(1) while preserving seen Set signature.
+const _nclexIndexByArray=new WeakMap();
 function nclexAccumulate(seen,allQ,incoming,track){
+  let idxMap=_nclexIndexByArray.get(allQ);
+  if(!idxMap){idxMap=new Map();for(let i=0;i<allQ.length;i++){const x=allQ[i];if(x&&x.question)idxMap.set(nclexKey(x),i);}_nclexIndexByArray.set(allQ,idxMap);}
   for(const q of incoming||[]){
     const rec=nclexAdmitRecord(q);
     if(!rec){if(track){track.malformed=(track.malformed||0)+1;let sample;try{sample=JSON.stringify(q);}catch(e){sample=String(q);}if((track.samples||(track.samples=[])).length<3)track.samples.push(String(sample).slice(0,200));}continue;}
@@ -9212,13 +9512,16 @@ function nclexAccumulate(seen,allQ,incoming,track){
     // v17.15 (review M15): chunk overlap extracts a boundary question twice, and the first copy can lack its answer; the
     // complete later copy was discarded and the exports printed "undefined". Missing fields are now filled from the later
     // copy; a field the first copy has is never overwritten.
-    if(seen.has(k)){const at=allQ.findIndex(x=>x&&nclexKey(x)===k),prev=at<0?null:allQ[at];
+    if(seen.has(k)){
+      let at=idxMap.has(k)?idxMap.get(k):-1;
+      if(at<0||at>=allQ.length||!allQ[at]||nclexKey(allQ[at])!==k){at=allQ.findIndex(x=>x&&nclexKey(x)===k);if(at>=0)idxMap.set(k,at);}
+      const prev=at<0?null:allQ[at];
       // v19.0: allow a matched later copy to replace an earlier answer_unmatched placeholder, propagate answer_unmatched when filling an empty answer from an unmatched record, and fill empty diseases_conditions.
       const replaceUnmatched=Boolean(prev&&prev.answer_unmatched&&!rec.answer_unmatched&&rec.correct_answer);
       const fill=prev?NCLEX_RECORD_TEXT_FIELDS.filter(fl=>(!prev[fl]||(replaceUnmatched&&(fl==='correct_answer'||fl==='rationale')))&&rec[fl]):[];
       const condFill=Boolean(prev&&!(prev.diseases_conditions&&prev.diseases_conditions.length)&&rec.diseases_conditions&&rec.diseases_conditions.length);
       if(fill.length||condFill){const next={...prev};for(const fl of fill)next[fl]=rec[fl];if(condFill)next.diseases_conditions=rec.diseases_conditions;if(fill.includes('correct_answer')||replaceUnmatched){if(rec.answer_unmatched)next.answer_unmatched=true;else delete next.answer_unmatched;}allQ[at]=next;}continue;}
-    seen.add(k);allQ.push(rec);
+    seen.add(k);idxMap.set(k,allQ.length);allQ.push(rec);
   }
   if(track)track.questions=allQ.length;
   return allQ;
@@ -9554,10 +9857,12 @@ function NCLEXExtractor(){
   const [filterStrategy,setFilterStrategy]=useState('');
   const [filterDisease,setFilterDisease]=useState('');
   const abortRef=useRef(null); // v15: holds the run's AbortController — the old boolean only skipped FUTURE chunks; in-flight requests and retries could not be cancelled
-  const fRef=useRef(null);
+  const fRef=useRef(null),filesRef=useRef(files);filesRef.current=files;
   // v18.0 (review L22): an extraction kept sending requests after the tool unmounted (a ToolBoundary reset remounts
   // it), with no way left to cancel it. Unmounting now aborts the run, as the KB and Anki tools already do.
   useEffect(()=>()=>{abortRef.current?.abort();abortRef.current=null;},[]);
+  // v20.2: destroy any cached PDF.js workers held for NCLEXExtractor files when unmounting.
+  useEffect(()=>()=>{filesRef.current.forEach(destroyPdfDoc);},[]);
 
   const {model,level:toolLevel}=cfg.forTool('nclex');
   // v15.14: one intake path, filtering and de-duplicating on the same rule as the KB builder.
@@ -9608,12 +9913,16 @@ function NCLEXExtractor(){
   async function nclexCallGemini(prompt,signal){
     // Was 8192 — the legacy ceiling. A dense chunk overflowed it, the JSON came back
     // truncated, the bare parse threw, and the whole chunk was silently skipped.
-    // v17.13: no ceiling here; geminiRequest sets the called model's own (65,536 for Flash and, since v18.2, Argon).
+    // v17.13: no ceiling here; geminiRequest sets the called model's own (65,536 for Hydrogen and, since v18.2, Argon).
     const gc={responseMimeType:'application/json'};gc.thinkingConfig={thinkingLevel:toolLevel};
     // v18.0 (review dead code): a "cut" flag copied onMeta's truncated field for the parse error below. Since v17.13
     // geminiRequest rejects JSON cut off at the ceiling (e.truncated) before returning, and the last meta of a returned
     // reply always says truncated:false, so the flag was always false here. The rejection itself names the ceiling.
-    const raw=await geminiRequest(cfg.apiKey,model,{contents:[{parts:[{text:prompt}]}],generationConfig:gc},{signal});
+    // v20.2: hoist static NCLEX extraction prompt prefix into systemInstruction for implicit prefix caching and enable SSE keep-alives.
+    const promptStr=String(prompt||'');
+    const sysPrompt=[NCLEX_INLINE_PROMPT,NCLEX_SPLIT_PROMPT,NCLEX_AI_PAIR_PROMPT].find(p=>typeof p==='string'&&p&&promptStr.startsWith(p));
+    const reqBody=sysPrompt?{systemInstruction:{parts:[{text:sysPrompt}]},contents:[{parts:[{text:promptStr.slice(sysPrompt.length)}]}],generationConfig:gc}:{contents:[{parts:[{text:promptStr}]}],generationConfig:gc};
+    const raw=await geminiRequest(cfg.apiKey,model,reqBody,{signal,stream:true});
     const cleaned=raw.replace(/```json\s*/gi,'').replace(/```/g,'').trim();
     try{return JSON.parse(cleaned);}
     catch(e){
@@ -9782,8 +10091,10 @@ function NCLEXExtractor(){
       for(let fi=0;fi<workFiles.length;fi++){
         if(ctl.signal.aborted)throw new DOMException('Aborted','AbortError');
         addLog(`\n📁 File ${fi+1}/${workFiles.length}: ${workFiles[fi].name}`);
-        if(mode==='inline')allQ=await runInline(workFiles[fi],allQ,ctl.signal,track);
-        else allQ=await runSplit(workFiles[fi],allQ,ctl.signal,track);
+        try{
+          if(mode==='inline')allQ=await runInline(workFiles[fi],allQ,ctl.signal,track);
+          else allQ=await runSplit(workFiles[fi],allQ,ctl.signal,track);
+        }finally{destroyPdfDoc(workFiles[fi]);} // v20.2: release PDF.js worker after each extracted file
       }
       // v17.4: "Done" is earned, not assumed (nclexRunSummary).
       const summary=nclexRunSummary(track);setRunSummary(summary);
@@ -11059,7 +11370,7 @@ function i2aAnswerBatchText(batch){
 function i2aApplyAi(questions,cache,model){
   const warnings=[];
   for(const q of questions.filter(i2aNeedsAi)){
-    const a=cache[i2aQid(q)+model];
+    const k=i2aQid(q)+model,a=cache&&Object.hasOwn(cache,k)?cache[k]:null;
     if(!a||typeof a!=='object'||Array.isArray(a))continue;
     // v19.0: strip trailing punctuation from AI rationale labels ("A." or "A)" -> "A") so option matching succeeds.
     const whys=(Array.isArray(a.option_rationales)?a.option_rationales:[]).filter(w=>w&&typeof w==='object'&&i2aS(w.text)).map(w=>[i2aS(w.label).replace(/[.)]+$/,'').toUpperCase(),i2aS(w.verdict).toLowerCase(),i2aS(w.text)]);
@@ -11210,13 +11521,14 @@ function i2aNaturalCompare(a,b){ // "shot 2" before "shot 10"
   for(let i=0;i<Math.min(x.length,y.length);i++){if(x[i]===y[i])continue;if(typeof x[i]===typeof y[i])return x[i]<y[i]?-1:1;return typeof x[i]==='number'?-1:1;}
   return x.length-y.length;
 }
-function i2aEmptyCache(){return {tool:'img2anki '+I2A_VERSION,images:{},ai:{}};}
+// v20.2: null-prototype cache maps and explicit prototype-key guards prevent untrusted transcripts JSON from polluting Object.prototype.
+function i2aEmptyCache(){return {tool:'img2anki '+I2A_VERSION,images:Object.create(null),ai:Object.create(null)};}
 // Accepts the script's <output>_transcripts.json as well as one saved from here.
 function i2aMergeCache(cache,loaded){
   if(!loaded||typeof loaded!=='object'||!loaded.images||typeof loaded.images!=='object'||Array.isArray(loaded.images))throw new Error('not an img2anki transcripts file');
   let n=0;
-  for(const [k,v] of Object.entries(loaded.images))if(v&&typeof v==='object'&&'items' in v){cache.images[k]=v;n++;}
-  if(loaded.ai&&typeof loaded.ai==='object'&&!Array.isArray(loaded.ai))Object.assign(cache.ai,loaded.ai);
+  for(const [k,v] of Object.entries(loaded.images)){if(k==='__proto__'||k==='constructor'||k==='prototype')continue;if(v&&typeof v==='object'&&!Array.isArray(v)&&Object.hasOwn(v,'items')){cache.images[k]=v;n++;}}
+  if(loaded.ai&&typeof loaded.ai==='object'&&!Array.isArray(loaded.ai)){for(const [k,v] of Object.entries(loaded.ai)){if(k==='__proto__'||k==='constructor'||k==='prototype')continue;if(v&&typeof v==='object'&&!Array.isArray(v))cache.ai[k]=v;}}
   return n;
 }
 // The whole image run. images: [{name, key, payload: async()=>{mimeType,data,resized}}], already in
@@ -11227,14 +11539,15 @@ async function i2aConvert({images,gemini,halts,model,cache,deck,extraTags=[],sou
   if(!images.length){warnings.push('No images to read.');return result;}
   const transcripts=[];
   for(let n=0;n<images.length;n++){
-    const im=images[n],key=im.key+'|'+model+'|'+I2A_PROMPT_VERSION,hit=cache.images[key];onProgress(n,images.length);
+    const im=images[n],key=im.key+'|'+model+'|'+I2A_PROMPT_VERSION,hit=Object.hasOwn(cache.images,key)?cache.images[key]:null;onProgress(n,images.length);
     if(hit){log('['+(n+1)+'/'+images.length+'] '+im.name+' (cached)');try{transcripts.push([im.name,i2aNormalizeTranscript(hit.items)]);}catch(e){warnings.push(im.name+': cached transcript unreadable - '+e.message);transcripts.push([im.name,[]]);}continue;}
     log('['+(n+1)+'/'+images.length+'] '+im.name);
     let obj,items;
     try{
       const payload=await im.payload();
       if(payload.resized)log('    resized to '+payload.resized.to);
-      obj=await gemini([{inlineData:{mimeType:payload.mimeType,data:payload.data}},{text:I2A_TRANSCRIBE_PROMPT}],thinking);
+      // v20.2: send static I2A_TRANSCRIBE_PROMPT before per-image bytes for Gemini implicit prefix caching across image batches.
+      obj=await gemini([{text:I2A_TRANSCRIBE_PROMPT},{inlineData:{mimeType:payload.mimeType,data:payload.data}}],thinking);
       result.calls++;items=i2aNormalizeTranscript(obj);
     }catch(e){
       if(halts(e)){result.stopped=(e.name==='AbortError'?'Cancelled.':e.message)+' Stopped at '+im.name+'; '+(images.length-n)+' image(s) left. Run again later - finished images are cached.';break;}
@@ -11249,7 +11562,7 @@ async function i2aConvert({images,gemini,halts,model,cache,deck,extraTags=[],sou
   const {questions,warnings:w}=i2aAssemble(transcripts);warnings.push(...w);
   const todo=questions.filter(i2aNeedsAi);result.needsAi=todo.length;
   if(todo.length&&aiAnswers&&!result.stopped){
-    const pending=todo.filter(q=>!((i2aQid(q)+model) in cache.ai));
+    const pending=todo.filter(q=>!Object.hasOwn(cache.ai,i2aQid(q)+model));
     try{
       for(let i=0;i<pending.length;i+=I2A_AI_BATCH){
         const batch=pending.slice(i,i+I2A_AI_BATCH);
@@ -11288,6 +11601,7 @@ async function i2aFileKey(file){
 // Only an image over the inline ceiling is touched, as in the script; the suite's card resizer
 // then brings its long edge to 3000px so small print and digits stay legible.
 async function i2aImagePayload(file){
+  await cardValidateImageSafety(file); // v20.2: enforce 25 MB / 64 MP header check before raw pass-through too
   if(file.size<=I2A_MAX_RAW_BYTES)return {mimeType:CARD_MIME[getExt(file.name)]||'image/jpeg',data:await cardFileToBase64(file)};
   const p=await cardFilePayload(file);
   if(!p.resized)throw new Error((file.size/1048576).toFixed(0)+" MB is over Gemini's inline limit and could not be shrunk here. Export a smaller image.");
@@ -11300,8 +11614,10 @@ const N2A_MODES=[
 ];
 const N2A_KIND_LABEL={worksheet:'Generator worksheet',extract:'Extractor export'};
 const N2A_PREVIEW_LIMIT=40;
-const N2A_CARD_POLICY={ALLOWED_TAGS:['div','b','i','br'],ALLOWED_ATTR:['style']};
+// v20.2: freeze card sanitizer policy with explicit data/aria denial; ensureDomPurifyHooks filters style attributes to safe typography properties.
+const N2A_CARD_POLICY=Object.freeze({ALLOWED_TAGS:['div','b','i','br'],ALLOWED_ATTR:['style'],ALLOW_DATA_ATTR:false,ALLOW_ARIA_ATTR:false});
 function NCLEXToAnki(){
+  if(typeof ensureDomPurifyHooks==='function')ensureDomPurifyHooks();
   const cfg=useConfig();
   const [mode,setMode]=useState('export');
   const [decks,setDecks]=useState(()=>Object.fromEntries(N2A_MODES.map(m=>[m.id,m.deck])));
@@ -11377,7 +11693,7 @@ function NCLEXToAnki(){
     setError('');setLog([]);setBusy(true);setProgress({current:0,total:images.length});
     const ac=new AbortController();abortRef.current=ac;
     // The script's default model and its thinking levels: low to read images, high to answer.
-    const model=cfg.flashModel;
+    const model=cfg.hydrogenModel;
     if(fresh){cacheRef.current=i2aEmptyCache();setCacheCount(0);}
     try{
       const ordered=[...images].sort((a,b)=>i2aNaturalCompare(a.name,b.name)),prepared=[];
@@ -11401,6 +11717,7 @@ function NCLEXToAnki(){
   const loadTranscripts=async fl=>{
     if(busy||reading)return;
     const f=fl&&fl[0];if(!f)return;setNote('');
+    if(Number.isFinite(f.size)&&f.size>50*1024*1024){setNote(f.name+': transcripts file exceeds the 50 MB limit.');return;}
     try{const n=i2aMergeCache(cacheRef.current,JSON.parse(await f.text()));setCacheCount(Object.keys(cacheRef.current.images).length);setNote('Loaded '+n+' cached transcript(s) from '+f.name+'. Images that match are not sent to Gemini again.');}
     catch(e){setNote(f.name+': '+(e.message||String(e)));}
   };
@@ -11452,7 +11769,7 @@ function NCLEXToAnki(){
           <span><b>Have Gemini answer</b> questions whose answer or rationale is not in the images. Those cards say so on the back and are tagged AI_Answer / AI_Rationale. Check them against your source.</span>
         </label>
         <div className="sb-field" style={{marginTop:10}}><label htmlFor="n2a-thinking">Thinking level for reading images</label><select id="n2a-thinking" value={thinking} onChange={e=>setThinking(e.target.value)}>{['low','medium','high','xhigh'].map(v=><option key={v} value={v}>{v}{v==='low'?' (default)':''}</option>)}</select></div>
-        <div style={{fontSize:12,color:'var(--text-dim)',marginTop:6,lineHeight:1.5}}>Model: {cfg.flashModel} (the Hydrogen model in Settings). One call per image, plus one per 8 questions for AI answers.</div>
+        <div style={{fontSize:12,color:'var(--text-dim)',marginTop:6,lineHeight:1.5}}>Model: {cfg.hydrogenModel} (the Hydrogen model in Settings). One call per image, plus one per 8 questions for AI answers.</div>
         <label style={{display:'flex',gap:7,alignItems:'center',fontSize:12,color:'var(--text)',cursor:'pointer',marginTop:10}}><input type="checkbox" checked={fresh} onChange={e=>setFresh(e.target.checked)}/>Ignore cached transcripts and re-read every image</label>
         <div className="act-row" style={{marginTop:10}}>
           <button className="btn-secondary" onClick={saveTranscripts} disabled={!cacheCount}>⬇ Save transcripts</button>
@@ -12277,21 +12594,27 @@ function ngFocusMatch(ix,item,{words=true,pointId=''}={}){
 // generator passes half the run's target facts); the per-item quota shrinks to fit, to no less than 1, so the v18.5
 // walk keeps at least half of a run.
 function ngFocusPlan(groups,{points='',outcomes='',batches=1,perItem=3,cap=Infinity,batchCaps=null}={}){
+  // v20.2: inherit persisted KB numberedPoints when caller sets _inheritPersistedPoints and local points textarea is empty,
+  // and read _batchCaps attached to groups when batchCaps argument is omitted so short final batches route overflow cleanly.
+  const effectivePoints=(!String(points||'').trim()&&groups&&groups._inheritPersistedPoints&&Array.isArray(groups.numberedPoints)&&groups.numberedPoints.length>0)
+    ?groups.numberedPoints.filter(p=>p&&p.id&&p.text).map(p=>p.id+': '+p.text).join('\n')
+    :points;
   // v19.2: capture explicit P# prefixes on raw point lines before ngFocusItems strips them so [P#] pointAnchors can resolve.
   const normPt=s=>String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
   const explicitIds=new Map();
-  for(const raw of String(points||'').split(/\r?\n|;/)){
+  for(const raw of String(effectivePoints||'').split(/\r?\n|;/)){
     const pm=raw.match(/^\s*(P\d+)\s*[:.)—–-]\s+(.+)$/i);
     if(pm){const cleaned=ngFocusItems(pm[2])[0];if(cleaned&&!explicitIds.has(normPt(cleaned)))explicitIds.set(normPt(cleaned),pm[1].toUpperCase());}
   }
-  const items=[...ngFocusItems(points).map(text=>({kind:'point',text})),...ngFocusItems(outcomes).map(text=>({kind:'outcome',text}))];
+  const items=[...ngFocusItems(effectivePoints).map(text=>({kind:'point',text})),...ngFocusItems(outcomes).map(text=>({kind:'outcome',text}))];
   const nb=Math.max(1,Math.floor(Number(batches))||1),plan=Array.from({length:nb},()=>[]);
   if(!items.length)return {plan,items};
   const ix=ngFocusIndex(groups),limit=Number.isFinite(Number(cap))?Math.max(0,Math.floor(Number(cap))):Infinity;
   const persistedByText=new Map((ix.numberedPoints||[]).filter(p=>p&&p.id&&p.text).map(p=>[normPt(p.text),String(p.id).toUpperCase()]));
   const quota=Math.max(1,Math.min(Math.floor(Number(perItem))||1,Math.floor(limit/items.length))),claimed=new Set();
   // v19.0: when per-batch capacity limits are provided (e.g. for a short final batch), route overflow focus picks to batches with remaining capacity.
-  const caps=Array.isArray(batchCaps)&&batchCaps.length===nb?batchCaps.map(c=>Number.isFinite(Number(c))?Math.max(0,Math.floor(Number(c))):Infinity):null;
+  const rawCaps=batchCaps||(groups&&groups._batchCaps)||null;
+  const caps=Array.isArray(rawCaps)&&rawCaps.length===nb?rawCaps.map(c=>Number.isFinite(Number(c))?Math.max(0,Math.floor(Number(c))):Infinity):null;
   items.forEach((it,k)=>{
     const npKey=normPt(it.text);
     const pointId=it.kind==='point'?(persistedByText.get(npKey)||(ix.numberedPoints.length?'':explicitIds.get(npKey))||''):'';
@@ -13098,10 +13421,12 @@ function NCLEXGenerator(){
   const clearNclexScope=()=>{setKbSelectedConcepts([]);setKbSelectedConditionIds([]);setKbConditionFilter('');};
 
   // v18.1: focus matches still go first in selection, but their tier tag stays the KB tier (see NG_GROUNDING_ADAPTER).
+  // v20.2: automatically inherit persisted KB numberedPoints when the local Points field is empty, matching AnkiGenerator.
   function buildFocusBlock(){
     const parts=[];
     if(outcomes.trim())parts.push('OUTCOMES (Learning Objectives the student must master):\n'+outcomes.trim());
-    if(points.trim())parts.push('POINTS (Specific content that must be covered):\n'+points.trim());
+    const effPoints=points.trim()||((Array.isArray(K.knowledgeBase?.numberedPoints)&&K.knowledgeBase.numberedPoints.length>0)?formatPointsForPrompt(K.knowledgeBase.numberedPoints):'');
+    if(effPoints)parts.push('POINTS (Specific content that must be covered):\n'+effPoints);
     if(focusContext.trim())parts.push('ADDITIONAL CONTEXT:\n'+focusContext.trim());
     if(!parts.length)return'';
     return'\n\n═══ STUDENT-PROVIDED FOCUS CONTEXT ═══\n'+parts.join('\n\n')+`
@@ -13225,6 +13550,12 @@ ${NG_GROUNDING_ADAPTER}
 
 ${kbPacket}`});
       const wantPerBatch=Math.max(1,Math.round(batchSize*factsPerQ));
+      // v20.2: attach per-batch target capacities (accounting for a smaller final batch) and persisted-Point inheritance metadata to pool.
+      if(allocMode){
+        const batchCapsList=Array.from({length:numBatches},(_,i)=>Math.max(1,Math.round(Math.max(0,Math.min(batchSize,targetCount-i*batchSize))*factsPerQ)));
+        Object.defineProperty(pool,'_batchCaps',{value:batchCapsList,configurable:true});
+        Object.defineProperty(pool,'_inheritPersistedPoints',{value:!points.trim()&&Array.isArray(K.knowledgeBase?.numberedPoints)&&K.knowledgeBase.numberedPoints.length>0,configurable:true});
+      }
       // v18.6: the student's Points and Outcomes pick facts that go first in their batches, at most half the run's targets.
       const focus=allocMode?ngFocusPlan(pool,{points,outcomes,batches:numBatches,perItem:factsPerQ,cap:Math.floor(targetCount*factsPerQ/2)}):{plan:[],items:[]};
       if(allocMode){
@@ -13277,6 +13608,7 @@ ${kbPacket}`});
           alloc.targets.forEach(f=>{usedFactIds.add(f.id);allocatedAll.add(f.id);});
           // v19.0: carry any focus picks deferred by perCondition or batch size into the next batch so claimed focus facts are not silently dropped.
           if(b<numBatches&&focus.plan[b-1]?.length){const deferred=focus.plan[b-1].filter(id=>!usedFactIds.has(id));if(deferred.length)focus.plan[b]=[...deferred,...(focus.plan[b]||[])];}
+          else if(b===numBatches&&focus.plan[b-1]?.length){const unplaced=focus.plan[b-1].filter(id=>!usedFactIds.has(id));if(unplaced.length)owned_log('  ⚠ '+unplaced.length+' focus-matched fact(s) could not fit into the final batch capacity ('+size+' question(s)). Increase target question count to include them.','warn');}
           const focusTargets=alloc.targets.filter(f=>(focus.plan[b-1]||[]).includes(f.id)).length;
           owned_log(`  Allocated ${alloc.targets.length} target fact(s) across ${[...new Set(alloc.targets.map(t=>t.condition))].length} condition(s) + ${alloc.context.length} context fact(s).`+(focusTargets?` ${focusTargets} of the targets were picked for your Points and Outcomes.`:''));
         }
@@ -13290,7 +13622,8 @@ ${NG_GROUNDING_ADAPTER}
 `+ngRenderAllocation(alloc.targets,alloc.context):'';
         // v18.1: the shared priority order follows the batch block (see PRIORITY_ORDER_RULES).
         let prompt=NCLEX_GEN_PROMPT+buildBatchBlock(b,numBatches,size)+'\n'+PRIORITY_ORDER_RULES+'\n'+buildFocusBlock()+(allocMode?buildCarryLite(stems):buildCarry(logged,used,stems));
-        const parts=allocMode?[{text:groundingAdapter},{text:prompt}]:[...fileParts,{text:prompt}];
+        // v20.2: place static NCLEX_GEN_PROMPT prefix in parts[0] before per-batch allocated facts for Gemini implicit prefix caching.
+        const parts=allocMode?[{text:prompt},{text:groundingAdapter}]:[{text:prompt},...fileParts];
 
         let raw;
         try{raw=await ownedCallGemini(cfg.apiKey,model,parts,{thinkingLevel:toolLevel,signal:ctl.signal,onUpdate:t=>owned_setLiveKB(Math.round(t.length/102.4)/10),onMeta:m=>{if(m.truncated){const th=m.usage?.thoughtsTokenCount||0;owned_log('  \u26a0 Batch '+b+' hit the '+(m.maxOutputTokens||65536).toLocaleString()+'-token ceiling \u2014 the answer key is likely cut short.'+(th?' Thinking used '+th.toLocaleString()+' tok of that budget.':' Try a smaller batch size.'),'err');}}});}
@@ -13416,7 +13749,7 @@ ${NG_GROUNDING_ADAPTER}
               auditInterrupted=true;
               if(generatorSlot.current.current(operation))setAuditState('interrupted');
               publishBatch();
-              owned_log('  ⚠ Audit stopped early — your Gemini API quota is exhausted. The worksheet itself is complete and still passed its structural checks; only the optional item review was cut short. Wait for your quota to reset, switch the "Item quality · audit" profile to Flash, or turn the audit off.','err');
+              owned_log('  ⚠ Audit stopped early — your Gemini API quota is exhausted. The worksheet itself is complete and still passed its structural checks; only the optional item review was cut short. Wait for your quota to reset, switch the "Item quality · audit" profile to Hydrogen, or turn the audit off.','err');
             }
 
             const fails=auditRows.filter(r=>r.status==='FAIL');
@@ -15575,10 +15908,13 @@ function CaseStudyGenerator(){
     const runPid=(_ovr&&_ovr.packetId)||('pkt-'+Date.now().toString(36)+'-'+uid().slice(0,5));
     if(typeof setActivePacketId==='function')setActivePacketId(runPid);
     const operation=generatorSlot.current.start(),ctl=operation.ctl,source=artifactSourceSnapshot(K.knowledgeBase);
-    operation.sourceKB=K.knowledgeBase;setArtifactSource({...source,requested:stages*questionsPerStage,auditRequested:runAudit});setAuditState(runAudit?'running':'disabled');
+    const runArtifactSource={...source,requested:stages*questionsPerStage,auditRequested:runAudit};
+    operation.sourceKB=K.knowledgeBase;setArtifactSource(runArtifactSource);setAuditState(runAudit?'running':'disabled');
     const current=()=>generatorSlot.current.current(operation)&&(K.isCurrentSource?K.isCurrentSource(source.sourceKB):source.sourceKB===currentSourceKB.current);
     const guard=fn=>(...args)=>{if(current())fn(...args);};
-    const [owned_setBusy,owned_setLogs,owned_setCaseStudy,owned_setIssues,owned_setCoverage,owned_setLiveKB,owned_setAudit,owned_setAuditPhase,owned_setProvenance,owned_setInvalidCaseRaw,owned_setAbortCtl,owned_log]=[setBusy,setLogs,setCaseStudy,setIssues,setCoverage,setLiveKB,setAudit,setAuditPhase,setProvenance,setInvalidCaseRaw,setAbortCtl,log].map(guard);
+    let finalAudit=null;
+    const [owned_setBusy,owned_setLogs,owned_setCaseStudy,owned_setIssues,owned_setCoverage,owned_setLiveKB,_rawSetAudit,owned_setAuditPhase,owned_setProvenance,owned_setInvalidCaseRaw,owned_setAbortCtl,owned_log]=[setBusy,setLogs,setCaseStudy,setIssues,setCoverage,setLiveKB,setAudit,setAuditPhase,setProvenance,setInvalidCaseRaw,setAbortCtl,log].map(guard);
+    const owned_setAudit=v=>{if(!current())return;finalAudit=typeof v==='function'?v(finalAudit):v;_rawSetAudit(finalAudit);};
     const ownedCallGemini=async(...args)=>{if(!current())throw new DOMException('Aborted','AbortError');const result=await callGemini(...args);if(!current())throw new DOMException('Aborted','AbortError');return result;};
     const publishArtifact=(kind,entries,options={})=>{if(current())K.registerArtifact(kind,entries,{...options,sourceKB:source.sourceKB});};
     owned_setBusy(true);if(!(_ovr&&_ovr.keepLogs))owned_setLogs([]);owned_setCaseStudy(null);owned_setIssues([]);owned_setCoverage(null);owned_setLiveKB(0);
@@ -15590,8 +15926,9 @@ function CaseStudyGenerator(){
     // v15.17: a quota-stopped case audit remains interrupted after the generated case finishes.
     let auditInterrupted=false;
     const _aud=cfg.forTool('itemAudit');
-    owned_setProvenance({genModel:model,genLevel:level,promptLabel:'case builder v17.3',
-      auditModel:runAudit?_aud.model:'',auditLevel:runAudit?_aud.level:''});
+    const runProvenance={genModel:model,genLevel:level,promptLabel:'case builder v17.3',
+      auditModel:runAudit?_aud.model:'',auditLevel:runAudit?_aud.level:''};
+    owned_setProvenance(runProvenance);
     try{
       owned_log('Selected '+runFacts.length+' grounded fact(s) for '+runCond.name+'.','ok');
       owned_log('Model: '+model+' [Thinking: '+level+']'+(cfg.autoProfile?' (auto)':''),'warn');
@@ -15686,7 +16023,7 @@ function CaseStudyGenerator(){
             results=(e.partial||[]).filter(Boolean); // keep the verdicts already paid for
             auditInterrupted=true;
             if(generatorSlot.current.current(operation))setAuditState('interrupted');
-            owned_log('⚠ Audit stopped early — your Gemini API quota is exhausted. The case itself is complete and still passed its grounding checks; only the optional item review was cut short. Wait for your quota to reset, switch the "Item quality · audit" profile to Flash, or turn the audit off.','err');
+            owned_log('⚠ Audit stopped early — your Gemini API quota is exhausted. The case itself is complete and still passed its grounding checks; only the optional item review was cut short. Wait for your quota to reset, switch the "Item quality · audit" profile to Hydrogen, or turn the audit off.','err');
           }
 
           const sum=itemAuditSummary(results.concat(Object.values(seed)));
@@ -15776,16 +16113,19 @@ function CaseStudyGenerator(){
       const cited=new Set(caseAllFactIds(parsed));
       const usedSelected=new Set([...cited].filter(id=>allowedFactIds.has(id)));
       const outOfPacket=[...cited].filter(id=>!allowedFactIds.has(id));
-      owned_setCoverage({selected:runFacts.length,used:usedSelected.size,outOfPacket,
-        uncovered:runFacts.filter(f=>!usedSelected.has(String(f.id).toLowerCase()))});
+      const finalCoverage={selected:runFacts.length,used:usedSelected.size,outOfPacket,
+        uncovered:runFacts.filter(f=>!usedSelected.has(String(f.id).toLowerCase()))};
+      owned_setCoverage(finalCoverage);
       // A case that failed validation is still shown and exportable (you may want to inspect
       // or hand-correct it), but it must NOT enter the registry: once a fact badge appears in
       // the inspector it reads as verified provenance, and linking an invalid case there would
       // make a fabrication look audited.
+      let registeredCaseId='';
       if(K.registerArtifact&&errCount===0){
         // Namespaced per case. Models reuse ids like "q1" for every case they write, so an
         // un-namespaced key would silently merge two different questions' provenance.
         const caseId='case-'+Date.now().toString(36)+'-'+uid().slice(0,6);
+        registeredCaseId=caseId;
         const title=parsed.title||runCond.name;
         // v15.1: stage data and question rationales get SEPARATE registry entries. v15
         // seeded every question's entry with the whole stage's data facts, so the Inspector
@@ -15819,6 +16159,12 @@ function CaseStudyGenerator(){
       if(outOfPacket.length)owned_log('⚠ '+outOfPacket.length+' cited fact ID(s) were never supplied to this run: '+outOfPacket.slice(0,6).join(', ')+(outOfPacket.length>6?'…':''),'err');
       if(errCount)owned_log('Case failed validation — it is shown and exportable, but was NOT linked into the Fact Inspector. Fix the errors or regenerate before using it as study content.','err');
       if(generatorSlot.current.current(operation))setAuditState(runAudit?(auditInterrupted?'interrupted':'complete'):'disabled');
+      // v20.2: deterministically commit the completed packet snapshot inside run() so backgrounded tabs never lose auditState/coverage when runBatch advances.
+      if(current()&&typeof setCasePacket==='function'){
+        const finalAuditState=runAudit?(auditInterrupted?'interrupted':'complete'):'disabled';
+        const snap={id:runPid,caseId:registeredCaseId,caseStudy:parsed,issues:allIssues,coverage:finalCoverage,audit:finalAudit,auditState:finalAuditState,provenance:runProvenance,artifactSource:runArtifactSource};
+        setCasePacket(prev=>{const ix=prev.findIndex(x=>x.id===runPid);const next=ix<0?[...prev,snap]:prev.map((x,i)=>i===ix?snap:x);if(typeof casePacketRef!=='undefined')casePacketRef.current=next;return next;});
+      }
     }catch(e){
       if(_ovr){if(e&&e.name==='AbortError')_ovr.halted='abort';else if((typeof geminiHaltsBatch==='function'&&geminiHaltsBatch(e))||isQuotaError(e))_ovr.halted='quota';}
       if(generatorSlot.current.owns(operation))setAuditState(e.name==='AbortError'?'interrupted':'failed');
@@ -15851,10 +16197,10 @@ function CaseStudyGenerator(){
   useEffect(()=>{
     if(!activePacketId||!caseStudy)return;
     setCasePacket(prev=>{
-      const snap={id:activePacketId,caseStudy,issues,coverage,audit,auditState,provenance,artifactSource};
       const ix=prev.findIndex(x=>x.id===activePacketId);
+      const cur=ix>=0?prev[ix]:null;
+      const snap={id:activePacketId,caseId:cur?.caseId||'',caseStudy,issues,coverage,audit,auditState,provenance,artifactSource};
       if(ix<0)return[...prev,snap];
-      const cur=prev[ix];
       if(cur.caseStudy===caseStudy&&cur.issues===issues&&cur.coverage===coverage&&cur.audit===audit&&cur.auditState===auditState&&cur.provenance===provenance&&cur.artifactSource===artifactSource)return prev;
       const next=prev.slice();next[ix]=snap;return next;
     });
@@ -15866,18 +16212,24 @@ function CaseStudyGenerator(){
     setProvenance(entry.provenance||null);setArtifactSource(entry.artifactSource||null);setInvalidCaseRaw('');
   },[]);
   const removePacketEntry=useCallback(id=>{
+    // v20.2: prune removed Case Packet entry's provenance from artifactRegistry.caseStudies.
+    const removed=casePacketRef.current.find(x=>x.id===id);
+    if(removed?.caseId)K.pruneArtifact?.('caseStudies',[removed.caseId]);
     const remaining=casePacketRef.current.filter(x=>x.id!==id);
+    casePacketRef.current=remaining;
     setCasePacket(remaining);
     if(activePacketId===id){
       const next=remaining[remaining.length-1]||null;
       if(next)selectPacketEntry(next);
       else{setActivePacketId('');setCaseStudy(null);setIssues([]);setCoverage(null);setAudit(null);setAuditState('disabled');setProvenance(null);setArtifactSource(null);setInvalidCaseRaw('');}
     }
-  },[activePacketId,selectPacketEntry]);
+  },[activePacketId,selectPacketEntry,K]);
   const clearPacket=useCallback(()=>{
+    K.pruneArtifact?.('caseStudies',null);
+    casePacketRef.current=[];
     setCasePacket([]);setActivePacketId('');setCaseStudy(null);setIssues([]);setCoverage(null);
     setAudit(null);setAuditState('disabled');setProvenance(null);setArtifactSource(null);setInvalidCaseRaw('');
-  },[]);
+  },[K]);
   const isBatchMode=hasCustomCaseScope&&resolvedCaseConditions.length>1&&caseRunMode==='batch';
   const batchPlan=useMemo(()=>isBatchMode?caseBuildBatchTargets({conditions,resolvedConditions:resolvedCaseConditions,concepts:validCaseConcepts,mixConceptExemplars:caseMixExemplars,includeRelated:caseIncludeRelated,mixMode:caseMixMode,batchUnit:(validCaseConcepts.length>0&&caseMixExemplars)?caseBatchUnit:'conditions',factOpts:{includeTier2,includeTier3,includeCalculation:types.calculation,includeEducation:types.education},stages,questionsPerStage,maxBatch:MAX_CASE_BATCH}):{targets:[],skipped:[],overflowCount:0,totalEligible:0},[isBatchMode,conditions,resolvedCaseConditions,validCaseConcepts,caseMixExemplars,caseIncludeRelated,caseMixMode,caseBatchUnit,includeTier2,includeTier3,types.calculation,types.education,stages,questionsPerStage]);
   const runBatch=useCallback(async()=>{
@@ -15895,7 +16247,6 @@ function CaseStudyGenerator(){
           const ovr={condition:t.condition,facts:t.facts,sufficiency:t.sufficiency,keepLogs:true,packetId:'pkt-'+Date.now().toString(36)+'-'+idx+'-'+uid().slice(0,4),completed:false,halted:''};
           batchOverrideRef.current=ovr;
           try{await run();}finally{batchOverrideRef.current=null;}
-          await new Promise(r=>setTimeout(r,0));
           return{completed:ovr.completed,halted:ovr.halted};
         }
       });
@@ -16704,8 +17055,8 @@ function GizmoImporter(){
   const [cardsPerPage,setCardsPerPage]=useState(GIZMO_DEFAULT_CARDS_PER_PAGE);
   const [importPrompt,setImportPrompt]=useState(()=>loadGizmoImportPrompt(typeof localStorage!=='undefined'?localStorage:null));
   const [savedPrompt,setSavedPrompt]=useState(()=>loadGizmoImportPrompt(typeof localStorage!=='undefined'?localStorage:null));
-  const [promptFlash,setPromptFlash]=useState('');
-  const [copyFlash,setCopyFlash]=useState('');
+  const [promptNotice,setPromptNotice]=useState('');
+  const [copyNotice,setCopyNotice]=useState('');
   const [busy,setBusy]=useState(false);
   const [progress,setProgress]=useState({current:0,total:0});
   const [logs,pushLog,setLogs]=useCappedLog();
@@ -16715,23 +17066,23 @@ function GizmoImporter(){
   const [copiedChunks,setCopiedChunks]=useState(()=>new Set());
   const [rangeStart,setRangeStart]=useState(1);
   const [rangeEnd,setRangeEnd]=useState(GIZMO_DEFAULT_PAGES_PER_CHUNK);
-  const abortRef=useRef(null),fileInputRef=useRef(null),flashTimer=useRef(null),copyTimer=useRef(null);
+  const abortRef=useRef(null),fileInputRef=useRef(null),noticeTimer=useRef(null),copyTimer=useRef(null);
 
   useEffect(()=>()=>{
     abortRef.current?.abort();abortRef.current=null;
-    if(flashTimer.current)clearTimeout(flashTimer.current);
+    if(noticeTimer.current)clearTimeout(noticeTimer.current);
     if(copyTimer.current)clearTimeout(copyTimer.current);
   },[]);
 
-  const showPromptFlash=msg=>{
-    setPromptFlash(msg);
-    if(flashTimer.current)clearTimeout(flashTimer.current);
-    flashTimer.current=setTimeout(()=>setPromptFlash(''),2000);
+  const showPromptNotice=msg=>{
+    setPromptNotice(msg);
+    if(noticeTimer.current)clearTimeout(noticeTimer.current);
+    noticeTimer.current=setTimeout(()=>setPromptNotice(''),2000);
   };
-  const showCopyFlash=msg=>{
-    setCopyFlash(msg);
+  const showCopyNotice=msg=>{
+    setCopyNotice(msg);
     if(copyTimer.current)clearTimeout(copyTimer.current);
-    copyTimer.current=setTimeout(()=>setCopyFlash(''),2000);
+    copyTimer.current=setTimeout(()=>setCopyNotice(''),2000);
   };
 
   const fileKey=f=>f.name+'|'+f.size+'|'+f.lastModified;
@@ -16879,35 +17230,35 @@ function GizmoImporter(){
 
   const handleSavePrompt=()=>{
     const ok=saveGizmoImportPrompt(typeof localStorage!=='undefined'?localStorage:null,importPrompt);
-    if(ok){setSavedPrompt(importPrompt);showPromptFlash('Saved');}
-    else showPromptFlash('Could not save in browser storage');
+    if(ok){setSavedPrompt(importPrompt);showPromptNotice('Saved');}
+    else showPromptNotice('Could not save in browser storage');
   };
   const handleResetPrompt=()=>{
     setImportPrompt(GIZMO_DEFAULT_IMPORT_PROMPT);
     saveGizmoImportPrompt(typeof localStorage!=='undefined'?localStorage:null,GIZMO_DEFAULT_IMPORT_PROMPT);
     setSavedPrompt(GIZMO_DEFAULT_IMPORT_PROMPT);
-    showPromptFlash('Reset to default');
+    showPromptNotice('Reset to default');
   };
   const handleCopyPrompt=async()=>{
     await copyText(importPrompt);
-    showPromptFlash('Copied!');
+    showPromptNotice('Copied!');
   };
   const handleCopyChunk=async(advance=false)=>{
     if(!activeChunk)return;
     await copyText(activeChunk.text);
     setCopiedChunks(prev=>{const next=new Set(prev);next.add(activeChunk.chunkIndex);return next;});
-    showCopyFlash('Copied chunk '+activeChunk.chunkNumber+' ('+activeChunk.cardCount+' cards)');
+    showCopyNotice('Copied chunk '+activeChunk.chunkNumber+' ('+activeChunk.cardCount+' cards)');
     if(advance&&safeChunkIdx<chunks.length-1)setChunkIdx(safeChunkIdx+1);
   };
   const handleCopyAll=async()=>{
     if(!allText)return;
     await copyText(allText);
-    showCopyFlash('Copied all '+result.cards.length+' cards');
+    showCopyNotice('Copied all '+result.cards.length+' cards');
   };
   const handleCopyRange=async()=>{
     if(!rangeSlice.valid||!rangeSlice.text)return;
     await copyText(rangeSlice.text);
-    showCopyFlash('Copied pages '+rangeSlice.startPage+'–'+rangeSlice.endPage+' ('+rangeSlice.cardCount+' cards)');
+    showCopyNotice('Copied pages '+rangeSlice.startPage+'–'+rangeSlice.endPage+' ('+rangeSlice.cardCount+' cards)');
   };
 
   const promptDirty=importPrompt!==savedPrompt;
@@ -17008,8 +17359,8 @@ function GizmoImporter(){
     </>}
   >
     <Panel title="Gizmo import instructions" className="flat" actions={<>
-      {promptFlash&&<span role="status" style={{fontSize:12,fontWeight:600,color:'var(--ok)',alignSelf:'center',marginRight:4}}>✓ {promptFlash}</span>}
-      {promptDirty&&!promptFlash&&<span style={{fontSize:11,color:'var(--accent-warm)',alignSelf:'center',marginRight:4}}>Unsaved edits</span>}
+      {promptNotice&&<span role="status" style={{fontSize:12,fontWeight:600,color:'var(--ok)',alignSelf:'center',marginRight:4}}>✓ {promptNotice}</span>}
+      {promptDirty&&!promptNotice&&<span style={{fontSize:11,color:'var(--accent-warm)',alignSelf:'center',marginRight:4}}>Unsaved edits</span>}
       <button type="button" className="btn-secondary" disabled={!promptDirty} onClick={handleSavePrompt}>Save</button>
       {importPrompt!==GIZMO_DEFAULT_IMPORT_PROMPT&&<button type="button" className="btn-secondary" onClick={handleResetPrompt}>Reset default</button>}
       <button type="button" className="btn-primary" onClick={handleCopyPrompt}>Copy</button>
@@ -17030,7 +17381,7 @@ function GizmoImporter(){
 
     {result&&<>
       <ResultsHead title="Gizmo tab-separated output" count={<><b>{result.cards.length}</b> card{result.cards.length===1?'':'s'} · <b>{result.totalBlanks}</b> [blank]{result.totalBlanks===1?'':'s'} · <b>{pages.length}</b> page{pages.length===1?'':'s'}</>}>
-        {copyFlash&&<span role="status" style={{fontSize:12,fontWeight:600,color:'var(--ok)',marginRight:4}}>✓ {copyFlash}</span>}
+        {copyNotice&&<span role="status" style={{fontSize:12,fontWeight:600,color:'var(--ok)',marginRight:4}}>✓ {copyNotice}</span>}
         <button type="button" className="btn-secondary" disabled={!allText} onClick={()=>downloadBlob(new Blob([allText],{type:'text/plain;charset=utf-8'}),result.outName)}>⬇ {result.outName}</button>
       </ResultsHead>
 
@@ -17160,7 +17511,11 @@ function ConfigSidebar({onClose,activeTool}){
       <div className="sb-section">
         <label className="sb-label" htmlFor="suite-api-key">Gemini API key</label>
         <div className="sb-field">
-          <input id="suite-api-key" aria-describedby="suite-api-help" autoComplete="off" type="password" value={cfg.apiKey} onChange={e=>cfg.setApiKey(e.target.value)} placeholder="AIza..." spellCheck="false"/>
+          {/* v20.2: password-manager ignore attributes and explicit Clear button prevent auto-save prompts and let shared workstations clear sessionStorage. */}
+          <div style={{display:'flex',gap:6,alignItems:'center'}}>
+            <input id="suite-api-key" aria-describedby="suite-api-help" autoComplete="off" type="password" data-1p-ignore="true" data-lpignore="true" data-form-type="other" value={cfg.apiKey} onChange={e=>cfg.setApiKey(e.target.value)} placeholder="AIza..." spellCheck="false" style={{flex:1}}/>
+            {cfg.apiKey&&<button type="button" className="btn-secondary" aria-label="Clear Gemini API key" style={{padding:'4px 10px',fontSize:12,flexShrink:0}} onClick={()=>cfg.setApiKey('')}>Clear</button>}
+          </div>
           <div className="sb-hint" id="suite-api-help">Kept for this browser session. Sent only to Google’s API when you run a tool.</div>
         </div>
       </div>
@@ -17173,10 +17528,10 @@ function ConfigSidebar({onClose,activeTool}){
         {cfg.autoProfile?(
           <div style={{marginTop:6}}>
             <div className="sb-hint" style={{marginBottom:6}}>Each tool uses its own model and thinking level. The manual toggle is paused.</div>
-            {/* v18.0 (review L4): NCLEX to Anki has no profile row, so this badge showed the Flash · low fallback. That tab always
-                runs the Flash model, reads images at the level chosen in the tab and answers at high. The header now says seven tools.
+            {/* v18.0 (review L4): NCLEX to Anki has no profile row, so this badge showed the Hydrogen · low fallback. That tab always
+                runs the Hydrogen model, reads images at the level chosen in the tab and answers at high.
                 v19.0: Priority runs both Stage-1 harvest (priorityHarvest) and Stage-2 synthesis (priority); display both in the badge. */}
-            {(()=>{const r=activeTool==='nclex2anki'?{model:cfg.flashModel,level:'level set in tab',family:'flash'}:cfg.forTool(activeTool);const h=activeTool==='priority'?cfg.forTool('priorityHarvest'):null;return(
+            {(()=>{const r=activeTool==='nclex2anki'?{model:cfg.hydrogenModel,level:'level set in tab',family:'hydrogen'}:cfg.forTool(activeTool);const h=activeTool==='priority'?cfg.forTool('priorityHarvest'):null;return(
               <div className="model-badge"><div className={`model-dot ${r.family==='argon'?'argon':''}`}/><span style={{flex:1}}>{h?`${h.model} (${h.level}) → ${r.model}`:r.model}</span><span style={{fontSize:12,color:'var(--text-dim)'}}>{r.level}</span></div>
             );})()}
             <div style={{fontSize:12,color:'var(--text-dim)',marginTop:3,marginBottom:7}}>↑ what the open tab will use</div>
@@ -17186,7 +17541,7 @@ function ConfigSidebar({onClose,activeTool}){
                 <div key={row.id} style={{marginBottom:8}}>
                   <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:3,gap:6}}>
                     <span style={{fontSize:12,color:'var(--text-dim)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{row.label}</span>
-                    <button className="btn-secondary" aria-label={row.label+': use '+(p.m==='argon'?'Hydrogen':'Argon')} onClick={()=>cfg.setProfile(row.id,p.m==='argon'?{m:'flash'}:{m:'argon',...(p.lv==='xhigh'?{lv:'high'}:{})})} style={{flexShrink:0,background:p.m==='argon'?'var(--orange-soft)':'var(--bg-input)',color:p.m==='argon'?'var(--accent2)':'var(--text)'}}>{p.m==='argon'?'Argon':'Hydrogen'}</button>
+                    <button className="btn-secondary" aria-label={row.label+': use '+(p.m==='argon'?'Hydrogen':'Argon')} onClick={()=>cfg.setProfile(row.id,p.m==='argon'?{m:'hydrogen'}:{m:'argon',...(p.lv==='xhigh'?{lv:'high'}:{})})} style={{flexShrink:0,background:p.m==='argon'?'var(--orange-soft)':'var(--bg-input)',color:p.m==='argon'?'var(--accent2)':'var(--text)'}}>{p.m==='argon'?'Argon':'Hydrogen'}</button>
                   </div>
                   <div className="level-pills">
                     {['low','medium','high','xhigh'].map(lv=>{const dis=p.m==='argon'&&lv==='xhigh';return <button key={lv} type="button" disabled={dis} title={dis?'xhigh is supported on Hydrogen; Argon supports low, medium, and high':undefined} aria-pressed={p.lv===lv} aria-label={row.label+': '+lv+' thinking'} className={`level-pill ${p.lv===lv?'on':''}`} onClick={()=>!dis&&cfg.setProfile(row.id,{lv})}>{lv}</button>;})}
@@ -17214,8 +17569,8 @@ function ConfigSidebar({onClose,activeTool}){
           </div>
         )}
         <div style={{marginTop:10}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:4}}><span className="sb-label" style={{marginBottom:0}}>Model IDs</span>{(cfg.flashModel!=='gemini-4-hydrogen'||cfg.argonModel!=='gemini-4-argon')&&<button type="button" className="btn-ghost" style={{fontSize:11,padding:'2px 6px',minHeight:0}} onClick={()=>{setModelDraft({});cfg.setFlashModel('gemini-4-hydrogen');cfg.setArgonModel('gemini-4-argon');}}>Reset defaults</button>}</div>
-          <div className="sb-field"><label htmlFor="suite-flash-model">Hydrogen model</label><input id="suite-flash-model" type="text" value={modelDraft.flash??cfg.flashModel} aria-invalid={modelDraft.flashBad===true} aria-describedby={modelDraft.flashBad?'suite-flash-model-error':undefined} onChange={e=>commitModelId('flash',e.target.value,cfg.setFlashModel)} spellCheck="false"/>{modelDraft.flashBad&&<div className="sb-hint" id="suite-flash-model-error" style={{color:'var(--accent-warm)'}}>Not a valid model ID (letters, digits, dot, dash, underscore). Still using {cfg.flashModel}.</div>}</div>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:4}}><span className="sb-label" style={{marginBottom:0}}>Model IDs</span>{(cfg.hydrogenModel!=='gemini-4-hydrogen'||cfg.argonModel!=='gemini-4-argon')&&<button type="button" className="btn-ghost" style={{fontSize:11,padding:'2px 6px',minHeight:0}} onClick={()=>{setModelDraft({});cfg.setHydrogenModel('gemini-4-hydrogen');cfg.setArgonModel('gemini-4-argon');}}>Reset defaults</button>}</div>
+          <div className="sb-field"><label htmlFor="suite-hydrogen-model">Hydrogen model</label><input id="suite-hydrogen-model" type="text" value={modelDraft.hydrogen??cfg.hydrogenModel} aria-invalid={modelDraft.hydrogenBad===true} aria-describedby={modelDraft.hydrogenBad?'suite-hydrogen-model-error':undefined} onChange={e=>commitModelId('hydrogen',e.target.value,cfg.setHydrogenModel)} spellCheck="false"/>{modelDraft.hydrogenBad&&<div className="sb-hint" id="suite-hydrogen-model-error" style={{color:'var(--accent-warm)'}}>Not a valid model ID (letters, digits, dot, dash, underscore). Still using {cfg.hydrogenModel}.</div>}</div>
           <div className="sb-field"><label htmlFor="suite-argon-model">Argon model</label><input id="suite-argon-model" type="text" value={modelDraft.argon??cfg.argonModel} aria-invalid={modelDraft.argonBad===true} aria-describedby={modelDraft.argonBad?'suite-argon-model-error':undefined} onChange={e=>commitModelId('argon',e.target.value,cfg.setArgonModel)} spellCheck="false"/>{modelDraft.argonBad&&<div className="sb-hint" id="suite-argon-model-error" style={{color:'var(--accent-warm)'}}>Not a valid model ID (letters, digits, dot, dash, underscore). Still using {cfg.argonModel}.</div>}</div>
         </div>
       </div>
@@ -17264,21 +17619,22 @@ class BootErrorBoundary extends React.Component{
 // v17.3: the six tools take no props, so React.memo lets an App re-render (tab switch, header chip,
 // drawer toggle) skip them; changes to the contexts they consume still reach them.
 const TOOL_COMPONENTS={knowledge:React.memo(KnowledgeBaseBuilder),priority:React.memo(PriorityAnalyzer),anki:React.memo(AnkiGenerator),nclex:React.memo(NCLEXExtractor),nclexgen:React.memo(NCLEXGenerator),cases:React.memo(CaseStudyGenerator),nclex2anki:React.memo(NCLEXToAnki),gizmo:React.memo(GizmoImporter)}; // v15: hoisted — was rebuilt on every App render
+const NoopTool=()=>null; // v20.2: unvisited tabs render NoopTool on boot and stay mounted once visited
 
 function App(){
   const [apiKey,setApiKey]=useState(()=>{try{return sessionStorage.getItem('suite_key')||'';}catch{return'';}});
   // v17.3: hydrate once from the validated snapshot; loadModelSettings holds the defaults and the validation.
   const [savedModels]=useState(()=>{try{return loadModelSettings(localStorage);}catch(e){return {...MODEL_SETTINGS_DEFAULTS};}});
-  const [flashModel,setFlashModel]=useState(savedModels.flashModel); // v15.15 model refresh (2026-09-02): 3.8 Flash is stable and keeps the supported low/medium/high thinking levels and 65,536-token output ceiling.
+  const [hydrogenModel,setHydrogenModel]=useState(savedModels.hydrogenModel); // v20.2: Gemini 4 Hydrogen (gemini-4-hydrogen) supports low/medium/high/xhigh thinking levels and a 65,536-token output ceiling.
   const [argonModel,setArgonModel]=useState(savedModels.argonModel); // v17.13 (2026-10-13): Argon replaces 3.1 Pro (gemini-3.1-pro-preview) in this slot. The ID gemini-4-argon is the one Google's Cloud developer guide uses; if a key rejects it, type the right ID here — no code change is needed.
   const [thinkingMode,setThinkingMode]=useState(savedModels.thinkingMode);
   // Thinking level is tracked per model family so decoupling doesn't silently change
-  // anyone's defaults: Flash keeps running at low and Argon at high until changed.
-  // The old single toggle couldn't express Flash+medium/high at all.
-  const [flashLevel,setFlashLevel]=useState(savedModels.flashLevel);
+  // anyone's defaults: Hydrogen keeps running at low and Argon at high until changed.
+  // The old single toggle couldn't express Hydrogen+medium/high/xhigh at all.
+  const [hydrogenLevel,setHydrogenLevel]=useState(savedModels.hydrogenLevel);
   const [argonLevel,setArgonLevel]=useState(savedModels.argonLevel);
   // Auto mode: each tool resolves its own model+level from a profile table, overriding
-  // the manual Flash/Argon toggle. Opt-in and persisted, so an untouched build behaves
+  // the manual Hydrogen/Argon toggle. Opt-in and persisted, so an untouched build behaves
   // exactly as before and a customized profile survives reload.
   const [autoProfile,setAutoProfile]=useState(()=>{try{const v=localStorage.getItem('latte_auto_profile_v1');return v===null?true:v==='1';}catch{return true;}});
   // v15.7: `casesAudit` was renamed to `itemAudit`. A saved profile from v15.6 still carries
@@ -17288,15 +17644,42 @@ function App(){
   const [profiles,setProfiles]=useState(()=>{try{const r=localStorage.getItem('latte_tool_profiles_v1');const p=r?JSON.parse(r):null;if(!p||typeof p!=='object'||Array.isArray(p))return TOOL_PROFILE_DEFAULTS;if(p.casesAudit&&!p.itemAudit){p.itemAudit=p.casesAudit;}delete p.casesAudit;
     // v17.3: only complete, recognized rows are kept; a malformed row falls back to its recommended default so an arbitrary level cannot reach the API.
     // v17.13: a row saved as 'pro' chose the second slot, which is now Argon; it would otherwise be discarded as an
-    // unknown family and quietly fall back to Flash. Keep this shim, as with casesAudit above.
-    // v20.2: admit xhigh for Hydrogen/Flash rows while clamping Argon rows to high so Argon never receives an unsupported xhigh level.
-    const valid={};for(const id of Object.keys(TOOL_PROFILE_DEFAULTS)){const row=p[id];const m=row&&row.m==='pro'?'argon':row&&row.m;if(row&&typeof row==='object'&&!Array.isArray(row)&&['flash','argon'].includes(m)&&['low','medium','high','xhigh'].includes(row.lv))valid[id]={m,lv:m==='argon'&&row.lv==='xhigh'?'high':row.lv};}
+    // unknown family and quietly fall back to Hydrogen. Keep this shim, as with casesAudit above.
+    // v20.2: admit xhigh for Hydrogen rows while clamping Argon rows to high so Argon never receives an unsupported xhigh level.
+    const valid={};for(const id of Object.keys(TOOL_PROFILE_DEFAULTS)){const row=p[id];const m=row&&row.m==='pro'?'argon':row&&row.m;if(row&&typeof row==='object'&&!Array.isArray(row)&&['hydrogen','argon'].includes(m)&&['low','medium','high','xhigh'].includes(row.lv))valid[id]={m,lv:m==='argon'&&row.lv==='xhigh'?'high':row.lv};}
     return{...TOOL_PROFILE_DEFAULTS,...valid};}catch{return TOOL_PROFILE_DEFAULTS;}});
   useEffect(()=>{try{localStorage.setItem('latte_auto_profile_v1',autoProfile?'1':'0');localStorage.setItem('latte_tool_profiles_v1',JSON.stringify(profiles));}catch(e){}},[autoProfile,profiles]);
-  useEffect(()=>{try{localStorage.setItem(MODEL_SETTINGS_KEY,JSON.stringify({flashModel,argonModel,thinkingMode,flashLevel,argonLevel}));}catch(e){}},[flashModel,argonModel,thinkingMode,flashLevel,argonLevel]);
-  const setProfile=useCallback((id,patch)=>setProfiles(p=>{const cur=p[id]||TOOL_PROFILE_DEFAULTS[id]||{m:'flash',lv:'low'};const next={...cur,...patch};if(next.m==='argon'&&next.lv==='xhigh')next.lv='high';return{...p,[id]:next};}),[]);
+  useEffect(()=>{saveModelSettings(localStorage,{hydrogenModel,argonModel,thinkingMode,hydrogenLevel,argonLevel});},[hydrogenModel,argonModel,thinkingMode,hydrogenLevel,argonLevel]);
+  // v20.2: keep model settings, auto-profile toggle, and per-tool profiles synchronized across sibling browser tabs.
+  useEffect(()=>{
+    const onStorage=ev=>{
+      if(!ev||!ev.key||ev.storageArea!==localStorage)return;
+      if(ev.key===MODEL_SETTINGS_KEY){
+        const next=loadModelSettings(localStorage);
+        setHydrogenModel(next.hydrogenModel);setArgonModel(next.argonModel);
+        setThinkingMode(next.thinkingMode);setHydrogenLevel(next.hydrogenLevel);setArgonLevel(next.argonLevel);
+      }else if(ev.key==='latte_auto_profile_v1'){
+        setAutoProfile(ev.newValue===null?true:ev.newValue==='1');
+      }else if(ev.key==='latte_tool_profiles_v1'){
+        try{
+          const p=ev.newValue?JSON.parse(ev.newValue):null;
+          if(!p||typeof p!=='object'||Array.isArray(p)){setProfiles(TOOL_PROFILE_DEFAULTS);return;}
+          const cp={...p};if(cp.casesAudit&&!cp.itemAudit)cp.itemAudit=cp.casesAudit;delete cp.casesAudit;
+          const valid={};for(const id of Object.keys(TOOL_PROFILE_DEFAULTS)){const row=cp[id];const m=row&&row.m==='pro'?'argon':row&&row.m;if(row&&typeof row==='object'&&!Array.isArray(row)&&['hydrogen','argon'].includes(m)&&['low','medium','high','xhigh'].includes(row.lv))valid[id]={m,lv:m==='argon'&&row.lv==='xhigh'?'high':row.lv};}
+          setProfiles({...TOOL_PROFILE_DEFAULTS,...valid});
+        }catch(e){}
+      }
+    };
+    window.addEventListener('storage',onStorage);
+    return()=>window.removeEventListener('storage',onStorage);
+  },[]);
+  const setProfile=useCallback((id,patch)=>setProfiles(p=>{const cur=p[id]||TOOL_PROFILE_DEFAULTS[id]||{m:'hydrogen',lv:'low'};const next={...cur,...patch};if(next.m==='argon'&&next.lv==='xhigh')next.lv='high';return{...p,[id]:next};}),[]);
   const resetProfiles=useCallback(()=>setProfiles(TOOL_PROFILE_DEFAULTS),[]);
   const [activeTool,setActiveTool]=useState('knowledge');
+  // v20.2: mount only the active/visited tool(s) at boot so 7 unvisited workbenches skip initial hook & memo startup,
+  // while keeping visited tabs mounted across subsequent tab switches so running work and state are never lost.
+  const [visitedTabs,setVisitedTabs]=useState(()=>new Set(['knowledge']));
+  const selectTool=useCallback(id=>{setVisitedTabs(prev=>{if(prev.has(id))return prev;const next=new Set(prev);next.add(id);return next;});setActiveTool(id);},[]);
   const [knowledgeBase,publishKnowledgeBase]=useState(EMPTY_LATTE_KB);
   // v15.17: mutation ownership, source object identity, and durable save order are distinct.
   const currentKnowledge=useRef(EMPTY_LATTE_KB),kbMutation=useRef(0),mounted=useRef(true);
@@ -17385,19 +17768,31 @@ function App(){
   // Auto on -> the tool's profile row. Auto off -> the manual global toggle, unchanged.
   const forTool=useCallback(id=>{
     if(autoProfile){
-      const p=profiles[id]||TOOL_PROFILE_DEFAULTS[id]||{m:'flash',lv:'low'};
-      return{model:p.m==='argon'?argonModel:flashModel,level:p.lv,family:p.m,auto:true};
+      const p=profiles[id]||TOOL_PROFILE_DEFAULTS[id]||{m:'hydrogen',lv:'low'};
+      return{model:p.m==='argon'?argonModel:hydrogenModel,level:p.lv,family:p.m,auto:true};
     }
-    return{model:thinkingMode?argonModel:flashModel,level:thinkingMode?argonLevel:flashLevel,family:thinkingMode?'argon':'flash',auto:false};
-  },[autoProfile,profiles,argonModel,flashModel,thinkingMode,argonLevel,flashLevel]);
+    return{model:thinkingMode?argonModel:hydrogenModel,level:thinkingMode?argonLevel:hydrogenLevel,family:thinkingMode?'argon':'hydrogen',auto:false};
+  },[autoProfile,profiles,argonModel,hydrogenModel,thinkingMode,argonLevel,hydrogenLevel]);
 
   // v17.3: activeTool left this context; it invalidated every mounted tool on each tab switch and only the settings drawer read it.
-  const cfg=useMemo(()=>({apiKey,setApiKey,flashModel,setFlashModel,argonModel,setArgonModel,thinkingMode,setThinkingMode,flashLevel,argonLevel,thinkingLevel:thinkingMode?argonLevel:flashLevel,setThinkingLevel:thinkingMode?setArgonLevel:setFlashLevel,activeModel:thinkingMode?argonModel:flashModel,autoProfile,setAutoProfile,profiles,setProfile,resetProfiles,forTool}),[apiKey,flashModel,argonModel,thinkingMode,flashLevel,argonLevel,autoProfile,profiles,setProfile,resetProfiles,forTool]);
+  const cfg=useMemo(()=>({apiKey,setApiKey,hydrogenModel,setHydrogenModel,argonModel,setArgonModel,thinkingMode,setThinkingMode,hydrogenLevel,argonLevel,thinkingLevel:thinkingMode?argonLevel:hydrogenLevel,setThinkingLevel:thinkingMode?setArgonLevel:setHydrogenLevel,activeModel:thinkingMode?argonModel:hydrogenModel,autoProfile,setAutoProfile,profiles,setProfile,resetProfiles,forTool}),[apiKey,hydrogenModel,argonModel,thinkingMode,hydrogenLevel,argonLevel,autoProfile,profiles,setProfile,resetProfiles,forTool]);
 
   // O(1) fact lookup, rebuilt only when the KB changes — powers FactTag and the drawer.
   const factIndex=useMemo(()=>buildFactIndex(knowledgeBase),[knowledgeBase]);
   // v18.4: a status chip on the Knowledge Base tab; 0 once normalizeKbEntities has run, unless an entry has no usable field.
   const entitiesWithoutFacts=useMemo(()=>kbEntitiesWithoutFacts(knowledgeBase),[knowledgeBase]);
+  // v20.2: prune deleted or cleared Case Packet provenance from artifactRegistry so the Fact Inspector never cites removed cases.
+  const pruneArtifact=useCallback((kind,caseIds=null)=>{
+    setArtifactRegistry(r=>{
+      const cur=Array.isArray(r[kind])?r[kind]:[];
+      if(!cur.length)return r;
+      if(caseIds===null)return{...r,[kind]:[]};
+      const drop=new Set((Array.isArray(caseIds)?caseIds:[caseIds]).filter(Boolean));
+      if(!drop.size)return r;
+      const next=cur.filter(entry=>!entry||!drop.has(entry.caseId));
+      return next.length===cur.length?r:{...r,[kind]:next};
+    });
+  },[]);
   // Merge a batch of generated artifacts into the registry (replacing any prior entries of
   // the same kind, since a fresh generation supersedes the last).
   const registerArtifact=useCallback((kind,entries,{merge=false,sourceKB=currentKnowledge.current}={})=>{
@@ -17405,7 +17800,7 @@ function App(){
     const next=Array.isArray(entries)?entries:[];
     setArtifactRegistry(r=>({...r,[kind]:merge?mergeArtifactEntries(r[kind],next):next}));
   },[]);
-  const knowledgeValue=useMemo(()=>({knowledgeBase,setKnowledgeBase,isCurrentSource:sourceKB=>sourceKB===currentKnowledge.current,persistenceStatus,persistenceError,recoveryChoices,chooseRecovery,factIndex,artifactRegistry,registerArtifact,publishAnkiDeck:setSharedAnkiDeck}),[knowledgeBase,persistenceStatus,persistenceError,recoveryChoices,chooseRecovery,factIndex,artifactRegistry,registerArtifact]);
+  const knowledgeValue=useMemo(()=>({knowledgeBase,setKnowledgeBase,isCurrentSource:sourceKB=>sourceKB===currentKnowledge.current,persistenceStatus,persistenceError,recoveryChoices,chooseRecovery,factIndex,artifactRegistry,registerArtifact,pruneArtifact,publishAnkiDeck:setSharedAnkiDeck}),[knowledgeBase,persistenceStatus,persistenceError,recoveryChoices,chooseRecovery,factIndex,artifactRegistry,registerArtifact,pruneArtifact]);
   const inspectorValue=useMemo(()=>({inspectedFactId,openFactInspector:setInspectedFactId,closeFactInspector:()=>setInspectedFactId(null)}),[inspectedFactId]);
 
 
@@ -17431,7 +17826,7 @@ function App(){
               <div className="rail-group" key={stage.id}>
                 <h2 className="rail-group-label" title={stage.note}>{stage.label}</h2>
                 {TOOLS.filter(t=>t.stage===stage.id).map(t=>(
-                  <button key={t.id} className={`rail-item ${activeTool===t.id?'on':''}`} aria-current={activeTool===t.id?'page':undefined} aria-controls={'tool-'+t.id} onClick={()=>setActiveTool(t.id)} title={t.title}>
+                  <button key={t.id} className={`rail-item ${activeTool===t.id?'on':''}`} aria-current={activeTool===t.id?'page':undefined} aria-controls={'tool-'+t.id} onClick={()=>selectTool(t.id)} title={t.title}>
                     <span className="rail-index" aria-hidden="true">{TOOL_INDEX.get(t.id)}</span>
                     <span className="rail-text"><span className="rail-name">{t.label}</span><span className="rail-role">{t.step}</span></span>
                   </button>
@@ -17465,7 +17860,7 @@ function App(){
             </div>
           </header>
           <div className="workspace-body">
-            {TOOLS.map(t=>{const C=TOOL_COMPONENTS[t.id];return <section key={t.id} id={'tool-'+t.id} aria-label={t.title} style={{display:activeTool===t.id?'contents':'none'}}><ToolBoundary name={t.title}><C/></ToolBoundary></section>;})}
+            {TOOLS.map(t=>{const C=(visitedTabs.has(t.id)||activeTool===t.id)?TOOL_COMPONENTS[t.id]:NoopTool;return <section key={t.id} id={'tool-'+t.id} aria-label={t.title} style={{display:activeTool===t.id?'contents':'none'}}><ToolBoundary name={t.title}><C/></ToolBoundary></section>;})}
           </div>
         </main>
       </div>

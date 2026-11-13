@@ -21,7 +21,7 @@ function page(){
   html=html.replace(sizeLimit,'const ANKI_SOURCE_AUDIT_GROUP_CHARS=2400;');
   const fixtureCfg="const cfg=useMemo(()=>({apiKey:'synthetic-only',forTool:()=>({model:'synthetic-fixture',level:'low'}),autoProfile:true}),[]);";
   if(html.split(fixtureCfg).length!==2)throw Error('Synthetic configuration anchor changed.');
-  html=html.replace(fixtureCfg,"const cfg=useMemo(()=>({apiKey:'synthetic-only',flashModel:'synthetic-flash',argonModel:'synthetic-argon',forTool:id=>({model:TOOL_PROFILE_DEFAULTS[id].m==='argon'?'synthetic-argon':'synthetic-flash',level:TOOL_PROFILE_DEFAULTS[id].lv}),autoProfile:true}),[]);");
+  html=html.replace(fixtureCfg,"const cfg=useMemo(()=>({apiKey:'synthetic-only',hydrogenModel:'synthetic-hydrogen',argonModel:'synthetic-argon',forTool:id=>({model:TOOL_PROFILE_DEFAULTS[id].m==='argon'?'synthetic-argon':'synthetic-hydrogen',level:TOOL_PROFILE_DEFAULTS[id].lv}),autoProfile:true}),[]);");
   const old='callGemini=async()=>{';
   if(html.split(old).length!==2)throw Error('Synthetic transport anchor changed.');
   html=html.replace(old,()=>validReceipt.toString()+String.raw`
@@ -69,7 +69,7 @@ async function main(){
     };
     await view.getByRole('button',{name:'▶ Generate Cards',exact:true}).click();
     await view.getByLabel('Text for note ',{exact:false}).first().waitFor();
-    assert((await view.evaluate(()=>window.__ankiReviewFixture.generationCalls)).every(c=>c.model==='synthetic-flash'&&c.level==='medium'),'new recommended Anki generation uses Flash Medium');
+    assert((await view.evaluate(()=>window.__ankiReviewFixture.generationCalls)).every(c=>c.model==='synthetic-hydrogen'&&c.level==='medium'),'new recommended Anki generation uses Hydrogen Medium');
     const field=view.getByLabel('Text for note ',{exact:false}).first();
     await field.fill('[Example] Timing: {{c1::8 minutes}}; repeat at 8 minutes.');
     await view.getByRole('button',{name:'⬇ Export .txt',exact:true}).click();
@@ -87,7 +87,7 @@ async function main(){
     assert.equal(await view.getByLabel('Anki review findings',{exact:true}).inputValue(),'all');
     await view.getByText('Optional · Check against KB',{exact:true}).click();
     assert.equal(await view.evaluate(()=>window.__ankiReviewFixture.calls.length),0);
-    assert.equal(await view.getByLabel('Source checker model',{exact:true}).inputValue(),'flash');
+    assert.equal(await view.getByLabel('Source checker model',{exact:true}).inputValue(),'hydrogen');
     assert.equal(await view.getByLabel('Source checker thinking',{exact:true}).inputValue(),'medium');
     await view.getByLabel('Source checker model',{exact:true}).selectOption('argon');
     await view.getByLabel('Source checker thinking',{exact:true}).selectOption('high');
@@ -100,7 +100,7 @@ async function main(){
     assert.equal(packet.model,'synthetic-argon');assert.equal(packet.thinkingLevel,'high');assert.equal(packet.metadata.generation.thinkingLevel,'medium');
     assert.match(packet.metadata.sourceSnapshotSha256,/^[a-f0-9]{64}$/);assert.match(packet.metadata.cardSnapshotSha256,/^[a-f0-9]{64}$/);assert.match(packet.metadata.audit.builderSha256,/^[a-f0-9]{64}$/);
     assert.equal(packet.metadata.startedAt,null);assert.equal(packet.metadata.finishedAt,null);assert(packet.metadata.preparedAt,'local preparation gets its own timestamp');
-    await view.getByLabel('Source checker model',{exact:true}).selectOption('flash');
+    await view.getByLabel('Source checker model',{exact:true}).selectOption('hydrogen');
     await view.getByLabel('Source checker thinking',{exact:true}).selectOption('low');
     await view.evaluate(()=>{window.__ankiReviewFixture.auditMode='finding';});
     const cardsBeforeAudit=await view.getByLabel('Text for note ',{exact:false}).evaluateAll(fields=>fields.map(f=>f.value));

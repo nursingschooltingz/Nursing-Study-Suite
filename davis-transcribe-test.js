@@ -5,7 +5,7 @@
  *
  * node davis-transcribe-test.js card.jpg --dry-run [--app-profile]
  * GEMINI_API_KEY=... node davis-transcribe-test.js card.jpg --live --runs 2
- * Options: --runs 2..100, --model ID, --level minimal|low|medium|high,
+ * Options: --runs 2..100, --model ID, --level low|medium|high|xhigh,
  * --app <suite.html>, --app-profile, --out <report.json>, --retryms 0..600000,
  * --rpm 0..60000 (0 = unthrottled; fractional positive rates allowed).
  *
@@ -95,6 +95,7 @@ function createTranscriber(config, prompt, key, deps = {}) {
   const readFile = deps.readFile || fs.readFileSync;
   const fetchFn = deps.fetch || globalThis.fetch;
   const sleep = deps.sleep || (ms => new Promise(resolve => setTimeout(resolve, ms)));
+  const rand = deps.random || Math.random;
   const pace = createMeasurementPacer(config.rpm, { now: deps.now || Date.now, sleep });
   return async function transcribe(imgPath, observation) {
     if (!config.live || config.dryRun) throw new Error('Live transcription requires --live and per-run human authorization');
@@ -117,7 +118,8 @@ function createTranscriber(config, prompt, key, deps = {}) {
       if (resp.ok) break;
       // Do not copy an upstream error body into a report: it can echo request data.
       if ((resp.status !== 429 && resp.status < 500) || attempt === 3) throw new Error('HTTP ' + resp.status);
-      await sleep(config.retryms * Math.pow(2, attempt));
+      const jitter = config.retryms > 0 ? Math.floor(rand() * Math.min(1000, config.retryms)) : 0;
+      await sleep(config.retryms * Math.pow(2, attempt) + jitter);
     }
     const response = await resp.json(), candidate = (response.candidates || [])[0] || {};
     observation.finishReason = candidate.finishReason || '';
@@ -167,7 +169,7 @@ async function main(argv = process.argv.slice(2), deps = {}) {
   try {
     config = parseArgs(argv);
     if (config.help) {
-      log('Davis: card.jpg [--dry-run | --live] [--runs 2..100] [--app-profile | --model ID --level low|medium|high] [--app suite.html] [--out report.json] [--retryms 0..600000] [--rpm 0..60000]. Exit 3 means incomplete measurement.');
+      log('Davis: card.jpg [--dry-run | --live] [--runs 2..100] [--app-profile | --model ID --level low|medium|high|xhigh] [--app suite.html] [--out report.json] [--retryms 0..600000] [--rpm 0..60000]. Exit 3 means incomplete measurement.');
       return 0;
     }
     if (!config.live && !config.dryRun) throw new Error('Use --dry-run to inspect the plan, or --live only after per-run human authorization');

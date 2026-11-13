@@ -36,7 +36,7 @@ window.__ankiQualityFixture={generationCalls:[],auditCalls:[],exports:[]};`);
 };`);
   html=once(html,'downloadBlob=async blob=>fixtureExport(await blob.text());',String.raw`downloadBlob=async(blob,name)=>{const text=await blob.text();window.__ankiQualityFixture.exports.push({name,text});fixtureExport(text);};`);
   html=once(html,"const cfg=useMemo(()=>({apiKey:'synthetic-only',forTool:()=>({model:'synthetic-fixture',level:'low'}),autoProfile:true}),[]);",
-    "const cfg=useMemo(()=>({apiKey:'synthetic-only',flashModel:'synthetic-flash',argonModel:'synthetic-argon',forTool:id=>({model:TOOL_PROFILE_DEFAULTS[id].m==='argon'?'synthetic-argon':'synthetic-flash',level:TOOL_PROFILE_DEFAULTS[id].lv}),autoProfile:true}),[]);");
+    "const cfg=useMemo(()=>({apiKey:'synthetic-only',hydrogenModel:'synthetic-hydrogen',argonModel:'synthetic-argon',forTool:id=>({model:TOOL_PROFILE_DEFAULTS[id].m==='argon'?'synthetic-argon':'synthetic-hydrogen',level:TOOL_PROFILE_DEFAULTS[id].lv}),autoProfile:true}),[]);");
   return html;
 }
 
@@ -67,7 +67,7 @@ async function main(){
     await view.getByRole('button',{name:'▶ Generate Cards',exact:true}).click();
     const rows=view.getByRole('table',{name:'Editable Anki notes',exact:true}).locator('tbody tr');
     await rows.nth(6).waitFor();
-    check('mocked generation uses the Flash / Medium recommendation',(await view.evaluate(()=>window.__ankiQualityFixture.generationCalls)).every(call=>call.model==='synthetic-flash'&&call.level==='medium'));
+    check('mocked generation uses the Hydrogen / Medium recommendation',(await view.evaluate(()=>window.__ankiQualityFixture.generationCalls)).every(call=>call.model==='synthetic-hydrogen'&&call.level==='medium'));
     check('all seven generated notes remain inspectable',await rows.count()===7);
     check('both malformed generated tags keep their checked selection',await rows.nth(3).getByRole('checkbox').isChecked()&&await rows.nth(4).getByRole('checkbox').isChecked());
     check('malformed tags display the actionable structural lint',/generated tags require/.test(await rows.nth(3).getAttribute('title'))&&/generated tags require/.test(await rows.nth(4).getAttribute('title')));

@@ -9,6 +9,39 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [20.3] — 2026-11-12
+
+Complete Hydrogen (`gemini-4-hydrogen`) model slot and profile cutover across all executable scripts and tooling, plus Production-Readiness Remediation Phases 1–10.
+
+### Added
+
+- **API key clear & password-manager ignore attributes (`ConfigSidebar`).** Adds `data-1p-ignore`, `data-lpignore`, `data-form-type="other"`, and an explicit **Clear** button beside `#suite-api-key`.
+- **Step 6 bloated-exemplar concept check (`auditKbConcepts`, `KnowledgeBaseBuilder`).** Adds warn-only `bloatedExemplars` reporting when an exemplar's fact count exceeds $\max(2\times\text{sibling median}, 4)$ inside a multi-exemplar Giddens concept.
+
+### Changed
+
+- **Complete Hydrogen model slot & profile cutover (`MODEL_SETTINGS_DEFAULTS`, `TOOL_PROFILE_DEFAULTS`, `loadModelSettings`, `App`, `tools/repo-checks.js`).** Replaces all legacy fast-slot identifiers across state, storage keys, per-tool Auto profiles (`m: 'hydrogen'`), **Study settings** (`#suite-hydrogen-model`), **Anki** (`Hydrogen / Medium` recommendation and Source Checker selector), **NCLEX → Anki**, quota-fallback notices, and CLI measurement baselines with `gemini-4-hydrogen` (`hydrogenModel` / `hydrogenLevel`).
+- **Transport secret redaction, SSE keep-alives, retry jitter, and implicit prefix caching (`redactApiSecrets`, `geminiRequest`, `callGemini`, `KnowledgeBaseBuilder`, `cardTranscribe`, `nclexCallGemini`, `i2aConvert`, `NCLEXGenerator`, `neia-retest.js`, `davis-transcribe-test.js`).** Scrubs echoed API keys and `AIza…` tokens from HTTP/stream error messages and `onMeta`, adds `stream: true` SSE keep-alive streaming (with JSON mock fallback) for KB Pass 1/Pass 2 and `nclexCallGemini`, applies uniform `0..999 ms` network/timeout retry jitter (plus bounded CLI jitter in `neia-retest.js` and `davis-transcribe-test.js`), and hoists static prompt blocks into `systemInstruction` or `parts[0]` for Gemini implicit prefix caching without altering any frozen prompt bytes.
+- **Native plain `<script>` utility split & lazy tab mounting (`Nursing-Study-Suite v20.3.html`, `App`, `verify-repo.js`).** Moves ~1,080 lines of non-JSX ES2020 utilities, persistence, sanitization, PPTX, Gemini transport, PDF.js, and print/export helpers into a native `<script>` block ahead of `<script type="text/babel" data-presets="react">`, and initializes `visitedTabs` to `['knowledge']` (`NoopTool` for unvisited tabs) so only visited tabs mount while keeping visited tabs alive across switches.
+
+### Fixed
+
+- **Schema-versioned settings persistence, cross-tab sync, and non-Hydrogen `xhigh` clamping (`MODEL_SETTINGS_SCHEMA_VERSION`, `loadModelSettings`, `saveModelSettings`, `geminiGenerationConfig`, `App`, `tools/repo-checks.js`).** Stamps `schemaVersion: 2` when persisting model settings so one-time legacy model migration never overwrites an explicit custom model ID on reload, synchronizes `latte_model_settings_v1`, `latte_auto_profile_v1`, and `latte_tool_profiles_v1` across tabs via `window.addEventListener('storage', ...)`, and clamps `xhigh -> high` on non-Hydrogen custom models while keeping Argon's explicit pre-flight refusal.
+- **IndexedDB watchdog & quota-safe recovery archiving (`kbOpenDB`, `kbArchiveRecovery`).** Adds `onblocked`, `db.onversionchange` auto-close, and a `4,000 ms` watchdog timer (closing late connections) to `kbOpenDB`, and updates `kbArchiveRecovery` to prune stale `latte_recovery-*` archives prior to writing, retry after full archive eviction on `QuotaExceededError`, and fall back to an automatic `.json` recovery download so `chooseRecovery` never deadlocks.
+- **Standalone entity bucket coercion & cross-chunk/import deduplication (`KB_FACT_BUCKETS`, `kbCoerceEntityBucket`, `kbDedupEntities`, `normalizeKbEntities`, `mergeLatteParts`, `kbNormalizeImported`).** Validates explicit `facts[]` buckets on standalone `medications`, `diagnostics`, and `scoringTools` against `KB_FACT_BUCKETS` (remaining reference-idempotent when already valid) and merges duplicate standalone entities across chunks and imports while keeping `fact-N` IDs contiguous.
+- **Deterministic Case Packet commits, `WeakMap` snapshot caching, and Fact Inspector registry pruning (`artifactSourceSnapshot`, `CaseStudyGenerator`, `App.pruneArtifact`).** Memoizes `artifactSourceSnapshot` per `sourceKB` via `WeakMap`, commits completed packet entries synchronously inside `CaseStudyGenerator.run` so sequential batch runs survive background-tab React effect coalescing, and prunes removed or cleared packet cases from `artifactRegistry.caseStudies`.
+- **Binary, archive, worker, and prototype-map hardening (`getPdfDoc`, `destroyPdfDoc`, `probeImageDimensions`, `cardValidateImageSafety`, `cardFilePayload`, `i2aImagePayload`, `extractPptxText`, `i2aEmptyCache`, `i2aMergeCache`, `loadTranscripts`).** Enforces `150 MB` PDF, `25 MB` image / `15 MB` unresized inline / `64 MP` header-probed image dimension, and `50 MB` transcript JSON bounds; zeroes temporary canvas dimensions and releases PDF.js workers (`destroyPdfDoc`) across KB builds and NCLEX extraction; pre-checks PPTX ZIP EOCD entry counts in the tail `65,557` bytes before `JSZip.loadAsync`, rejects XML `<!DOCTYPE`/`<!ENTITY` declarations before `DOMParser`, and guards `zip.files` with `Object.prototype.hasOwnProperty.call`; and hardens unmapped-field and image-hash maps with `Object.create(null)` and `Object.hasOwn`.
+- **DOMPurify CSS allowlist, Markdown link scheme allowlist, print-tab `sessionStorage` isolation, and PDF.js `isEvalSupported: false` (`n2aSanitizeStyle`, `ensureDomPurifyHooks`, `N2A_CARD_POLICY`, `mdToSafeHtml`, `pdfSafeDocParams`, `printViaIframe`, `exportAsPdf`).** Filters inline `style` attributes to safe typography declarations (stripping `position:fixed`, `z-index`, `url(...)`), freezes `N2A_CARD_POLICY` (`ALLOW_DATA_ATTR: false, ALLOW_ARIA_ATTR: false`), restricts `mdToSafeHtml` `a[href]` to `https?://` or `#`, forces `isEvalSupported: false` via `pdfSafeDocParams`, clears cloned `sessionStorage` on `about:blank` print windows while binding opener `#lp-print` click handlers, and raises `printViaIframe` fallback removal to `180,000 ms`.
+- **Persisted KB Points inheritance, `_batchCaps` routing, Priority chunk clamp, and $O(1)$ accumulation (`ngFocusPlan`, `NCLEXGenerator`, `PriorityAnalyzer`, `nclexAccumulate`, `kbReconcileStored`, `downloadBlob`, `latte-tests.js`).** Automatically inherits persisted `K.knowledgeBase.numberedPoints` in `NCLEXGenerator` when local Points are blank and routes overflow focus picks across `_batchCaps`, clamps `#priority-chunk-size` to `60,000`, indexes `nclexAccumulate` in $O(1)$ via `WeakMap`, deduplicates `kbReconcileStored` in one `JSON.stringify` per candidate, extends `downloadBlob` object-URL revocation to `60,000 ms`, and batches `git check-ignore --stdin` in `latte-tests.js`.
+
+### Verification
+
+- **31 new assertions (4,034 total)** across `tools/v20-2-review-remediation-tests.js` (29) and `latte-tests.js` (2).
+- **Prompt bytes.** All 11 frozen hashes unchanged. `Prompts.md` regenerated (19 documented prompt constants).
+- **SRI.** All eight SRI-pinned scripts and both PDF worker copies were re-hashed against their CDNs and match.
+
+See the [release verification record](docs/reviews/v20.3-release.md).
+
 ## [20.2] — 2026-11-12
 
 Gemini 4 Hydrogen (`gemini-4-hydrogen`) default fast-slot model, `xhigh` thinking level, automatic migration of saved retired Flash model IDs, and Gemini 4 transport guards.

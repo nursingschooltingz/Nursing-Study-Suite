@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 4003;
+const EXPECTED_ASSERTIONS = 4034;
 
 let file;
 try {
@@ -219,7 +219,9 @@ t('v18.0: the app script asks Babel for the react preset only', S.split('type="t
   const computed = ['LATTE-Knowledge-Base-recovery-1.json', 'LATTE-Knowledge-Base-recovery-1-raw.txt', 'LATTE-Extraction-Diagnostics-2026-10-13.json', 'card-transcripts-2026-10-13.json',
     'anki-source-report-complete.json', 'latte_anki_import.txt', 'latte_anki_import_tier1.txt', 'Exam1_anki.txt', 'gizmo_import.txt', 'latte_anki_gizmo.txt'];
   const names = [...new Set([...literal, ...computed])];
-  const exposed = names.filter(n => spawnSync('git', ['check-ignore', '-q', '--no-index', n], { cwd: __dirname }).status !== 0);
+  const res = spawnSync('git', ['check-ignore', '--stdin', '--no-index'], { cwd: __dirname, input: names.join('\n') + '\n', encoding: 'utf8' });
+  const ignoredSet = new Set(String(res.stdout || '').split(/\r?\n/).filter(Boolean));
+  const exposed = res.error ? names : names.filter(n => !ignoredSet.has(n));
   t('v18.0: every export name the app writes is ignored by git (' + names.length + ' names, ' + literal.length + ' found in the app)', literal.length >= 13 && exposed.length === 0);
   if (exposed.length) console.log('      not ignored: ' + exposed.join(', '));
 }
@@ -539,7 +541,8 @@ t('all three former walkers go through it',
   S.includes('await pdfWalkPages(file,{signal,onPage:async(text,i,pg,total)=>{'));
 t('the inline NCLEX read is cancellable, not just the chunk loop',
   S.includes('await extractPdfTextSpaced(file,signal)'));
-t('default Hydrogen/Flash slot model is gemini-4-hydrogen', /const MODEL_SETTINGS_DEFAULTS=Object\.freeze\(\{flashModel:'gemini-4-hydrogen'/.test(S)); // v17.3 + v20.2: shipped default moved from gemini-3.8-flash to gemini-4-hydrogen
+t('default Hydrogen slot model is gemini-4-hydrogen', /const MODEL_SETTINGS_DEFAULTS=Object\.freeze\(\{hydrogenModel:'gemini-4-hydrogen'/.test(S)); // v17.3 + v20.2: shipped first-slot default is gemini-4-hydrogen
+t('executable scripts contain zero legacy fast-slot identifiers', !/flash(?!card)/i.test(S.slice(S.indexOf('<script'))));
 
 /* ── 10d. v15.10: quote-miss classification + benchmark instrumentation ── */
 section('v15.10 — quote-miss classification');
@@ -1573,11 +1576,11 @@ section('v15.6 — case audit pass');
   t('repair prompt requires answerability from already-shown data', rp.includes('Do not depend on data the student has not seen'));
 
   // ── Wiring ──
-  // v15.7: Flash, not Pro — a free-tier cost decision (a free key exhausted 3.1 Pro at ~26 calls).
+  // v15.7: first slot, not Pro — a free-tier cost decision (a free key exhausted 3.1 Pro at ~26 calls).
   // v17.14: Argon at high is the shipped default; the only measured audit configuration was 3.1 Pro/high.
   t('itemAudit profile defaults to argon + high', /itemAudit:\{m:'argon',lv:'high'\}/.test(S));
   t('the audit still uses high reasoning', /itemAudit:\{m:'\w+',lv:'high'\}/.test(S));
-  t('the Argon default documents why the old Flash cost decision no longer applies',
+  t('the Argon default documents why the old free-tier cost decision no longer applies',
     S.includes('That was a COST decision, not a quality one') && S.includes('the shipped default is now Argon at high. The cost reason assumed a free-tier key;'));
   t('itemAudit has a profile row', S.includes("{id:'itemAudit',label:'Item quality · audit'}"));
   t('there is exactly ONE audit profile row, not one per source tool',
@@ -2512,9 +2515,9 @@ section('v15.7 — provenance + Anki lint');
     spanFrom("function latteProvenanceStamp(", "\n}") +
     '\n;return {latteProvenanceStamp,LATTE_STANDARDS_VERSION};'
   )();
-  const st = P.latteProvenanceStamp({ genModel: 'gemini-3.7-flash', genLevel: 'high',
+  const st = P.latteProvenanceStamp({ genModel: 'gemini-4-hydrogen', genLevel: 'high',
     auditModel: 'gemini-4-argon', auditLevel: 'high', promptLabel: 'NCLEX v4.2' });
-  t('stamp names the generator model and level', /Generator: gemini-3\.7-flash \[Thinking: high\]/.test(st));
+  t('stamp names the generator model and level', /Generator: gemini-4-hydrogen \[Thinking: high\]/.test(st));
   t('stamp names the auditor model and level', /Auditor:\s+gemini-4-argon \[Thinking: high\]/.test(st));
   t('stamp names the prompt label', /Prompt: NCLEX v4\.2/.test(st));
   t('stamp names the criteria version', /Criteria: LATTE-NEIA v1\.0/.test(st));
@@ -2925,6 +2928,9 @@ section('v15.14 — clamps, backoff, storage');
 
   section('v20.1 Case Packet booklet exports & sequential Batch Queue');
   await require('./tools/case-packet-batch-tests')(S,t);
+
+  section('v20.2 Production-readiness remediation Phases 1–10');
+  await require('./tools/v20-2-review-remediation-tests')(S,t);
 
   console.log('\n════════════════════════════');
   const total = pass + fail;

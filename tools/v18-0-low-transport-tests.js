@@ -93,24 +93,24 @@ module.exports=async function run(S,t){
     let h=make([json('x')]);let e=await rejected(h.callGemini('synthetic-key','gemini-4-argon',[{text:'p'}],{retries:0}));
     out[L23[0]]=!!e&&e.status===400&&e.isFatal===true&&/Argon/.test(e.message)&&h.calls()===0;
     h=make([json('a'),json('b')]);
-    await h.callGemini('synthetic-key','synthetic-flash',[{text:'p'}],{retries:0});
-    await h.callGemini('synthetic-key','synthetic-flash',[{text:'p'}],{retries:0,thinkingLevel:'medium'});
+    await h.callGemini('synthetic-key','synthetic-model',[{text:'p'}],{retries:0});
+    await h.callGemini('synthetic-key','synthetic-model',[{text:'p'}],{retries:0,thinkingLevel:'medium'});
     out[L23[1]]=h.bodies.length===2&&!('thinkingConfig' in h.bodies[0].generationConfig)&&h.bodies[1].generationConfig.thinkingConfig.thinkingLevel==='medium';
     const quota=ev({error:{code:429,message:'Synthetic quota exhausted',status:'RESOURCE_EXHAUSTED',details:[{'@type':'type.googleapis.com/google.rpc.RetryInfo',retryDelay:'20s'}]}});
-    h=make([stream([part,quota])]);e=await rejected(h.geminiRequest('synthetic-key','synthetic-flash',{contents:[]},{retries:0,onUpdate(){}}));
+    h=make([stream([part,quota])]);e=await rejected(h.geminiRequest('synthetic-key','synthetic-model',{contents:[]},{retries:0,onUpdate(){}}));
     out[L23[2]]=!!e&&e.status===429&&e.retryable===true&&e.isFatal===false&&e.message==='Synthetic quota exhausted'&&e.partialText==='partial'&&h.halts(e)===true;
-    h=make([stream([part,quota]),stream([done])]);const retried=await h.geminiRequest('synthetic-key','synthetic-flash',{contents:[]},{retries:1,onUpdate(){}});
+    h=make([stream([part,quota]),stream([done])]);const retried=await h.geminiRequest('synthetic-key','synthetic-model',{contents:[]},{retries:1,onUpdate(){}});
     out[L23[3]]=retried==='x'&&h.delays.length===1&&h.delays[0]>=20000&&h.calls()===2;
     h=make([stream([part,ev({error:{code:400,message:'Synthetic bad request',status:'INVALID_ARGUMENT'}})]),stream([done])]);
-    e=await rejected(h.geminiRequest('synthetic-key','synthetic-flash',{contents:[]},{retries:2,onUpdate(){}}));
+    e=await rejected(h.geminiRequest('synthetic-key','synthetic-model',{contents:[]},{retries:2,onUpdate(){}}));
     out[L23[4]]=!!e&&e.status===400&&e.isFatal===true&&e.retryable===false&&h.calls()===1&&h.halts(e)===true;
     h=make([stream([part,ev({error:{message:'Synthetic stream fault'}})])]);
-    e=await rejected(h.geminiRequest('synthetic-key','synthetic-flash',{contents:[]},{retries:0,onUpdate(){}}));
+    e=await rejected(h.geminiRequest('synthetic-key','synthetic-model',{contents:[]},{retries:0,onUpdate(){}}));
     out[L23[5]]=!!e&&e.incomplete===true&&e.message==='Synthetic stream fault'&&e.status===undefined&&h.halts(e)===false;
     h=make([json('a'),json('b')]);
-    await h.geminiRequest('synthetic-key','gemini-3.8-flash',{contents:[]},{retries:0});
+    await h.geminiRequest('synthetic-key','gemini-4-hydrogen',{contents:[],generationConfig:{thinkingConfig:{thinkingLevel:'low'}}},{retries:0});
     await h.geminiRequest('synthetic-key','bad id/x?y',{contents:[]},{retries:0});
-    out[L23[6]]=h.urls[0]==='https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent'&&
+    out[L23[6]]=h.urls[0]==='https://generativelanguage.googleapis.com/v1beta/models/gemini-4-hydrogen:generateContent'&&
       h.urls[1]==='https://generativelanguage.googleapis.com/v1beta/models/bad%20id%2Fx%3Fy:generateContent';
     return out;
   });
@@ -118,7 +118,7 @@ module.exports=async function run(S,t){
   // ── L4, L5: the shipped settings drawer, compiled with the browser's Babel preset ──
   const SET=['L5: a typed model ID is trimmed before it is used and saved',
     'L5: an invalid model ID is not used; the field keeps it, marked invalid, and names the ID still running',
-    'L4: the auto badge for NCLEX to Anki names the Flash model and the level set in that tab; other tabs unchanged',
+    'L4: the auto badge for NCLEX to Anki names the Hydrogen model and the level set in that tab; other tabs unchanged',
     'L4: the drawer counts eight tools and the manual hint names the NCLEX to Anki exception',
     'v20.2: xhigh pill is enabled on Hydrogen rows, disabled on Argon rows, and Reset defaults restores gemini-4-hydrogen/argon'];
   await section(t,SET,()=>{
@@ -129,32 +129,32 @@ module.exports=async function run(S,t){
     const compiled=Babel.transform(prelude+constants+component+'\nreturn ConfigSidebar;',{presets:['react'],parserOpts:{allowReturnOutsideFunction:true}}).code;
     const document={addEventListener(){},removeEventListener(){},getElementById(){return null;}};
     const mount=cfg=>{const rt=createRuntime(cfg);const C=new Function('React','document',compiled)(rt.React,document);return props=>rt.render(C,{onClose(){},...props});};
-    const sets={flash:[],argon:[]};
-    const profileFor=id=>id==='cases'?{model:'synthetic-argon',level:'high',family:'argon',auto:true}:{model:'synthetic-flash',level:'low',family:'flash',auto:true};
+    const sets={hydrogen:[],argon:[]};
+    const profileFor=id=>id==='cases'?{model:'synthetic-argon',level:'high',family:'argon',auto:true}:{model:'synthetic-hydrogen',level:'low',family:'hydrogen',auto:true};
     const base={apiKey:'',setApiKey(){},setAutoProfile(){},thinkingMode:false,setThinkingMode(){},thinkingLevel:'low',setThinkingLevel(){},
-      activeModel:'synthetic-flash',flashModel:'synthetic-flash',setFlashModel(v){sets.flash.push(v);},argonModel:'synthetic-argon',setArgonModel(v){sets.argon.push(v);},
+      activeModel:'synthetic-hydrogen',hydrogenModel:'synthetic-hydrogen',setHydrogenModel(v){sets.hydrogen.push(v);},argonModel:'synthetic-argon',setArgonModel(v){sets.argon.push(v);},
       profiles:{},setProfile(){},resetProfiles(){},forTool:profileFor};
     const out={};
     let render=mount({...base,autoProfile:false}),tree=render({activeTool:'knowledge'});
     const field=(tr,id)=>find(tr,n=>n.type==='input'&&n.props.id===id);
-    field(tree,'suite-flash-model').props.onChange({target:{value:'  gemini-next-flash  '}});
+    field(tree,'suite-hydrogen-model').props.onChange({target:{value:'  gemini-next-hydrogen  '}});
     field(tree,'suite-argon-model').props.onChange({target:{value:'\tgemini-next-argon\n'}});
-    out[SET[0]]=sets.flash.join('|')==='gemini-next-flash'&&sets.argon.join('|')==='gemini-next-argon';
+    out[SET[0]]=sets.hydrogen.join('|')==='gemini-next-hydrogen'&&sets.argon.join('|')==='gemini-next-argon';
     tree=render({activeTool:'knowledge'});
-    field(tree,'suite-flash-model').props.onChange({target:{value:'bad id/x'}});
+    field(tree,'suite-hydrogen-model').props.onChange({target:{value:'bad id/x'}});
     tree=render({activeTool:'knowledge'});
-    const bad=field(tree,'suite-flash-model'),argon=field(tree,'suite-argon-model');
+    const bad=field(tree,'suite-hydrogen-model'),argon=field(tree,'suite-argon-model');
     const hint=bad&&find(tree,n=>n.props&&n.props.id===bad.props['aria-describedby']);
-    out[SET[1]]=sets.flash.length===1&&bad.props.value==='bad id/x'&&bad.props['aria-invalid']===true&&!!hint&&/Still using synthetic-flash/.test(textOf(hint))&&
+    out[SET[1]]=sets.hydrogen.length===1&&bad.props.value==='bad id/x'&&bad.props['aria-invalid']===true&&!!hint&&/Still using synthetic-hydrogen/.test(textOf(hint))&&
       argon.props['aria-invalid']===false&&argon.props.value==='\tgemini-next-argon\n';
     const badge=tr=>find(tr,n=>n.props&&n.props.className==='model-badge');
     const auto=mount({...base,autoProfile:true});
     const n2a=textOf(badge(auto({activeTool:'nclex2anki'}))),cases=textOf(badge(auto({activeTool:'cases'})));
-    out[SET[2]]=n2a.includes('synthetic-flash')&&n2a.includes('level set in tab')&&!/low$/.test(n2a)&&cases==='synthetic-argonhigh';
+    out[SET[2]]=n2a.includes('synthetic-hydrogen')&&n2a.includes('level set in tab')&&!/low$/.test(n2a)&&cases==='synthetic-argonhigh';
     const manualText=textOf(mount({...base,autoProfile:false})({activeTool:'knowledge'}));
     out[SET[3]]=manualText.includes('Shared across all eight tools')&&!manualText.includes('six tools')&&!manualText.includes('seven tools')&&manualText.includes('except NCLEX to Anki, which always uses the Hydrogen model');
-    const profPatches=[],resets={flash:null,argon:null};
-    const autoDrawer=mount({...base,autoProfile:true,profiles:{knowledge:{m:'flash',lv:'xhigh'},cases:{m:'argon',lv:'high'}},setProfile:(id,p)=>profPatches.push([id,p]),setFlashModel:v=>{resets.flash=v;},setArgonModel:v=>{resets.argon=v;}});
+    const profPatches=[],resets={hydrogen:null,argon:null};
+    const autoDrawer=mount({...base,autoProfile:true,profiles:{knowledge:{m:'hydrogen',lv:'xhigh'},cases:{m:'argon',lv:'high'}},setProfile:(id,p)=>profPatches.push([id,p]),setHydrogenModel:v=>{resets.hydrogen=v;},setArgonModel:v=>{resets.argon=v;}});
     let pTree=autoDrawer({activeTool:'knowledge'});
     find(pTree,n=>n.type==='button'&&n.props['aria-controls']==='suite-profiles').props.onClick();
     pTree=autoDrawer({activeTool:'knowledge'});
@@ -166,7 +166,7 @@ module.exports=async function run(S,t){
     resetModelsBtn.props.onClick();
     const manualArgonXhigh=find(mount({...base,autoProfile:false,thinkingMode:true})({activeTool:'knowledge'}),n=>n.type==='button'&&n.props['aria-label']==='xhigh thinking level');
     out[SET[4]]=!!hXhigh&&hXhigh.props.disabled===false&&hXhigh.props['aria-pressed']===true&&!!aXhigh&&aXhigh.props.disabled===true&&!!manualArgonXhigh&&manualArgonXhigh.props.disabled===true&&
-      JSON.stringify(profPatches)==='[["knowledge",{"m":"argon","lv":"high"}]]'&&resets.flash==='gemini-4-hydrogen'&&resets.argon==='gemini-4-argon';
+      JSON.stringify(profPatches)==='[["knowledge",{"m":"argon","lv":"high"}]]'&&resets.hydrogen==='gemini-4-hydrogen'&&resets.argon==='gemini-4-argon';
     return out;
   });
 

@@ -14,8 +14,8 @@ function makeAnkiPilotSpec(kb,source){
   const view=span(source,'const KB_ENTITY_KINDS=','\nfunction kbBucketFacts('),normalizer=span(source,'function kbSlug(','// v15.14: the class kept ASCII');
   const {kbForAnki,ankiChunkText,kbFactView,normalizeKbEntities}=new Function(helpers+'\n'+view+'\n'+normalizer+';return {kbForAnki,ankiChunkText,kbFactView,normalizeKbEntities};')();
   const sent=kbFactView(normalizeKbEntities(kb).kb,{boxTableFirst:true}),packet=kbForAnki(sent),chunks=ankiChunkText(packet,12000,2);
-  const model=source.match(/const MODEL_SETTINGS_DEFAULTS=Object\.freeze\(\{[^}]*\bflashModel:'([^']+)'/)?.[1]; // v17.3: shipped defaults live in MODEL_SETTINGS_DEFAULTS
-  if(!model||!source.includes("anki:{m:'flash',lv:'medium'}"))throw Error('Recommended Anki profile changed; inspect settings before planning.');
+  const model=source.match(/const MODEL_SETTINGS_DEFAULTS=Object\.freeze\(\{[^}]*\bhydrogenModel:'([^']+)'/)?.[1]; // v17.3 + v20.2: shipped defaults live in MODEL_SETTINGS_DEFAULTS
+  if(!model||!source.includes("anki:{m:'hydrogen',lv:'medium'}"))throw Error('Recommended Anki profile changed; inspect settings before planning.');
   return {model,thinkingLevel:'medium',profile:'recommended auto; confirm these settings in the UI',conditions:(kb.conditions||[]).length,entries:sent.conditions.length-(kb.conditions||[]).length,facts:sent.conditions.reduce((n,c)=>n+(c.facts||[]).length,0),packetSha256:sha256(packet),chunkChars:12000,overlapPages:2,chunkCount:chunks.length,chunkSizes:chunks.map(c=>c.length),expectedGenerationCalls:chunks.length,retriesPerCall:2,maximumAttempts:3*chunks.length,maxOutputTokensPerAttempt:65536,additionalAuditCalls:0,focusContext:'Keep Outcomes, Points, and Additional Context identical for all comparison runs.',privateOutputs:'scratch/anki-pilot/ (gitignored); save diagnostics, original responses, and the exported .txt locally.',status:'PLANNED ONLY — explicit approval for this source and these calls is required.'};
 }
 if(require.main===module){

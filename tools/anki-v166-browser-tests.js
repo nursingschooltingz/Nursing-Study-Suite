@@ -51,7 +51,7 @@ callGemini=async(apiKey,model,parts,options={})=>{
   return String.fromCharCode(96).repeat(3)+'text\n'+notes.join('\n')+'\n'+String.fromCharCode(96).repeat(3)+'\n'+String.fromCharCode(96).repeat(3)+'text\n'+['fact-1 -> line #1','fact-1 -> line #2','fact-2 -> line #3','fact-3 -> line #4','fact-4 -> line #5'].join('\n')+'\n'+String.fromCharCode(96).repeat(3);
 };`);
   html=once(html,'downloadBlob=async blob=>fixtureExport(await blob.text());',String.raw`downloadBlob=async(blob,name)=>{const text=await blob.text();window.__ankiV166Fixture.exports.push({name,text});fixtureExport(text);};`);
-  html=once(html,"const cfg=useMemo(()=>({apiKey:'synthetic-only',forTool:()=>({model:'synthetic-fixture',level:'low'}),autoProfile:true}),[]);","const cfg=useMemo(()=>({apiKey:'synthetic-only',flashModel:'synthetic-flash',argonModel:'synthetic-argon',forTool:id=>({model:TOOL_PROFILE_DEFAULTS[id].m==='argon'?'synthetic-argon':'synthetic-flash',level:TOOL_PROFILE_DEFAULTS[id].lv}),autoProfile:true}),[]);");
+  html=once(html,"const cfg=useMemo(()=>({apiKey:'synthetic-only',forTool:()=>({model:'synthetic-fixture',level:'low'}),autoProfile:true}),[]);","const cfg=useMemo(()=>({apiKey:'synthetic-only',hydrogenModel:'synthetic-hydrogen',argonModel:'synthetic-argon',forTool:id=>({model:TOOL_PROFILE_DEFAULTS[id].m==='argon'?'synthetic-argon':'synthetic-hydrogen',level:TOOL_PROFILE_DEFAULTS[id].lv}),autoProfile:true}),[]);");
   return html;
 }
 
@@ -86,7 +86,7 @@ async function main(){
     const result=report.results.find(r=>r.factReviews.some(f=>f.factId==='fact-1'));
     const mixed=result.factReviews.find(f=>f.factId==='fact-1').targets.find(t=>t.sourceRef.start===4);
     check('captured mixed target retains both locations and stays untested',mixed.status==='visible-only'&&mixed.noteRefs.length===0&&mixed.contextRefs.length===2);
-    check('mocked check captures Flash Low without a live request',await view.evaluate(()=>window.__ankiV166Fixture.auditCalls.every(c=>c.model==='synthetic-flash'&&c.level==='low')));
+    check('mocked check captures Hydrogen Low without a live request',await view.evaluate(()=>window.__ankiV166Fixture.auditCalls.every(c=>c.model==='synthetic-hydrogen'&&c.level==='low')));
     await view.getByText('Checked targets and note fields ·',{exact:false}).first().click();
     await view.getByText('Text and Extra',{exact:false}).first().waitFor();
     const normalizations=view.locator('[data-anki-reference-recoveries]');await normalizations.locator('summary').click();

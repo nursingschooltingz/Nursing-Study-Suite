@@ -69,8 +69,8 @@ function run(S,t){
     app.includes("const closeSettings=useCallback(()=>{setShowConfig(false);settingsTrigger.current?.focus();},[]);")&&!app.includes('const closeSettings=()=>'));
 
   const cfg={apiKey:'',setApiKey(){},autoProfile:false,setAutoProfile(){},thinkingMode:false,setThinkingMode(){},thinkingLevel:'low',setThinkingLevel(){},
-    activeModel:'synthetic-flash',flashModel:'synthetic-flash',setFlashModel(){},argonModel:'synthetic-argon',setArgonModel(){},profiles:{},setProfile(){},resetProfiles(){},
-    forTool(){return {model:'synthetic-flash',level:'low',family:'flash',auto:false};},activeTool:'knowledge'};
+    activeModel:'synthetic-hydrogen',hydrogenModel:'synthetic-hydrogen',setHydrogenModel(){},argonModel:'synthetic-argon',setArgonModel(){},profiles:{},setProfile(){},resetProfiles(){},
+    forTool(){return {model:'synthetic-hydrogen',level:'low',family:'hydrogen',auto:false};},activeTool:'knowledge'};
   const focus=[],listeners=new Map(),removed=[];
   const document={
     addEventListener(type,fn){listeners.set(type,fn);},

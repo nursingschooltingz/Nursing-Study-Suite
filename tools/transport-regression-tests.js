@@ -94,14 +94,14 @@ module.exports=async function transportRegressionTests(S,t){
   const argon='gemini-4-argon',json={responseMimeType:'application/json'};
   h=make([response([ev('ok','STOP')])]);
   // v18.2: Argon's ceiling is 65,536 (a live non-streaming call accepted it on 2026-10-14); it was 32,768.
-  t('the output ceiling follows the model ID: 65,536 for Argon and every other model',h.cap(argon)===65536&&h.cap('gemini-4-argon-preview')===65536&&h.cap('gemini-3.8-flash')===65536&&h.cap('')===65536&&S.includes('const GEMINI_OUTPUT_CAP=65536,ARGON_OUTPUT_CAP=65536;'));
+  t('the output ceiling follows the model ID: 65,536 for Argon and every other model',h.cap(argon)===65536&&h.cap('gemini-4-argon-preview')===65536&&h.cap('gemini-4-hydrogen')===65536&&h.cap('')===65536&&S.includes('const GEMINI_OUTPUT_CAP=65536,ARGON_OUTPUT_CAP=65536;'));
   let asked={contents:[],generationConfig:{maxOutputTokens:65536,thinkingConfig:{thinkingLevel:'high'}}};await h.call({},{model:argon,body:asked});
   t('an Argon request asking for 65,536 is sent with 65,536, no longer clamped to 32,768',h.bodies[0].generationConfig.maxOutputTokens===65536&&h.bodies[0].generationConfig.thinkingConfig.thinkingLevel==='high'&&h.metas.at(-1).maxOutputTokens===65536);
   {const over=make([response([ev('ok','STOP')])]);await over.call({},{model:argon,body:{contents:[],generationConfig:{maxOutputTokens:131072,thinkingConfig:{thinkingLevel:'high'}}}});
   t('v18.2: an Argon request asking for more than 65,536 is still clamped to 65,536',over.bodies[0].generationConfig.maxOutputTokens===65536&&over.metas.at(-1).maxOutputTokens===65536);}
   t('the caller body is not mutated by the ceiling or the thinking copy',asked.generationConfig.maxOutputTokens===65536&&!('safetySettings' in asked));
-  h=make([response([ev('ok','STOP')])]);asked={contents:[],generationConfig:{thinkingConfig:{thinkingLevel:'low'}}};await h.call({},{body:asked});
-  t('a Flash request with no ceiling is sent with 65,536 and the caller keeps none',h.bodies[0].generationConfig.maxOutputTokens===65536&&h.metas.at(-1).maxOutputTokens===65536&&!('maxOutputTokens' in asked.generationConfig));
+  h=make([response([ev('ok','STOP')])]);asked={contents:[],generationConfig:{thinkingConfig:{thinkingLevel:'low'}}};await h.call({},{model:'gemini-4-hydrogen',body:asked});
+  t('a Hydrogen request with no ceiling is sent with 65,536 and the caller keeps none',h.bodies[0].generationConfig.maxOutputTokens===65536&&h.metas.at(-1).maxOutputTokens===65536&&!('maxOutputTokens' in asked.generationConfig));
   h=make([response([ev('{"facts":[{"a":','MAX_TOKENS')])]);e=await rejected(h.call({retries:2},{body:{contents:[],generationConfig:{...json,thinkingConfig:{thinkingLevel:'medium'}}}}));
   t('JSON cut off at the ceiling is a fatal truncated failure, never returned or retried',e?.truncated===true&&e.isFatal===true&&e.finishReason==='MAX_TOKENS'&&e.partialText==='{"facts":[{"a":'&&h.calls()===1&&/65,536-token ceiling/.test(e.message)&&h.metas.at(-1).truncated===true);
   t('a truncated JSON failure stops only its own chunk, not the batch',!h.halts(e));
