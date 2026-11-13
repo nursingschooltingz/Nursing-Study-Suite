@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 4054;
+const EXPECTED_ASSERTIONS = 4056;
 
 let file;
 try {
@@ -259,7 +259,8 @@ t('v18.0: the app script asks Babel for the react preset only', S.split('type="t
     fact('Float heels.', 'Treatments', 'independent'), fact('Give mannitol.', 'Treatments', 'dependent'), fact('Reposition q2h.', 'Treatments', null), fact('Teach at discharge.', 'Treatments', 'discharge')] }] });
   const section = (head, next) => md.slice(md.indexOf(head), md.indexOf(next, md.indexOf(head) + head.length));
   t('v17.15: only dependent treatments print under Pharmacology / Provider Orders; independent, discharge and unlabelled ones get their own heading',
-    section('**1. Pharmacology, Hold Rules & Provider Orders**', '**2. Priority Bedside & Safe-Administration Actions**').includes('Give mannitol.') && !section('**1. Pharmacology, Hold Rules & Provider Orders**', '**2. Priority Bedside & Safe-Administration Actions**').includes('Reposition') &&
+    section('**1. Priority Bedside & Safe-Administration Actions**', '**2. Pharmacology, Hold Rules & Provider Orders**').includes('Float heels.') &&
+    section('**2. Pharmacology, Hold Rules & Provider Orders**', '**Other Interventions').includes('Give mannitol.') && !section('**2. Pharmacology, Hold Rules & Provider Orders**', '**Other Interventions').includes('Reposition') &&
     section('**Other Interventions', '### E — Educate').includes('Reposition q2h.') && section('**Other Interventions', '### E — Educate').includes('Teach at discharge.'));
   t('v17.15: findings staged neither early nor late sit under their own heading, not inside the LATE / EMERGENCY list',
     !section('**LATE / EMERGENCY**', '**OTHER FINDINGS').includes('Nausea.') && section('**OTHER FINDINGS', '### A — Analyze').includes('Nausea.'));

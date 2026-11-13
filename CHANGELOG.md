@@ -9,6 +9,28 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [21.2] — 2026-11-13
+
+Multi-select Source Role checkboxes + inline role breakdown in Step 01 Knowledge Base intake, full Priority Analyzer (`R1–R8` + `B1–B2` + `LOC vs. AIRWAY` + deceptive pseudo-improvement) alignment across NCLEX/Case generators, and NGN `Q1 → Q6` sub-section ordering in Study View. All 11 frozen prompt constants remain byte-identical (`prompt-baseline.json` unchanged).
+
+### Added
+
+- **Inline Step 01 Source Role Reference Breakdown (`KB_SOURCE_ROLE_GUIDE`, `KnowledgeBaseBuilder`).** Adds a plain-English breakdown directly beside each source-role checkbox in Step 01 (and as hover tooltips on per-file role pills) explaining which textbooks/sources belong in **`RN Core`** (*Saunders, Ignatavicius, lecture slides, drug cards — testable by default*), **`Patho Bridge`** (*Porth, McCance — cellular, neurohormonal & hemodynamic cascades*), **`Exam / Diff Bridge`** (*Jarvis, Bates — S3/S4 bedside exam nuances & look-alike tie-breakers*), and **`Pharm / GDMT Bridge`** (*Lehne, guidelines — receptor targets & GDMT sequencing*), plus an **`Apply to all N files`** reset button when per-file role overrides differ from the default selection.
+
+### Changed
+
+- **Multi-select Source Role checkboxes & mixed-lens layer routing (`kbNormalizeSourceRoles`, `kbToggleSourceRole`, `kbBuildFocusBlock`, `kbCoercePlateFields`, `mergeLatteParts`, `KnowledgeBaseBuilder`).** Replaces the single-select Step 01 `<select>` dropdown with multi-select checkboxes on both the default **Source roles** card and every uploaded PDF, PPTX, and flashcard photo chip so combined study packets or multi-lens chapters can activate any combination of roles in one build while keeping single-role prompt headers 100% byte-identical. When **`RN Core`** is checked alongside one or more Bridge lenses (`['rn', 'patho-bridge', ...]`), standard bedside/safety facts remain in **RN Core** while model-tagged mechanism/exam/GDMT bridge facts file under collapsible **NP Bridge** sections; when only Bridge roles are checked (`['patho-bridge', 'exam-bridge']`), untagged non-safety facts default to **NP Bridge**.
+- **Full Priority Analyzer alignment across Stage 1/2 Priority, NCLEX Generate, and Case Studies (`PRIORITY_ORDER_RULES`, `paBuildExtractPrompt`, `paBuildSynthPrompt`, `NCLEX_PLATE_TRAP_RULES`, `CASE_SLOPE_SYNC_RULES`).** Carries `B1` **Organ Hierarchy** (`brain > lung > heart > liver > kidney > pancreas` on the finding/qualifier's organ, not the diagnosis label) and **LOC vs. AIRWAY** special precedence from `PriorityAnalyzer` into `PRIORITY_ORDER_RULES`, adds deceptive "pseudo-improvement" (e.g., *silent chest*, *abrupt perforation pain relief*) under `UNSTABLE` across Stage 1 Harvest, Stage 2 `R5`, and `PRIORITY_ORDER_RULES`, and explicitly subordinates `NCLEX_PLATE_TRAP_RULES` and `CASE_SLOPE_SYNC_RULES` to `PRIORITY_ORDER_RULES` so crisis rescue prescriptions (`R1`/`R2`) and gating safety assessments (`R8`) are never overridden by "hands-first" shortcuts.
+- **NGN `Q1 → Q6` inpatient-to-discharge sub-section order in Study View (`renderKBMarkdown`).** Orders **`T — Treat`** as **`1. Priority Bedside & Safe-Administration Actions`** followed by **`2. Pharmacology, Hold Rules & Provider Orders`**, and **`E — Educate, Evaluate & Exam Traps`** as **`1. Evaluate — Expected vs. Worsening Trends`** followed by **`2. Educate — Discharge & Self-Management`**, matching the chronological bedside-to-discharge NGN sequence.
+
+### Verification
+
+- **2 new assertions (4,056 total)** in `tools/plate-bridge-tests.js` (exercising `KB_SOURCE_ROLE_GUIDE`, `kbNormalizeSourceRoles`, `kbToggleSourceRole`, Step 01 default and per-file multi-select checkbox rendering, `kbBuildFocusBlock` single-role byte identity vs. multi-role layer rules, `mergeLatteParts` mixed `RN Core + Bridge` vs. pure-Bridge condition and standalone medication routing, `PRIORITY_ORDER_RULES` + `paBuildExtractPrompt` + `paBuildSynthPrompt` + `NCLEX_PLATE_TRAP_RULES` + `CASE_SLOPE_SYNC_RULES` Priority Analyzer alignment, and `renderKBMarkdown` `Q1 → Q6` sub-section ordering).
+- **Prompt bytes.** All 11 frozen hashes in `prompt-baseline.json` are unchanged. `Prompts.md` regenerated and verified across all 22 documented prompt constants.
+- **SRI.** All eight SRI-pinned scripts and both PDF worker copies were re-hashed against their CDNs and match.
+
+See the [release verification record](docs/reviews/v21.2-release.md).
+
 ## [21.1] — 2026-11-13
 
 Deep deterministic intertwining of Giddens Concept-Based Curriculum and 5-bucket **P-LATE (Triple-E)** across Study View, Case Studies, NCLEX Generator, and Step 6 Concept Curriculum Audit. All 11 frozen prompt constants remain byte-identical (`prompt-baseline.json` unchanged).

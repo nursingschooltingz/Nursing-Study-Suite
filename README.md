@@ -8,7 +8,7 @@ Turn your lecture PDFs and PowerPoints into a complete, source-cited study syste
 
 The whole suite is **one HTML file**. There is nothing to install, no account to create, and no website collecting your data. You open the file in your web browser, paste in a free Google Gemini API key, upload your study materials, and go.
 
-**Published release: v21.0.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v21.0/Nursing-Study-Suite.v21.0.html) or open the [repository HTML (v21.1)](Nursing-Study-Suite%20v21.1.html).
+**Published release: v21.2.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v21.2/Nursing-Study-Suite.v21.2.html) or open the [repository HTML](Nursing-Study-Suite%20v21.2.html).
 
 The left rail lists the eight tools in the order you use them, grouped by stage. **Source:** *Knowledge Base* builds or imports the cited facts everything else reads from. **Plan:** *Priority* ranks those facts by clinical urgency into its own Tier 1/2/3. **Practice:** *Anki* for recall, *NCLEX Extract* for questions out of a review book you already own, *NCLEX Generate* for new ones written from your facts, *Case Studies* for unfolding cases, *NCLEX to Anki* to turn NCLEX questions into Anki cards, and *Import to Gizmo* to convert Anki decks into Gizmo.ai tab-separated flashcards.
 
@@ -110,7 +110,7 @@ The **focus box** helps here too — tell it things like *"Only Ch. 61–63 are 
 **How to use it:**
 
 1. Optionally fill in **Course** and **Exam/unit** — these become organizational tags on your Anki cards later.
-2. Add your PDF/PPTX file(s) — or photos of flashcards (see below).
+2. Add your PDF/PPTX file(s) — or photos of flashcards (see below) — and check one or more **Source roles** (`RN Core` for lecture slides/Saunders/med-surg, `Patho Bridge` for Porth/McCance, `Exam / Diff Bridge` for Jarvis/Bates, and `Pharm / GDMT Bridge` for Lehne/guidelines, with an inline reference guide right next to each checkbox). You can customize checkboxes per file when uploading separate chapters at once, or check multiple roles together for a combined study packet.
 3. Click **Build Knowledge Base**. Watch the log: it runs an extraction pass and then a second **audit pass** that re-reads each chunk hunting for facts the first pass missed. Recovered facts are only kept if their quoted text is actually found in your source — the suite verifies this in code, not on the AI's word.
 4. Browse the result: conditions on the left, followed by medication, diagnostic and scoring-tool entries (each labelled with its kind), and facts (with tiers, buckets, and source pointers) on the right. **⬇ Study View** exports the whole thing as a readable markdown study guide.
 

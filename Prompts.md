@@ -1,6 +1,6 @@
 # Nursing Study Suite — Prompt Library
 
-The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, the item-quality auditor, the NCLEX to Anki image reader, and the Import to Gizmo chunk formatter, **extracted verbatim from the shipped v21.1 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
+The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, the item-quality auditor, the NCLEX to Anki image reader, and the Import to Gizmo chunk formatter, **extracted verbatim from the shipped v21.2 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
 
 > **Coverage.** All 22 named prompt constants are represented from live HTML bytes. Eleven are byte-frozen (with user-approved v21.0 updates to five constants recorded in `docs/history/PLATE-v21.0-frozen-prompts.diff`); `CARD_TRANSCRIBE_PROMPT` is deliberately tunable but requires two transcription runs per card after an edit. `I2A_TRANSCRIBE_PROMPT` and `I2A_ANSWER_PROMPT` (NCLEX to Anki, v17.9) are copied from img2anki.py and are not frozen. `PRIORITY_ORDER_RULES` (v18.1), `KB_SOURCE_ANCHOR_RULES` (v19.0), `KB_CONCEPT_CURRICULUM_RULES` (v19.2), `KB_EXAM_TRAP_RULES` (v19.2), `GIZMO_CONVERT_PROMPT` (Import to Gizmo, v19.2), `KB_PLATE_BRIDGE_RULES` (v21.0), `NCLEX_PLATE_TRAP_RULES` (v21.0), and `CASE_SLOPE_SYNC_RULES` (v21.0) are not frozen; harness assertions keep them in step with their workflows. The generated appendix is maintained by `node tools/render-prompts.js --write` and checked by `node verify-repo.js`.
 
@@ -1858,9 +1858,9 @@ mid-rationale. If you cannot complete a question to this standard, produce fewer
 rather than truncating one.
 ````
 
-### `PRIORITY_ORDER_RULES` (2,082 chars, v18.1)
+### `PRIORITY_ORDER_RULES` (2,541 chars, v18.1 / v21.2)
 
-Unlike the four above, this one **is** sent to the NCLEX Generator (after the batch block) as well as to the Case Study Generator (after `CASE_QUESTION_RULES`). It is not sent to the case repair prompt or the item audit. It restates the Priority Analyzer's cascade R1–R8 and its B2 tiebreakers for choosing the key of a "what comes first" question; `tools/v18-1-alignment-tests.js` fails if the two lists drift apart.
+Unlike the four above, this one **is** sent to the NCLEX Generator (after the batch block) as well as to the Case Study Generator (after `CASE_QUESTION_RULES`). It is not sent to the case repair prompt or the item audit. It restates the Priority Analyzer's cascade R1–R8, `LOC vs. AIRWAY` precedence, `B1` Organ Hierarchy, and `B2` tiebreakers for choosing the key of a "what comes first" question; `tools/v18-1-alignment-tests.js` and `tools/plate-bridge-tests.js` fail if the lists drift apart.
 
 ````text
 PRIORITY ORDER — the same order the Priority Analyzer uses. Use it to choose the correct
@@ -1873,12 +1873,18 @@ down the list; the first rule that separates the options decides the key.
   3. PSYCH-SAFETY ..... suicidal or homicidal ideation, self-harm, violence, elopement.
   4. CRIT-LAB ......... a value the facts present as critical for THIS client, not an expected
                         baseline such as a dialysis client's usual potassium.
-  5. UNSTABLE ......... acute; unexpected or changed; worsening; post-op <12h; newly admitted <24h.
+  5. UNSTABLE ......... acute; unexpected or changed; worsening; deceptive pseudo-improvement
+                        (e.g., silent chest, abrupt pain relief on perforation); post-op <12h; newly admitted <24h.
   6. SAFETY / SCOPE ... contraindications, hold parameters, allergies, antidotes, high-alert
                         medications. An option outside the nurse's scope, or one that needs a
                         prescription the client does not have, is not the nurse's first action.
   7. MASLOW ........... physiological > safety > psychosocial > self-actualization.
   8. NURSING PROCESS .. assess before intervening, except under rules 1 and 2.
+Special precedence (LOC vs. AIRWAY): level of consciousness is the first thing the nurse
+ASSESSES; airway is the first thing the nurse DOES.
+Organ tiebreaker: brain > lung > heart > liver > kidney > pancreas — apply to the organ
+named in the finding/qualifier, not the diagnosis label (a chronic renal client with frothy
+sputum is a lung problem).
 Tiebreakers: acute > chronic · unstable > stable · emergent > urgent > nonurgent ·
 unexpected > expected · actual > potential · fresh post-op (<12h) > medical or other surgical.
 Grounding still governs: the key and every distractor must trace to supplied facts. When a
@@ -2120,9 +2126,9 @@ const KB_PLATE_BRIDGE_RULES=`P-LATE MULTI-SOURCE & NP MECHANISM BRIDGE RULES (ZE
 3. RN Safety Stays in RN Core: Do NOT demote acute RN stabilization priorities, airway/hemodynamic red flags, boxed warnings, antidotes, or medication hold parameters to the bridge layer — omit "clinicalLayer" (or set "clinicalLayer": "rn") for essential RN bedside safety facts.`;
 ````
 
-### `NCLEX_PLATE_TRAP_RULES` (4,022 source chars; tunable; v21.0 P-LATE 4-Pillar distractor & Slope Red Flag runtime directive for NCLEXGenerator)
+### `NCLEX_PLATE_TRAP_RULES` (4,326 source chars; tunable; v21.0 P-LATE 4-Pillar distractor & Slope Red Flag runtime directive for NCLEXGenerator)
 
-SHA-256 of the raw template-literal body: `402a816a46918c84c3904f422b5bb06bd34478fad6420b23df548795e7da8c90`
+SHA-256 of the raw template-literal body: `23936e46430d8c990edd10389ff4426eaceb4a144d262cf546248c42cd5c62ae`
 
 ````js
 const NCLEX_PLATE_TRAP_RULES=`### P-LATE (TRIPLE-E) & 4-PILLAR DISTRACTOR ENGINEERING RULES
@@ -2135,7 +2141,7 @@ Use your internal reasoning budget BEFORE writing PART 1-PART 4 to verify every 
 
 2. MANDATORY 4-PILLAR DISTRACTOR CONSTRUCTION (NO OBVIOUS FILLER OPTIONS):
    Every incorrect option (distractor) MUST be a realistic clinical action or statement grounded in a logged C# anchor that fails for one of these 4 reasons—and its PART 4 "Why X is wrong:" rationale MUST explicitly label which trap it is while citing (Source: C#):
-   - [Priority / First-Action Trap]: A valid intervention for this condition (e.g., ordering a test, drawing labs, or notifying the primary health care provider) that is WRONG because an immediate bedside stabilization action in Treat / independent (e.g., positioning, airway/oxygen, stopping an offending infusion) must happen FIRST per PRIORITY ORDER.
+   - [Priority / First-Action Trap]: A valid action for this condition (e.g., routine charting, notifying the primary health care provider, or jumping to an un-gated intervention) that is WRONG because a higher-ranking step under PRIORITY ORDER (rules 1-8, LOC vs. AIRWAY, and organ/clinical tiebreakers) must happen FIRST — in ABC or CRISIS (rules 1-2) the nurse acts immediately (e.g., airway/oxygen, stopping an offending infusion, or giving an ordered crisis rescue medication), whereas outside rules 1-2 a gating assessment (rule 8) outranks the intervention it gates and Treat / independent never blindly outranks an active crisis rescue prescription.
    - [Twin-Diagnosis Trap]: A gold-standard intervention or expected finding for a look-alike condition or opposite phase in the packet that is HARMFUL, contraindicated, or mismatched here.
    - [Pharm / Lab Hold Trap]: Administering or continuing a medication when a specific lab, electrolyte, or vital sign in the stem violates a source-grounded hold parameter or contraindication in Treat / dependent.
    - [Further-Teaching / Context Trap]: A subtle client self-management error corrected by an Educate fact, or a source-grounded statement that fails to answer the specific question asked.
@@ -2153,9 +2159,9 @@ Use your internal reasoning budget BEFORE writing PART 1-PART 4 to verify every 
    - For SATA: Every correct and incorrect option must trace to a logged C# anchor; never make an option wrong solely via a semantic absolute ("always/never")—make it wrong via physiological, priority, or safety incompatibility grounded in the packet.`;
 ````
 
-### `CASE_SLOPE_SYNC_RULES` (3,222 source chars; tunable; v21.0 Unfolding EHR State-Machine & Cross-Stage Synchronization directive for CaseStudyGenerator)
+### `CASE_SLOPE_SYNC_RULES` (3,565 source chars; tunable; v21.0 Unfolding EHR State-Machine & Cross-Stage Synchronization directive for CaseStudyGenerator)
 
-SHA-256 of the raw template-literal body: `0da1dd94a7d68cb9a7a4194fb37c5323c31f82cd56a6a3f5546ef601b362318a`
+SHA-256 of the raw template-literal body: `a98226994ec87e16fd6ddf1a61e2ec71eb5e789ecba6204c2fceefabb5d594a7`
 
 ````js
 const CASE_SLOPE_SYNC_RULES=`═══ UNFOLDING EHR STATE-MACHINE & CROSS-STAGE SYNCHRONIZATION RULES ═══
@@ -2171,7 +2177,7 @@ Before emitting JSON, construct a synchronized stage-by-stage physiological time
 2. P-LATE (TRIPLE-E) CLINICAL PROGRESSION ACROSS UNFOLDING QUESTIONS:
    Distribute the case's questions across the P-LATE workflow in chronological clinical order as stages unfold:
    - Early Stage(s) — Recognize & Analyze Cues (Look + Analyze + Patho): Identify priority bedside cues (Look) and diagnostic/lab red flags (Analyze), and link presentation to the underlying pathophysiological driver (Patho) or twin-diagnosis differentiator ([PRIORITY DIFFERENTIATOR] / [Slot: A.diff-tiebreaker]).
-   - Middle Stage(s) — Prioritize Bedside Action & Safe Pharm/Hold Rules (Treat): Sequence immediate independent bedside stabilization actions (Treat / independent) ahead of dependent orders per PRIORITY ORDER, and evaluate prescriptions against source-grounded hold parameters, labs, and vital signs (Treat / dependent — include a Pharm / Lab Hold Trap when supported by the packet).
+   - Middle Stage(s) — Prioritize Action, Gating Assessment & Safe Pharm/Hold Rules (Treat): Apply PRIORITY ORDER (rules 1-8, LOC vs. AIRWAY, and organ/clinical tiebreakers) as the sole priority authority — act immediately in ABC or CRISIS situations (rules 1-2, including stopping an offending infusion or administering an active crisis rescue prescription), assess first when a gating safety check is required outside rules 1-2 (rule 8), never treat Treat / independent as automatically outranking Treat / dependent when PRIORITY ORDER says otherwise, and evaluate prescriptions against source-grounded hold parameters, labs, and vital signs (Treat / dependent — include a Pharm / Lab Hold Trap when supported by the packet).
    - Later Stage(s) — Evaluate Slope Red Flags & Self-Management (Educate / evaluate + Educate / discharge): Interpret multi-stage T0 -> T1 -> T2 trajectory shifts or Slope Red Flags ([TRAP: trend-slope] / [TRAP: pseudo-improvement] / Educate / evaluate) to judge improvement vs. decompensation, and evaluate client self-management or discharge statements for "further teaching needed" traps (Educate / discharge).
 
 3. STRICT FACT-ID GROUNDING & 4-PILLAR DISTRACTORS:

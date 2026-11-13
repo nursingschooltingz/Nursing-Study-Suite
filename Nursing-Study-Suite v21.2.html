@@ -12,7 +12,27 @@
      policy and uses only its own inline style block and system fonts. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com">
 <title>P-LATE Study Suite</title>
-<!-- v21.1 (2026-11-13): Concept-Curriculum x P-LATE Deep Intertwining — Sibling Exemplar P-LATE Matrix, Standalone
+<!-- v21.2 (2026-11-13): Multi-Select Source Role Checkboxes & Inline Role Reference Guide in Step 01 Knowledge Base Intake.
+     All 11 frozen prompt constants unchanged.
+     (1) MULTI-SELECT SOURCE ROLES (kbNormalizeSourceRoles, kbToggleSourceRole, kbBuildFocusBlock, kbCoercePlateFields,
+     mergeLatteParts): Replaces the single-select Step 01 role dropdown with multi-select checkboxes (both default roles and
+     per-file chips) so combined study packets or multi-lens textbook chapters can activate any combination of RN Core, Patho
+     Bridge, Exam / Diff Bridge, and Pharm / GDMT Bridge in a single build. When RN Core is selected alongside Bridge lens(es),
+     standard bedside/safety facts remain in RN Core while explicitly tagged mechanism/exam/GDMT bridge nuances file under
+     collapsible NP Bridge sections; when only Bridge roles are selected, untagged non-safety facts default to NP Bridge.
+     (2) INLINE ROLE BREAKDOWN (KB_SOURCE_ROLE_GUIDE, KnowledgeBaseBuilder): Displays a plain-English breakdown directly next
+     to each checkbox in Step 01 explaining what books/materials belong in RN Core vs. Patho Bridge vs. Exam / Diff Bridge vs.
+     Pharm / GDMT Bridge.
+     (3) PRIORITY ANALYZER FULL ALIGNMENT (PRIORITY_ORDER_RULES, paBuildExtractPrompt, paBuildSynthPrompt,
+     NCLEX_PLATE_TRAP_RULES, CASE_SLOPE_SYNC_RULES): Carries B1 Organ Hierarchy (brain > lung > heart > liver > kidney >
+     pancreas on the qualifier's organ) and LOC vs. AIRWAY special precedence into PRIORITY_ORDER_RULES, adds deceptive
+     pseudo-improvement (e.g., silent chest, abrupt perforation pain relief) under UNSTABLE across Stage 1/2 Priority and
+     PRIORITY_ORDER_RULES, and explicitly subordinates NCLEX_PLATE_TRAP_RULES and CASE_SLOPE_SYNC_RULES to PRIORITY_ORDER_RULES
+     so crisis rescue prescriptions (R1/R2) and gating assessments (R8) are never overridden by "hands-first" shortcuts.
+     (4) NGN Q1-Q6 STUDY VIEW SUB-SECTION ORDER (renderKBMarkdown): Orders Treat as (1) Priority Bedside & Safe-Administration
+     Actions -> (2) Pharmacology, Hold Rules & Provider Orders, and Educate as (1) Evaluate — Expected vs. Worsening Trends ->
+     (2) Educate — Discharge & Self-Management to match the acute-to-discharge clinical sequence.
+     v21.1 (2026-11-13): Concept-Curriculum x P-LATE Deep Intertwining — Sibling Exemplar P-LATE Matrix, Standalone
      Medication/Diagnostic Auto-Linking in Single-Condition Cases & NCLEX Batches, Interrelated Concept Cascade Framing,
      and 1-Click Concept Assignment in Step 6 Concept Audit. All 11 frozen prompt constants unchanged.
      (1) SIBLING EXEMPLAR P-LATE MATRIX (kbProjectConceptMatrix, kbFormatConceptMatrixText, renderKBMarkdown): Automatically
@@ -2560,8 +2580,10 @@ function kbBuildFocusBlock(outcomes,points,extra,mode,concepts='',conceptAuto=fa
     'exam-bridge':'Physical Exam & Differential Bridge source (e.g., Jarvis/physical assessment) — extract exam nuance, inspection/auscultation/palpation differentiators, and look-alike rule-outs.',
     'pharm-bridge':'Pharmacology / GDMT Bridge source — extract receptor targets, drug classes, GDMT bridge mechanisms, hold parameters, and dynamic safety monitors.'
   };
-  const normRole=Object.prototype.hasOwnProperty.call(roleDescMap,sourceRole)?sourceRole:'rn';
-  const useBridge=(Boolean(plateBridge)||normRole!=='rn')&&typeof KB_PLATE_BRIDGE_RULES==='string';
+  // v21.2: accept either a single role string or a multi-select array/CSV of roles; single-role headers remain byte-identical.
+  const normRoles=typeof kbNormalizeSourceRoles==='function'?kbNormalizeSourceRoles(sourceRole):[Object.prototype.hasOwnProperty.call(roleDescMap,sourceRole)?sourceRole:'rn'];
+  const hasBridgeRole=normRoles.some(r=>r!=='rn');
+  const useBridge=(Boolean(plateBridge)||hasBridgeRole)&&typeof KB_PLATE_BRIDGE_RULES==='string';
   if(!seg.length&&!useConcept&&!useTraps&&!useBridge)return'';
   let out='';
   if(seg.length){
@@ -2595,7 +2617,12 @@ function kbBuildFocusBlock(outcomes,points,extra,mode,concepts='',conceptAuto=fa
     out+=(out?'\n':'\n\n')+'═══ EXAM TRAP MAPPING (HESI / ATI / NGN) ═══\n'+KB_EXAM_TRAP_RULES+'\n════════════════════════════════════════════\n';
   }
   if(useBridge){
-    out+=(out?'\n':'\n\n')+'═══ P-LATE MULTI-SOURCE & NP MECHANISM BRIDGE ═══\nSOURCE ROLE FOR THIS CHUNK: '+roleDescMap[normRole]+'\n\n'+KB_PLATE_BRIDGE_RULES+'\n═════════════════════════════════════════════════\n';
+    const roleHdr=normRoles.length===1
+      ?'SOURCE ROLE FOR THIS CHUNK: '+roleDescMap[normRoles[0]]
+      :'SOURCE ROLES FOR THIS CHUNK (MULTI-SELECT):\n'+normRoles.map(r=>'- '+roleDescMap[r]).join('\n')+'\n\n'+(normRoles.includes('rn')
+        ?'MULTI-ROLE LAYER RULE: Because RN Core is selected alongside NP Bridge role(s), keep standard bedside assessment, diagnostic, safety, and nursing intervention facts in RN Core (omit "clinicalLayer"), and tag "clinicalLayer": "bridge" ONLY on deeper cellular/receptor/hemodynamic cascades, S3/S4/Forrester exam nuances, diagnostic tie-breakers/confounders, or GDMT sequencing matching the selected Bridge role(s).'
+        :'MULTI-ROLE LAYER RULE: Because only supplemental Bridge roles are selected (RN Core is not selected), apply all selected Bridge extraction lenses together while keeping acute RN bedside safety/hold rules in RN Core per Rule 3.');
+    out+=(out?'\n':'\n\n')+'═══ P-LATE MULTI-SOURCE & NP MECHANISM BRIDGE ═══\n'+roleHdr+'\n\n'+KB_PLATE_BRIDGE_RULES+'\n═════════════════════════════════════════════════\n';
   }
   return out;
 }
@@ -2923,6 +2950,25 @@ const KB_SOURCE_ROLES=[
   ['exam-bridge','Exam / Diff Bridge'],
   ['pharm-bridge','Pharm / GDMT Bridge']
 ];
+// v21.2: inline Step 01 reference descriptions + canonical multi-select role normalizer/toggler.
+const KB_SOURCE_ROLE_GUIDE={
+  rn:'Lecture slides, med-surg chapters (Saunders, Ignatavicius, HESI/ATI), drug cards — testable by default across RN generators (wins on shared facts).',
+  'patho-bridge':'Pathophysiology references (Porth, McCance) — cellular, neurohormonal & hemodynamic cascades (P), filed under collapsible NP Bridge.',
+  'exam-bridge':'Physical assessment & differential references (Jarvis, Bates) — bedside exam nuances (S3/S4) & look-alike tie-breakers (L/A), filed under NP Bridge.',
+  'pharm-bridge':'Advanced pharmacology / GDMT references (Lehne, guidelines) — receptor targets, GDMT sequencing & dynamic monitors (T), filed under NP Bridge.'
+};
+function kbNormalizeSourceRoles(raw){
+  const valid=new Set(KB_SOURCE_ROLES.map(r=>r[0]));
+  const list=Array.isArray(raw)?raw:typeof raw==='string'?raw.split(',').map(s=>s.trim()):[];
+  const picked=new Set(list.filter(r=>valid.has(r)));
+  const ordered=KB_SOURCE_ROLES.map(r=>r[0]).filter(r=>picked.has(r));
+  return ordered.length?ordered:['rn'];
+}
+function kbToggleSourceRole(currentRoles,roleId){
+  const cur=kbNormalizeSourceRoles(currentRoles);
+  const next=cur.includes(roleId)?cur.filter(r=>r!==roleId):[...cur,roleId];
+  return kbNormalizeSourceRoles(next);
+}
 const KB_PLATE_BRIDGE_RULES=`P-LATE MULTI-SOURCE & NP MECHANISM BRIDGE RULES (ZERO HALLUCINATION):
 1. Strict Source-Only Grounding: Tag "clinicalLayer": "bridge" ONLY when the fact is explicitly stated in this source chunk with a verbatim "sourceQuote" matching the chunk word-for-word. Never invent cellular/receptor mechanisms, RAAS/neurohormonal cascades, Forrester classifications, numeric lab cutoffs, "gold-standard" claims, or artificial 3-step chronological lists that do not appear in the chunk.
 2. When to Tag "clinicalLayer": "bridge":
@@ -2934,8 +2980,11 @@ const KB_PLATE_BRIDGE_RULES=`P-LATE MULTI-SOURCE & NP MECHANISM BRIDGE RULES (ZE
 3. RN Safety Stays in RN Core: Do NOT demote acute RN stabilization priorities, airway/hemodynamic red flags, boxed warnings, antidotes, or medication hold parameters to the bridge layer — omit "clinicalLayer" (or set "clinicalLayer": "rn") for essential RN bedside safety facts.`;
 function kbCoercePlateFields(f,{sourceRole='rn',capBridgeTier=false}={}){
   const warnings=[];
+  // v21.2: when RN Core is selected alongside Bridge role(s), untagged facts remain RN Core; only pure-Bridge chunks default untagged facts to 'bridge'.
+  const roles=kbNormalizeSourceRoles(sourceRole);
+  const defaultToBridge=!roles.includes('rn')&&roles.some(r=>r!=='rn');
   if(f.clinicalLayer==null){
-    if(sourceRole&&sourceRole!=='rn')f.clinicalLayer='bridge';
+    if(defaultToBridge)f.clinicalLayer='bridge';
     else if('clinicalLayer' in f)delete f.clinicalLayer;
   }else{
     const cl=String(f.clinicalLayer).trim().toLowerCase();
@@ -2943,7 +2992,7 @@ function kbCoercePlateFields(f,{sourceRole='rn',capBridgeTier=false}={}){
     else if(cl==='rn')delete f.clinicalLayer;
     else{
       if(cl)warnings.push('unknown clinicalLayer "'+String(f.clinicalLayer).slice(0,40)+'" was ignored');
-      if(sourceRole&&sourceRole!=='rn')f.clinicalLayer='bridge';
+      if(defaultToBridge)f.clinicalLayer='bridge';
       else delete f.clinicalLayer;
     }
   }
@@ -3402,7 +3451,7 @@ function mergeLatteParts(parts,course='',exam='',numberedPoints=null,conceptOpts
   const scopeRank={differentiator:3,delta:2,shared:1};
   const capBridge=Boolean(conceptOpts&&conceptOpts.capBridgeTier);
   for(const part of parts){
-    const partRole=(part&&part.source&&typeof part.source.sourceRole==='string')?part.source.sourceRole:'rn';
+    const partRole=kbNormalizeSourceRoles(part&&part.source?(part.source.sourceRoles??part.source.sourceRole):'rn');
     for(const c of part.conditions||[]){
       const aliases=(c.aliases||[]).map(x=>String(x).trim()).filter(Boolean);
       // v15.17: condition aliases use the same conservative identity; Greek names must not disappear.
@@ -3597,10 +3646,11 @@ function mergeLatteParts(parts,course='',exam='',numberedPoints=null,conceptOpts
       next={...next};delete next.contrastPartners;
       if(cp.length)next.contrastPartners=cp;
     }
-    const entRole=(p&&p.source&&typeof p.source.sourceRole==='string')?p.source.sourceRole:'rn';
-    if(entRole!=='rn'&&next.clinicalLayer==null)next={...next,clinicalLayer:'bridge'};
-    if(Array.isArray(next.facts)&&next.facts.some(f=>f&&(f.trapRole!=null||f.contrastWith!=null||f.clinicalLayer!=null||f.plateSlot!=null||entRole!=='rn'))){
-      next={...next,facts:next.facts.map(f=>{if(!f||typeof f!=='object')return f;const fc={...f};if(fc.trapRole!=null||fc.contrastWith!=null){const tw=kbCoerceTrapFields(fc,next.name);if(tw)coerced.push({condition:String(next.name||''),text:String(f.text||'').slice(0,160),reason:tw});}if(fc.clinicalLayer!=null||fc.plateSlot!=null||entRole!=='rn'){const pw=kbCoercePlateFields(fc,{sourceRole:entRole,capBridgeTier:capBridge});if(pw)coerced.push({condition:String(next.name||''),text:String(f.text||'').slice(0,160),reason:pw});}return fc;})};
+    const entRoles=kbNormalizeSourceRoles(p&&p.source?(p.source.sourceRoles??p.source.sourceRole):'rn');
+    const entDefaultBridge=!entRoles.includes('rn')&&entRoles.some(r=>r!=='rn');
+    if(entDefaultBridge&&next.clinicalLayer==null)next={...next,clinicalLayer:'bridge'};
+    if(Array.isArray(next.facts)&&next.facts.some(f=>f&&(f.trapRole!=null||f.contrastWith!=null||f.clinicalLayer!=null||f.plateSlot!=null||entDefaultBridge))){
+      next={...next,facts:next.facts.map(f=>{if(!f||typeof f!=='object')return f;const fc={...f};if(fc.trapRole!=null||fc.contrastWith!=null){const tw=kbCoerceTrapFields(fc,next.name);if(tw)coerced.push({condition:String(next.name||''),text:String(f.text||'').slice(0,160),reason:tw});}if(fc.clinicalLayer!=null||fc.plateSlot!=null||entDefaultBridge){const pw=kbCoercePlateFields(fc,{sourceRole:entRoles,capBridgeTier:capBridge});if(pw)coerced.push({condition:String(next.name||''),text:String(f.text||'').slice(0,160),reason:pw});}return fc;})};
     }
     return next;
   });
@@ -4225,13 +4275,14 @@ function renderKBMarkdown(kb){
       stdAnalyze.length?'**Labs, Imaging & Monitoring**\n'+renderList(stdAnalyze,{empty:'',isExemplar,parentName:c.concept,flagDiff:true}):''
     ].filter(Boolean).join('\n\n'):renderList(stdAnalyze,{empty:(analyzeAll.bridge.length?'':'_No labs or diagnostics extracted._'),isExemplar,parentName:c.concept,flagDiff:true});
     const analyzeBridge=renderBridgeBox(isMed?'NP Lab Monitoring & Confounder Bridge':'NP Diagnostic & Differential Nuance',analyzeAll.bridge,{isExemplar,parentName:c.concept,flagDiff:true});
-    // T — Treat (Medications & Priority Nursing Interventions)
-    const treatHead=isMed?'### T — Treat: Indications, Hold Rules, Antidotes & Safe Administration':'### T — Treat (Medications & Priority Nursing Interventions)';
+    // T — Treat (Priority Nursing Interventions & Medications)
+    const treatHead=isMed?'### T — Treat: Indications, Hold Rules, Antidotes & Safe Administration':'### T — Treat (Priority Nursing Interventions & Medications)';
     const treatAll=splitLayer(kbBucketFacts(c,'Treat'));
     const isDepTreat=f=>f&&(f.subtype==='dependent'||(f.latteBucket==='Assess'&&!f.subtype));
     const dep=treatAll.rn.filter(isDepTreat),ind=treatAll.rn.filter(f=>f.subtype==='independent'),unk=treatAll.rn.filter(f=>!isDepTreat(f)&&f.subtype!=='independent');
-    const depBlock='**1. Pharmacology, Hold Rules & Provider Orders**\n'+renderList(dep,{empty:'_None extracted._',isExemplar,parentName:c.concept,flagDiff:true});
-    const indBlock='**2. Priority Bedside & Safe-Administration Actions**\n'+renderList(ind,{empty:'_None extracted._',isExemplar,parentName:c.concept,flagDiff:true});
+    // v21.2: order bedside stabilization (1) ahead of pharmacology/MAR hold rules (2), and evaluate trends (1) ahead of discharge teaching (2) to mirror the inpatient-to-discharge Q1->Q6 NGN sequence.
+    const indBlock='**1. Priority Bedside & Safe-Administration Actions**\n'+renderList(ind,{empty:'_None extracted._',isExemplar,parentName:c.concept,flagDiff:true});
+    const depBlock='**2. Pharmacology, Hold Rules & Provider Orders**\n'+renderList(dep,{empty:'_None extracted._',isExemplar,parentName:c.concept,flagDiff:true});
     const unkBlock=unk.length?'\n\n**Other Interventions (not classified as independent or dependent)**\n'+renderList(unk,{empty:'',isExemplar,parentName:c.concept,flagDiff:true}):'';
     const treatBridge=renderBridgeBox('NP Receptor & GDMT Bridge',treatAll.bridge,{isExemplar,parentName:c.concept,flagDiff:true});
     // E — Educate, Evaluate & Exam Traps (Triple-E)
@@ -4239,8 +4290,8 @@ function renderKBMarkdown(kb){
     const educAll=splitLayer(kbBucketFacts(c,'Educate'));
     const isEval=f=>f&&(f.subtype==='evaluate'||f.plateSlot==='evaluate'||f.latteBucket==='Assess');
     const teachFacts=educAll.rn.filter(f=>!isEval(f)),evalFacts=educAll.rn.filter(isEval);
-    const teachBlock='**1. Educate — Discharge & Self-Management**\n'+renderList(teachFacts,{empty:'_None extracted._',isExemplar,parentName:c.concept,flagDiff:false});
-    const evalBlock='**2. Evaluate — Expected vs. Worsening Trends**\n'+renderList(evalFacts,{empty:'_None extracted._',isExemplar,parentName:c.concept,flagDiff:false});
+    const evalBlock='**1. Evaluate — Expected vs. Worsening Trends**\n'+renderList(evalFacts,{empty:'_None extracted._',isExemplar,parentName:c.concept,flagDiff:false});
+    const teachBlock='**2. Educate — Discharge & Self-Management**\n'+renderList(teachFacts,{empty:'_None extracted._',isExemplar,parentName:c.concept,flagDiff:false});
     const educBridge=renderBridgeBox('NP Bridge Teaching / Prognostic Nuance',educAll.bridge,{isExemplar,parentName:c.concept,flagDiff:false});
     const trapProj=kbProjectExamTraps(c,kb,opts);
     const stripMd=trapProj&&trapProj.contrastStrip?`\n\n**Twin-Diagnosis Contrast Strip (${escPipe(trapProj.contrastStrip.selfName)} vs. ${escPipe(trapProj.contrastStrip.partnerName)})**\n\n| Dimension | ${escPipe(trapProj.contrastStrip.selfName)} | ${escPipe(trapProj.contrastStrip.partnerName)} |\n|---|---|---|\n| **Tie-Breaker Cues** | ${escPipe(trapProj.contrastStrip.selfCueMd)} | ${escPipe(trapProj.contrastStrip.partnerCueMd)} |\n| **Treatment Opposite** | ${escPipe(trapProj.contrastStrip.selfRxMd)} | ${escPipe(trapProj.contrastStrip.partnerRxMd)} |`:'';
@@ -4248,7 +4299,7 @@ function renderKBMarkdown(kb){
     // v21.1: assemble a deterministic Sibling Exemplar P-LATE Matrix on Concept Overviews with >= 2 sibling exemplars.
     const conceptMat=isConcept?kbProjectConceptMatrix(c,kb):null;
     const matrixBlock=conceptMat?`\n\n### 🧭 Sibling Exemplar P-LATE Matrix — ${c.name} (${conceptMat.rows.length} exemplars)\n\n| Exemplar | P — Concept Bridge | L — Hallmark Cue | A — Gold-Standard / Tie-Breaker | T — 1st Bedside / Key Rx | E — Slope / Red-Flag Trend |\n|---|---|---|---|---|---|\n`+conceptMat.rows.map(r=>`| **${escPipe(r.name)}** | ${escPipe(r.pathoMd)} | ${escPipe(r.lookMd)} | ${escPipe(r.analyzeMd)} | ${escPipe(r.treatMd)} | ${escPipe(r.educateMd)} |`).join('\n'):'';
-    return `## ${c.name}${c.entityKind?' ('+c.entityKind+')':''}${roleBanner}\n\n${pathoHead}\n${pathRn}${pathBridge}\n\n${lookHead}\n${lookRnBlock}${lookBridge}\n\n${analyzeHead}\n${analyzeRnBlock}${analyzeBridge}\n\n${treatHead}\n\n${depBlock}\n\n${indBlock}${unkBlock}${treatBridge}\n\n${educHead}\n\n${teachBlock}\n\n${evalBlock}${educBridge}${trapBlock}${matrixBlock}`;
+    return `## ${c.name}${c.entityKind?' ('+c.entityKind+')':''}${roleBanner}\n\n${pathoHead}\n${pathRn}${pathBridge}\n\n${lookHead}\n${lookRnBlock}${lookBridge}\n\n${analyzeHead}\n${analyzeRnBlock}${analyzeBridge}\n\n${treatHead}\n\n${indBlock}\n\n${depBlock}${unkBlock}${treatBridge}\n\n${educHead}\n\n${evalBlock}\n\n${teachBlock}${educBridge}${trapBlock}${matrixBlock}`;
   }).join('\n\n---\n\n');
 }
 const KB_TRAP_ROLE_BADGE={
@@ -5512,6 +5563,7 @@ function KnowledgeBaseBuilder(){
   // while empty [not stated in source] Study View worksheets default OFF so legacy saved KBs stay uncluttered.
   const [kbExamTraps,setKbExamTraps]=useState(true);
   const [kbTrapWorksheet,setKbTrapWorksheet]=useState(false);
+  const [defaultSourceRoles,setDefaultSourceRoles]=useState(['rn']);
   const [sourceRoles,setSourceRoles]=useState({});
   const [kbPlateBridge,setKbPlateBridge]=useState(false);
   const [kbCapBridgeTier,setKbCapBridgeTier]=useState(true);
@@ -5679,6 +5731,8 @@ function KnowledgeBaseBuilder(){
     const _examTraps=typeof kbExamTraps==='boolean'?kbExamTraps:false;
     const _plateBridge=typeof kbPlateBridge==='boolean'?kbPlateBridge:false;
     const _capBridgeTier=typeof kbCapBridgeTier==='boolean'?kbCapBridgeTier:true;
+    const _normRoles=r=>typeof kbNormalizeSourceRoles==='function'?kbNormalizeSourceRoles(r):(Array.isArray(r)?(r.length?r:['rn']):[r||'rn']);
+    const _defaultRoles=typeof defaultSourceRoles!=='undefined'?_normRoles(defaultSourceRoles):['rn'];
     const _sourceRoles=typeof sourceRoles==='object'&&sourceRoles?sourceRoles:{};
     const baseFocusBlock=kbBuildFocusBlock(kbOutcomes,kbPoints,kbExtra,focusMode,_concepts,_conceptAuto,_examTraps,_plateBridge,'rn');
     const hasFocusText=Boolean(String(kbOutcomes||'').trim()||String(kbPoints||'').trim()||String(kbExtra||'').trim());
@@ -5695,10 +5749,11 @@ function KnowledgeBaseBuilder(){
       // misread number could not be walked back to the image it came from, which is precisely
       // the check the transcript-as-trust-boundary design depends on a human being able to do.
       for(const c of cardGate.buildable){
-        // v21.0: card/transcript source chips also carry a P-LATE role pill; propagate any non-RN bridge role from the card's photo(s) instead of hardcoding 'rn'.
+        // v21.2: propagate multi-select source role arrays across card/transcript photo chips cleanly.
         const srcSet=new Set(Array.isArray(c.sources)?c.sources:[]);
         const matchedRoles=(files||[]).filter(f=>f&&srcSet.has(f.name)).map(f=>_sourceRoles[typeof cardFileId==='function'?cardFileId(f):f.name]||_sourceRoles[f.name]).concat([...srcSet].map(s=>_sourceRoles[s])).filter(Boolean);
-        const cardRole=matchedRoles.find(r=>r!=='rn')||matchedRoles[0]||'rn';
+        const cardRoles=matchedRoles.length?_normRoles(matchedRoles.flatMap(r=>_normRoles(r))):_defaultRoles;
+        const cardRole=cardRoles.length===1?cardRoles[0]:cardRoles;
         queue.push({file:{name:'flashcards · '+c.key},chunk:{text:c.text,label:c.title+(c.sources.length?' ['+c.sources.join(', ')+']':''),units:[]},role:cardRole,depth:0,order:[queue.length]});
       }
       if(cardGate.buildable.length)owned_addLog(cardGate.buildable.length+' transcribed card(s) queued as source text.','');
@@ -5707,8 +5762,10 @@ function KnowledgeBaseBuilder(){
         owned_addLog('⚑ '+msg,'err');problems.push(msg);
       }
       for(const f of files.filter(x=>!cardIsImage(x))){
-        // v21.0: guard cardFileId so standalone build() source-regression closures without card helpers in scope still run.
-        const fileRole=_sourceRoles[typeof cardFileId==='function'?cardFileId(f):f.name]||'rn';
+        // v21.0/v21.2: guard cardFileId so standalone build() source-regression closures without card helpers in scope still run.
+        const rawFileRoles=_sourceRoles[typeof cardFileId==='function'?cardFileId(f):f.name]||_defaultRoles;
+        const normFileRoles=_normRoles(rawFileRoles);
+        const fileRole=normFileRoles.length===1?normFileRoles[0]:normFileRoles;
         try{const chunks=await kbBuildSourceChunks(f,chunkChars,overlapUnits,{signal:controller.signal,onProgress:(p,tot)=>owned_addLog(`Reading ${f.name} — page ${p}/${tot}`),
           composition:probeComposition,
           onComposition:c=>{composition[f.name]=c;},
@@ -5725,7 +5782,7 @@ function KnowledgeBaseBuilder(){
         finally{if(typeof destroyPdfDoc==='function'&&(/\.pdf$/i.test(f.name||'')||f.type==='application/pdf'))destroyPdfDoc(f);}
       }
       if(!queue.length)throw new Error(problems[0]||'No readable source chunks were found.');
-      const hasBridgeQueue=_plateBridge||queue.some(j=>j.role&&j.role!=='rn');
+      const hasBridgeQueue=_plateBridge||queue.some(j=>_normRoles(j.role).some(r=>r!=='rn'));
       owned_addLog(`${queue.length} chunk(s) · ${model} [${level}]${cfg.autoProfile?' (auto)':''}${laneCount>1?' · 2 lanes':''}${verifyPass?` · audit: ${auditCfg.model} [${auditCfg.level}]`:''}${hasFocusText?` · focus: ${scoped?'SCOPE (out-of-scope content skipped)':'prioritize (nothing skipped)'}`:''}${(_concepts.trim()||_conceptAuto)?` · concept: ${_concepts.trim()&&_conceptAuto?'named + auto-detect':_concepts.trim()?'named':'auto-detect'}`:''}${_examTraps?' · traps: on':''}${hasBridgeQueue?' · NP bridge: on':''}`,'warn');
       const passesPerChunk=verifyPass?2:1;
       let total=queue.length*passesPerChunk,done=0;
@@ -5737,8 +5794,11 @@ function KnowledgeBaseBuilder(){
       const processJob=async(job,laneSignal=controller.signal)=>{
         const result={order:job.order||[0],parts:[],stat:null};
         const{file,chunk}=job;const tag=file.name+' ('+chunk.label+')';
-        const jobRole=job.role||'rn';
-        const focusBlock=jobRole==='rn'?baseFocusBlock:kbBuildFocusBlock(kbOutcomes,kbPoints,kbExtra,focusMode,_concepts,_conceptAuto,_examTraps,_plateBridge,jobRole);
+        const jobRoles=_normRoles(job.role||'rn');
+        const isPlainRn=jobRoles.length===1&&jobRoles[0]==='rn';
+        const jobRole=jobRoles.length===1?jobRoles[0]:jobRoles;
+        const srcRoleMeta=isPlainRn?{}:jobRoles.length===1?{sourceRole:jobRoles[0]}:{sourceRole:jobRoles.join(','),sourceRoles:jobRoles};
+        const focusBlock=isPlainRn?baseFocusBlock:kbBuildFocusBlock(kbOutcomes,kbPoints,kbExtra,focusMode,_concepts,_conceptAuto,_examTraps,_plateBridge,jobRole);
         const srcNorm=kbNormForMatch(chunk.text);
         // v15.11: srcDehyph now feeds kbQuoteInSource as well as the classifier.
         const srcDehyph=kbDehyphNormForMatch(chunk.text),srcToks=new Set(srcNorm.split(' '));
@@ -5820,7 +5880,7 @@ function KnowledgeBaseBuilder(){
           if(!kbQuoteInSource(f.sourceQuote,srcNorm,null,srcMarks))dehyphSaved++;
           if(!kbQuoteOperatorsAgree(f.sourceQuote,srcOpNorm,srcOpDehyph))noteOp(1,f);
         }
-        result.parts.push(Object.assign(parsed,{source:Object.assign({},parsed.source,{filename:file.name,range:chunk.label},jobRole!=='rn'?{sourceRole:jobRole}:{})}));
+        result.parts.push(Object.assign(parsed,{source:Object.assign({},parsed.source,{filename:file.name,range:chunk.label},srcRoleMeta)}));
         bump(1);
         owned_addLog(`✓ ${tag} — ${nFacts} fact(s)`,'ok');
 
@@ -5859,7 +5919,7 @@ function KnowledgeBaseBuilder(){
                 slot.facts.push({...rest,recovered:true,sourcePointer:{filename:file.name,location:chunk.label}});
                 recovered++;
               }
-              if(recovered)result.parts.push({source:{filename:file.name,range:chunk.label+' (recovered)',...(jobRole!=='rn'?{sourceRole:jobRole}:{})},conditions:[...byCond.entries()].map(([name,slot])=>({name,aliases:[],...(slot.entryRole?{entryRole:slot.entryRole}:{}),...(slot.concept&&slot.entryRole!=='concept'?{concept:slot.concept}:{}),...(slot.contrastPartners.length?{contrastPartners:[...new Set(slot.contrastPartners)]}:{}),facts:slot.facts}))});
+              if(recovered)result.parts.push({source:{filename:file.name,range:chunk.label+' (recovered)',...srcRoleMeta},conditions:[...byCond.entries()].map(([name,slot])=>({name,aliases:[],...(slot.entryRole?{entryRole:slot.entryRole}:{}),...(slot.concept&&slot.entryRole!=='concept'?{concept:slot.concept}:{}),...(slot.contrastPartners.length?{contrastPartners:[...new Set(slot.contrastPartners)]}:{}),facts:slot.facts}))});
             }
             // v18.0 (review L12): a 'truncated' status and warning followed here, but since v17.13 geminiRequest rejects a
             // JSON reply cut off at the ceiling (the catch below keeps its partial text), so a returned audit is complete.
@@ -6008,6 +6068,9 @@ function KnowledgeBaseBuilder(){
   const selTrapProj=useMemo(()=>sel&&typeof kbProjectExamTraps==='function'?kbProjectExamTraps(sel,kb,{showEmptyTrapWorksheet:kbTrapWorksheet}):null,[sel,kb,kbTrapWorksheet]);
   const selConceptMat=useMemo(()=>sel&&typeof kbProjectConceptMatrix==='function'?kbProjectConceptMatrix(sel,kb):null,[sel,kb]);
   const selHtml=useMemo(()=>sel&&kbView==='study'?mdToSafeHtml(renderKBMarkdown({...kb,conditions:[sel]})):'',[kb,sel,kbView]);
+  const normDefRoles=kbNormalizeSourceRoles(defaultSourceRoles);
+  const hasAnyBridgeRole=normDefRoles.some(r=>r!=='rn')||Object.values(sourceRoles).some(r=>kbNormalizeSourceRoles(r).some(x=>x!=='rn'));
+  const hasCustomPerFileRoles=files.length>0&&files.some(f=>kbNormalizeSourceRoles(sourceRoles[cardFileId(f)]||normDefRoles).join(',')!==normDefRoles.join(','));
   // v17.0: intake, extraction controls, processing status and knowledge review used to be
   // one vertical stack, so the built Knowledge Base opened below several screens of
   // configuration. Controls now sit in the setup column and everything the build produces —
@@ -6018,8 +6081,19 @@ function KnowledgeBaseBuilder(){
     setup={<>
       <Step n="01" title="Sources" note={files.length?files.length+(files.length===1?' file':' files'):'none yet'} lede="PDFs and PPTX decks are read as text. Flashcard photos have no text layer, so they are transcribed first and reviewed before they become facts.">
     <div role="button" tabIndex={0} aria-label="Add PDF, PPTX, or flashcard image source files" onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fileRef.current?.click();}}} className="upload-zone" onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();addFiles(e.dataTransfer.files)}}><h3>Drop PDF, PPTX, or flashcard photos</h3><p>Large sources are processed in page or slide chunks; successful chunks are retained even if another chunk fails. Flashcard photos are transcribed first, and you review the transcript before it becomes facts.</p><input aria-label="Source files" ref={fileRef} type="file" multiple accept=".pdf,.pptx,.jpg,.jpeg,.png,.webp,.heic,.heif" style={{display:'none'}} onChange={e=>{addFiles(e.target.files);e.target.value=''}}/></div>
-    {files.length>0&&<div style={{marginTop:8}}>{files.map((f,i)=>{const fid=cardFileId(f);return <div className="file-chip" key={cardFileId(f)}><div className={'f-icon '+getExt(f.name)}>{getExt(f.name)}</div><span className="f-name">{f.name}</span><span className="f-size">{formatSize(f.size)}</span><select aria-label={'Source role for '+f.name} value={sourceRoles[fid]||'rn'} onChange={e=>setSourceRoles(p=>({...p,[fid]:e.target.value}))} style={{fontSize:11,padding:'2px 6px',maxWidth:145}}>{KB_SOURCE_ROLES.map(([rv,rl])=><option key={rv} value={rv}>{rl}</option>)}</select><button className="f-rm" aria-label={'Remove source '+f.name} onClick={()=>{destroyPdfDoc(f);currentFiles.current=currentFiles.current.filter(x=>cardFileId(x)!==fid);txAbortRef.current?.abort();if(busy)abortRef.current?.abort();setTranscripts(p=>{const n={...p};delete n[cardFileId(f)];return n;});setTxReviewed(false);setSourceRoles(p=>{const n={...p};delete n[fid];return n;});setFiles(currentFiles.current);}}>×</button></div>;})}</div>}
-    <div className="form-grid" style={{margin:'14px 0 10px'}}><div className="field-block"><label htmlFor="kb-course">Course <span className="badge-opt">optional</span></label><input id="kb-course" type="text" value={course} onChange={e=>setCourse(e.target.value)} placeholder="Course name"/></div><div className="field-block"><label htmlFor="kb-exam">Exam / unit <span className="badge-opt">optional</span></label><input id="kb-exam" type="text" value={exam} onChange={e=>setExam(e.target.value)} placeholder="Exam or unit name"/></div></div>
+    {files.length>0&&<div style={{marginTop:8}}>{files.map((f,i)=>{const fid=cardFileId(f),fRoles=kbNormalizeSourceRoles(sourceRoles[fid]||normDefRoles);return <div className="file-chip" key={cardFileId(f)} style={{flexWrap:'wrap'}}><div className={'f-icon '+getExt(f.name)}>{getExt(f.name)}</div><span className="f-name">{f.name}</span><span className="f-size">{formatSize(f.size)}</span><button className="f-rm" aria-label={'Remove source '+f.name} onClick={()=>{destroyPdfDoc(f);currentFiles.current=currentFiles.current.filter(x=>cardFileId(x)!==fid);txAbortRef.current?.abort();if(busy)abortRef.current?.abort();setTranscripts(p=>{const n={...p};delete n[cardFileId(f)];return n;});setTxReviewed(false);setSourceRoles(p=>{const n={...p};delete n[fid];return n;});setFiles(currentFiles.current);}}>×</button><div role="group" aria-label={'Source roles for '+f.name} style={{width:'100%',display:'flex',flexWrap:'wrap',gap:'4px 6px',paddingTop:5,marginTop:2,borderTop:'1px solid var(--border)'}}>{KB_SOURCE_ROLES.map(([rv,rl])=>{const checked=fRoles.includes(rv);return <label key={rv} title={KB_SOURCE_ROLE_GUIDE[rv]} style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:11,padding:'1px 6px',borderRadius:4,border:'1px solid '+(checked?'var(--blue-line)':'var(--border)'),background:checked?'var(--blue-tint)':'var(--bg-deep)',color:checked?'var(--blue-deep)':'var(--text-dim)',cursor:'pointer',fontWeight:checked?600:400}}><input type="checkbox" aria-label={rl+' role for '+f.name} checked={checked} onChange={()=>setSourceRoles(p=>({...p,[fid]:kbToggleSourceRole(p[fid]||normDefRoles,rv)}))} style={{accentColor:'var(--accent)',margin:0}}/><span>{rl}</span></label>;})}</div></div>;})}</div>}
+    <div className="field-block" style={{marginTop:10,padding:'9px 11px',borderRadius:'var(--radius)',border:'1px solid var(--border)',background:'var(--bg-deep)'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6,flexWrap:'wrap',marginBottom:5}}>
+        <span style={{fontSize:12,fontWeight:600,color:'var(--text-bright)'}}>Source roles <span className="badge-opt">select one or more</span></span>
+        {hasCustomPerFileRoles&&<button type="button" className="btn-ghost" style={{fontSize:11,padding:'2px 7px',minHeight:24}} onClick={()=>setSourceRoles({})}>Apply to all {files.length} files</button>}
+      </div>
+      <div style={{fontSize:11.5,color:'var(--text-dim)',marginBottom:7,lineHeight:1.45}}>Check one or more lenses for combined packets/chapters, or customize individual files above (e.g., Saunders = RN Core, Porth = Patho Bridge, Jarvis = Exam / Diff Bridge).</div>
+      {KB_SOURCE_ROLES.map(([rv,rl],idx)=>{const checked=normDefRoles.includes(rv);return <label key={rv} style={{display:'flex',alignItems:'flex-start',gap:8,fontSize:12,color:'var(--text)',cursor:'pointer',marginTop:idx?7:0}}>
+        <input type="checkbox" aria-label={'Default source role: '+rl} checked={checked} onChange={()=>setDefaultSourceRoles(p=>kbToggleSourceRole(p,rv))} style={{accentColor:'var(--accent)',marginTop:2}}/>
+        <span style={{lineHeight:1.45}}><b style={{color:checked?'var(--blue-deep)':'var(--text-bright)'}}>{rl}</b> — <span style={{color:'var(--text-dim)'}}>{KB_SOURCE_ROLE_GUIDE[rv]}</span></span>
+      </label>;})}
+    </div>
+    <div className="form-grid" style={{margin:'12px 0 10px'}}><div className="field-block"><label htmlFor="kb-course">Course <span className="badge-opt">optional</span></label><input id="kb-course" type="text" value={course} onChange={e=>setCourse(e.target.value)} placeholder="Course name"/></div><div className="field-block"><label htmlFor="kb-exam">Exam / unit <span className="badge-opt">optional</span></label><input id="kb-exam" type="text" value={exam} onChange={e=>setExam(e.target.value)} placeholder="Exam or unit name"/></div></div>
     <div className="field-block" style={{marginBottom:6}}>
       <label htmlFor="kb-concepts">Overarching concept(s) <span className="badge-opt">optional · concept curriculum</span></label>
       <input id="kb-concepts" type="text" value={kbConcepts} onChange={e=>setKbConcepts(e.target.value)} placeholder="e.g. Perfusion, Gas Exchange, Intracranial Regulation"/>
@@ -6041,7 +6115,7 @@ function KnowledgeBaseBuilder(){
           <div style={{fontSize:12,color:'var(--text-dim)',marginTop:2,lineHeight:1.45}}>Preserves source-quoted neurohormonal, receptor-level, and physical-exam differential nuances in collapsible NP Bridge sections while keeping downstream RN exam generators clean by default.</div>
         </span>
       </label>
-      {(kbPlateBridge||Object.values(sourceRoles).some(r=>r&&r!=='rn'))&&<label style={{display:'flex',alignItems:'flex-start',gap:8,fontSize:12,color:'var(--text-dim)',cursor:'pointer',marginTop:6,marginLeft:22}}>
+      {(kbPlateBridge||hasAnyBridgeRole)&&<label style={{display:'flex',alignItems:'flex-start',gap:8,fontSize:12,color:'var(--text-dim)',cursor:'pointer',marginTop:6,marginLeft:22}}>
         <input id="kb-cap-bridge-tier" type="checkbox" checked={kbCapBridgeTier} onChange={e=>setKbCapBridgeTier(e.target.checked)} style={{accentColor:'var(--accent)',marginTop:2}}/>
         <span>Cap non-safety NP Bridge facts at Tier 2 <span className="badge-opt">keeps RN safety/thresholds at Tier 1</span></span>
       </label>}
@@ -6444,7 +6518,9 @@ RULES
    ROUTINE-LAB .... abnormal but not critical — creatinine, BUN, Hgb 8–11, bicarb, elevated HCT,
                     elevated BNP, elevated Na
    UNSTABLE ....... acute; unexpected or changed finding; post-op <12h; general anesthesia <12h;
-                    newly admitted or diagnosed <24h; not ready for discharge; worsening
+                    newly admitted or diagnosed <24h; not ready for discharge; worsening;
+                    or deceptive "pseudo-improvement" (sudden loss of an acute sign signaling
+                    decompensation, such as a silent chest or abrupt pain relief on perforation)
    STABLE ......... chronic; expected/classic presentation; unchanged assessment; post-op >12h;
                     ready for discharge
    SAFETY ......... black-box warning, contraindication, antidote, hold parameter, allergy,
@@ -6529,7 +6605,7 @@ R3  PSYCH-SAFETY ... suicidal/homicidal ideation, self-harm, violence, elopement
                      it is T1 — no matter where Maslow would otherwise file it.
 R4  CRIT-LAB ....... critical-range value. → T1
 R5  UNSTABLE ....... acute; unexpected/changed finding; post-op <12h; newly admitted <24h;
-                     worsening. → T1
+                     worsening; deceptive pseudo-improvement (e.g., silent chest, abrupt pain relief on perforation). → T1
 R6  SAFETY / SCOPE . black-box warnings, contraindications, antidotes, hold parameters, allergies,
                      high-alert meds; delegation, assignment, scope limits, staff-management actions.
                      → T1 (safety-critical and heavily tested)
@@ -8849,7 +8925,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '21.1';}
+function suiteVersion(){return '21.2';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -12866,12 +12942,18 @@ down the list; the first rule that separates the options decides the key.
   3. PSYCH-SAFETY ..... suicidal or homicidal ideation, self-harm, violence, elopement.
   4. CRIT-LAB ......... a value the facts present as critical for THIS client, not an expected
                         baseline such as a dialysis client's usual potassium.
-  5. UNSTABLE ......... acute; unexpected or changed; worsening; post-op <12h; newly admitted <24h.
+  5. UNSTABLE ......... acute; unexpected or changed; worsening; deceptive pseudo-improvement
+                        (e.g., silent chest, abrupt pain relief on perforation); post-op <12h; newly admitted <24h.
   6. SAFETY / SCOPE ... contraindications, hold parameters, allergies, antidotes, high-alert
                         medications. An option outside the nurse's scope, or one that needs a
                         prescription the client does not have, is not the nurse's first action.
   7. MASLOW ........... physiological > safety > psychosocial > self-actualization.
   8. NURSING PROCESS .. assess before intervening, except under rules 1 and 2.
+Special precedence (LOC vs. AIRWAY): level of consciousness is the first thing the nurse
+ASSESSES; airway is the first thing the nurse DOES.
+Organ tiebreaker: brain > lung > heart > liver > kidney > pancreas — apply to the organ
+named in the finding/qualifier, not the diagnosis label (a chronic renal client with frothy
+sputum is a lung problem).
 Tiebreakers: acute > chronic · unstable > stable · emergent > urgent > nonurgent ·
 unexpected > expected · actual > potential · fresh post-op (<12h) > medical or other surgical.
 Grounding still governs: the key and every distractor must trace to supplied facts. When a
@@ -13266,7 +13348,7 @@ Use your internal reasoning budget BEFORE writing PART 1-PART 4 to verify every 
 
 2. MANDATORY 4-PILLAR DISTRACTOR CONSTRUCTION (NO OBVIOUS FILLER OPTIONS):
    Every incorrect option (distractor) MUST be a realistic clinical action or statement grounded in a logged C# anchor that fails for one of these 4 reasons—and its PART 4 "Why X is wrong:" rationale MUST explicitly label which trap it is while citing (Source: C#):
-   - [Priority / First-Action Trap]: A valid intervention for this condition (e.g., ordering a test, drawing labs, or notifying the primary health care provider) that is WRONG because an immediate bedside stabilization action in Treat / independent (e.g., positioning, airway/oxygen, stopping an offending infusion) must happen FIRST per PRIORITY ORDER.
+   - [Priority / First-Action Trap]: A valid action for this condition (e.g., routine charting, notifying the primary health care provider, or jumping to an un-gated intervention) that is WRONG because a higher-ranking step under PRIORITY ORDER (rules 1-8, LOC vs. AIRWAY, and organ/clinical tiebreakers) must happen FIRST — in ABC or CRISIS (rules 1-2) the nurse acts immediately (e.g., airway/oxygen, stopping an offending infusion, or giving an ordered crisis rescue medication), whereas outside rules 1-2 a gating assessment (rule 8) outranks the intervention it gates and Treat / independent never blindly outranks an active crisis rescue prescription.
    - [Twin-Diagnosis Trap]: A gold-standard intervention or expected finding for a look-alike condition or opposite phase in the packet that is HARMFUL, contraindicated, or mismatched here.
    - [Pharm / Lab Hold Trap]: Administering or continuing a medication when a specific lab, electrolyte, or vital sign in the stem violates a source-grounded hold parameter or contraindication in Treat / dependent.
    - [Further-Teaching / Context Trap]: A subtle client self-management error corrected by an Educate fact, or a source-grounded statement that fails to answer the specific question asked.
@@ -14989,7 +15071,7 @@ Before emitting JSON, construct a synchronized stage-by-stage physiological time
 2. P-LATE (TRIPLE-E) CLINICAL PROGRESSION ACROSS UNFOLDING QUESTIONS:
    Distribute the case's questions across the P-LATE workflow in chronological clinical order as stages unfold:
    - Early Stage(s) — Recognize & Analyze Cues (Look + Analyze + Patho): Identify priority bedside cues (Look) and diagnostic/lab red flags (Analyze), and link presentation to the underlying pathophysiological driver (Patho) or twin-diagnosis differentiator ([PRIORITY DIFFERENTIATOR] / [Slot: A.diff-tiebreaker]).
-   - Middle Stage(s) — Prioritize Bedside Action & Safe Pharm/Hold Rules (Treat): Sequence immediate independent bedside stabilization actions (Treat / independent) ahead of dependent orders per PRIORITY ORDER, and evaluate prescriptions against source-grounded hold parameters, labs, and vital signs (Treat / dependent — include a Pharm / Lab Hold Trap when supported by the packet).
+   - Middle Stage(s) — Prioritize Action, Gating Assessment & Safe Pharm/Hold Rules (Treat): Apply PRIORITY ORDER (rules 1-8, LOC vs. AIRWAY, and organ/clinical tiebreakers) as the sole priority authority — act immediately in ABC or CRISIS situations (rules 1-2, including stopping an offending infusion or administering an active crisis rescue prescription), assess first when a gating safety check is required outside rules 1-2 (rule 8), never treat Treat / independent as automatically outranking Treat / dependent when PRIORITY ORDER says otherwise, and evaluate prescriptions against source-grounded hold parameters, labs, and vital signs (Treat / dependent — include a Pharm / Lab Hold Trap when supported by the packet).
    - Later Stage(s) — Evaluate Slope Red Flags & Self-Management (Educate / evaluate + Educate / discharge): Interpret multi-stage T0 -> T1 -> T2 trajectory shifts or Slope Red Flags ([TRAP: trend-slope] / [TRAP: pseudo-improvement] / Educate / evaluate) to judge improvement vs. decompensation, and evaluate client self-management or discharge statements for "further teaching needed" traps (Educate / discharge).
 
 3. STRICT FACT-ID GROUNDING & 4-PILLAR DISTRACTORS:

@@ -15,8 +15,8 @@ module.exports = async function run(S, t) {
   const KB = new Function(
     span('function kbBuildFocusBlock(', '// Underextraction flag:') + '\n' +
     span('function kbSlug(', '// ── Durable Knowledge Base persistence') + '\n' +
-    ';return {KB_FACT_BUCKETS,KB_LEGACY_LATTE_BUCKETS,KB_SOURCE_ROLES,KB_PLATE_SLOTS,KB_PLATE_BRIDGE_RULES,' +
-    'kbMigrateLegacyBucket,kbCoercePlateFields,kbBuildFocusBlock,kbConditionMatchKeys,mergeLatteParts,kbNormalizeImported,normalizeKbEntities};'
+    ';return {KB_FACT_BUCKETS,KB_LEGACY_LATTE_BUCKETS,KB_SOURCE_ROLES,KB_SOURCE_ROLE_GUIDE,KB_PLATE_SLOTS,KB_PLATE_BRIDGE_RULES,' +
+    'kbNormalizeSourceRoles,kbToggleSourceRole,kbMigrateLegacyBucket,kbCoercePlateFields,kbBuildFocusBlock,kbConditionMatchKeys,mergeLatteParts,kbNormalizeImported,normalizeKbEntities};'
   )();
 
   const VIEW = new Function(
@@ -61,12 +61,15 @@ module.exports = async function run(S, t) {
     const focusBridgeRole = KB.kbBuildFocusBlock('', '', '', 'prioritize', '', false, false, false, 'patho-bridge');
     const focusToggle = KB.kbBuildFocusBlock('', '', '', 'prioritize', '', false, false, true, 'rn');
 
-    t('plate-bridge (Step 01 role pills & zero-hallucination prompt rules): PDFs, PPTX decks, and card/transcript chips render all 4 role options, propagate card roles in build(), and ban invented thresholds/receptors/gold-standards/3-step chronological lists',
+    t('plate-bridge (Step 01 role checkboxes, inline role breakdown, & zero-hallucination prompt rules): PDFs, PPTX decks, and card/transcript chips render multi-select role checkboxes + inline reference guide, propagate card roles in build(), and ban invented thresholds/receptors/gold-standards/3-step chronological lists',
       JSON.stringify(KB.KB_SOURCE_ROLES) === '[["rn","RN Core"],["patho-bridge","Patho Bridge"],["exam-bridge","Exam / Diff Bridge"],["pharm-bridge","Pharm / GDMT Bridge"]]' &&
       JSON.stringify(KB.KB_PLATE_SLOTS) === '["exam-nuance","gold-standard","diff-tiebreaker","gdmt-bridge","evaluate"]' &&
-      chipJsx.includes("<select aria-label={'Source role for '+f.name}") &&
-      !chipJsx.includes('!isImg&&<select') &&
-      kbBuilderSpan.includes("const cardRole=matchedRoles.find(r=>r!=='rn')||matchedRoles[0]||'rn';") &&
+      chipJsx.includes("type=\"checkbox\" aria-label={rl+' role for '+f.name}") &&
+      chipJsx.includes('title={KB_SOURCE_ROLE_GUIDE[rv]}') &&
+      !chipJsx.includes('!isImg&&') &&
+      kbBuilderSpan.includes("aria-label={'Default source role: '+rl}") &&
+      kbBuilderSpan.includes('{KB_SOURCE_ROLE_GUIDE[rv]}') &&
+      kbBuilderSpan.includes('const cardRoles=matchedRoles.length?_normRoles(matchedRoles.flatMap(r=>_normRoles(r))):_defaultRoles;') &&
       kbBuilderSpan.includes('role:cardRole,depth:0') &&
       KB.KB_PLATE_BRIDGE_RULES.includes('artificial 3-step chronological lists') &&
       !focusRn.includes('P-LATE MULTI-SOURCE & NP MECHANISM BRIDGE RULES') &&
@@ -248,15 +251,16 @@ module.exports = async function run(S, t) {
       VIEW.kbBucketFacts(unmigratedCond, 'Analyze').map(f => f.id).join(',') === 'u3' &&
       VIEW.kbBucketFacts(unmigratedCond, 'Treat', 'dependent').map(f => f.id).join(',') === 'u4' &&
       VIEW.kbBucketFacts(unmigratedCond, 'Educate', 'evaluate').map(f => f.id).join(',') === 'u5' &&
-      unmigMd.indexOf('Hold dose if apical pulse < 60 bpm') > unmigMd.indexOf('**1. Pharmacology, Hold Rules & Provider Orders**') &&
-      unmigMd.indexOf('Urine output >= 30 mL/hr indicates therapeutic response.') > unmigMd.indexOf('**2. Evaluate — Expected vs. Worsening Trends**') &&
+      unmigMd.indexOf('Hold dose if apical pulse < 60 bpm') > unmigMd.indexOf('**2. Pharmacology, Hold Rules & Provider Orders**') &&
+      unmigMd.indexOf('Urine output >= 30 mL/hr indicates therapeutic response.') > unmigMd.indexOf('**1. Evaluate — Expected vs. Worsening Trends**') &&
+      unmigMd.indexOf('Urine output >= 30 mL/hr indicates therapeutic response.') < unmigMd.indexOf('**2. Educate — Discharge & Self-Management**') &&
       md.includes('<details open><summary><strong>NP Mechanism Bridge</strong></summary>') &&
       md.includes('<details open><summary><strong>NP Physical Exam & Differential Nuance</strong></summary>') &&
       md.includes('<details open><summary><strong>NP Diagnostic & Differential Nuance</strong></summary>') &&
       md.includes('<details open><summary><strong>NP Receptor & GDMT Bridge</strong></summary>') &&
       md.includes('**Gold Standard / Confirmatory**') &&
-      md.includes('**1. Educate — Discharge & Self-Management**') &&
-      md.includes('**2. Evaluate — Expected vs. Worsening Trends**') &&
+      md.indexOf('**1. Priority Bedside & Safe-Administration Actions**') < md.indexOf('**2. Pharmacology, Hold Rules & Provider Orders**') &&
+      md.indexOf('**1. Evaluate — Expected vs. Worsening Trends**') < md.indexOf('**2. Educate — Discharge & Self-Management**') &&
       md.includes('**Twin-Diagnosis Contrast Strip (Acute Decompensated Heart Failure vs. COPD Exacerbation)**') &&
       md.includes('### ⚡ Exam Trap Block — '));
   }
@@ -288,5 +292,144 @@ module.exports = async function run(S, t) {
       gizmoParsed.cards.length === 2 &&
       ANKI_GIZMO.gizmoLooksLikeTagField('Condition::ADHF Nursing::PLATE::Analyze Tier::2 Layer::NPBridge') &&
       ANKI_GIZMO.gizmoLooksLikeTagField('Condition::ADHF Nursing::LATTE::Assess Tier::1'));
+  }
+
+  // 7. v21.2 Multi-select source role checkboxes, inline KB_SOURCE_ROLE_GUIDE, and mixed RN+Bridge vs. pure-Bridge merging
+  {
+    const guideKeys = Object.keys(KB.KB_SOURCE_ROLE_GUIDE);
+    const normOrdered = KB.kbNormalizeSourceRoles(['exam-bridge', 'rn', 'patho-bridge']);
+    const normCsv = KB.kbNormalizeSourceRoles('pharm-bridge, patho-bridge');
+    const toggleAdd = KB.kbToggleSourceRole(['rn'], 'patho-bridge');
+    const toggleRemoveRn = KB.kbToggleSourceRole(toggleAdd, 'rn');
+    const toggleLastFallback = KB.kbToggleSourceRole(['rn'], 'rn');
+
+    const focusSingleStr = KB.kbBuildFocusBlock('', '', '', 'prioritize', '', false, false, false, 'patho-bridge');
+    const focusSingleArr = KB.kbBuildFocusBlock('', '', '', 'prioritize', '', false, false, false, ['patho-bridge']);
+    const focusRnOnlyArr = KB.kbBuildFocusBlock('', '', '', 'prioritize', '', false, false, false, ['rn']);
+    const focusMixed = KB.kbBuildFocusBlock('', '', '', 'prioritize', '', false, false, false, ['rn', 'patho-bridge', 'exam-bridge']);
+    const focusPureBridgeMulti = KB.kbBuildFocusBlock('', '', '', 'prioritize', '', false, false, false, ['patho-bridge', 'exam-bridge']);
+
+    const mixedMerged = KB.mergeLatteParts([
+      {
+        source: { filename: 'Combined-Packet.pdf', range: 'pp. 1-4', sourceRole: 'rn,patho-bridge,exam-bridge', sourceRoles: ['rn', 'patho-bridge', 'exam-bridge'] },
+        conditions: [{
+          name: 'Heart Failure',
+          aliases: [],
+          facts: [
+            { text: 'Monitor daily morning weight and report a gain of 2 lb in 24 hours.', latteBucket: 'Educate', subtype: 'discharge', tier: 1, safetyCritical: false, sourceQuote: 'Monitor daily morning weight and report a gain of 2 lb in 24 hours', sourcePointer: { filename: 'Combined-Packet.pdf', location: 'p. 1' } },
+            { text: 'S3 ventricular gallop reflects rapid passive filling into an overdistended ventricle.', latteBucket: 'Look', subtype: 'early', clinicalLayer: 'bridge', plateSlot: 'exam-nuance', tier: 1, safetyCritical: false, sourceQuote: 'S3 ventricular gallop reflects rapid passive filling', sourcePointer: { filename: 'Combined-Packet.pdf', location: 'p. 2' } }
+          ]
+        }],
+        medications: [{
+          name: 'Sacubitril/Valsartan',
+          class: 'ARNI',
+          facts: [
+            { text: 'Allow a 36-hour washout window when switching from an ACE inhibitor to prevent angioedema.', latteBucket: 'Treat', subtype: 'dependent', tier: 1, safetyCritical: true, sourceQuote: '36-hour washout window when switching from an ACE inhibitor', sourcePointer: { filename: 'Combined-Packet.pdf', location: 'p. 3' } },
+            { text: 'Neprilysin inhibition augments endogenous natriuretic peptides and bradykinin.', latteBucket: 'Patho', clinicalLayer: 'bridge', plateSlot: 'gdmt-bridge', tier: 1, safetyCritical: false, sourceQuote: 'Neprilysin inhibition augments endogenous natriuretic peptides', sourcePointer: { filename: 'Combined-Packet.pdf', location: 'p. 3' } }
+          ]
+        }]
+      }
+    ], 'NUR 220', 'Exam 2', null, { capBridgeTier: true });
+
+    const pureBridgeMultiMerged = KB.mergeLatteParts([
+      {
+        source: { filename: 'Porth-Jarvis-Packet.pdf', range: 'pp. 10-12', sourceRole: 'patho-bridge,exam-bridge', sourceRoles: ['patho-bridge', 'exam-bridge'] },
+        conditions: [{
+          name: 'Heart Failure',
+          aliases: [],
+          facts: [
+            { text: 'Chronic angiotensin II upregulation drives myocardial fibrosis and remodeling.', latteBucket: 'Patho', tier: 1, safetyCritical: false, sourceQuote: 'Chronic angiotensin II upregulation drives myocardial fibrosis', sourcePointer: { filename: 'Porth-Jarvis-Packet.pdf', location: 'p. 10' } }
+          ]
+        }],
+        medications: [{
+          name: 'Spironolactone',
+          class: 'Mineralocorticoid receptor antagonist',
+          facts: [
+            { text: 'Competitive aldosterone receptor blockade attenuates maladaptive cardiac fibrosis.', latteBucket: 'Patho', tier: 1, safetyCritical: false, sourceQuote: 'Competitive aldosterone receptor blockade attenuates maladaptive cardiac fibrosis', sourcePointer: { filename: 'Porth-Jarvis-Packet.pdf', location: 'p. 12' } }
+          ]
+        }]
+      }
+    ], 'NUR 220', 'Exam 2', null, { capBridgeTier: true });
+
+    const mixedCondFacts = mixedMerged.conditions[0].facts;
+    const mixedBedsideFact = mixedCondFacts.find(f => f.text.includes('daily morning weight'));
+    const mixedBridgeFact = mixedCondFacts.find(f => f.text.includes('S3 ventricular gallop'));
+    const mixedMed = mixedMerged.medications[0];
+    const mixedMedRnFact = mixedMed.facts.find(f => f.text.includes('36-hour washout'));
+    const mixedMedBridgeFact = mixedMed.facts.find(f => f.text.includes('Neprilysin inhibition'));
+
+    const pureBridgeFact = pureBridgeMultiMerged.conditions[0].facts[0];
+    const pureBridgeMed = pureBridgeMultiMerged.medications[0];
+
+    t('plate-bridge (v21.2 multi-select source roles & inline role guide): normalizes/toggles roles canonically, preserves single-role prompt byte identity while emitting multi-role layer rules, and keeps untagged RN facts in RN Core when RN Core is co-selected vs. defaulting to NP Bridge when only Bridge roles are selected',
+      guideKeys.join(',') === 'rn,patho-bridge,exam-bridge,pharm-bridge' &&
+      KB.KB_SOURCE_ROLE_GUIDE.rn.includes('Saunders') &&
+      KB.KB_SOURCE_ROLE_GUIDE['patho-bridge'].includes('Porth') &&
+      KB.KB_SOURCE_ROLE_GUIDE['exam-bridge'].includes('Jarvis') &&
+      KB.KB_SOURCE_ROLE_GUIDE['pharm-bridge'].includes('GDMT') &&
+      normOrdered.join(',') === 'rn,patho-bridge,exam-bridge' &&
+      normCsv.join(',') === 'patho-bridge,pharm-bridge' &&
+      toggleAdd.join(',') === 'rn,patho-bridge' &&
+      toggleRemoveRn.join(',') === 'patho-bridge' &&
+      toggleLastFallback.join(',') === 'rn' &&
+      focusSingleArr === focusSingleStr &&
+      focusRnOnlyArr === '' &&
+      focusMixed.includes('SOURCE ROLES FOR THIS CHUNK (MULTI-SELECT):') &&
+      focusMixed.includes('Pathophysiology Bridge source') &&
+      focusMixed.includes('Physical Exam & Differential Bridge source') &&
+      focusMixed.includes('MULTI-ROLE LAYER RULE: Because RN Core is selected alongside NP Bridge role(s)') &&
+      focusPureBridgeMulti.includes('MULTI-ROLE LAYER RULE: Because only supplemental Bridge roles are selected (RN Core is not selected)') &&
+      !mixedBedsideFact.clinicalLayer &&
+      mixedBedsideFact.tier === 1 &&
+      mixedBridgeFact.clinicalLayer === 'bridge' &&
+      mixedBridgeFact.plateSlot === 'exam-nuance' &&
+      mixedBridgeFact.tier === 2 &&
+      !mixedMed.clinicalLayer &&
+      !mixedMedRnFact.clinicalLayer &&
+      mixedMedBridgeFact.clinicalLayer === 'bridge' &&
+      mixedMedBridgeFact.tier === 2 &&
+      pureBridgeFact.clinicalLayer === 'bridge' &&
+      pureBridgeFact.tier === 2 &&
+      pureBridgeMed.clinicalLayer === 'bridge' &&
+      pureBridgeMed.facts.some(f => f.text.includes('Competitive aldosterone') && f.clinicalLayer === 'bridge' && f.tier === 2));
+  }
+
+  // 8. v21.2 Priority Analyzer full alignment (B1 Organ Hierarchy, LOC vs. AIRWAY, pseudo-improvement UNSTABLE, P-LATE trap subordination) & Q1->Q6 Study View order
+  {
+    const { extractPromptLiteral } = require('./repo-checks');
+    const priorityOrderRules = extractPromptLiteral(S, 'PRIORITY_ORDER_RULES').body;
+    const nclexTrapRules = extractPromptLiteral(S, 'NCLEX_PLATE_TRAP_RULES').body;
+    const caseSlopeRules = extractPromptLiteral(S, 'CASE_SLOPE_SYNC_RULES').body;
+    const paExtractFn = new Function(span('function paBuildExtractPrompt(', '\n// STAGE 2 — Cascade') + ';return paBuildExtractPrompt;')();
+    const paSynthFn = new Function(span('function paBuildSynthPrompt(', '\n// v15.8: was four independent regexes') + ';return paBuildSynthPrompt;')();
+    const harvestPrompt = paExtractFn('## Asthma\n- Disappearance of wheezes', 0, 1, '');
+    const synthPrompt = paSynthFn(['- **Silent chest** [§ Asthma] | QUALIFIER: sudden loss of wheezes | FLAGS: UNSTABLE'], '');
+
+    const orderFixtureMd = VIEW.renderKBMarkdown({
+      conditions: [{
+        name: 'Status Asthmaticus',
+        facts: [
+          { id: 'sa-1', latteBucket: 'Treat', subtype: 'dependent', tier: 1, text: 'Administer nebulized albuterol and IV methylprednisolone.', sources: [{ filename: 'rn.pdf', location: 'p. 1' }] },
+          { id: 'sa-2', latteBucket: 'Treat', subtype: 'independent', tier: 1, text: 'Position upright in high-Fowler and apply humidified oxygen.', sources: [{ filename: 'rn.pdf', location: 'p. 1' }] },
+          { id: 'sa-3', latteBucket: 'Educate', subtype: 'discharge', tier: 1, text: 'Rinse mouth after inhaled corticosteroid use.', sources: [{ filename: 'rn.pdf', location: 'p. 2' }] },
+          { id: 'sa-4', latteBucket: 'Educate', subtype: 'evaluate', tier: 1, text: 'Sudden silent chest with rising PaCO2 signals impending respiratory arrest.', sources: [{ filename: 'rn.pdf', location: 'p. 2' }] }
+        ]
+      }]
+    });
+
+    t('plate-bridge (v21.2 Priority Analyzer full alignment & NGN Q1->Q6 Study View order): carries B1 Organ Hierarchy + LOC vs. AIRWAY + pseudo-improvement UNSTABLE across Priority/NCLEX/Case, subordinates P-LATE trap blocks to PRIORITY ORDER, and orders Bedside->Pharm and Evaluate->Educate in Study View',
+      priorityOrderRules.includes('Special precedence (LOC vs. AIRWAY): level of consciousness is the first thing the nurse\nASSESSES; airway is the first thing the nurse DOES.') &&
+      priorityOrderRules.includes('Organ tiebreaker: brain > lung > heart > liver > kidney > pancreas') &&
+      priorityOrderRules.includes('deceptive pseudo-improvement') &&
+      harvestPrompt.includes('deceptive "pseudo-improvement"') &&
+      harvestPrompt.includes('silent chest') &&
+      synthPrompt.includes('deceptive pseudo-improvement') &&
+      nclexTrapRules.includes('PRIORITY ORDER (rules 1-8, LOC vs. AIRWAY, and organ/clinical tiebreakers)') &&
+      nclexTrapRules.includes('gating assessment (rule 8) outranks the intervention it gates and Treat / independent never blindly outranks an active crisis rescue prescription') &&
+      caseSlopeRules.includes('Apply PRIORITY ORDER (rules 1-8, LOC vs. AIRWAY, and organ/clinical tiebreakers) as the sole priority authority') &&
+      caseSlopeRules.includes('never treat Treat / independent as automatically outranking Treat / dependent when PRIORITY ORDER says otherwise') &&
+      orderFixtureMd.includes('### T — Treat (Priority Nursing Interventions & Medications)') &&
+      orderFixtureMd.indexOf('Position upright in high-Fowler') < orderFixtureMd.indexOf('Administer nebulized albuterol') &&
+      orderFixtureMd.indexOf('Sudden silent chest with rising PaCO2') < orderFixtureMd.indexOf('Rinse mouth after inhaled corticosteroid use'));
   }
 };
