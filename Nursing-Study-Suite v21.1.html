@@ -12,7 +12,24 @@
      policy and uses only its own inline style block and system fonts. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com">
 <title>P-LATE Study Suite</title>
-<!-- v21.0 (2026-11-13): P-LATE (Triple-E) 5-Bucket Taxonomy Cutover, RN vs. NP Mechanism Bridge Layer, 4-Pillar &
+<!-- v21.1 (2026-11-13): Concept-Curriculum x P-LATE Deep Intertwining — Sibling Exemplar P-LATE Matrix, Standalone
+     Medication/Diagnostic Auto-Linking in Single-Condition Cases & NCLEX Batches, Interrelated Concept Cascade Framing,
+     and 1-Click Concept Assignment in Step 6 Concept Audit. All 11 frozen prompt constants unchanged.
+     (1) SIBLING EXEMPLAR P-LATE MATRIX (kbProjectConceptMatrix, kbFormatConceptMatrixText, renderKBMarkdown): Automatically
+     assembles a cited side-by-side P/L/A/T/E comparison matrix at the foot of every Overarching Concept Overview with >= 2
+     sibling exemplars in Study View, Markdown/PDF exports, and 1-click clipboard copy.
+     (2) STANDALONE MEDICATION & DIAGNOSTIC AUTO-LINKING (selectCaseFacts, caseRenderFactPacket, ngAllocateBatch): Pulls up
+     to 4 high-priority Analyze/Treat facts (hold rules, antidotes, contraindications, therapeutic/critical thresholds) from
+     standalone medication and diagnostic entries linked by direct clinical mention or parent Giddens concept into single-
+     condition Case Studies ([LINKED ENTITY: ...]) and NCLEX Generator batch SUPPORTING CONTEXT.
+     (3) INTERRELATED CONCEPT CASCADE FRAMING (caseBuildPrompt, CaseStudyGenerator): Adds 'cascade' ("Interrelated Concept
+     Cascade") alongside 'comorbid' and 'differential' for multi-entry cases (Stage 1 primary concept disruption -> Stage 2
+     interrelated concept complication -> Stage 3+ Pharm/Lab hold & trajectory evaluation), auto-enabling interrelated
+     concept links when selected on a Giddens concept scope while keeping single-entry prompts byte-identical.
+     (4) ONE-CLICK CONCEPT LINKING IN STEP 6 AUDIT (auditKbConcepts, kbAssignConditionConcept, KnowledgeBaseBuilder): Surfaces
+     both orphan exemplars and unlinked conditions in Step 6's Concept Curriculum Audit with 1-click concept assignment or
+     Concept Overview promotion directly in IndexedDB-persisted KB state (zero API calls).
+     v21.0 (2026-11-13): P-LATE (Triple-E) 5-Bucket Taxonomy Cutover, RN vs. NP Mechanism Bridge Layer, 4-Pillar &
      Slope Red Flag Runtime Directives, Subtype-Balanced Case Fact Allocation, P-LATE Branding, and Case TDZ Fix.
      (1) P-LATE (TRIPLE-E) TAXONOMY: Migrates the 6-bucket LATTE schema to the zero-overlap 5-bucket P-LATE framework
      (Patho, Look, Analyze, Treat, Educate with evaluate subtype) across extraction, verification, Study View, Priority,
@@ -2723,14 +2740,19 @@ function auditKbConcepts(kbOrView){
   const norm=s=>String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
   const conceptMap=new Map();
   for(const c of realConds)if(c.entryRole==='concept'&&norm(c.name))conceptMap.set(norm(c.name),{name:c.name,cond:c,exemplars:[]});
-  const orphanExemplars=[],missingBridgeExemplars=[],exemplars=[];
+  const orphanExemplars=[],missingBridgeExemplars=[],exemplars=[],unlinkedConditions=[];
   for(const c of realConds){
     if(c.entryRole==='concept')continue;
-    if(!c.concept&&c.entryRole!=='exemplar')continue;
+    if(!c.concept&&c.entryRole!=='exemplar'){
+      // v21.1: surface unlinked conditions (e.g. organ-system conditions merged alongside a Giddens concept KB)
+      // so Step 6 can offer 1-click assignment to an overarching Concept Overview without inflating issueCount.
+      unlinkedConditions.push({id:c.id||'',name:c.name});
+      continue;
+    }
     exemplars.push(c);
     const ck=norm(c.concept);
     if(ck&&conceptMap.has(ck))conceptMap.get(ck).exemplars.push(c);
-    else orphanExemplars.push({name:c.name,concept:c.concept||'(unspecified)'});
+    else orphanExemplars.push({id:c.id||'',name:c.name,concept:c.concept||'(unspecified)'});
     const hasBridge=(c.facts||[]).some(f=>f&&(f.latteBucket==='Patho'||f.latteBucket==='BriefPatho')&&String(f.text||'').trim());
     if(!hasBridge)missingBridgeExemplars.push(c.name);
   }
@@ -2777,7 +2799,60 @@ function auditKbConcepts(kbOrView){
   const unlinkedEntities=entityGroups.filter(e=>!e.concept).map(e=>e.name);
   const linkedEntityCount=entityGroups.length-unlinkedEntities.length;
   const issueCount=orphanExemplars.length+missingBridgeExemplars.length+missingDifferentiatorExemplars.length+nearDuplicateOverlaps.length+bloatedExemplars.length+concepts.filter(c=>!c.hasBriefPatho).length;
-  return {concepts,exemplarCount:exemplars.length,orphanExemplars,missingBridgeExemplars,missingDifferentiatorExemplars,nearDuplicateOverlaps,bloatedExemplars,linkedEntityCount,unlinkedEntities,issueCount};
+  return {concepts,exemplarCount:exemplars.length,orphanExemplars,unlinkedConditions,missingBridgeExemplars,missingDifferentiatorExemplars,nearDuplicateOverlaps,bloatedExemplars,linkedEntityCount,unlinkedEntities,issueCount};
+}
+// v21.1: deterministic 1-click condition-to-concept linker for Step 6 Concept Curriculum Audit. Links an unlinked or orphan
+// condition under an overarching concept ('exemplar'), promotes a condition to a Concept Overview ('__concept__'), or unlinks
+// it (''), re-ordering conditions so Concept Overviews sit ahead of their exemplars without mutating the input KB.
+function kbAssignConditionConcept(kb,conditionIdOrName,targetConcept){
+  if(!kb||typeof kb!=='object'||!Array.isArray(kb.conditions))return kb;
+  const clean=s=>String(s||'').replace(/\s+/g,' ').trim(),norm=s=>clean(s).toLowerCase();
+  const keyRaw=clean(conditionIdOrName),keyNorm=norm(conditionIdOrName);
+  if(!keyRaw)return kb;
+  let targetIx=kb.conditions.findIndex(c=>c&&!c.entityKind&&c.id&&clean(c.id)===keyRaw);
+  if(targetIx<0)targetIx=kb.conditions.findIndex(c=>c&&!c.entityKind&&norm(c.name)===keyNorm);
+  if(targetIx<0)return kb;
+  const rawConcept=clean(targetConcept);
+  const canonMap=new Map();
+  for(const n of (Array.isArray(kb.metadata?.concepts)?kb.metadata.concepts:[])){const cn=clean(n);if(cn)canonMap.set(norm(cn),cn);}
+  for(const c of kb.conditions)if(c&&!c.entityKind&&clean(c.name)&&(c.entryRole==='concept'||(!c.concept&&!canonMap.has(norm(c.name)))))canonMap.set(norm(c.name),clean(c.name));
+  const sanitizeRel=(raw,primary,selfName)=>typeof kbSanitizeRelatedConcepts==='function'?kbSanitizeRelatedConcepts(raw,primary,selfName):(Array.isArray(raw)?raw.map(clean).filter(x=>x&&norm(x)!==norm(primary)&&norm(x)!==norm(selfName)):[]);
+  let trackedConcept='';
+  const mapped=kb.conditions.map((c,ix)=>{
+    if(!c||typeof c!=='object')return c;
+    if(ix!==targetIx){
+      // If assigning to a concept name that already exists as an untagged standalone condition, promote that condition to Concept Overview.
+      if(rawConcept&&rawConcept!=='__concept__'&&!c.entityKind&&c.entryRole!=='concept'&&!c.concept&&norm(c.name)===norm(rawConcept)){
+        const promoted={...c,aliases:Array.isArray(c.aliases)?c.aliases:[],entryRole:'concept'};
+        delete promoted.concept;
+        return promoted;
+      }
+      return c;
+    }
+    const next={...c,aliases:Array.isArray(c.aliases)?c.aliases:[]};
+    if(rawConcept==='__concept__'){
+      next.entryRole='concept';
+      delete next.concept;
+      trackedConcept=clean(next.name);
+      if(Array.isArray(next.relatedConcepts)){const rc=sanitizeRel(next.relatedConcepts,'',next.name);if(rc.length)next.relatedConcepts=rc;else delete next.relatedConcepts;}
+    }else if(!rawConcept){
+      delete next.concept;
+      if(next.entryRole==='exemplar')delete next.entryRole;
+    }else{
+      const canon=canonMap.get(norm(rawConcept))||rawConcept;
+      next.entryRole='exemplar';
+      next.concept=canon;
+      trackedConcept=canon;
+      if(Array.isArray(next.relatedConcepts)){const rc=sanitizeRel(next.relatedConcepts,canon,next.name);if(rc.length)next.relatedConcepts=rc;else delete next.relatedConcepts;}
+    }
+    return next;
+  });
+  const ordered=typeof kbOrderByConcept==='function'?kbOrderByConcept(mapped):mapped;
+  const prevMeta=kb.metadata&&typeof kb.metadata==='object'?kb.metadata:{};
+  const prevConcepts=Array.isArray(prevMeta.concepts)?prevMeta.concepts.map(clean).filter(Boolean):[];
+  const nextConcepts=trackedConcept&&!prevConcepts.some(x=>norm(x)===norm(trackedConcept))?[...prevConcepts,trackedConcept]:prevConcepts;
+  const nextMeta={...prevMeta,...(nextConcepts.length?{concepts:nextConcepts}:{})};
+  return {...kb,metadata:nextMeta,conditions:ordered};
 }
 // v19.2: Exam Trap Mapping (LATTE + P + Traps) for HESI Bowtie, HESI Trend, ATI, and NGN partial-credit guardrails.
 // Appended by kbBuildFocusBlock when kbExamTraps is active so Pass 1 & Pass 2 tag source-supported twin contrasts,
@@ -4170,7 +4245,10 @@ function renderKBMarkdown(kb){
     const trapProj=kbProjectExamTraps(c,kb,opts);
     const stripMd=trapProj&&trapProj.contrastStrip?`\n\n**Twin-Diagnosis Contrast Strip (${escPipe(trapProj.contrastStrip.selfName)} vs. ${escPipe(trapProj.contrastStrip.partnerName)})**\n\n| Dimension | ${escPipe(trapProj.contrastStrip.selfName)} | ${escPipe(trapProj.contrastStrip.partnerName)} |\n|---|---|---|\n| **Tie-Breaker Cues** | ${escPipe(trapProj.contrastStrip.selfCueMd)} | ${escPipe(trapProj.contrastStrip.partnerCueMd)} |\n| **Treatment Opposite** | ${escPipe(trapProj.contrastStrip.selfRxMd)} | ${escPipe(trapProj.contrastStrip.partnerRxMd)} |`:'';
     const trapBlock=trapProj?`\n\n### ⚡ Exam Trap Block — ${trapProj.header}${stripMd}\n\n`+trapProj.rows.map(r=>`- **${r.label}:** ${r.mdText}`).join('\n'):'';
-    return `## ${c.name}${c.entityKind?' ('+c.entityKind+')':''}${roleBanner}\n\n${pathoHead}\n${pathRn}${pathBridge}\n\n${lookHead}\n${lookRnBlock}${lookBridge}\n\n${analyzeHead}\n${analyzeRnBlock}${analyzeBridge}\n\n${treatHead}\n\n${depBlock}\n\n${indBlock}${unkBlock}${treatBridge}\n\n${educHead}\n\n${teachBlock}\n\n${evalBlock}${educBridge}${trapBlock}`;
+    // v21.1: assemble a deterministic Sibling Exemplar P-LATE Matrix on Concept Overviews with >= 2 sibling exemplars.
+    const conceptMat=isConcept?kbProjectConceptMatrix(c,kb):null;
+    const matrixBlock=conceptMat?`\n\n### 🧭 Sibling Exemplar P-LATE Matrix — ${c.name} (${conceptMat.rows.length} exemplars)\n\n| Exemplar | P — Concept Bridge | L — Hallmark Cue | A — Gold-Standard / Tie-Breaker | T — 1st Bedside / Key Rx | E — Slope / Red-Flag Trend |\n|---|---|---|---|---|---|\n`+conceptMat.rows.map(r=>`| **${escPipe(r.name)}** | ${escPipe(r.pathoMd)} | ${escPipe(r.lookMd)} | ${escPipe(r.analyzeMd)} | ${escPipe(r.treatMd)} | ${escPipe(r.educateMd)} |`).join('\n'):'';
+    return `## ${c.name}${c.entityKind?' ('+c.entityKind+')':''}${roleBanner}\n\n${pathoHead}\n${pathRn}${pathBridge}\n\n${lookHead}\n${lookRnBlock}${lookBridge}\n\n${analyzeHead}\n${analyzeRnBlock}${analyzeBridge}\n\n${treatHead}\n\n${depBlock}\n\n${indBlock}${unkBlock}${treatBridge}\n\n${educHead}\n\n${teachBlock}\n\n${evalBlock}${educBridge}${trapBlock}${matrixBlock}`;
   }).join('\n\n---\n\n');
 }
 const KB_TRAP_ROLE_BADGE={
@@ -4353,6 +4431,67 @@ function kbFormatExamTrapText(proj){
     lines.push('');
   }
   for(const r of proj.rows||[])lines.push('* **'+r.label+':** '+r.text);
+  return lines.join('\n');
+}
+// v21.1: deterministically assemble a cited side-by-side P/L/A/T/E comparison matrix across all sibling exemplars of an
+// overarching Concept Overview (requires >= 2 sibling exemplars so single-exemplar overviews stay concise). Reads RN Core
+// facts (clinicalLayer !== 'bridge') via kbBucketFacts so legacy v15-v20 LATTE KBs populate all 5 columns automatically.
+function kbProjectConceptMatrix(c,kb){
+  if(!c||typeof c!=='object'||c.entryRole!=='concept'||c.entityKind)return null;
+  // v21.1: honor explicit multi-entry kb.conditions (filtered/subset renders) while falling back to c._kbGroups for single-selection Study View ({...kb,conditions:[sel]}).
+  const explicitConds=kb&&Array.isArray(kb.conditions)?kb.conditions:null;
+  const allGroups=(explicitConds&&(explicitConds.length>1||explicitConds[0]!==c))?explicitConds:(Array.isArray(c._kbGroups)?c._kbGroups:(explicitConds||[]));
+  const norm=s=>String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+  const cleanTxt=f=>String(f&&f.text||'').replace(/\s+/g,' ').trim();
+  const cKey=norm(c.name),aliasKeys=new Set([cKey,...(Array.isArray(c.aliases)?c.aliases:[]).map(norm)].filter(Boolean));
+  if(!cKey)return null;
+  const siblings=allGroups.filter(x=>x&&typeof x==='object'&&!x.entityKind&&x.entryRole!=='concept'&&aliasKeys.has(norm(x.concept)));
+  if(siblings.length<2)return null;
+  const rnOk=f=>f&&typeof f==='object'&&f.clinicalLayer!=='bridge'&&cleanTxt(f).length>0;
+  const baseRank=(a,b)=>(b.conceptScope==='differentiator'?4:0)-(a.conceptScope==='differentiator'?4:0)||(b.trapRole?2:0)-(a.trapRole?2:0)||(b.safetyCritical?1:0)-(a.safetyCritical?1:0)||(Number(a.tier)||2)-(Number(b.tier)||2);
+  const pickBest=(arr,boostFn)=>{
+    if(!arr.length)return null;
+    return [...arr].sort((a,b)=>(boostFn?boostFn(b)-boostFn(a):0)||baseRank(a,b))[0]||null;
+  };
+  const cellMd=f=>{
+    if(!f)return '[not stated in source]';
+    const src=[kbSourceText(f),kbProvenanceText(f)].filter(Boolean).join(' · ');
+    const meta=[f.id,src].filter(Boolean).join('; ');
+    return cleanTxt(f)+(meta?' *(['+meta+'])*':'');
+  };
+  const cellPlain=f=>f?cleanTxt(f)+(f.id?' ['+f.id+']':''):'[not stated in source]';
+  const rows=siblings.map(ex=>{
+    const ownRn=(Array.isArray(ex.facts)?ex.facts:[]).filter(rnOk);
+    const pFact=pickBest(kbBucketFacts(ex,'Patho').filter(rnOk),()=>0);
+    const lFact=pickBest(kbBucketFacts(ex,'Look').filter(rnOk),f=>(f.trapRole==='twin-cue'?3:0)+(f.conceptScope==='differentiator'?2:0)+(f.subtype==='late'?1:0));
+    const aFact=pickBest(kbBucketFacts(ex,'Analyze').filter(rnOk),f=>(f.plateSlot==='gold-standard'||f.plateSlot==='diff-tiebreaker'?3:0)+(f.trapRole==='twin-cue'?2:0)+(f.conceptScope==='differentiator'?1:0));
+    const tFact=pickBest(kbBucketFacts(ex,'Treat').filter(rnOk),f=>(f.trapRole==='bedside-first'||f.trapRole==='twin-rx-opposite'||f.trapRole==='hold-triangle'||f.trapRole==='ordered-escalation'?3:0)+(f.conceptScope==='differentiator'?2:0)+(f.subtype==='independent'?1:0));
+    const slopePool=[...ownRn.filter(f=>f.trapRole==='trend-slope'||f.trapRole==='pseudo-improvement'||f.trapRole==='therapy-overshoot'),...kbBucketFacts(ex,'Educate').filter(rnOk)];
+    const seenE=new Set(),dedupE=slopePool.filter(f=>{const k=f.id||cleanTxt(f);if(seenE.has(k))return false;seenE.add(k);return true;});
+    const eFact=pickBest(dedupE,f=>(f.trapRole==='trend-slope'||f.trapRole==='pseudo-improvement'||f.trapRole==='therapy-overshoot'?4:0)+(f.subtype==='evaluate'||f.plateSlot==='evaluate'?2:0));
+    return{
+      id:ex.id||'',
+      name:String(ex.name||'').replace(/\s+/g,' ').trim(),
+      patho:cellPlain(pFact),pathoMd:cellMd(pFact),
+      look:cellPlain(lFact),lookMd:cellMd(lFact),
+      analyze:cellPlain(aFact),analyzeMd:cellMd(aFact),
+      treat:cellPlain(tFact),treatMd:cellMd(tFact),
+      educate:cellPlain(eFact),educateMd:cellMd(eFact),
+      factIds:[pFact,lFact,aFact,tFact,eFact].filter(Boolean).map(f=>f.id).filter(Boolean)
+    };
+  });
+  return{conceptName:String(c.name||'').replace(/\s+/g,' ').trim(),rows};
+}
+function kbFormatConceptMatrixText(mat){
+  if(!mat||!Array.isArray(mat.rows)||!mat.rows.length)return '';
+  const esc=s=>String(s||'').replace(/\|/g,'·').replace(/\r?\n/g,' ');
+  const lines=[
+    '### Sibling Exemplar P-LATE Matrix — '+mat.conceptName+' ('+mat.rows.length+' exemplars)',
+    '',
+    '| Exemplar | P — Concept Bridge | L — Hallmark Cue | A — Gold-Standard / Tie-Breaker | T — 1st Bedside / Key Rx | E — Slope / Red-Flag Trend |',
+    '|---|---|---|---|---|---|'
+  ];
+  for(const r of mat.rows)lines.push('| **'+esc(r.name)+'** | '+esc(r.patho)+' | '+esc(r.look)+' | '+esc(r.analyze)+' | '+esc(r.treat)+' | '+esc(r.educate)+' |');
   return lines.join('\n');
 }
 // v19.2: warn-only Step 6 Exam Trap Readiness audit (returns null when no trap metadata exists on the KB).
@@ -5867,6 +6006,7 @@ function KnowledgeBaseBuilder(){
   const trapAudit=useMemo(()=>typeof auditKbExamTraps==='function'&&(view.conditions||[]).length?auditKbExamTraps(view):null,[view]);
   const exportMd=useMemo(()=>kbTrapWorksheet?renderKBMarkdown(view,{showEmptyTrapWorksheet:true}):md,[kbTrapWorksheet,view,md]);
   const selTrapProj=useMemo(()=>sel&&typeof kbProjectExamTraps==='function'?kbProjectExamTraps(sel,kb,{showEmptyTrapWorksheet:kbTrapWorksheet}):null,[sel,kb,kbTrapWorksheet]);
+  const selConceptMat=useMemo(()=>sel&&typeof kbProjectConceptMatrix==='function'?kbProjectConceptMatrix(sel,kb):null,[sel,kb]);
   const selHtml=useMemo(()=>sel&&kbView==='study'?mdToSafeHtml(renderKBMarkdown({...kb,conditions:[sel]})):'',[kb,sel,kbView]);
   // v17.0: intake, extraction controls, processing status and knowledge review used to be
   // one vertical stack, so the built Knowledge Base opened below several screens of
@@ -6137,9 +6277,40 @@ function KnowledgeBaseBuilder(){
             {conceptAudit.issueCount?'⚑':'✓'} Concept Curriculum Audit (P-LATE) — {conceptAudit.concepts.length} concept overview(s) · {conceptAudit.exemplarCount} exemplar(s){conceptAudit.linkedEntityCount>0?` · ${conceptAudit.linkedEntityCount} linked med/test/tool entr${conceptAudit.linkedEntityCount===1?'y':'ies'}`:''}
           </span>
         </div>
-        {conceptAudit.orphanExemplars.length>0&&<div style={{fontSize:12,color:'var(--accent-warm)',marginTop:6,lineHeight:1.5}}>
-          <b>Orphan Exemplar(s) ({conceptAudit.orphanExemplars.length}):</b> {conceptAudit.orphanExemplars.map(o=>`${o.name} → ${o.concept}`).join(' · ')} — parent Concept Overview entry was not found in the extracted pages.
-        </div>}
+        {conceptAudit.orphanExemplars.length>0&&(()=>{
+          const conceptOpts=[...new Set([...conceptAudit.concepts.map(c=>c.name),...(Array.isArray(kb.metadata?.concepts)?kb.metadata.concepts:[])].filter(Boolean))];
+          return <div style={{fontSize:12,color:'var(--accent-warm)',marginTop:6,lineHeight:1.5}}>
+            <div><b>Orphan Exemplar(s) ({conceptAudit.orphanExemplars.length}):</b> {conceptAudit.orphanExemplars.map(o=>`${o.name} → ${o.concept}`).join(' · ')} — parent Concept Overview entry was not found in the extracted pages.</div>
+            {typeof kbAssignConditionConcept==='function'&&<div style={{display:'flex',gap:6,flexWrap:'wrap',marginTop:5}}>
+              {conceptAudit.orphanExemplars.map(o=><span key={o.id||o.name} style={{display:'inline-flex',alignItems:'center',gap:5,padding:'2px 7px',borderRadius:5,border:'1px solid var(--border)',background:'var(--bg-deep)',color:'var(--text)'}}>
+                <span>{o.name}:</span>
+                <select aria-label={'Reassign concept for '+o.name} value="" onChange={e=>{const v=e.target.value;if(v==='_noop')return;K.setKnowledgeBase(prev=>kbAssignConditionConcept(prev,o.id||o.name,v));}} style={{fontSize:11,padding:'1px 5px'}}>
+                  <option value="_noop">Reassign from {o.concept}…</option>
+                  {conceptOpts.map(cn=><option key={cn} value={cn}>↳ Link to ◆ {cn}</option>)}
+                  <option value="__concept__">◆ Promote {o.name} to Concept Overview</option>
+                  <option value="">Unlink (standalone condition)</option>
+                </select>
+              </span>)}
+            </div>}
+          </div>;
+        })()}
+        {conceptAudit.unlinkedConditions?.length>0&&typeof kbAssignConditionConcept==='function'&&(()=>{
+          const conceptOpts=[...new Set([...conceptAudit.concepts.map(c=>c.name),...(Array.isArray(kb.metadata?.concepts)?kb.metadata.concepts:[]),...conceptAudit.orphanExemplars.map(o=>o.concept).filter(x=>x&&x!=='(unspecified)')].filter(Boolean))];
+          if(!conceptOpts.length)return null;
+          return <div style={{fontSize:12,color:'var(--text-dim)',marginTop:6,lineHeight:1.5}}>
+            <div><b>Unlinked Condition(s) ({conceptAudit.unlinkedConditions.length}):</b> Assign organ-system or standalone conditions under an overarching concept in 1 click (zero API calls):</div>
+            <div style={{display:'flex',gap:6,flexWrap:'wrap',marginTop:5}}>
+              {conceptAudit.unlinkedConditions.map(u=><span key={u.id||u.name} style={{display:'inline-flex',alignItems:'center',gap:5,padding:'2px 7px',borderRadius:5,border:'1px solid var(--border)',background:'var(--bg-deep)',color:'var(--text)'}}>
+                <span>{u.name}</span>
+                <select aria-label={'Link '+u.name+' to concept'} value="" onChange={e=>{const v=e.target.value;if(!v)return;K.setKnowledgeBase(prev=>kbAssignConditionConcept(prev,u.id||u.name,v));}} style={{fontSize:11,padding:'1px 5px'}}>
+                  <option value="">Link to concept…</option>
+                  {conceptOpts.map(cn=><option key={cn} value={cn}>↳ Exemplar of {cn}</option>)}
+                  <option value="__concept__">◆ Promote to Concept Overview</option>
+                </select>
+              </span>)}
+            </div>
+          </div>;
+        })()}
         {conceptAudit.missingBridgeExemplars.length>0&&<div style={{fontSize:12,color:'var(--accent-warm)',marginTop:6,lineHeight:1.5}}>
           <b>Missing "P" Concept Bridge ({conceptAudit.missingBridgeExemplars.length}):</b> {conceptAudit.missingBridgeExemplars.join(' · ')} — no <code>Patho</code> mechanism tying the exemplar back to its parent concept.
         </div>}
@@ -6182,7 +6353,7 @@ function KnowledgeBaseBuilder(){
           <button aria-pressed={kbView==='facts'} onClick={()=>setKbView('facts')}>Facts</button>
         </div><label style={{display:'inline-flex',alignItems:'center',gap:5,fontSize:12,color:'var(--text-dim)',cursor:'pointer'}} title="Show fill-in-the-blank Exam Trap Block scaffolding ([not stated in source]) even on older KBs without trap metadata"><input id="kb-trap-worksheet" type="checkbox" checked={kbTrapWorksheet} onChange={e=>setKbTrapWorksheet(e.target.checked)} style={{accentColor:'var(--accent)'}}/>Show empty trap worksheet (<code>[not stated in source]</code>)</label><button className="btn-secondary" onClick={()=>copyText(JSON.stringify(kb,null,2))}>Copy JSON</button><button className="btn-secondary" onClick={()=>downloadBlob(new Blob([JSON.stringify(kb,null,2)],{type:'application/json'}),'LATTE-Knowledge-Base.json')}>⬇ JSON</button><button className="btn-secondary" onClick={()=>exportAsMd(exportMd,'LATTE-Study-View.md')}>⬇ Study View</button><button className="btn-secondary" onClick={()=>exportAsPdf(exportMd,'LATTE Study View',course+(exam?' · '+exam:''))}>🖨 PDF</button>
       </ResultsHead>
-      <div className="output-container"><div className="kb-browser"><div className="kb-condition-list" role="group" aria-label="Knowledge Base conditions">{view.conditions.map(c=><button key={c.id} className="kb-condition" style={c.entryRole==='concept'?{borderColor:'var(--accent)',background:'rgba(56,189,248,0.06)'}:(!c.entityKind&&c.concept)?{paddingLeft:20}:undefined} aria-pressed={selected===c.id} onClick={()=>setSelected(c.id)}><span className="kb-condition-name">{c.entryRole==='concept'?'◆ ':(!c.entityKind&&c.concept)?'↳ ':''}{c.name}{c.entryRole==='concept'&&<span style={{color:'var(--accent)',fontWeight:500}}> · concept</span>}{!c.entityKind&&c.entryRole!=='concept'&&c.concept&&<span style={{color:'var(--text-dim)',fontWeight:400}}> · {c.concept}</span>}{c.entityKind&&<span style={{color:'var(--text-dim)',fontWeight:400}}> · {c.entityKind}{c.concept?' ('+c.concept+')':''}</span>}</span><span className="kb-condition-count">{c.facts.length}</span></button>)}</div><div className="output-body">{!sel?<div>Select a condition.</div>:kbView==='facts'?<KBFactList condition={sel} showEmptyTrapWorksheet={kbTrapWorksheet}/>:<><div dangerouslySetInnerHTML={{__html:selHtml}}/>{selTrapProj&&(selTrapProj.hasExplicitTrap?<div style={{marginTop:10}}><button type="button" className="btn-secondary" style={{padding:'4px 10px',fontSize:12}} onClick={()=>copyText(kbFormatExamTrapText(selTrapProj))}>📋 Copy Exam Trap Block</button></div>:<KBExamTrapCard condition={sel} showEmptyTrapWorksheet={true}/>)}</>}</div></div></div></>}
+      <div className="output-container"><div className="kb-browser"><div className="kb-condition-list" role="group" aria-label="Knowledge Base conditions">{view.conditions.map(c=><button key={c.id} className="kb-condition" style={c.entryRole==='concept'?{borderColor:'var(--accent)',background:'rgba(56,189,248,0.06)'}:(!c.entityKind&&c.concept)?{paddingLeft:20}:undefined} aria-pressed={selected===c.id} onClick={()=>setSelected(c.id)}><span className="kb-condition-name">{c.entryRole==='concept'?'◆ ':(!c.entityKind&&c.concept)?'↳ ':''}{c.name}{c.entryRole==='concept'&&<span style={{color:'var(--accent)',fontWeight:500}}> · concept</span>}{!c.entityKind&&c.entryRole!=='concept'&&c.concept&&<span style={{color:'var(--text-dim)',fontWeight:400}}> · {c.concept}</span>}{c.entityKind&&<span style={{color:'var(--text-dim)',fontWeight:400}}> · {c.entityKind}{c.concept?' ('+c.concept+')':''}</span>}</span><span className="kb-condition-count">{c.facts.length}</span></button>)}</div><div className="output-body">{!sel?<div>Select a condition.</div>:kbView==='facts'?<KBFactList condition={sel} showEmptyTrapWorksheet={kbTrapWorksheet}/>:<><div dangerouslySetInnerHTML={{__html:selHtml}}/>{selConceptMat&&<div style={{marginTop:10}}><button type="button" className="btn-secondary" style={{padding:'4px 10px',fontSize:12}} onClick={()=>copyText(kbFormatConceptMatrixText(selConceptMat))}>📋 Copy Sibling P-LATE Matrix</button></div>}{selTrapProj&&(selTrapProj.hasExplicitTrap?<div style={{marginTop:10}}><button type="button" className="btn-secondary" style={{padding:'4px 10px',fontSize:12}} onClick={()=>copyText(kbFormatExamTrapText(selTrapProj))}>📋 Copy Exam Trap Block</button></div>:<KBExamTrapCard condition={sel} showEmptyTrapWorksheet={true}/>)}</>}</div></div></div></>}
     {!(kb.conditions||[]).length&&!busy&&<EmptyState mark="◆" title="No Knowledge Base yet" note="Everything else in the suite reads from this one source of cited facts. Build it once and Priority, Anki, NCLEX and Cases all reuse it." steps={['Add PDFs, PPTX decks or flashcard photos on the left.','Optionally narrow the focus to what your exam actually covers.','Build — every fact keeps its verbatim source quote and page pointer.']}/>}
   </Workbench>;
 }
@@ -8678,7 +8849,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '21.0';}
+function suiteVersion(){return '21.1';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -12834,6 +13005,48 @@ function ngAllocateBatch(groups,usedIds,{want,perCondition=4,neighborCap=2,start
       }
     }
   }
+  // v21.1: when a batch allocates disease/exemplar targets and standalone medication or diagnostic groups exist in the pool,
+  // co-allocate up to min(2, neighborCap) high-priority Analyze/Treat facts per linked entity (capped at 4 total) into
+  // SUPPORTING CONTEXT so [Pharm / Lab Hold Trap] stems and distractors have exact drug hold thresholds and lab ranges.
+  const hitCondGroups=neighborCap>0?hitGroups.filter(g=>g&&!g.entityKind&&g.entryRole!=='concept'):[];
+  const unhitEntities=hitCondGroups.length?order.filter(g=>g&&!seenGroups.has(g)&&(g.entityKind==='medication'||g.entityKind==='diagnostic')):[];
+  if(unhitEntities.length){
+    const cNorm=s=>String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+    const escRe=s=>String(s||'').replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    const wbHit=(lbl,blob)=>lbl.length>=3&&new RegExp('(^|[^a-z0-9])'+escRe(lbl.toLowerCase())+'s?($|[^a-z0-9])','i').test(blob);
+    const condMeta=hitCondGroups.map(g=>({
+      g,cKey:cNorm(g.concept),
+      labels:[g.condition,...(Array.isArray(g.aliases)?g.aliases:[])].map(s=>String(s||'').replace(/\s+/g,' ').trim()).filter(Boolean),
+      blob:(g.facts||[]).map(f=>String(f&&f.text||'').toLowerCase()).join(' | ')
+    }));
+    const otherConds=groups.filter(g=>g&&!g.entityKind&&g.entryRole!=='concept'&&!hitCondGroups.includes(g));
+    const matchedEntities=[];
+    for(const eg of unhitEntities){
+      const eLabels=[eg.condition,...(Array.isArray(eg.aliases)?eg.aliases:[])].map(s=>String(s||'').replace(/\s+/g,' ').trim()).filter(Boolean);
+      const eBlob=(eg.facts||[]).map(f=>String(f&&f.text||'').toLowerCase()).join(' | ');
+      const direct=condMeta.some(cm=>cm.labels.some(l=>wbHit(l,eBlob))||eLabels.filter(l=>l.length>=4).some(l=>wbHit(l,cm.blob)));
+      const egConcept=cNorm(eg.concept);
+      const conceptMatch=!direct&&Boolean(egConcept)&&condMeta.some(cm=>cm.cKey&&cm.cKey===egConcept)&&!otherConds.some(oc=>cNorm(oc.concept)===egConcept&&[oc.condition,...(Array.isArray(oc.aliases)?oc.aliases:[])].map(s=>String(s||'').replace(/\s+/g,' ').trim()).filter(l=>l.length>=4).some(l=>wbHit(l,eBlob)));
+      if(direct||conceptMatch)matchedEntities.push({eg,direct});
+    }
+    matchedEntities.sort((a,b)=>(b.direct?1:0)-(a.direct?1:0)||(a.eg.entityKind==='medication'?0:1)-(b.eg.entityKind==='medication'?0:1));
+    const perEntCap=Math.min(2,neighborCap);
+    let entTotal=0;
+    const isHighYieldEnt=f=>{
+      const b=f&&f.latteBucket;
+      return b==='Treat'||b==='Treatments'||b==='Analyze'||b==='Tests'||b==='Assess'||Boolean(f&&f.trapRole)||Boolean(f&&f.safetyCritical);
+    };
+    const entBoost=f=>(f&&(f.trapRole==='hold-triangle'||f.trapRole==='never-click'||f.trapRole==='dynamic-monitor'||f.factType==='contraindication'||f.factType==='antidote'||f.factType==='threshold')?2:0)+(f&&f.safetyCritical?1:0);
+    for(const {eg} of matchedEntities){
+      if(entTotal>=4)break;
+      const cand=(eg.facts||[]).filter(f=>f&&!taken.has(f.id)&&!ctxSeen.has(f.id)&&isHighYieldEnt(f)).sort((a,b)=>entBoost(b)-entBoost(a)||(Number(a.tier)||2)-(Number(b.tier)||2));
+      let en=0;
+      for(const f of cand){
+        if(en>=perEntCap||entTotal>=4)break;
+        ctxSeen.add(f.id);context.push({...f,condition:eg.condition,...(eg.concept?{concept:eg.concept}:{})});en++;entTotal++;
+      }
+    }
+  }
   return{targets,context};
 }
 // v18.5: the group batch b of `total` starts from: the one holding pool fact floor((b-1)*poolSize/total), counting facts in
@@ -14537,6 +14750,41 @@ function selectCaseFacts(condition,{includeTier2=true,includeTier3=false,include
       }
     }
   }
+  // v21.1: auto-link standalone medication and diagnostic entries in allConditions into single-exemplar / single-condition
+  // cases (up to 2 facts per linked entity, 4 total) so unfolding cases have exact drug hold rules, antidotes, and lab
+  // monitoring ranges without requiring manual multi-entry selection. Skipped when condition itself is a Concept Overview or entity.
+  if(condition&&!condition.entityKind&&condition.entryRole!=='concept'&&Array.isArray(allConditions)){
+    const clean=s=>String(s||'').replace(/\s+/g,' ').trim(),norm=s=>clean(s).toLowerCase();
+    const escRe=s=>String(s||'').replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    const wbHit=(lbl,blob)=>lbl.length>=3&&new RegExp('(^|[^a-z0-9])'+escRe(lbl.toLowerCase())+'s?($|[^a-z0-9])','i').test(blob);
+    const ownLabels=[condition.name,...(Array.isArray(condition.aliases)?condition.aliases:[])].map(clean).filter(Boolean);
+    const ownBlob=(condition.facts||[]).map(f=>String(f&&f.text||'').toLowerCase()).join(' | ');
+    const siblings=pNorm?allConditions.filter(s=>s&&s!==condition&&!s.entityKind&&s.entryRole!=='concept'&&norm(s.concept)===pNorm):[];
+    const entityCands=[];
+    for(const eg of allConditions){
+      if(!eg||eg===condition||(eg.entityKind!=='medication'&&eg.entityKind!=='diagnostic'))continue;
+      const eName=clean(eg.name),eLabels=[eName,...(Array.isArray(eg.aliases)?eg.aliases:[])].map(clean).filter(Boolean);
+      const eFacts=(eg.facts||[]).filter(tierOk);
+      if(!eName||!eFacts.length)continue;
+      const eBlob=eFacts.map(f=>String(f&&f.text||'').toLowerCase()).join(' | ');
+      const direct=ownLabels.some(l=>wbHit(l,eBlob))||eLabels.filter(l=>l.length>=4).some(l=>wbHit(l,ownBlob));
+      const conceptMatch=!direct&&Boolean(pNorm)&&norm(eg.concept)===pNorm&&!siblings.some(sib=>[sib.name,...(Array.isArray(sib.aliases)?sib.aliases:[])].map(clean).filter(l=>l.length>=4).some(l=>wbHit(l,eBlob)));
+      if(direct||conceptMatch)entityCands.push({eg,eName,eFacts,direct});
+    }
+    entityCands.sort((a,b)=>(b.direct?1:0)-(a.direct?1:0)||(a.eg.entityKind==='medication'?0:1)-(b.eg.entityKind==='medication'?0:1));
+    const entHighBoost=f=>(f.trapRole==='hold-triangle'||f.trapRole==='never-click'||f.trapRole==='dynamic-monitor'||f.factType==='contraindication'||f.factType==='antidote'||f.factType==='threshold'||(f.derivedFrom&&['monitoring','contraindications','antidote','blackBoxWarnings','therapeuticRange','labMonitoring','criticalValues'].includes(f.derivedFrom.field))?2:0);
+    let entAdded=0;
+    for(const {eg,eName,eFacts} of entityCands){
+      if(entAdded>=4)break;
+      const pool=eFacts.filter(f=>{const cb=canon(f.latteBucket);return cb==='Treat'||cb==='Analyze'||Boolean(f.trapRole)||Boolean(f.safetyCritical);}).sort((a,b)=>entHighBoost(b)-entHighBoost(a)||rank(a,b));
+      let perEnt=0;
+      for(const f of pool){
+        if(perEnt>=2||entAdded>=4)break;
+        if(selected.some(s=>s.id===f.id))continue;
+        selected.push({...f,linkedEntity:eName+' ('+eg.entityKind+')'});perEnt++;entAdded++;
+      }
+    }
+  }
   if(includeCalculation){
     const numeric=[...eligible,...parentEligible].filter(f=>/\d/.test(`${f.text||''} ${f.sourceQuote||''}`));
     // v18.0 (review L42): the first four numeric facts were taken before removing those already selected, so the top-up
@@ -14676,7 +14924,7 @@ function caseRenderFactPacket(conditionName,facts){
     const anchor=String(f.sourceQuote||f.text||'').replace(/\s+/g,' ').trim().split(' ').slice(0,20).join(' ');
     L.push('FACT '+f.id);
     if(f.caseCondition)L.push('ENTRY: '+f.caseCondition);
-    L.push('PLATE: '+f.latteBucket+(f.subtype?' / '+f.subtype:'')+(f.clinicalLayer==='bridge'?' [NP BRIDGE]':'')+(f.conceptScope==='differentiator'?' [PRIORITY DIFFERENTIATOR]':f.conceptScope==='shared'?' [SHARED PARENT CONCEPT]':'')+(f.trapRole?' [TRAP: '+f.trapRole+(f.contrastWith?' vs '+f.contrastWith:'')+']':''));
+    L.push('PLATE: '+f.latteBucket+(f.subtype?' / '+f.subtype:'')+(f.linkedEntity?' [LINKED ENTITY: '+f.linkedEntity+']':'')+(f.clinicalLayer==='bridge'?' [NP BRIDGE]':'')+(f.conceptScope==='differentiator'?' [PRIORITY DIFFERENTIATOR]':f.conceptScope==='shared'?' [SHARED PARENT CONCEPT]':'')+(f.trapRole?' [TRAP: '+f.trapRole+(f.contrastWith?' vs '+f.contrastWith:'')+']':''));
     L.push('TIER: '+f.tier+(f.safetyCritical?' (safety-critical)':''));
     L.push('FACT: '+f.text);
     L.push('ANCHOR: "'+anchor.replace(/"/g,"'")+'"');
@@ -14766,14 +15014,18 @@ function caseBuildPrompt({conditionName,facts,difficulty,stages,questionsPerStag
   // v19.2: optional multi-condition / concept-mix framing when 2+ KB entries are selected; empty on single-entry runs so
   // single-condition prompts stay byte-identical. Uses plain string concatenation so standalone prompt-builder extractors keep working.
   const _entries=Array.isArray(scopeEntries)?scopeEntries.filter(Boolean):[];
-  const _mode=String(mixMode||'comorbid').toLowerCase()==='differential'?'differential':'comorbid';
+  // v21.1: support 'cascade' (Interrelated Concept Cascade: Concept A disruption -> Concept B secondary complication -> Pharm/Hold shift) alongside 'comorbid' and 'differential'.
+  const _rawMode=String(mixMode||'comorbid').toLowerCase();
+  const _mode=_rawMode==='differential'?'differential':_rawMode==='cascade'?'cascade':'comorbid';
   const _safeCond=String(conditionName||'').replace(/"/g,"'");
   const mixBlock=_entries.length>1?(
-    '═══ MULTI-ENTRY / CONCEPT-MIX SCOPE ('+(_mode==='differential'?'DIFFERENTIAL / TWIN TIE-BREAKER':'COMORBID / EVOLVING TRAJECTORY')+') ═══\n'+
+    '═══ MULTI-ENTRY / CONCEPT-MIX SCOPE ('+(_mode==='differential'?'DIFFERENTIAL / TWIN TIE-BREAKER':_mode==='cascade'?'INTERRELATED CONCEPT CASCADE':'COMORBID / EVOLVING TRAJECTORY')+') ═══\n'+
     'Selected entries in packet: '+_entries.join(' · ')+'\n'+
     'Each FACT block in CASE SOURCE PACKET carries an ENTRY line naming the exact condition, exemplar, or concept overview that fact belongs to. Never attribute a finding, lab threshold, medication hold rule, or contraindication from Entry A to Entry B unless a cited fact explicitly connects them.\n'+
     (_mode==='differential'
       ?'FRAMING (DIFFERENTIAL / TWIN TIE-BREAKER): Build ONE coherent unfolding client case where Stage 1-2 present overlapping clinical cues across the look-alike or sibling entries and require the student to distinguish between them using supplied [PRIORITY DIFFERENTIATOR] and [TRAP: ...] facts. By Stage 2-3, revealed diagnostic data establish the active condition (while distractors and rationales test why the sibling condition is ruled out or why opposite therapy would be harmful), followed by targeted intervention and outcome evaluation. Echo "'+_safeCond+'" in the JSON "condition" field.\n\n'
+      :_mode==='cascade'
+      ?'FRAMING (INTERRELATED CONCEPT CASCADE): Build ONE coherent unfolding client case structured as a physiological Concept A -> Concept B cascade across stages using ONLY supplied facts: Stage 1 establishes the primary concept/exemplar disruption (Look + Analyze + Patho); Stage 2 unfolds a secondary interrelated-concept complication or compensatory failure grounded in the supplied entries; and Stage 3+ tests priority bedside stabilization, [Pharm / Lab Hold Trap] decisions across interacting prescriptions/labs, and post-intervention trajectory evaluation (Educate / evaluate). Keep stage "narrative" free of clinical numbers (all values go in cited "data" rows), never invent unsupported causal links, and leave incompatible facts unused with an honest note in debrief.notes. Echo "'+_safeCond+'" in the JSON "condition" field.\n\n'
       :'FRAMING (COMORBID / EVOLVING TRAJECTORY): Build ONE coherent unfolding client case that integrates or progresses across the selected entries (shared concept physiology manifesting through comorbid exemplars, complication progression, or condition + prescribed medication/diagnostic management) using ONLY supplied facts. Never invent causal links unsupported by the packet; if a tangential entry has no compatible facts for this trajectory, leave those facts unused and note that honestly in debrief.notes. Echo "'+_safeCond+'" in the JSON "condition" field.\n\n')
   ):'';
   return `═══ CLINICAL CASE STUDY GENERATOR (strict, source-grounded, JSON output) ═══
@@ -16788,9 +17040,9 @@ function CaseStudyGenerator(){
             {(caseRunMode==='mixed'||(caseRunMode==='batch'&&validCaseConcepts.length>0&&caseMixExemplars&&caseBatchUnit==='concepts'))&&<>
               <div style={{fontSize:11,fontWeight:700,letterSpacing:.5,textTransform:'uppercase',color:'var(--text-dim)',marginBottom:5}}>Multi-Entry Case Framing</div>
               <div role="group" aria-label="Case mix framing" style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-                {[['comorbid','Comorbid / Evolving Trajectory','Integrates or progresses across selected conditions/concepts'],['differential','Differential / Twin Tie-Breaker','Stage 1–2 overlapping cues → Stage 3–4 definitive care']].map(([m,lbl,hint])=>{
+                {[['comorbid','Comorbid / Evolving Trajectory','Integrates or progresses across selected conditions/concepts'],['differential','Differential / Twin Tie-Breaker','Stage 1–2 overlapping cues → Stage 3–4 definitive care'],['cascade','Interrelated Concept Cascade','Stage 1 primary concept disruption → Stage 2 interrelated concept complication → Stage 3+ Pharm/Hold & trajectory shift']].map(([m,lbl,hint])=>{
                   const active=caseMixMode===m;
-                  return <button key={m} type="button" className="btn-secondary" aria-pressed={active} title={hint} style={{padding:'3px 9px',fontSize:11.5,borderColor:active?'var(--accent)':undefined,color:active?'var(--accent)':undefined,background:active?'rgba(99,179,237,.12)':undefined}} onClick={()=>setCaseMixMode(m)}>{lbl}</button>;
+                  return <button key={m} type="button" className="btn-secondary" aria-pressed={active} title={hint} style={{padding:'3px 9px',fontSize:11.5,borderColor:active?'var(--accent)':undefined,color:active?'var(--accent)':undefined,background:active?'rgba(99,179,237,.12)':undefined}} onClick={()=>{setCaseMixMode(m);if(m==='cascade'&&caseCatalog.hasRelated&&validCaseConcepts.length>0)setCaseIncludeRelated(true);}}>{lbl}</button>;
                 })}
               </div>
             </>}

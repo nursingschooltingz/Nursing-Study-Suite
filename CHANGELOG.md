@@ -9,6 +9,25 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [21.1] — 2026-11-13
+
+Deep deterministic intertwining of Giddens Concept-Based Curriculum and 5-bucket **P-LATE (Triple-E)** across Study View, Case Studies, NCLEX Generator, and Step 6 Concept Curriculum Audit. All 11 frozen prompt constants remain byte-identical (`prompt-baseline.json` unchanged).
+
+### Added
+
+- **Concept-wide Sibling Exemplar P-LATE Matrix (`kbProjectConceptMatrix`, `kbFormatConceptMatrixText`, `renderKBMarkdown`, `KnowledgeBaseBuilder`).** Automatically assembles a cited 5-column side-by-side comparison table (`Exemplar | P — Concept Bridge | L — Hallmark Cue | A — Gold-Standard / Tie-Breaker | T — 1st Bedside / Key Rx | E — Slope / Red-Flag Trend`) at the bottom of every Overarching Concept Overview (`entryRole === 'concept'`) with $\ge 2$ sibling exemplars in Study View (including single-entry browser selection via `_kbGroups`), Markdown/PDF exports, and a 1-click **`📋 Copy Sibling P-LATE Matrix`** clipboard button, prioritizing RN-Core `differentiator`, `gold-standard`, `bedside-first`, and `trend-slope` / `evaluate` facts while respecting the RN/NP Bridge firewall.
+- **Standalone Medication & Diagnostic auto-linking in single-condition Cases & NCLEX batches (`selectCaseFacts`, `caseRenderFactPacket`, `ngAllocateBatch`).** Automatically pulls up to 4 high-priority `Analyze` and `Treat` facts (max 2 per entity: hold rules, antidotes, contraindications, therapeutic/critical lab thresholds) from standalone `medication` and `diagnostic` entries linked by direct clinical mention or shared Giddens concept (excluding medications/diagnostics that name only a competing sibling exemplar) into single-condition/exemplar Case Studies (`[LINKED ENTITY: <Name> (<kind>)]` on `PLATE:` lines without adding multi-entry `ENTRY:` headers) and `NCLEXGenerator` batch `SUPPORTING CONTEXT`.
+- **Interrelated Concept Cascade framing (`'cascade'`) in Case Studies (`caseBuildPrompt`, `CaseStudyGenerator`).** Adds **`Interrelated Concept Cascade`** alongside **`Comorbid / Evolving Trajectory`** and **`Differential / Twin Tie-Breaker`** for multi-entry unfolding cases (`Stage 1` primary concept disruption → `Stage 2` secondary interrelated-concept complication → `Stage 3+` `[Pharm / Lab Hold Trap]` & trajectory evaluation), automatically enabling **Include interrelated-concept links** when selected on a Giddens concept scope while keeping single-entry prompts byte-identical.
+- **One-click Condition-to-Concept linker in Step 6 Concept Curriculum Audit (`auditKbConcepts`, `kbAssignConditionConcept`, `KnowledgeBaseBuilder`).** Surfaces unlinked conditions (`unlinkedConditions`, without inflating warn `issueCount`) alongside `orphanExemplars` in Step 6's **Concept Curriculum Audit (P-LATE)** panel with 1-click `<select>` controls to link any organ-system or orphan condition under an overarching Concept Overview, promote a condition to `◆ Concept Overview`, or unlink back to standalone directly in IndexedDB-persisted Knowledge Base state with zero API calls.
+
+### Verification
+
+- **6 new assertions (4,054 total)** in `tools/v21-1-concept-plate-tests.js` (exercising `kbProjectConceptMatrix` / `kbFormatConceptMatrixText` / `renderKBMarkdown`, `selectCaseFacts` + `caseRenderFactPacket` + `validateCaseStudy` standalone med/diagnostic auto-linking, `ngAllocateBatch` standalone med/diagnostic `SUPPORTING CONTEXT`, `caseBuildPrompt` `'cascade'` framing & single-entry byte parity, and `auditKbConcepts` `unlinkedConditions` + `kbAssignConditionConcept` strict IndexedDB restore round-tripping).
+- **Prompt bytes.** All 11 frozen hashes in `prompt-baseline.json` are unchanged. `Prompts.md` regenerated and verified across all 22 documented prompt constants.
+- **SRI.** All eight SRI-pinned scripts and both PDF worker copies were re-hashed against their CDNs and match.
+
+See the [release verification record](docs/reviews/v21.1-release.md).
+
 ## [21.0] — 2026-11-13
 
 5-bucket P-LATE (Triple-E) taxonomy cutover, RN Core vs. NP Mechanism Bridge firewall, 4-Pillar distractor & Slope Red Flag runtime directives (`NCLEX_PLATE_TRAP_RULES`, `CASE_SLOPE_SYNC_RULES`), subtype-balanced Case Study fact allocation, `[P] P-LATE` suite branding + HESI®/ATI® legal notices, and `CaseStudyGenerator` Temporal Dead Zone fix.

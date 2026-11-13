@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 4048;
+const EXPECTED_ASSERTIONS = 4054;
 
 let file;
 try {
@@ -2935,6 +2935,9 @@ section('v15.14 — clamps, backoff, storage');
   section('v21.0 P-LATE 5-bucket cutover, TDZ guard, RN/NP Bridge firewall, and runtime trap/slope directives');
   await require('./tools/v21-0-plate-remediation-tests')(S,t);
   await require('./tools/plate-bridge-tests')(S,t);
+
+  section('v21.1 Concept-Curriculum x P-LATE matrix, standalone med/diagnostic auto-linking, cascade framing, and Step 6 concept linker');
+  await require('./tools/v21-1-concept-plate-tests')(S,t);
 
   console.log('\n════════════════════════════');
   const total = pass + fail;
