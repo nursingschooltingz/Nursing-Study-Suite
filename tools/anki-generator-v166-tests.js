@@ -30,7 +30,7 @@ function runAnkiGeneratorV166Tests({S,t,section}){
   for(const [name,token] of names)t('source packet emits exact canonical spelling: '+name,packet.includes('=== CONDITION: '+name+' ===\nCANONICAL CONDITION TAG: Condition::'+token+'\n'));
   t('canonical serialization preserves source input and alias reading cues',JSON.stringify(source)===before&&packet.includes('ALIASES: Short label')&&!packet.includes('CANONICAL CONDITION TAG: Condition::ShortLabel'));
   const twoTiers=kb([condition('Mixed Priority',[],[fact({id:'fact-100',tier:1}),fact({id:'fact-101',tier:2})])]),twoPacket=H.kbForAnki(twoTiers);
-  t('tag serialization preserves fact IDs, wording, buckets and independent tiers',twoPacket.includes('FACT fact-100 | LATTE: Assess | Tier: 1 | Synthetic alpha target; beta remains conditional. | Source: pointer unavailable')&&twoPacket.includes('FACT fact-101 | LATTE: Assess | Tier: 2 | Synthetic alpha target; beta remains conditional. | Source: pointer unavailable'));
+  t('tag serialization preserves fact IDs, wording, buckets and independent tiers',twoPacket.includes('FACT fact-100 | PLATE: Assess | Tier: 1 | Synthetic alpha target; beta remains conditional. | Source: pointer unavailable')&&twoPacket.includes('FACT fact-101 | PLATE: Assess | Tier: 2 | Synthetic alpha target; beta remains conditional. | Source: pointer unavailable'));
   const unavailable='CANONICAL CONDITION TAG: unavailable — source condition name requires review';
   const collision=H.kbForAnki(kb([condition('A B'),condition('AB')]));
   t('colliding canonical identities remain unavailable instead of receiving authoritative tokens',collision.split(unavailable).length===3&&!collision.includes('CANONICAL CONDITION TAG: Condition::'));

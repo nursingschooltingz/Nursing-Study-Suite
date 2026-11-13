@@ -200,8 +200,8 @@ async function runTests({ source, test = (name, value) => assert.ok(value, name)
     fs.writeFileSync(clashHtml, '<!-- v19.0 (2026-10-21) -->');
     t('resolveSuiteFile rejects explicit --html when a Proton Drive Name-clash file exists in rootDir',
       throws(() => checks.resolveSuiteFile({ rootDir: clashDir, explicit: 'Nursing-Study-Suite v19.0.html' }), /Proton Drive Name clash/));
-    t('DOCUMENTED_PROMPTS includes v19.0 KB_SOURCE_ANCHOR_RULES and v19.2 KB_CONCEPT_CURRICULUM_RULES + KB_EXAM_TRAP_RULES + GIZMO_CONVERT_PROMPT (19 total)',
-      checks.DOCUMENTED_PROMPTS.length === 19 && checks.DOCUMENTED_PROMPTS.includes('KB_SOURCE_ANCHOR_RULES') && checks.DOCUMENTED_PROMPTS.includes('KB_CONCEPT_CURRICULUM_RULES') && checks.DOCUMENTED_PROMPTS.includes('KB_EXAM_TRAP_RULES') && checks.DOCUMENTED_PROMPTS.includes('GIZMO_CONVERT_PROMPT'));
+    t('DOCUMENTED_PROMPTS includes v19.0/v19.2/v21.0 prompt & runtime-rule constants (22 total)',
+      checks.DOCUMENTED_PROMPTS.length === 22 && checks.DOCUMENTED_PROMPTS.includes('KB_SOURCE_ANCHOR_RULES') && checks.DOCUMENTED_PROMPTS.includes('KB_CONCEPT_CURRICULUM_RULES') && checks.DOCUMENTED_PROMPTS.includes('KB_EXAM_TRAP_RULES') && checks.DOCUMENTED_PROMPTS.includes('KB_PLATE_BRIDGE_RULES') && checks.DOCUMENTED_PROMPTS.includes('NCLEX_PLATE_TRAP_RULES') && checks.DOCUMENTED_PROMPTS.includes('CASE_SLOPE_SYNC_RULES') && checks.DOCUMENTED_PROMPTS.includes('GIZMO_CONVERT_PROMPT'));
     t('parseCliArgs rejects unknown flags, duplicate options, missing values, and unexpected positional arguments',
       throws(() => checks.parseCliArgs(['--bogus'], { flags: ['check'], options: ['html'] }), /Unknown option: --bogus/) &&
       throws(() => checks.parseCliArgs(['--check', '--check'], { flags: ['check'], options: ['html'] }), /Duplicate option: --check/) &&

@@ -1,0 +1,433 @@
+# v21.0 Approved Frozen Prompt Changes (P-LATE 5-Bucket Taxonomy, 4-Pillar Distractors & Trend Stems)
+
+## KB_EXTRACTION_PROMPT
+- Old SHA-256 (v20.3): `430fd1a8b12eccb48429a1bc8e3534c6c05fee8593c2e94394f77a8e4dd5272c`
+- New SHA-256 (v21.0): `9f6149e2ff2a0405056bf465560ea907a278563ca9e8a2ddcaa3fffb91ca9f23`
+
+```diff
+--- a/KB_EXTRACTION_PROMPT
++++ b/KB_EXTRACTION_PROMPT
+@@ -10,8 +10,8 @@ JSON SHAPE:
+     "aliases":["string"],
+     "facts":[{
+       "text":"string",
+-      "latteBucket":"BriefPatho|Look|Assess|Tests|Treatments|Educate",
+-      "subtype":"early|late|independent|dependent|acute|discharge|null",
++      "latteBucket":"Patho|Look|Analyze|Treat|Educate",
++      "subtype":"early|late|independent|dependent|acute|discharge|evaluate|null",
+       "factType":"mechanism|symptom|assessment|test|medication|intervention|education|threshold|contraindication|other",
+       "safetyCritical":false,
+       "tier":1,
+@@ -33,35 +33,31 @@ PHASE 0 — INPUT HANDLING
+ 
+ - Clean repeated headers, footers, page numbers, offsets, citation markers, and artifact text internally.
+ - If duplicate content appears, keep it once unless the duplicate adds meaningful differences.
+-- Preserve the order of first appearance within each condition and LATTE bucket.
++- Preserve the order of first appearance within each condition and P-LATE bucket.
+ - Separate combined conditions. Do not invent diseases, values, thresholds, or missing facts.
+ 
+-PHASE 1 — LATTE ASSIGNMENT
++PHASE 1 — P-LATE ASSIGNMENT
+ 
+-Before returning JSON, assign every extractable fact to exactly one LATTE bucket.
++Before returning JSON, assign every extractable fact to exactly one P-LATE bucket (stored in "latteBucket").
+ 
+-BriefPatho = disease mechanism, etiology, classification, what is going wrong
+-Look = signs, symptoms, complaints, red flags, deterioration signs, observable side effects
+-Assess = what the nurse assesses, checks, asks, inspects, trends, monitors, sequences
+-Tests = labs, imaging, diagnostics, values, ranges, units, interpretations
+-Treatments = medications, doses, routes, timing, interventions, procedures, safety steps, contraindications, precautions, hold/notify thresholds
+-Educate = patient/family teaching, discharge teaching, home management, follow-up, when to seek care
++Patho = disease mechanism, hemodynamic or cellular driver, etiology, classification, drug class, or source-stated drug mechanism of action
++Look = bedside signs, subjective symptoms, physical exam findings, red flags, deterioration cues, and observable adverse or toxic effects (everything seen, heard, palpated, or percussed on the client)
++Analyze = laboratory values, therapeutic drug levels, imaging, ECG/telemetry findings, diagnostic procedures, ranges, units, and diagnostic interpretations or confounders
++Treat = medications, doses, routes, timing, hold/notify parameters, contraindications, antidotes (subtype "dependent"), and priority bedside nursing interventions, positioning, procedures, or pre-administration checks (subtype "independent")
++Educate = patient/family discharge teaching, home self-management, follow-up, when to seek care (subtype "discharge"), and expected vs worsening clinical outcome evaluation criteria (subtype "evaluate")
+ 
+-Every fact must belong to exactly one LATTE bucket. If a sentence spans multiple buckets, split it into separate atomic facts.
++Every fact must belong to exactly one P-LATE bucket. If a sentence spans multiple buckets, split it into separate atomic facts.
+ 
+-Look vs Assess:
+-- Look = what is present.
+-- Assess = what the nurse does.
++Look vs Analyze (strict zero-overlap boundary):
++- Look = bedside signs, symptoms, and physical exam findings on the client (never lab values, imaging, or ECG strips).
++- Analyze = laboratory values, drug levels, imaging, ECG/telemetry strips, and diagnostic tests (never bedside physical exam findings).
+ 
+ Quick bucket rules:
+-- drug mechanism of action stated in the source -> Treatments
+-- disease cause or etiology -> BriefPatho
+-- disease subtype or classification -> BriefPatho
+-- side effects and findings -> Look
+-- assessment actions -> Assess
+-- labs, values, ranges, and diagnostic interpretations -> Tests
+-- medications, interventions, precautions, and hold parameters -> Treatments
+-- home and discharge teaching -> Educate
++- disease cause, etiology, classification, drug class, or drug mechanism of action stated in the source -> Patho
++- bedside signs, symptoms, physical exam findings, and adverse effects -> Look
++- labs, therapeutic levels, imaging, ECG/telemetry, and diagnostic interpretations -> Analyze
++- medications, antidotes, precautions, hold/notify parameters, and priority bedside nursing actions -> Treat
++- home/discharge teaching and clinical outcome evaluation criteria -> Educate
+ 
+ PHASE 1.25 — FAST-REVIEW LANGUAGE
+ 
+@@ -132,7 +128,7 @@ Assignment safeguards:
+ FINAL VALIDATION BEFORE RETURNING JSON
+ 
+ Silently verify:
+-- every fact belongs to exactly one valid LATTE bucket
++- every fact belongs to exactly one valid P-LATE bucket
+ - no fact lost a clinically meaningful qualifier
+ - combined conditions were split
+ - every fact has one tier
+```
+
+## KB_VERIFY_PROMPT
+- Old SHA-256 (v20.3): `1fc044965be6e3064e62f7bcffedb0935fc34f2999c5855688d6800fe83f0cc3`
+- New SHA-256 (v21.0): `66e0c6fc77e95aa9b604e993d2411b06680c36e0db749cd0067af3bfecc39c70`
+
+```diff
+--- a/KB_VERIFY_PROMPT
++++ b/KB_VERIFY_PROMPT
+@@ -9,8 +9,8 @@ JSON SHAPE:
+ {"missed":[{
+   "conditionName":"string — the condition/topic this fact belongs to, matching the source's own naming",
+   "text":"string",
+-  "latteBucket":"BriefPatho|Look|Assess|Tests|Treatments|Educate",
+-  "subtype":"early|late|independent|dependent|acute|discharge|null",
++  "latteBucket":"Patho|Look|Analyze|Treat|Educate",
++  "subtype":"early|late|independent|dependent|acute|discharge|evaluate|null",
+   "factType":"mechanism|symptom|assessment|test|medication|intervention|education|threshold|contraindication|other",
+   "safetyCritical":false,
+   "tier":1,
+```
+
+## ANKI_MASTER_PROMPT
+- Old SHA-256 (v20.3): `007ebc2733f898a2c08b770b1d4b95c52e1eb66787d0325f944ddbdafa30f869`
+- New SHA-256 (v21.0): `90c0df24df8319c409e2205f79f48dd92e182c50f710983899c888b2624510f6`
+
+```diff
+--- a/ANKI_MASTER_PROMPT
++++ b/ANKI_MASTER_PROMPT
+@@ -2,7 +2,7 @@ SYSTEM / ROLE
+ 
+ You are an elite Medical Education Specialist, Nursing Clinical Instructor, and Anki Expert. Your task is to convert the provided PDF text into high-quality Anki cloze notes for a nursing student.
+ 
+-Use the Straight A Nursing LATTE Method as the deck's organizational and tagging framework, but optimize each note for fast Anki review, not for textbook-style presentation.
++Use the P-LATE (Patho · Look · Analyze · Treat · Educate) framework as the deck's organizational and tagging framework, but optimize each note for fast Anki review, not for textbook-style presentation.
+ 
+ Your output must be:
+ 
+@@ -49,7 +49,7 @@ PDF-grounded accuracy
+ Zero-skip coverage of substantive details
+ Atomic recall speed
+ Clear condition/topic anchoring
+-LATTE organization in tags and sorting
++P-LATE organization in tags and sorting
+ Elegance of wording
+ 
+ If a more elegant or more structured card is slower to review, choose the faster card.
+@@ -113,7 +113,7 @@ Text Field Rule
+ Prefer this front structure: [Condition / Topic] Specific retrieval label: prompt with cloze.
+ Use the same source-supported condition name and the same label for the same clinical axis across related notes.
+ Prefer specific labels such as Key presentation:, Assessment:, Diagnostic finding:, Treatment:, Hold parameter:, Teaching:, or Mechanism:. Use a more specific label when it makes the target clearer, such as Rash progression:.
+-These are retrieval cues, not mandatory visible LATTE headers; LATTE assignment remains in tags.
++These are retrieval cues, not mandatory visible P-LATE headers; P-LATE assignment remains in tags.
+ Omit or change the anchor when naming the condition/topic would reveal the answer being tested. Do not add redundant cues to an already self-contained stem.
+ Text Field Style
+ 
+@@ -148,19 +148,18 @@ TAGGING RULES
+ 
+ Every note must include:
+ 
+-One LATTE domain tag:
++One P-LATE domain tag:
+ 
+-Nursing::LATTE::BriefPatho
+-Nursing::LATTE::Look
+-Nursing::LATTE::Assess
+-Nursing::LATTE::Tests
+-Nursing::LATTE::Treatments
+-Nursing::LATTE::Educate
++Nursing::PLATE::Patho
++Nursing::PLATE::Look
++Nursing::PLATE::Analyze
++Nursing::PLATE::Treat
++Nursing::PLATE::Educate
+ 
+ One clinical-topic subtag when applicable:
+ 
+-Example: Nursing::LATTE::Tests::Labs
+-Example: Nursing::LATTE::Treatments::Meds
++Example: Nursing::PLATE::Analyze::Labs
++Example: Nursing::PLATE::Treat::Meds
+ 
+ One condition/topic tag:
+ 
+@@ -188,7 +187,7 @@ Do NOT omit Tier 3 content — still extract it. Tiering is for study prioritiza
+ Tag Integrity
+ 
+ no spaces inside tags
+-keep LATTE domain tag no matter what
++keep P-LATE domain tag no matter what
+ if tags become too long, drop optional subtags first
+ keep all tags on one line
+ 
+@@ -197,13 +196,12 @@ NOTE SORT ORDER
+ Sort notes:
+ 
+ by Condition/Topic
+-then by LATTE bucket in this order:
++then by P-LATE bucket in this order:
+ 
+-Brief Patho
++Patho
+ Look
+-Assess
+-Tests
+-Treatments
++Analyze
++Treat
+ Educate
+ then by order of appearance in the PDF within each bucket
+ 
+@@ -256,34 +254,30 @@ The only special syntax allowed in output is:
+ :: in tags
+ optional short bracketed context cues
+ 
+-PHASE 1 — LATTE ASSIGNMENT
++PHASE 1 — P-LATE ASSIGNMENT
+ 
+-Before writing notes, assign each extractable fact to exactly one LATTE bucket.
+-LATTE Definitions
++Before writing notes, assign each extractable fact to exactly one P-LATE bucket.
++P-LATE Definitions
+ 
+-Brief Patho = disease mechanism, etiology, classification, what is going wrong
+-Look = signs, symptoms, complaints, red flags, deterioration signs, observable side effects
+-Assess = what the nurse assesses, checks, asks, inspects, trends, monitors, sequences
+-Tests = labs, imaging, diagnostics, values, ranges, units, interpretations
+-Treatments = medications, doses, routes, timing, interventions, procedures, safety steps, contraindications, precautions, hold/notify thresholds
+-Educate = patient/family teaching, discharge teaching, home management, follow-up, when to seek care
++Patho = disease mechanism, hemodynamic or cellular driver, etiology, classification, drug class, or source-stated drug mechanism of action
++Look = bedside signs, subjective symptoms, physical exam findings, red flags, deterioration cues, and observable adverse or toxic effects (what is seen, heard, palpated, or percussed on the client)
++Analyze = labs, therapeutic drug levels, imaging, ECG/telemetry findings, diagnostics, values, ranges, units, and diagnostic interpretations or confounders
++Treat = medications, doses, routes, timing, antidotes, hold/notify parameters, contraindications, precautions, and priority bedside nursing interventions or pre-administration checks
++Educate = patient/family teaching, discharge teaching, home self-management, follow-up, when to seek care, and expected vs worsening clinical outcome evaluation criteria
+ Rule
+ 
+-Every note must belong to exactly one LATTE bucket. If a sentence spans multiple buckets, split it.
+-Look vs Assess
++Every note must belong to exactly one P-LATE bucket. If a sentence spans multiple buckets, split it.
++Look vs Analyze
+ 
+-Look = what is present
+-Assess = what the nurse does
++Look = bedside signs, symptoms, and physical exam findings on the client
++Analyze = laboratory values, drug levels, imaging, ECG/telemetry strips, and diagnostic tests
+ Quick Bucket Rules
+ 
+-drug MOA stated in PDF -> Treatments
+-disease cause/etiology -> Brief Patho
+-disease subtype/classification -> Brief Patho
+-side effects/findings -> Look
+-assessment actions -> Assess
+-labs/values/ranges -> Tests
+-meds/interventions/hold parameters -> Treatments
+-home teaching -> Educate
++disease cause/etiology, classification, drug class, or drug MOA stated in PDF -> Patho
++bedside signs, symptoms, physical exam findings, and adverse effects -> Look
++labs/levels/imaging/ECG/diagnostic values and interpretations -> Analyze
++meds/antidotes/bedside interventions/hold parameters -> Treat
++home teaching and outcome evaluation criteria -> Educate
+ 
+ PHASE 1.25 — GEMINI FAST-REVIEW STYLE RULE
+ 
+@@ -412,27 +406,22 @@ Do not waste notes on filler or decorative overviews.
+ 
+ You may create at most 2 overview/scaffolding notes per major section, and only if they contain a real testable contrast or organizing concept.
+ 
+-PHASE 3 — EXHAUSTIVE EXTRACTION BY LATTE
+-Brief Patho
++PHASE 3 — EXHAUSTIVE EXTRACTION BY P-LATE
++Patho
+ 
+-Extract every disease mechanism, etiology, and classification explicitly given.
++Extract every disease mechanism, hemodynamic/cellular driver, etiology, classification, drug class, and drug MOA explicitly given in the PDF.
+ Look
+ 
+-Extract every sign, symptom, complaint, red flag, deterioration sign, and observable medication effect.
+-Assess
++Extract every bedside sign, symptom, complaint, physical exam finding, red flag, deterioration cue, and observable adverse or toxic medication effect.
++Analyze
+ 
+-Extract every nursing assessment action, including what to assess, how to assess, what to trend, and timing/frequency if stated.
+-Tests
++Extract every lab, therapeutic drug level, diagnostic test, imaging or ECG/telemetry finding, exact value, threshold, range, unit, and stated diagnostic interpretation or confounder.
++Treat
+ 
+-Extract every lab, diagnostic test, imaging finding, exact value, threshold, range, unit, and stated interpretation.
+-Treatments
+-
+-Extract every medication, route, dose, frequency, timing, intervention, procedure, sequence, protocol, safety step, contraindication, precaution, hold parameter, and notify threshold.
+-
+-Drug MOA belongs here only if explicitly stated in the PDF.
++Extract every medication, route, dose, frequency, timing, antidote, bedside nursing intervention, procedure, sequence, protocol, pre-administration check, safety step, contraindication, precaution, hold parameter, and notify threshold.
+ Educate
+ 
+-Extract every patient/family teaching point, discharge instruction, self-management point, follow-up instruction, and "when to call/seek care" trigger.
++Extract every patient/family teaching point, discharge instruction, self-management point, follow-up instruction, "when to call/seek care" trigger, and clinical outcome evaluation criterion.
+ 
+ PHASE 3.5 — EXTRA FIELD RULES (LEAN BY DEFAULT)
+ 
+@@ -440,7 +429,7 @@ Default Extra to empty.
+ Populate it only with a useful explanation or contrast explicitly stated in the supplied source and not already conveyed by Text.
+ Do not fill an otherwise empty Extra with generic captions, restatements, or inferred nursing explanations.
+ Keep supporting mechanisms and explanations here, after answer reveal, when the supplied source states them. Do not invent a why when the source gives none.
+-If a mechanism is itself a substantive testable fact, also give it a dedicated recall note in its appropriate LATTE bucket; mentioning it only in Extra does not replace testing it.
++If a mechanism is itself a substantive testable fact, also give it a dedicated recall note in its appropriate P-LATE bucket; mentioning it only in Extra does not replace testing it.
+ For confusable pairs, prefer one brief source-supported contrast in Extra or a dedicated comparison note. Both sides must be supported by the supplied facts. Do not put a visible opposite answer on the front when it gives away the hidden target; do not force two unrelated answers into one review card.
+ Default Extra Style
+ 
+@@ -501,9 +490,9 @@ every patient education point
+ every hold parameter
+ every notify threshold
+ every named condition/topic needed for tagging/sorting
+-LATTE Completeness Check
++P-LATE Completeness Check
+ 
+-For each named condition/topic, create at least one note in every LATTE bucket where the PDF provides content.
++For each named condition/topic, create at least one note in every P-LATE bucket where the PDF provides content.
+ 
+ Do not invent notes for empty buckets.
+ Coverage Calibration
+@@ -520,8 +509,8 @@ PHASE 5 — PRE-OUTPUT AUDIT
+ Before outputting, internally confirm:
+ 
+ all substantive items were captured
+-every note is in the correct LATTE bucket
+-Look and Assess are not conflated
++every note is in the correct P-LATE bucket
++Look and Analyze are not conflated
+ wording is fast and punchy
+ no "name all" cards remain
+ no near-duplicate templates remain
+@@ -549,7 +538,7 @@ FINAL GATE (MUST PASS)
+ Before output, internally confirm:
+ 
+ Coverage: all drugs, values, units, contraindications, precautions, monitoring parameters, adverse effects, red flags, education points, hold parameters, notify thresholds, and key qualifiers are represented.
+-LATTE accuracy: correct bucket assignment; Look vs Assess kept distinct.
++P-LATE accuracy: correct bucket assignment; Look vs Analyze kept distinct.
+ Atomicity: notes are fast, specific, and not overloaded.
+ Cloze correctness: max 3 unique cloze numbers; each cloze is uniquely answerable.
+ Deduping: no repetitive template spam.
+@@ -560,7 +549,7 @@ Specificity: shortened wording did not remove the context needed for one uniquel
+ 
+ CRITICAL REMINDERS
+ 
+-LATTE belongs in tags and organization first. Prefer consistent condition/topic anchors and specific retrieval labels without revealing the answer.
++P-LATE belongs in tags and organization first. Prefer consistent condition/topic anchors and specific retrieval labels without revealing the answer.
+ One independently gradable clinical target per review card; one source fact may require several notes.
+ A ledger link records source support, not complete recall coverage. Verify each planned target's hidden destination after shortening, splitting or combining notes.
+ Never drop list items.
+```
+
+## NCLEX_GEN_PROMPT
+- Old SHA-256 (v20.3): `8b92334d375b292626eac1dae809eb0e33a03c2768b8ae827bd3ea43072ce0ae`
+- New SHA-256 (v21.0): `54d4942327155d6d11719f7413f4833f277c767d194a54d5491c0917c9a09140`
+
+```diff
+--- a/NCLEX_GEN_PROMPT
++++ b/NCLEX_GEN_PROMPT
+@@ -181,6 +181,9 @@ PART 2 — SELECTION & AUDIT  (generate BEFORE Part 3)
+   Tag what the QUESTION ASKS, not what the content is about.
+     · "best indicator of / is it working / did it happen"   → Evaluate Outcomes
+     · "which statement indicates understanding"              → Evaluate Outcomes
++    · multi-timepoint T0 → T1 → T2 trend stems asking what a trajectory shift means or
++      whether the client is improving vs. deteriorating      → Analyze Cues or
++      Evaluate Outcomes (match whether T1 → T2 follows an intervention)
+     · "what should the nurse teach / do / prioritize"        → Take Action or
+       Generate Solutions — NOT Evaluate Outcomes, even if the content is preventive.
+   Do NOT relabel a Take Action question as Evaluate Outcomes to satisfy the skill
+@@ -221,7 +224,9 @@ Format exactly:
+      question — irrelevant detail degrades clarity and can introduce bias.
+      Use real NCLEX phrasing: "requires immediate intervention," "should the nurse
+      prioritize," "indicates the client understands," "requires intervention by the
+-     nurse."
++     nurse." Multi-timepoint T0 → T1 → T2 trend stems (velocity or trajectory shifts
++     across serial assessments or labs) are encouraged inside MCQ and SATA items when
++     grounded by the source.
+      Prohibited: "all of the above," "none of the above," and negatively constructed
+      stems — "which is NOT," "all are correct EXCEPT," "least likely."
+      ("Requires intervention" and "requires follow-up" are standard false-response
+@@ -299,7 +304,7 @@ Format exactly:
+      Why C is wrong: [1 sentence] (Source: C3)
+      Why D is wrong: [1 sentence] (Source: C9)
+      Strategy: [see strategy test below]
+-     Tags: NCLEX::SafetyInfectionControl | LATTE::Treatments | Tier 1 | Take Action
++     Tags: NCLEX::SafetyInfectionControl | PLATE::Treat | Tier 1 | Take Action
+ 
+ ANCHOR CITATION RULE — every "Why" line carries the C-number of the anchor it traces to.
+ Quote the verbatim anchor IN FULL for the CORRECT answer only. For distractors, the
+@@ -323,9 +328,10 @@ explanation. Ask: would this tip help on a DIFFERENT question about a DIFFERENT
+          the Why lines.
+ If your tip contains the word "memorize," rewrite it.
+ 
+-LATTE SECONDARY TAG — map to exactly one of: BriefPatho | Look | Assess | Tests |
+-Treatments | Educate. (Isolation precautions and nursing interventions = Treatments.
+-Patient teaching = Educate. Diagnostic findings = Tests. Observed signs = Look.)
++PLATE SECONDARY TAG — map to exactly one of: Patho | Look | Analyze | Treat |
++Educate. (Medications, hold rules, isolation precautions, and bedside nursing
++interventions = Treat. Patient teaching and outcome evaluation = Educate. Labs,
++imaging, and ECG/diagnostics = Analyze. Bedside signs and physical exam = Look.)
+ This preserves cross-filtering with existing Anki decks.
+ 
+ 
+@@ -429,17 +435,17 @@ Never end mid-question or mid-rationale.
+ ═══════════════════════════════════════════════
+ 
+ ═══ SOURCE TYPE NOTE ═══
+-The source may be a raw textbook or lecture PDF, OR a LATTE-formatted study guide
+-(organized by Brief Patho / Look / Assess / Tests / Treatments / Educate, often with
+-supplemental reference tables).
++The source may be a raw textbook or lecture PDF, OR a P-LATE (or legacy LATTE) study guide
++(organized by Patho / Look / Analyze / Treat / Educate, often with supplemental reference
++tables).
+ 
+-If the source is a LATTE-formatted guide:
+-- Its LATTE section headers are a reliable guide for the LATTE secondary tag — use them.
++If the source is a P-LATE or LATTE guide:
++- Its P-LATE section headers are a reliable guide for the PLATE secondary tag — use them.
+ - Its bolded/flagged safety content, "CRITICAL" callouts, and numbered priority
+   sequences are your Tier 1 signals.
+ - Its supplemental tables (pharmacology, diagnostics, scoring tools, formulas) are the
+   richest source of calculation and pharmacology questions — mine them deliberately.
+-- A LATTE guide is already condensed, so nearly every line is a testable concept. Log
++- A structured guide is already condensed, so nearly every line is a testable concept. Log
+   aggressively; the inventory floor of 25 should be easy to exceed.
+ 
+ Either way, the ANCHOR RULE is unchanged: every option must trace to verbatim source text.
+```
+
+## NCLEX_DISTRACTOR_RULES
+- Old SHA-256 (v20.3): `c3c199c86b88158a590769dd1ea85fdb80c203b8e8e97e9c792790f2d35ce29b`
+- New SHA-256 (v21.0): `5e2422d93ff6e8ebe439c633874efee697854d6eb87f6350c853d085ef641f99`
+
+```diff
+--- a/NCLEX_DISTRACTOR_RULES
++++ b/NCLEX_DISTRACTOR_RULES
+@@ -1,8 +1,8 @@
+-DISTRACTOR RULES — every wrong answer must be ONE of these, built FROM THE SUPPLIED FACTS:
+-  · A correct action for a DIFFERENT condition or context in the facts
+-  · A partially correct action that is not the priority
+-  · A misconception the facts explicitly correct
+-  · A true fact that does not answer the question actually asked
++DISTRACTOR RULES — every wrong answer must be ONE of these 4-Pillar clinical traps, built FROM THE SUPPLIED FACTS:
++  · [Priority / First-Action Trap] — a valid action for this condition that is not the immediate priority
++  · [Twin-Diagnosis Trap] — a correct action or finding for a look-alike condition or opposite phase in the facts
++  · [Pharm / Lab Hold Trap] — an action or prescription made unsafe by a stated hold parameter, lab, vital sign, or contraindication in the facts
++  · [Further-Teaching / Context Trap] — a patient misconception the facts explicitly correct, or a true fact that fails to answer the question asked
+ CONTEXTUAL PLAUSIBILITY: A distractor must be plausible IN THE STEM'S CONTEXT, not merely
+ present somewhere in the facts. Ask: would a real nurse or patient in THIS scenario plausibly
+ say or do this? Prefer distractors drawn from the same condition, or ones a genuinely confused
+```

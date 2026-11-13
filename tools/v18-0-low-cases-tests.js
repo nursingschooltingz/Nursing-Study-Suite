@@ -43,11 +43,11 @@ module.exports=async function run(S,t){
   }
   // v18.0 (review L41): audit error details are redacted before display and export.
   t('case and worksheet audit error details remove the API key',S.split("detail:cfg.apiKey?auditError.split(cfg.apiKey).join('[redacted]'):auditError,").length===3&&!S.includes("detail:e.message||String(e),warns:[]"));
-  // v18.0 (review L42): the Calculation top-up adds numeric facts that are not already selected.
+  // v18.0 (review L42): the Calculation top-up adds numeric facts that are not already selected (v21.0 Look cap = 12).
   {
     const facts=n=>Array.from({length:n},(_,i)=>({id:'f'+i,tier:1,latteBucket:'Look',text:'Synthetic value '+i+' mg'}));
     const ids=(n,calc)=>selectCaseFacts({facts:facts(n)},{includeCalculation:calc}).map(f=>f.id);
-    t('the Calculation top-up adds up to four unselected numeric facts',ids(16,false).length===10&&ids(16,true).length===14&&ids(12,true).length===12&&ids(16,true).includes('f13')&&!ids(16,true).includes('f14')&&ids(8,true).length===8);
+    t('the Calculation top-up adds up to four unselected numeric facts',ids(18,false).length===12&&ids(18,true).length===16&&ids(14,true).length===14&&ids(18,true).includes('f15')&&!ids(18,true).includes('f16')&&ids(8,true).length===8);
   }
   // v18.0 (review L43): negated comparators keep their meaning.
   {

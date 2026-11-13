@@ -8,7 +8,7 @@ Turn your lecture PDFs and PowerPoints into a complete, source-cited study syste
 
 The whole suite is **one HTML file**. There is nothing to install, no account to create, and no website collecting your data. You open the file in your web browser, paste in a free Google Gemini API key, upload your study materials, and go.
 
-**Published release: v20.3.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v20.3/Nursing-Study-Suite.v20.3.html) or open the [repository HTML](Nursing-Study-Suite%20v20.3.html).
+**Published release: v21.0.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v21.0/Nursing-Study-Suite.v21.0.html) or open the [repository HTML](Nursing-Study-Suite%20v21.0.html).
 
 The left rail lists the eight tools in the order you use them, grouped by stage. **Source:** *Knowledge Base* builds or imports the cited facts everything else reads from. **Plan:** *Priority* ranks those facts by clinical urgency into its own Tier 1/2/3. **Practice:** *Anki* for recall, *NCLEX Extract* for questions out of a review book you already own, *NCLEX Generate* for new ones written from your facts, *Case Studies* for unfolding cases, *NCLEX to Anki* to turn NCLEX questions into Anki cards, and *Import to Gizmo* to convert Anki decks into Gizmo.ai tab-separated flashcards.
 
@@ -63,7 +63,7 @@ Notes worth knowing:
 
 **Build the Knowledge Base first. Everything else reads from it.**
 
-When you build the Knowledge Base, the suite extracts your material into individual **facts**, organized by condition using the **LATTE method** (Straight A Nursing's framework): **L**ook, **A**ssess, **T**ests, **T**reatments, **E**ducate, plus a Brief Patho intro for each condition. Every fact gets:
+When you build the Knowledge Base, the suite extracts your material into individual **facts**, organized by condition using the **P-LATE (Triple-E)** 5-bucket clinical workflow (evolved from Straight A Nursing's LATTE method to eliminate assessment/diagnostic overlap): **P**atho, **L**ook (bedside history & physical exam), **A**nalyze (labs, imaging & telemetry), **T**reat (`dependent` provider orders vs. `independent` priority bedside actions), and **E**ducate (`discharge` self-management & "further teaching needed" cues vs. `evaluate` NGN trend trajectories). Every fact gets:
 
 - a **fact ID** (like `FACT-12`) — its name within this Knowledge Base
 - a **tier** (1 = must-know, 2 = supporting, 3 = nice-to-know)
@@ -95,7 +95,7 @@ The **Hydrogen model / Argon model** text boxes exist so the suite doesn't go st
 
 # The tools, in rail order
 
-## 01 · Source — LATTE Knowledge Base
+## 01 · Source — P-LATE Knowledge Base
 
 *Extract once → reusable facts for every study output.*
 
@@ -174,9 +174,9 @@ This tab answers the question every nursing student asks the night before an exa
 
 **Large Knowledge Bases (v17.7).** One request has 65,536 output tokens on Hydrogen and Argon, shared between the model's thinking and the guide it writes. A whole exam's Knowledge Base can use that up in thinking before the guide is written; one 650-fact run stopped after two topics. When the harvest is large, the synthesis pass now runs in parts of about 10,000 input tokens each (on Argon too, since v18.2). The app merges them into one guide with the audit counts added together. Each part is one more request against your quota. The results and every export say how many parts were used. Each condition is kept whole inside one part, and topics that share a heading are combined into one section. If one part fails or is cut off, the notice names that part and the other parts are still shown. The harvest also reads your Knowledge Base whole facts at a time, always under their condition heading, so nothing is filed as "untitled". **Overlap** now only repeats facts within a condition too large for one chunk.
 
-## 03 · Practice — LATTE Anki Generator
+## 03 · Practice — P-LATE Anki Generator
 
-*Anki cloze cards with LATTE tagging + tiers.*
+*Anki cloze cards with P-LATE tagging + tiers.*
 
 Generates cloze-deletion flashcards ready for Anki, from your Knowledge Base. Optional boxes — **Outcomes**, **Points**, **Additional Context** (e.g., *"Exam is on cardiac meds only"*) — steer emphasis without you writing prompts.
 
@@ -240,15 +240,15 @@ Every card carries a structured set of tags, and this is where the suite quietly
 
 | Tag | Meaning | Example |
 |---|---|---|
-| `Nursing::LATTE::<Domain>` | Which LATTE bucket the fact belongs to | `Nursing::LATTE::Assess` |
-| `...::<Subtag>` | Optional finer slice | `Nursing::LATTE::Tests::Labs`, `Nursing::LATTE::Treatments::Meds` |
+| `Nursing::PLATE::<Domain>` | Which P-LATE bucket the fact belongs to (`Patho`, `Look`, `Analyze`, `Treat`, `Educate`) | `Nursing::PLATE::Look` |
+| `...::<Subtag>` | Optional finer slice | `Nursing::PLATE::Analyze::Labs`, `Nursing::PLATE::Treat::Meds`, `Nursing::PLATE::Educate::Evaluate` |
 | `Condition::<Name>` | The disease/topic, CamelCase | `Condition::HeartFailure` |
 | `Concept::<Name>` | Parent concept on concept-based KBs, CamelCase | `Concept::Perfusion` |
 | `Scope::<Kind>` | Concept role on concept-based KBs (`Overview`, `Bridge`, `Differentiator`, `Contrast`, `Delta`) | `Scope::Differentiator` |
 | `Trap::<Kind>` | Clinical exam trap on trap-mapped KBs (`TwinContrast`, `TrendSlope`, `PseudoImprovement`, `TherapyOvershoot`, `BedsideFirst`, `OrderedEscalation`, `HoldTriangle`, `DynamicMonitor`, `NeverClick`) | `Trap::NeverClick` |
 | `Tier::1 / 2 / 3` | Exam priority — every card has exactly one | `Tier::1` |
 
-Practical plays: five days out, build a **filtered deck** on `Tier::1` and clear it first. Night before a HESI or ATI exam? Choose **Exam Traps only** under **Concept / trap scope** before generating, or build a filtered deck in Anki on `Trap::NeverClick` or `Trap::PseudoImprovement`. Weak on labs? Filter `Nursing::LATTE::Tests::Labs`. Professor said the exam is heavy on one condition? `Condition::` tag, done. (Tags are hierarchical in Anki's browser — click the little arrows to drill down.)
+Practical plays: five days out, build a **filtered deck** on `Tier::1` and clear it first. Night before a HESI or ATI exam? Choose **Exam Traps only** under **Concept / trap scope** before generating, or build a filtered deck in Anki on `Trap::NeverClick` or `Trap::PseudoImprovement`. Weak on labs? Filter `Nursing::PLATE::Analyze::Labs`. Professor said the exam is heavy on one condition? `Condition::` tag, done. (Tags are hierarchical in Anki's browser — click the little arrows to drill down.)
 
 ### Getting cards into Anki
 
@@ -274,7 +274,7 @@ You can **Abort** mid-run and keep everything extracted so far. Results appear a
 
 ## 05 · Practice — NCLEX Question Generator
 
-*Generate NEW NCLEX questions from your LATTE guide.*
+*Generate NEW NCLEX questions from your P-LATE guide.*
 
 This writes **brand-new** NCLEX-style questions from your Knowledge Base — and this is where the fact-ID system earns its keep. The generator works on an *allocation* model: it divides your KB facts across the questions it's going to write, so coverage is systematic instead of the AI riffing on whatever it finds interesting. Every question and every answer rationale **cites the fact IDs it was built from.**
 
@@ -368,7 +368,7 @@ Replaces the standalone Python `Gizmo Converter` script with an AI-driven, chunk
 
 Not a tool — a drawer that opens when you **click any fact ID badge** anywhere in the suite. It shows:
 
-- the fact's full text, tier, LATTE bucket, and safety flag
+- the fact's full text, tier, P-LATE bucket, and safety flag
 - the **verbatim quote** from your source material
 - the **source pointer** — which file, which page or slide
 - **"Used in"** — every place this session's generated artifacts cited it: which case stage presented it as data, which specific question's rationale relied on it, which card set covered it
@@ -408,9 +408,9 @@ Use it as your reflexive "wait, is that true?" button. One honest limitation: th
 
 **No real patient information.** Never enter PHI or any identifiable patient data. It's a study tool, not a clinical system.
 
-**The LATTE method belongs to Straight A Nursing.** This suite uses LATTE (Look, Assess, Tests, Treatments, Educate) as its organizational framework with credit and gratitude. It is **not affiliated with, endorsed by, or connected to Straight A Nursing** in any way. If the framework clicks for you, look them up — their materials are excellent and the method is theirs.
+**The LATTE method belongs to Straight A Nursing.** This suite's P-LATE organizational framework builds upon Straight A Nursing's LATTE method (Look, Assess, Tests, Treatments, Educate) with credit and gratitude. It is **not affiliated with, endorsed by, or connected to Straight A Nursing** in any way. If the framework clicks for you, look them up — their materials are excellent and the original LATTE method is theirs.
 
-**NCLEX®** is a registered trademark of the National Council of State Boards of Nursing (NCSBN). This suite is not affiliated with or endorsed by NCSBN. Generated questions are practice items *in the style of* the exam — they are not, and do not resemble access to, actual exam content.
+**NCLEX®, HESI®, and ATI®.** **NCLEX®** is a registered trademark of the National Council of State Boards of Nursing (NCSBN). **HESI®** is a registered trademark of Elsevier Inc. **ATI®** is a registered trademark of Assessment Technologies Institute, LLC. This suite is **not affiliated with, endorsed by, or sponsored by NCSBN, HESI / Elsevier Inc., or ATI / Assessment Technologies Institute, LLC**. Generated questions, exam trap blocks, and case studies are independent study items *in the style of* nursing coursework and licensure exams — they are not, and do not resemble access to, actual proprietary exam content.
 
 **Anki** is an independent open-source project. This suite generates files formatted for import into Anki but is not affiliated with the Anki project.
 

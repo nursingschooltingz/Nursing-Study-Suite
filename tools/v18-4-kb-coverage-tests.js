@@ -38,8 +38,8 @@ module.exports=async function run(S,t){
     const {kb,report}=N.normalizeKbEntities({conditions:[],medications:[copy(mannitol)]});
     const facts=kb.medications[0].facts||[],buckets=facts.map(f=>f.latteBucket);
     t('v18.4: the flat Mannitol entry (class, mechanism, 2 indications, 2 considerations) becomes at least 5 facts, all derived',facts.length>=5&&facts.length===6&&facts.every(f=>f.derived===true));
-    t('v18.4: Mannitol facts land in the mapped buckets: class and mechanism BriefPatho, indications and considerations Treatments',
-      JSON.stringify(buckets)==='["BriefPatho","BriefPatho","Treatments","Treatments","Treatments","Treatments"]'
+    t('v18.4: Mannitol facts land in the mapped buckets: class and mechanism Patho, indications and considerations Treat',
+      JSON.stringify(buckets)==='["Patho","Patho","Treat","Treat","Treat","Treat"]'
       &&facts[0].text==='Mannitol is an osmotic diuretic.'&&facts[1].factType==='mechanism'&&facts[2].factType==='indication'&&facts[4].factType==='nursing_action');
     t('v18.4: a derived fact has tier 1, a null sourceQuote, the entry pointer as its source, and names its field',
       facts.every(f=>f.tier===1&&f.sourceQuote===null&&f.sources.length===1&&f.sources[0].filename==='synthetic.pdf'&&f.sources[0].location==='pages 10-12'&&f.derivedFrom.collection==='medications'&&typeof f.derivedFrom.field==='string'));
@@ -56,8 +56,8 @@ module.exports=async function run(S,t){
     t('v18.4: entry fact IDs continue after the conditions and never collide',new Set(ids).size===ids.length&&ids.every(id=>/^fact-\d+$/.test(id))&&!ids.slice(2).some(id=>Number(id.slice(5))<=2));
     const beta=kb.medications[1].facts[0];
     t('v18.4: an entry that already had facts keeps them and gains only a missing ID and sources',kb.medications[1].facts.length===1&&beta.text.startsWith('Betadrug is held')&&/^fact-\d+$/.test(beta.id)&&beta.sources[0].location==='page 3'&&!beta.derived);
-    t('v18.4: a diagnostic\'s indications go to Tests, its critical values are safety-critical thresholds',
-      kb.diagnostics[0].facts.some(f=>f.derivedFrom.field==='indications'&&f.latteBucket==='Tests')&&kb.diagnostics[0].facts.some(f=>f.derivedFrom.field==='criticalValues'&&f.factType==='threshold'&&f.safetyCritical===true));
+    t('v18.4: a diagnostic\'s indications go to Analyze, its critical values are safety-critical thresholds',
+      kb.diagnostics[0].facts.some(f=>f.derivedFrom.field==='indications'&&f.latteBucket==='Analyze')&&kb.diagnostics[0].facts.some(f=>f.derivedFrom.field==='criticalValues'&&f.factType==='threshold'&&f.safetyCritical===true));
     t('v18.4: each scoring-tool component is its own fact, and unmapped content fields are reported, not dropped',
       kb.scoringTools[0].facts.filter(f=>f.derivedFrom.field==='components').length===2&&report.unmapped.category===1&&/category \(1\)/.test(report.summary)&&kb.diagnostics[0].category==='Laboratory');
     const again=N.normalizeKbEntities(kb);

@@ -13,8 +13,8 @@ const {syntheticKB}=require('./remediation-browser-fixture');
 const {worksheet}=require('./remediation-worksheet-browser-tests');
 const widths=[360,768,1024,1440];
 const tabs=[
-  ['knowledge','LATTE Knowledge Base'],['priority','Pyramid Priority Analyzer'],
-  ['anki','LATTE Anki Generator'],['nclex','NCLEX Question Extractor'],
+  ['knowledge','P-LATE Knowledge Base'],['priority','Pyramid Priority Analyzer'],
+  ['anki','P-LATE Anki Generator'],['nclex','NCLEX Question Extractor'],
   ['nclexgen','NCLEX Question Generator'],['cases','Clinical Case Study Generator'],
   ['nclex2anki','NCLEX to Anki'],['gizmo','Import to Gizmo']
 ];
@@ -51,7 +51,7 @@ async function capture(page,directory,name,fullPage=true){
   await page.screenshot({path:path.join(directory,name+'.png'),fullPage});
 }
 async function focusVisible(page){
-  const nav=page.getByTitle('LATTE Knowledge Base',{exact:true});
+  const nav=page.getByTitle('P-LATE Knowledge Base',{exact:true});
   await nav.focus();await page.keyboard.press('Tab');
   const result=await page.evaluate(()=>{
     const e=document.activeElement,s=getComputedStyle(e);

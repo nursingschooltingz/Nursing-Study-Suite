@@ -35,6 +35,11 @@ const DOCUMENTED_PROMPTS = Object.freeze([
   'KB_CONCEPT_CURRICULUM_RULES',
   // v20.0: the HESI/ATI/NGN Exam Trap mapping rules appended by kbBuildFocusBlock (not frozen).
   'KB_EXAM_TRAP_RULES',
+  // v21.0: the P-LATE RN vs. NP Mechanism Bridge tagging rules appended by kbBuildFocusBlock (not frozen).
+  'KB_PLATE_BRIDGE_RULES',
+  // v21.0: the P-LATE 4-Pillar distractor & Slope Red Flag runtime directives for NCLEX and Case Studies (not frozen).
+  'NCLEX_PLATE_TRAP_RULES',
+  'CASE_SLOPE_SYNC_RULES',
   // v20.0: the strict verbatim Anki-to-Gizmo chunk formatter prompt (not frozen).
   'GIZMO_CONVERT_PROMPT',
 ]);

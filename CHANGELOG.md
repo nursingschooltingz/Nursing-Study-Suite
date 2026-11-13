@@ -9,6 +9,35 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [21.0] — 2026-11-13
+
+5-bucket P-LATE (Triple-E) taxonomy cutover, RN Core vs. NP Mechanism Bridge firewall, 4-Pillar distractor & Slope Red Flag runtime directives (`NCLEX_PLATE_TRAP_RULES`, `CASE_SLOPE_SYNC_RULES`), subtype-balanced Case Study fact allocation, `[P] P-LATE` suite branding + HESI®/ATI® legal notices, and `CaseStudyGenerator` Temporal Dead Zone fix.
+
+### Added
+
+- **RN Core vs. NP Mechanism Bridge firewall (`KB_SOURCE_ROLES`, `KB_PLATE_BRIDGE_RULES`, `capBridgeTier`, `kbCoercePlateFields`, `KnowledgeBaseBuilder`, `PriorityAnalyzer`, `AnkiGenerator`, `NCLEXGenerator`, `CaseStudyGenerator`).** Adds per-source Step 01 role pills (`rn`, `patho-bridge`, `exam-bridge`, `pharm-bridge`) on PDFs, PPTX decks, and card/transcript chips, `clinicalLayer` (`'rn'` | `'bridge'`) and `plateSlot` (`exam-nuance`, `gold-standard`, `diff-tiebreaker`, `gdmt-bridge`, `evaluate`) fact metadata, cross-book acronym condition merging with RN-Core-wins deduplication, optional Tier-2 capping (`capBridgeTier`) on non-safety graduate mechanism bridge facts so Tier-1 RN exam facts are never displaced, collapsible NP Bridge `<details>` sections in Study View, `Layer::RNCore` / `Layer::NPBridge` Anki tags, and default-OFF **Include NP Bridge facts** toggles across Priority, NCLEX Generator, and Case Studies.
+- **Non-frozen runtime trap & NGN slope synchronization directives (`NCLEX_PLATE_TRAP_RULES`, `CASE_SLOPE_SYNC_RULES`).** Injects `NCLEX_PLATE_TRAP_RULES` into both allocated and flat `NCLEXGenerator` batch packets (enforcing the RN/NP clinical layer firewall, 4-Pillar distractor traps, Action + Parameter multi-cue integration, and `T0 → T1 → T2` Slope Red Flag stems while preserving plain-text `PART 1–PART 4` worksheet parsing and `(Source: C#)` citations) and injects `CASE_SLOPE_SYNC_RULES` into `caseBuildPrompt` (enforcing synchronized `T0 → T1 → T2` physiological state-machine math inside cited `stage.data` rows while keeping `stage.narrative` qualitative so `scanUncitedProse` passes cleanly).
+- **HESI® and ATI® non-affiliation trademark notices (`App` `.rail-foot`, `README.md`).** Adds explicit **HESI®** (Elsevier Inc.) and **ATI®** (Assessment Technologies Institute, LLC) non-affiliation notices alongside NCSBN® and Straight A Nursing in both the application rail footer and `README.md`.
+
+### Changed
+
+- **5-bucket P-LATE (Triple-E) taxonomy cutover, Pharmacology entity upgrade, & lossless legacy migration (`KB_FACT_BUCKETS`, `KB_ENTITY_FIELD_MAP`, `kbMigrateLegacyBucket`, `mergeLatteParts`, `kbNormalizeImported`, `normalizeKbEntities`, `kbBucketFacts`, `renderKBMarkdown`, `AnkiGenerator`, `GizmoImporter`, `NCLEXGenerator`, `CaseStudyGenerator`).** Consolidates the overlapping 6-bucket LATTE schema into the 5-bucket **P-LATE** framework — `Patho`, `Look`, `Analyze`, `Treat` (`dependent` | `independent`), and `Educate` (`discharge` | `evaluate`) — routing standalone `medications` across all 5 buckets with Pharm-native Study View headings, updating hierarchical Anki/NCLEX tags (`Nursing::PLATE::*`, `PLATE::*`) while preserving legacy `Nursing::LATTE::*` compatibility, and automatically migrating saved or imported v15–v20 LATTE Knowledge Bases (`BriefPatho → Patho`, `Tests → Analyze`, `Treatments → Treat`, and `Assess → Look / Analyze / Treat / Educate` by clinical target) at load, import, and bucket-read time without data loss.
+- **User-approved targeted updates to 5 frozen prompt constants (`KB_EXTRACTION_PROMPT`, `KB_VERIFY_PROMPT`, `ANKI_MASTER_PROMPT`, `NCLEX_GEN_PROMPT`, `NCLEX_DISTRACTOR_RULES`).** Aligns the 4 P-LATE bucket/tag references across extraction, verification, Anki, and NCLEX generation, updates `NCLEX_DISTRACTOR_RULES` with named 4-Pillar clinical trap categories (`[Priority / First-Action Trap]`, `[Twin-Diagnosis Trap]`, `[Pharm / Lab Hold Trap]`, `[Further-Teaching / Context Trap]`), and updates `NCLEX_GEN_PROMPT` to recognize multi-timepoint `T0 → T1 → T2` trend stems inside `MCQ`/`SATA` CJMM tags (`docs/history/PLATE-v21.0-frozen-prompts.diff`; the other 6 frozen constants remain byte-identical).
+- **Subtype-balanced Case Study fact allocation (`selectCaseFacts`, `selectCaseFactsMulti`).** Rebalances single-condition (`3/12/12/12/8 = 47`: `Patho (3) · Look (12) · Analyze (12) · Treat (12) · Educate (8)`) and multi-entry (`4/12/12/12/8 = 48`) case caps, reserving subtype sub-quotas inside `Treat` (`dependent` vs. `independent`) and `Educate` (`discharge` vs. `evaluate`) so bedside physical cues, labs/diagnostics, pharm hold rules, discharge teaching, and NGN trend evaluation cues dominate unfolding EHR stages.
+- **P-LATE suite mark & navigation branding (`<title>`, `TOOLS`, `App` `.rail-brand`, `PriorityAnalyzer`).** Updates the top-left suite mark and title in-place from `[L] LATTE` to `[P] P-LATE Study Suite` (`v21.0`).
+
+### Fixed
+
+- **`CaseStudyGenerator` lazy-mount Temporal Dead Zone crash (`CaseStudyGenerator`, `cardFileId`, `PriorityAnalyzer`, `KnowledgeBaseBuilder`).** Moves `caseStudyRef.current = caseStudy` below `const [caseStudy, setCaseStudy] = useState(null)` so opening `06 · Case Studies` never throws `ReferenceError: can't access lexical declaration 'caseStudy' before initialization`, and guards module-level state identifiers inside extracted async handlers for standalone harness compatibility.
+
+### Verification
+
+- **14 new assertions (4,048 total)** across `tools/v21-0-plate-remediation-tests.js` and `tools/plate-bridge-tests.js` (exercising live `CaseStudyGenerator` hook-prefix initialization, `[P] P-LATE` branding + HESI®/ATI® legal notices, legacy 6-bucket to 5-bucket P-LATE migration + unmigrated `Assess` parity, multi-book `Saunders + Porth + Jarvis` attribution & acronym merging, Pharmacology `medications` 5-bucket P-LATE routing & Pharm-native Study View, Triple-E Study View rendering, RN/NP Bridge clinical-layer filtering across all downstream tools, `selectCaseFacts` / `selectCaseFactsMulti` `3/12/12/12/8` & `4/12/12/12/8` subtype quotas, approved frozen prompt rules, and runtime `NCLEX_PLATE_TRAP_RULES` / `CASE_SLOPE_SYNC_RULES` injection).
+- **Prompt bytes.** 5 user-approved frozen hashes updated (`docs/history/PLATE-v21.0-frozen-prompts.diff`); the other 6 frozen hashes are byte-identical. `Prompts.md` regenerated and verified across all 22 documented prompt constants.
+- **SRI.** All eight SRI-pinned scripts and both PDF worker copies were re-hashed against their CDNs and match.
+
+See the [release verification record](docs/reviews/v21.0-release.md).
+
 ## [20.3] — 2026-11-12
 
 Complete Hydrogen (`gemini-4-hydrogen`) model slot and profile cutover across all executable scripts and tooling, plus Production-Readiness Remediation Phases 1–10.

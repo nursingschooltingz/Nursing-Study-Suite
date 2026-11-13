@@ -243,7 +243,7 @@ module.exports = async function productionReviewFollowupTests(S, t) {
   t('priority: clearing notices resets source, harvest and truncation state',
     JSON.stringify(cleared) === JSON.stringify([['source', null], ['harvest', null], ['meta', null]]));
   t('priority: both early returns clear the notices before reporting the error',
-    /clearNotices\(\);setError\('Build the LATTE Knowledge Base first\.'\)/.test(S) &&
+    /clearNotices\(\);setError\('Build the P-LATE Knowledge Base first\.'\)/.test(S) &&
     /clearNotices\(\);setError\('The current Knowledge Base filters contain no facts/.test(S));
   const notice = new Function(span('function paResultNotice(', 'function PriorityAnalyzer(') + ';return paResultNotice;')();
   t('priority: a cleared notice renders nothing while a real one still renders',

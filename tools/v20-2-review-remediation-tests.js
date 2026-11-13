@@ -240,9 +240,9 @@ module.exports = async function runV202ReviewRemediationTests(S, t) {
     const once = N.normalizeKbEntities(badEntityKb);
     const twice = N.normalizeKbEntities(once.kb);
     t('v20.2 (Phase 3 — entity bucket coercion & idempotence): coerces invalid entity latteBucket values onto KB_FACT_BUCKETS and stays reference-idempotent on second pass',
-      once.kb.medications[0].facts[0].latteBucket === 'Treatments' &&
+      once.kb.medications[0].facts[0].latteBucket === 'Treat' &&
       once.kb.medications[0].facts[1].latteBucket === 'Educate' &&
-      once.kb.diagnostics[0].facts[0].latteBucket === 'Tests' &&
+      once.kb.diagnostics[0].facts[0].latteBucket === 'Analyze' &&
       once.report.factsRepaired === 3 &&
       twice.kb === once.kb);
 

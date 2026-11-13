@@ -251,7 +251,7 @@ module.exports = async function run(S, t) {
       !state.error &&
       state.diag.focus === null &&
       state.requests.length === 2 &&
-      state.requests[0].includes('CONCEPT-BASED CURRICULUM RULES (LATTE + P):') &&
+      state.requests[0].includes('CONCEPT-BASED CURRICULUM RULES (P-LATE):') &&
       state.requests[1].includes('# Perfusion [CONCEPT OVERVIEW]') &&
       state.requests[1].includes('# Heart Failure [Exemplar of Perfusion]') &&
       !!recoveredBnp && recoveredBnp.recovered === true && recoveredBnp.conceptScope === 'delta' &&
@@ -285,10 +285,10 @@ module.exports = async function run(S, t) {
     });
     t('v19.2: Study view renders Concept Overview banner and cited P — Baseline Physiology & Risk Factors bullets',
       md.includes('> **◆ Overarching Concept Overview**') &&
-      md.includes('### P — Baseline Physiology & Risk Factors (Brief Patho)\n- Adequate perfusion requires intact cardiac output and vascular tone.  \n  *Source: giddens.pdf, p. 10*'));
+      md.includes('### P — Baseline Physiology & Risk Factors (Patho)\n- Adequate perfusion requires intact cardiac output and vascular tone.  \n  *Source: giddens.pdf, p. 10*'));
     t('v19.2: Study view renders Exemplar Concept Bridge (P), sorts and flags Priority Differentiators first, and separates residual shared facts',
       md.includes('> **↳ Exemplar of Perfusion**') &&
-      md.includes('### P — Brief Patho (Concept Bridge → Perfusion)\n- Ventricular remodeling impairs contractility and stroke volume.  \n  *Source: giddens.pdf, p. 22*') &&
+      md.includes('### P — Pathophysiology & Hemodynamic Driver (Concept Bridge → Perfusion)\n- Ventricular remodeling impairs contractility and stroke volume.  \n  *Source: giddens.pdf, p. 22*') &&
       md.indexOf('**⚑ Priority Differentiator:** Pink frothy sputum') > 0 &&
       md.indexOf('**⚑ Priority Differentiator:** Pink frothy sputum') < md.indexOf('- Monitor daily weight before breakfast.') &&
       md.indexOf('- Monitor daily weight before breakfast.') < md.indexOf('*Shared with Perfusion:*\n- Check blood pressure and heart rate.'));
@@ -312,15 +312,15 @@ module.exports = async function run(S, t) {
       prioPerfusion.includes('## Perfusion [Concept Overview]') &&
       prioPerfusion.includes('## Heart Failure [Exemplar of Perfusion]') &&
       prioPerfusion.includes('## Peripheral Arterial Disease [Exemplar of Perfusion]') &&
-      prioPerfusion.includes('[KB f2; LATTE Assess; PRIORITY DIFFERENTIATOR; source-tier T1; c.pdf, p. 2]') &&
+      prioPerfusion.includes('[KB f2; PLATE Assess; PRIORITY DIFFERENTIATOR; source-tier T1; c.pdf, p. 2]') &&
       !prioPerfusion.includes('Asthma'));
 
     t('v19.2: NCLEX packet and ngBuildFactPool match parent concept filter across all exemplars and tag [Concept Overview], [Exemplar of ...], and [PRIORITY DIFFERENTIATOR] in ngFactRow',
       poolPerfusion.map(g => g.condition).join('|') === 'Perfusion|Heart Failure|Peripheral Arterial Disease' &&
       poolPerfusion[1].concept === 'Perfusion' &&
-      nclexPerfusion.includes('KBFACT f1 | CONDITION: Perfusion [Concept Overview] | LATTE: Assess [Shared Concept Baseline] | TIER: 1') &&
-      nclexPerfusion.includes('KBFACT f2 | CONDITION: Heart Failure [Exemplar of Perfusion] | LATTE: Assess [PRIORITY DIFFERENTIATOR] | TIER: 1') &&
-      nclexPerfusion.includes('KBFACT f3 | CONDITION: Peripheral Arterial Disease [Exemplar of Perfusion] | LATTE: Treatments | TIER: 1') &&
+      nclexPerfusion.includes('KBFACT f1 | CONDITION: Perfusion [Concept Overview] | PLATE: Assess [Shared Concept Baseline] | TIER: 1') &&
+      nclexPerfusion.includes('KBFACT f2 | CONDITION: Heart Failure [Exemplar of Perfusion] | PLATE: Assess [PRIORITY DIFFERENTIATOR] | TIER: 1') &&
+      nclexPerfusion.includes('KBFACT f3 | CONDITION: Peripheral Arterial Disease [Exemplar of Perfusion] | PLATE: Treatments | TIER: 1') &&
       !nclexPerfusion.includes('Asthma'));
   }
 
@@ -371,8 +371,8 @@ module.exports = async function run(S, t) {
 
     const packet = caseRenderFactPacket('Heart Failure', picked);
     t('v19.2: caseRenderFactPacket labels [PRIORITY DIFFERENTIATOR] and [SHARED PARENT CONCEPT] facts',
-      packet.includes('LATTE: Assess [PRIORITY DIFFERENTIATOR]') &&
-      packet.includes('LATTE: Tests [SHARED PARENT CONCEPT]'));
+      packet.includes('PLATE: Assess [PRIORITY DIFFERENTIATOR]') &&
+      packet.includes('PLATE: Tests [SHARED PARENT CONCEPT]'));
 
     // Verify validateCaseStudy accepts parent-concept fact IDs included in allowedFactIds for an exemplar case.
     const fi = new Map();
@@ -573,7 +573,7 @@ module.exports = async function run(S, t) {
       !plainPkt.includes('CONCEPT ROLE:') && !plainPkt.includes('| Scope:') &&
       conceptPkt.includes('CONCEPT ROLE: Overarching Concept Overview') &&
       conceptPkt.includes('CONCEPT ROLE: Exemplar of Gas Exchange | Interrelated: Acid-Base Balance') &&
-      conceptPkt.includes('FACT fact-3 | LATTE: Treatments | Scope: differentiator | Tier: 1'));
+      conceptPkt.includes('FACT fact-3 | PLATE: Treatments | Scope: differentiator | Tier: 1'));
 
     // Concept-family chunking: filler standalone condition first (~2200 chars), then Gas Exchange family (~1200 chars) with max=3000.
     // Without family grouping, Gas Exchange Overview would squeeze into chunk 1 and strand COPD/Asthma in chunk 2.
@@ -711,7 +711,7 @@ module.exports = async function run(S, t) {
       cov[0].diffCited === 2);
 
     t('v19.2 (1A/2C/3D): UI wires Concept Curriculum Audit panel, Anki concept/scope filter & CONCEPT SCOPE review pills, and NCLEX concept pills & Concept Blueprint Coverage',
-      S.includes('Concept Curriculum Audit (LATTE + P)') &&
+      S.includes('Concept Curriculum Audit (P-LATE)') &&
       S.includes('id="anki-condition-filter"') &&
       S.includes('id="anki-scope-mode"') &&
       S.includes('CONCEPT SCOPE:') &&

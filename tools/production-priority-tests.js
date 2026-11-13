@@ -145,7 +145,7 @@ module.exports=async function productionPriorityTests(S,t){
   const home=new Map();{let at='';for(const l of packet.split('\n')){if(l.startsWith('## '))at=l;else if(l.startsWith('- '))home.set(l,at);}}
   const underOwnHeading=chunks=>chunks.every(c=>{let at=null;return c.split('\n').every(l=>l.startsWith('## ')?(at=l,true):!l.startsWith('- ')||at===home.get(l));});
   const chunked=C.paChunkText(packet,2000,500),noOverlap=C.paChunkText(packet,2000,0),inChunks=(chunks,l)=>chunks.filter(c=>c.split('\n').includes(l)).length;
-  t('Priority chunks open with the packet preamble and keep every fact under its own condition heading',chunked.length>3&&chunked.every(c=>c.startsWith('STRUCTURED LATTE KNOWLEDGE BASE'))&&underOwnHeading(chunked)&&underOwnHeading(noOverlap));
+  t('Priority chunks open with the packet preamble and keep every fact under its own condition heading',chunked.length>3&&chunked.every(c=>c.startsWith('STRUCTURED P-LATE KNOWLEDGE BASE'))&&underOwnHeading(chunked)&&underOwnHeading(noOverlap));
   t('Priority chunks keep every fact line whole and within the chunk size',[...home.keys()].every(l=>inChunks(chunked,l)>0)&&chunked.every(c=>c.split('\n').filter(l=>l.startsWith('- ')).every(l=>home.has(l))&&c.length<=2000));
   t('Priority chunks never split a condition that fits',[...home.keys()].filter(l=>home.get(l)!=='## Beta').every(l=>inChunks(chunked,l)===1)&&new Set(chunked.map((c,i)=>c.includes('## Alpha')?i:-1).filter(i=>i>=0)).size===1);
   t('Priority overlap repeats only the continuing condition\'s facts',[...home.keys()].some(l=>inChunks(chunked,l)>1)&&[...home.keys()].every(l=>inChunks(chunked,l)===1||home.get(l)==='## Beta')&&[...home.keys()].every(l=>inChunks(noOverlap,l)===1));
@@ -171,7 +171,7 @@ module.exports=async function productionPriorityTests(S,t){
   const handlers=new Function('copyText','exportAsMd','exportOutput',S.slice(copyStart,copyEnd)+';return {copyOutput,downloadMd};')(x=>copied.push(x),(text,name)=>downloaded.push({text,name}),'Earlier source notice\nGuide');
   handlers.copyOutput();handlers.downloadMd();
   t('Priority Copy and Markdown export include the retained notice',copied[0]==='Earlier source notice\nGuide'&&downloaded[0].text===copied[0]);
-  t('Priority text and print export use the same noticed output',S.includes("exportAsTxt(exportOutput,'priority-analysis.txt')")&&S.includes("exportAsPdf(exportOutput,'Pyramid Priority Analysis','LATTE Knowledge Base')"));
+  t('Priority text and print export use the same noticed output',S.includes("exportAsTxt(exportOutput,'priority-analysis.txt')")&&S.includes("exportAsPdf(exportOutput,'Pyramid Priority Analysis','P-LATE Knowledge Base')"));
   const N=new Function(span('function kbSlug(','// v15.14: the class kept ASCII')+span('const KB_IMPORT_MAX_BYTES=','// ── Durable Knowledge Base persistence')+';return kbNormalizeImported;')();
   const restored=N(syntheticKB('A'),{restore:true});
   t('browser synthetic KB satisfies the actual saved-state normalizer',restored.kb.conditions[0].facts[0].text==='Fictional marker A is present.'&&Array.isArray(restored.kb.sources));

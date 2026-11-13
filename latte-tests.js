@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 4034;
+const EXPECTED_ASSERTIONS = 4048;
 
 let file;
 try {
@@ -258,11 +258,11 @@ t('v18.0: the app script asks Babel for the react preset only', S.split('type="t
   const md = RENDER({ conditions: [{ name: 'ICP', facts: [fact('Restless.', 'Look', 'early'), fact('Cushing triad.', 'Look', 'late'), fact('Nausea.', 'Look', null),
     fact('Float heels.', 'Treatments', 'independent'), fact('Give mannitol.', 'Treatments', 'dependent'), fact('Reposition q2h.', 'Treatments', null), fact('Teach at discharge.', 'Treatments', 'discharge')] }] });
   const section = (head, next) => md.slice(md.indexOf(head), md.indexOf(next, md.indexOf(head) + head.length));
-  t('v17.15: only dependent treatments print under Dependent / Collaborative Orders; acute, discharge and unlabelled ones get their own heading',
-    section('**Dependent / Collaborative Orders**', '**Other Treatments').includes('Give mannitol.') && !section('**Dependent / Collaborative Orders**', '**Other Treatments').includes('Reposition') &&
-    section('**Other Treatments', '### Educate').includes('Reposition q2h.') && section('**Other Treatments', '### Educate').includes('Teach at discharge.'));
+  t('v17.15: only dependent treatments print under Pharmacology / Provider Orders; independent, discharge and unlabelled ones get their own heading',
+    section('**1. Pharmacology, Hold Rules & Provider Orders**', '**2. Priority Bedside & Safe-Administration Actions**').includes('Give mannitol.') && !section('**1. Pharmacology, Hold Rules & Provider Orders**', '**2. Priority Bedside & Safe-Administration Actions**').includes('Reposition') &&
+    section('**Other Interventions', '### E — Educate').includes('Reposition q2h.') && section('**Other Interventions', '### E — Educate').includes('Teach at discharge.'));
   t('v17.15: findings staged neither early nor late sit under their own heading, not inside the LATE / EMERGENCY list',
-    !section('**LATE / EMERGENCY**', '**OTHER FINDINGS').includes('Nausea.') && section('**OTHER FINDINGS', '### Assess').includes('Nausea.'));
+    !section('**LATE / EMERGENCY**', '**OTHER FINDINGS').includes('Nausea.') && section('**OTHER FINDINGS', '### A — Analyze').includes('Nausea.'));
 }
 // v17.15 (review H10): a quote that starts or ends at a decimal point is a partial number.
 {
@@ -2450,7 +2450,7 @@ section('v15.17 — approved rollback, historical examples and replay evidence')
   t('candidate examples have no numeric findings against their fictional facts',notes.every(c=>ANKI.ankiNumericAudit(c,batch,true).findings.length===0));
   t('candidate examples have no identical rendered fronts',ANKI.ankiCollisionGroups(notes).length===0);
   t('candidate explicitly excluded fictional examples from source material',prompt.includes('fictional; never source material for the generated deck'));
-  t('shipped prompt contains the current approved Anki revision, not failed examples',!proposal.applied&&live!==proposal.original&&!S.includes(proposal.proposed)&&sha256(extractPromptLiteral(live,'ANKI_MASTER_PROMPT').body)==='007ebc2733f898a2c08b770b1d4b95c52e1eb66787d0325f944ddbdafa30f869');
+  t('shipped prompt contains the current approved Anki revision, not failed examples',!proposal.applied&&live!==proposal.original&&!S.includes(proposal.proposed)&&sha256(extractPromptLiteral(live,'ANKI_MASTER_PROMPT').body)==='90c0df24df8319c409e2205f79f48dd92e182c50f710983899c888b2624510f6');
   t('restored prompt and rejected candidate retain their measured hashes',sha256(extractPromptLiteral(historical,'ANKI_MASTER_PROMPT').body)==='353471cbee66c759341ad8f4d857fa75ea4051744a52771ce780fcf172efc548'&&sha256(extractPromptLiteral(proposal.proposed,'ANKI_MASTER_PROMPT').body)==='9d6c99229af067191df7b34d92c8ad98ff569870dd8f3be88634a5eb1a378b83');
   const replay=buildAnkiExampleProposal(proposal.proposed);
   t('diff remains reproducible from either side without mutating input',replay.applied&&replay.original===proposal.original&&replay.proposed===proposal.proposed);
@@ -2465,12 +2465,12 @@ section('v15.17 — approved rollback, historical examples and replay evidence')
 
 section('generation input pins and bounded pilot');
 {
-  // v16.6/v19.0/v19.2: approved exact canonical input tokens, [P#] stripping, numbered Points focus, Step 7 4-category adapter, and concept-curriculum + exam-trap Anki roles/scopes/traps have deliberate pins.
+  // v16.6/v19.0/v19.2/v21.0: approved exact canonical input tokens, [P#] stripping, numbered Points focus, Step 7 4-category P-LATE adapter, and concept-curriculum + exam-trap + RN/NP Bridge Anki roles/scopes/traps have deliberate pins.
   const inputs=[
-    ['source packet','function kbForAnki(kb){','// ── KB source chunking','c78e78f1d2c255c93a32f2f1b5ac9ae62a7483e8927d585832ad32f59cf65702'],
+    ['source packet','function kbForAnki(kb){','// ── KB source chunking','9cccabe86193d39a9be303b2d2db8546e1de47c5cc187f43f41fdba7244d4f9c'],
     ['chunking','function splitOversizedConditionBlock(block,max){','function ankiParseCards(raw','4103527206fc71cf27beb31f3fc1ccd09a19a759a684be053662b2a261fa4514'],
-    ['focus block','  function buildFocusBlock(){','  const run=useCallback(async()=>{','58f32216a66f2119a1c38451d110d70b82cb0b4417fb7db2a4c31cf87ae4f728'],
-    ['mapping adapter','        const kbAdapter=','        parts.push({text:ANKI_MASTER_PROMPT','8f5e846a8b92029198570b7110d595ecc89cefdb4f9a1bdbf005efc2dde67592']
+    ['focus block','  function buildFocusBlock(){','  const run=useCallback(async()=>{','d776c964656230e3d8bc235fa08a0136c3b2e973300220df084630e76ba36db6'],
+    ['mapping adapter','        const kbAdapter=','        parts.push({text:ANKI_MASTER_PROMPT','06df2de3c402e0dbac3d1cb327bec5b0a7b9ae9b88e7ab1bc3dc80350d6396ac']
   ];
   const {sha256}=require('./tools/repo-checks');
   for(const [name,start,end,hash] of inputs){const a=S.indexOf(start,name==='focus block'?S.indexOf('function AnkiGenerator()'):0),b=S.indexOf(end,a);t('generation input matches its approved pin: '+name,a>=0&&b>a&&sha256(S.slice(a,b).trim())===hash);}
@@ -2931,6 +2931,10 @@ section('v15.14 — clamps, backoff, storage');
 
   section('v20.2 Production-readiness remediation Phases 1–10');
   await require('./tools/v20-2-review-remediation-tests')(S,t);
+
+  section('v21.0 P-LATE 5-bucket cutover, TDZ guard, RN/NP Bridge firewall, and runtime trap/slope directives');
+  await require('./tools/v21-0-plate-remediation-tests')(S,t);
+  await require('./tools/plate-bridge-tests')(S,t);
 
   console.log('\n════════════════════════════');
   const total = pass + fail;

@@ -275,7 +275,7 @@ async function sourceTests(browser,report){
     assert.equal(await page.evaluate(()=>window.__remediation.state.artifactRegistry.caseStudies.length),0);
   });report('malformed case stays inspectable and exportable without crashing or invoking audit');
   await withFixture(browser,{indexed:A},async({page})=>{
-    await waitCourse(page,'A');await page.getByTitle('LATTE Anki Generator',{exact:true}).click();
+    await waitCourse(page,'A');await page.getByTitle('P-LATE Anki Generator',{exact:true}).click();
     await page.evaluate(()=>window.__remediation.queueGemini('```text\n[Synthetic] Marker: {{c1::present}}|Synthetic explanation|Nursing::LATTE::Look Condition::Synthetic Tier::1\n```\n```text\nfact-1 -> line #1\n```'));
     await page.getByRole('button',{name:'▶ Generate Cards',exact:true}).click();
     await page.waitForFunction(()=>document.querySelectorAll('.anki-tbl-wrap tbody tr').length===1);

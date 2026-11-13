@@ -17,7 +17,7 @@ async function test(browser,report=()=>{}){
   const checks=[],check=(name,value)=>{assert(value,name);checks.push(name);report(name);};
   await withFixture(browser,{indexed:syntheticKB('A')},async({page})=>{
     await waitForSyntheticKnowledge(page);
-    await page.getByTitle('LATTE Anki Generator',{exact:true}).click();
+    await page.getByTitle('P-LATE Anki Generator',{exact:true}).click();
     await page.evaluate(text=>window.__remediation.queueGemini(text),syntheticNotes());
     await page.getByRole('button',{name:'▶ Generate Cards',exact:true}).click();
     const table=page.getByRole('table',{name:'Editable Anki notes',exact:true}),rows=table.locator('tbody tr');

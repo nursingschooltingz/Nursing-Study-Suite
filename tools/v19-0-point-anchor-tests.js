@@ -152,7 +152,7 @@ module.exports = function runV190PointAnchorTests(S, t) {
     }]
   });
   t('kbForAnki strips residual [P#] tags from fact text before Anki generation',
-    ankiPacket.includes('FACT fact-1 | LATTE: Look | Tier: 1 | Prominent U waves on ECG. | Source: lecture.pdf, p. 1') &&
+    ankiPacket.includes('FACT fact-1 | PLATE: Look | Tier: 1 | Prominent U waves on ECG. | Source: lecture.pdf, p. 1') &&
     !ankiPacket.includes('[P1'));
 
   const parsedCards = H.ankiParseCards('```text\nThe hallmark ECG finding of hypokalemia is {{c1::prominent U waves}} [P1]. | Contrast with tall peaked T waves [P2, P3] | Condition::Hypokalemia Nursing::LATTE::Look Tier::1\n```\n```text\nfact-1 -> line #1\n```', 1, 'hierarchical-v1');
@@ -164,11 +164,11 @@ module.exports = function runV190PointAnchorTests(S, t) {
   // 8. Step 7 4-category Anki adapter contract
   const { extractPromptLiteral } = require('./repo-checks');
   const adapter = new Function(extractPromptLiteral(S, 'kbAdapter').declaration + ';return kbAdapter;')();
-  t('Anki kbAdapter enforces all 4 exam-testable LATTE categories, front-anchored clozes, closed sets, and priority grounding',
+  t('Anki kbAdapter enforces all 4 exam-testable P-LATE categories, front-anchored clozes, closed sets, and priority grounding',
     adapter.includes('1. Clinical Discriminators:') &&
     adapter.includes('2. Exact Numeric Parameters:') &&
     adapter.includes('3. Direct Clinical Associations:') &&
-    adapter.includes('4. Nursing Interventions & Patient Education (LATTE T & E):') &&
+    adapter.includes('4. Nursing Interventions & Patient Education (P-LATE T & E):') &&
     adapter.includes('Front-Anchored Clozes:') &&
     adapter.includes('Closed Sets vs. Open Symptom Lists:') &&
     adapter.includes("[Increased ICP] Cushing's triad (three classic findings):") &&
@@ -345,7 +345,7 @@ module.exports = function runV190PointAnchorTests(S, t) {
     citedWithProv === '"Hold digoxin if apical pulse < 60" — medsurg.pdf (p. 102) · Table 14-2 · printed p. 98' &&
     plainMd.includes('Range 5---10 mg') && plainMd.includes('\n---\n') &&
     pptxThrew &&
-    Array.isArray(schema.properties.latteBucket.enum) && schema.properties.latteBucket.enum.length === 6);
+    Array.isArray(schema.properties.latteBucket.enum) && schema.properties.latteBucket.enum.length === 5);
 
   // 13. Phase 3 edge-case hardening
   const idx = H.buildFactIndex({ conditions: [{ name: 'C', facts: [{ id: '', text: 'No ID' }, { id: 'fact-7', text: 'Has ID' }] }] });
@@ -357,7 +357,7 @@ module.exports = function runV190PointAnchorTests(S, t) {
     usageEmpty.anki.length === 0 &&
     H.getExt('README') === '' && H.getExt('.gitignore') === '' && H.getExt('deck.pptx') === 'pptx' &&
     pdfNegCoord === 'First Second' &&
-    mlPrio.includes('- Line 1 Line 2 [KB fact-1; LATTE Look; source-tier T1; a.pdf, p. 1]'));
+    mlPrio.includes('- Line 1 Line 2 [KB fact-1; PLATE Look; source-tier T1; a.pdf, p. 1]'));
 
   const admitQ12 = H.nclexAdmitRecord({ question_number: 'Q12', question: 'Stem?' });
   const admitHash = H.nclexAdmitRecord({ question_number: '#7', question: 'Stem?' });
@@ -522,7 +522,7 @@ module.exports = function runV190PointAnchorTests(S, t) {
     rationale: 'A. Wrong. B. Correct. C. Wrong. D. Wrong. ⚠ No answer for this question was found on the answer pages; this answer was written by the model. Check it against the book.'
   }, 'src', []);
   t('Phase 10: kbForAnki collapses embedded newlines, importJSON decouples abortRef, paParseTiers parses bold/label-italicized Audit footers, nclexAccumulate propagates answer_unmatched & diseases_conditions, n2aStripSources handles trailing period, and x2aSplitRationale/x2aBuildCard handle inline marks & unmatched trailer',
-    ankiMultiLine.includes('FACT fact-1 | LATTE: Look | Tier: 1 | Prominent U waves on 12-lead ECG. | Source: lecture.pdf, p. 1') &&
+    ankiMultiLine.includes('FACT fact-1 | PLATE: Look | Tier: 1 | Prominent U waves on 12-lead ECG. | Source: lecture.pdf, p. 1') &&
     S.includes("if(!kbConfirmReplace('Importing this file'))return;\n    // v19.0: do not bind abortRef to importJSON") &&
     boldAuditTiers && boldAuditTiers.audit === '1 items · 0 unverified · 0 inferred · 1/1 T1 rule-tagged' && !boldAuditTiers.strategy.includes('Audit') &&
     labelAuditTiers && labelAuditTiers.audit === '1 items · 0 unverified · 0 inferred · 1/1 T1 rule-tagged' &&

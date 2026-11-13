@@ -28,7 +28,8 @@ const safetyCode=span('const SAFETY_SETTINGS=[','// Single core for ALL Gemini t
 const shippedThinkingLevels=new Function(span('const THINKING_LEVELS=','const MODEL_ID_RE=')+';return THINKING_LEVELS;')();
 const generatorCode=span('function AnkiGenerator(){','  return <Workbench\n    setupLabel="Anki source and focus context"');
 // v17.3: the tools share one capped-log hook; compile the shipped hook against this fixture's scheduler.
-const cappedLogCode=span('function useCappedLog(','// ──── TOOL: Shared LATTE Knowledge Base ────');
+const cappedLogCode=span('function useCappedLog(','// ──── TOOL: Shared P-LATE Knowledge Base ────');
+if(!cappedLogCode.includes('return [logs,push,setLogs];'))throw Error('Missing capped-log tail');
 if(!generatorCode.includes('const liveAbbrev=useMemo(')||!generatorCode.includes('const exportTxt=useCallback('))throw Error('Missing full generator pre-JSX tail');
 const master=span('const ANKI_MASTER_PROMPT=`','function splitOversizedConditionBlock(');
 const appSetter=span('  const setKnowledgeBase=useCallback(value=>{','  const [persistenceStatus,setPersistenceStatus]=useState(\'loading\');');

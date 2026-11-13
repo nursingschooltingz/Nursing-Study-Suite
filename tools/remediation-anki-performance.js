@@ -20,7 +20,7 @@ async function measure(browser,count,mode){
   let result;
   await withFixture(browser,{indexed:syntheticKB('A')},async({page})=>{
     await waitForSyntheticKnowledge(page);
-    await page.getByTitle('LATTE Anki Generator',{exact:true}).click();
+    await page.getByTitle('P-LATE Anki Generator',{exact:true}).click();
     await page.evaluate(text=>window.__remediation.queueGemini(text),syntheticNotes(count,mode));
     const begin=await page.evaluate(()=>performance.now());await page.getByRole('button',{name:'▶ Generate Cards',exact:true}).click();
     // v16.7: pagination bounds mounted rows while generation and export retain the requested deck.

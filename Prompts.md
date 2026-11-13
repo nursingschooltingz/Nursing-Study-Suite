@@ -1,8 +1,8 @@
 # Nursing Study Suite — Prompt Library
 
-The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, the item-quality auditor, the NCLEX to Anki image reader, and the Import to Gizmo chunk formatter, **extracted verbatim from the shipped v20.3 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
+The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, the item-quality auditor, the NCLEX to Anki image reader, and the Import to Gizmo chunk formatter, **extracted verbatim from the shipped v21.0 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
 
-> **Coverage.** All 19 named prompt constants are represented from live HTML bytes. Eleven are byte-frozen; `CARD_TRANSCRIBE_PROMPT` is deliberately tunable but requires two transcription runs per card after an edit. `I2A_TRANSCRIBE_PROMPT` and `I2A_ANSWER_PROMPT` (NCLEX to Anki, v17.9) are copied from img2anki.py and are not frozen. `PRIORITY_ORDER_RULES` (v18.1), `KB_SOURCE_ANCHOR_RULES` (v19.0), `KB_CONCEPT_CURRICULUM_RULES` (v19.2), `KB_EXAM_TRAP_RULES` (v19.2), and `GIZMO_CONVERT_PROMPT` (Import to Gizmo, v19.2) are not frozen; harness assertions keep them in step with their workflows. The generated appendix is maintained by `node tools/render-prompts.js --write` and checked by `node verify-repo.js`.
+> **Coverage.** All 22 named prompt constants are represented from live HTML bytes. Eleven are byte-frozen (with user-approved v21.0 updates to five constants recorded in `docs/history/PLATE-v21.0-frozen-prompts.diff`); `CARD_TRANSCRIBE_PROMPT` is deliberately tunable but requires two transcription runs per card after an edit. `I2A_TRANSCRIBE_PROMPT` and `I2A_ANSWER_PROMPT` (NCLEX to Anki, v17.9) are copied from img2anki.py and are not frozen. `PRIORITY_ORDER_RULES` (v18.1), `KB_SOURCE_ANCHOR_RULES` (v19.0), `KB_CONCEPT_CURRICULUM_RULES` (v19.2), `KB_EXAM_TRAP_RULES` (v19.2), `GIZMO_CONVERT_PROMPT` (Import to Gizmo, v19.2), `KB_PLATE_BRIDGE_RULES` (v21.0), `NCLEX_PLATE_TRAP_RULES` (v21.0), and `CASE_SLOPE_SYNC_RULES` (v21.0) are not frozen; harness assertions keep them in step with their workflows. The generated appendix is maintained by `node tools/render-prompts.js --write` and checked by `node verify-repo.js`.
 
 How to read them: text inside `${...}` is filled in at runtime by the app (your settings, your Knowledge Base, the current chunk). The Priority, Case, and audit prompts are shown as their complete builder functions because the assembly logic is part of the design.
 
@@ -65,8 +65,8 @@ JSON SHAPE:
     "aliases":["string"],
     "facts":[{
       "text":"string",
-      "latteBucket":"BriefPatho|Look|Assess|Tests|Treatments|Educate",
-      "subtype":"early|late|independent|dependent|acute|discharge|null",
+      "latteBucket":"Patho|Look|Analyze|Treat|Educate",
+      "subtype":"early|late|independent|dependent|acute|discharge|evaluate|null",
       "factType":"mechanism|symptom|assessment|test|medication|intervention|education|threshold|contraindication|other",
       "safetyCritical":false,
       "tier":1,
@@ -88,35 +88,31 @@ PHASE 0 — INPUT HANDLING
 
 - Clean repeated headers, footers, page numbers, offsets, citation markers, and artifact text internally.
 - If duplicate content appears, keep it once unless the duplicate adds meaningful differences.
-- Preserve the order of first appearance within each condition and LATTE bucket.
+- Preserve the order of first appearance within each condition and P-LATE bucket.
 - Separate combined conditions. Do not invent diseases, values, thresholds, or missing facts.
 
-PHASE 1 — LATTE ASSIGNMENT
+PHASE 1 — P-LATE ASSIGNMENT
 
-Before returning JSON, assign every extractable fact to exactly one LATTE bucket.
+Before returning JSON, assign every extractable fact to exactly one P-LATE bucket (stored in "latteBucket").
 
-BriefPatho = disease mechanism, etiology, classification, what is going wrong
-Look = signs, symptoms, complaints, red flags, deterioration signs, observable side effects
-Assess = what the nurse assesses, checks, asks, inspects, trends, monitors, sequences
-Tests = labs, imaging, diagnostics, values, ranges, units, interpretations
-Treatments = medications, doses, routes, timing, interventions, procedures, safety steps, contraindications, precautions, hold/notify thresholds
-Educate = patient/family teaching, discharge teaching, home management, follow-up, when to seek care
+Patho = disease mechanism, hemodynamic or cellular driver, etiology, classification, drug class, or source-stated drug mechanism of action
+Look = bedside signs, subjective symptoms, physical exam findings, red flags, deterioration cues, and observable adverse or toxic effects (everything seen, heard, palpated, or percussed on the client)
+Analyze = laboratory values, therapeutic drug levels, imaging, ECG/telemetry findings, diagnostic procedures, ranges, units, and diagnostic interpretations or confounders
+Treat = medications, doses, routes, timing, hold/notify parameters, contraindications, antidotes (subtype "dependent"), and priority bedside nursing interventions, positioning, procedures, or pre-administration checks (subtype "independent")
+Educate = patient/family discharge teaching, home self-management, follow-up, when to seek care (subtype "discharge"), and expected vs worsening clinical outcome evaluation criteria (subtype "evaluate")
 
-Every fact must belong to exactly one LATTE bucket. If a sentence spans multiple buckets, split it into separate atomic facts.
+Every fact must belong to exactly one P-LATE bucket. If a sentence spans multiple buckets, split it into separate atomic facts.
 
-Look vs Assess:
-- Look = what is present.
-- Assess = what the nurse does.
+Look vs Analyze (strict zero-overlap boundary):
+- Look = bedside signs, symptoms, and physical exam findings on the client (never lab values, imaging, or ECG strips).
+- Analyze = laboratory values, drug levels, imaging, ECG/telemetry strips, and diagnostic tests (never bedside physical exam findings).
 
 Quick bucket rules:
-- drug mechanism of action stated in the source -> Treatments
-- disease cause or etiology -> BriefPatho
-- disease subtype or classification -> BriefPatho
-- side effects and findings -> Look
-- assessment actions -> Assess
-- labs, values, ranges, and diagnostic interpretations -> Tests
-- medications, interventions, precautions, and hold parameters -> Treatments
-- home and discharge teaching -> Educate
+- disease cause, etiology, classification, drug class, or drug mechanism of action stated in the source -> Patho
+- bedside signs, symptoms, physical exam findings, and adverse effects -> Look
+- labs, therapeutic levels, imaging, ECG/telemetry, and diagnostic interpretations -> Analyze
+- medications, antidotes, precautions, hold/notify parameters, and priority bedside nursing actions -> Treat
+- home/discharge teaching and clinical outcome evaluation criteria -> Educate
 
 PHASE 1.25 — FAST-REVIEW LANGUAGE
 
@@ -187,7 +183,7 @@ Assignment safeguards:
 FINAL VALIDATION BEFORE RETURNING JSON
 
 Silently verify:
-- every fact belongs to exactly one valid LATTE bucket
+- every fact belongs to exactly one valid P-LATE bucket
 - no fact lost a clinically meaningful qualifier
 - combined conditions were split
 - every fact has one tier
@@ -212,8 +208,8 @@ JSON SHAPE:
 {"missed":[{
   "conditionName":"string — the condition/topic this fact belongs to, matching the source's own naming",
   "text":"string",
-  "latteBucket":"BriefPatho|Look|Assess|Tests|Treatments|Educate",
-  "subtype":"early|late|independent|dependent|acute|discharge|null",
+  "latteBucket":"Patho|Look|Analyze|Treat|Educate",
+  "subtype":"early|late|independent|dependent|acute|discharge|evaluate|null",
   "factType":"mechanism|symptom|assessment|test|medication|intervention|education|threshold|contraindication|other",
   "safetyCritical":false,
   "tier":1,
@@ -276,7 +272,7 @@ SYSTEM / ROLE
 
 You are an elite Medical Education Specialist, Nursing Clinical Instructor, and Anki Expert. Your task is to convert the provided PDF text into high-quality Anki cloze notes for a nursing student.
 
-Use the Straight A Nursing LATTE Method as the deck's organizational and tagging framework, but optimize each note for fast Anki review, not for textbook-style presentation.
+Use the P-LATE (Patho · Look · Analyze · Treat · Educate) framework as the deck's organizational and tagging framework, but optimize each note for fast Anki review, not for textbook-style presentation.
 
 Your output must be:
 
@@ -323,7 +319,7 @@ PDF-grounded accuracy
 Zero-skip coverage of substantive details
 Atomic recall speed
 Clear condition/topic anchoring
-LATTE organization in tags and sorting
+P-LATE organization in tags and sorting
 Elegance of wording
 
 If a more elegant or more structured card is slower to review, choose the faster card.
@@ -387,7 +383,7 @@ Text Field Rule
 Prefer this front structure: [Condition / Topic] Specific retrieval label: prompt with cloze.
 Use the same source-supported condition name and the same label for the same clinical axis across related notes.
 Prefer specific labels such as Key presentation:, Assessment:, Diagnostic finding:, Treatment:, Hold parameter:, Teaching:, or Mechanism:. Use a more specific label when it makes the target clearer, such as Rash progression:.
-These are retrieval cues, not mandatory visible LATTE headers; LATTE assignment remains in tags.
+These are retrieval cues, not mandatory visible P-LATE headers; P-LATE assignment remains in tags.
 Omit or change the anchor when naming the condition/topic would reveal the answer being tested. Do not add redundant cues to an already self-contained stem.
 Text Field Style
 
@@ -422,19 +418,18 @@ TAGGING RULES
 
 Every note must include:
 
-One LATTE domain tag:
+One P-LATE domain tag:
 
-Nursing::LATTE::BriefPatho
-Nursing::LATTE::Look
-Nursing::LATTE::Assess
-Nursing::LATTE::Tests
-Nursing::LATTE::Treatments
-Nursing::LATTE::Educate
+Nursing::PLATE::Patho
+Nursing::PLATE::Look
+Nursing::PLATE::Analyze
+Nursing::PLATE::Treat
+Nursing::PLATE::Educate
 
 One clinical-topic subtag when applicable:
 
-Example: Nursing::LATTE::Tests::Labs
-Example: Nursing::LATTE::Treatments::Meds
+Example: Nursing::PLATE::Analyze::Labs
+Example: Nursing::PLATE::Treat::Meds
 
 One condition/topic tag:
 
@@ -462,7 +457,7 @@ Do NOT omit Tier 3 content — still extract it. Tiering is for study prioritiza
 Tag Integrity
 
 no spaces inside tags
-keep LATTE domain tag no matter what
+keep P-LATE domain tag no matter what
 if tags become too long, drop optional subtags first
 keep all tags on one line
 
@@ -471,13 +466,12 @@ NOTE SORT ORDER
 Sort notes:
 
 by Condition/Topic
-then by LATTE bucket in this order:
+then by P-LATE bucket in this order:
 
-Brief Patho
+Patho
 Look
-Assess
-Tests
-Treatments
+Analyze
+Treat
 Educate
 then by order of appearance in the PDF within each bucket
 
@@ -530,34 +524,30 @@ The only special syntax allowed in output is:
 :: in tags
 optional short bracketed context cues
 
-PHASE 1 — LATTE ASSIGNMENT
+PHASE 1 — P-LATE ASSIGNMENT
 
-Before writing notes, assign each extractable fact to exactly one LATTE bucket.
-LATTE Definitions
+Before writing notes, assign each extractable fact to exactly one P-LATE bucket.
+P-LATE Definitions
 
-Brief Patho = disease mechanism, etiology, classification, what is going wrong
-Look = signs, symptoms, complaints, red flags, deterioration signs, observable side effects
-Assess = what the nurse assesses, checks, asks, inspects, trends, monitors, sequences
-Tests = labs, imaging, diagnostics, values, ranges, units, interpretations
-Treatments = medications, doses, routes, timing, interventions, procedures, safety steps, contraindications, precautions, hold/notify thresholds
-Educate = patient/family teaching, discharge teaching, home management, follow-up, when to seek care
+Patho = disease mechanism, hemodynamic or cellular driver, etiology, classification, drug class, or source-stated drug mechanism of action
+Look = bedside signs, subjective symptoms, physical exam findings, red flags, deterioration cues, and observable adverse or toxic effects (what is seen, heard, palpated, or percussed on the client)
+Analyze = labs, therapeutic drug levels, imaging, ECG/telemetry findings, diagnostics, values, ranges, units, and diagnostic interpretations or confounders
+Treat = medications, doses, routes, timing, antidotes, hold/notify parameters, contraindications, precautions, and priority bedside nursing interventions or pre-administration checks
+Educate = patient/family teaching, discharge teaching, home self-management, follow-up, when to seek care, and expected vs worsening clinical outcome evaluation criteria
 Rule
 
-Every note must belong to exactly one LATTE bucket. If a sentence spans multiple buckets, split it.
-Look vs Assess
+Every note must belong to exactly one P-LATE bucket. If a sentence spans multiple buckets, split it.
+Look vs Analyze
 
-Look = what is present
-Assess = what the nurse does
+Look = bedside signs, symptoms, and physical exam findings on the client
+Analyze = laboratory values, drug levels, imaging, ECG/telemetry strips, and diagnostic tests
 Quick Bucket Rules
 
-drug MOA stated in PDF -> Treatments
-disease cause/etiology -> Brief Patho
-disease subtype/classification -> Brief Patho
-side effects/findings -> Look
-assessment actions -> Assess
-labs/values/ranges -> Tests
-meds/interventions/hold parameters -> Treatments
-home teaching -> Educate
+disease cause/etiology, classification, drug class, or drug MOA stated in PDF -> Patho
+bedside signs, symptoms, physical exam findings, and adverse effects -> Look
+labs/levels/imaging/ECG/diagnostic values and interpretations -> Analyze
+meds/antidotes/bedside interventions/hold parameters -> Treat
+home teaching and outcome evaluation criteria -> Educate
 
 PHASE 1.25 — GEMINI FAST-REVIEW STYLE RULE
 
@@ -686,27 +676,22 @@ Do not waste notes on filler or decorative overviews.
 
 You may create at most 2 overview/scaffolding notes per major section, and only if they contain a real testable contrast or organizing concept.
 
-PHASE 3 — EXHAUSTIVE EXTRACTION BY LATTE
-Brief Patho
+PHASE 3 — EXHAUSTIVE EXTRACTION BY P-LATE
+Patho
 
-Extract every disease mechanism, etiology, and classification explicitly given.
+Extract every disease mechanism, hemodynamic/cellular driver, etiology, classification, drug class, and drug MOA explicitly given in the PDF.
 Look
 
-Extract every sign, symptom, complaint, red flag, deterioration sign, and observable medication effect.
-Assess
+Extract every bedside sign, symptom, complaint, physical exam finding, red flag, deterioration cue, and observable adverse or toxic medication effect.
+Analyze
 
-Extract every nursing assessment action, including what to assess, how to assess, what to trend, and timing/frequency if stated.
-Tests
+Extract every lab, therapeutic drug level, diagnostic test, imaging or ECG/telemetry finding, exact value, threshold, range, unit, and stated diagnostic interpretation or confounder.
+Treat
 
-Extract every lab, diagnostic test, imaging finding, exact value, threshold, range, unit, and stated interpretation.
-Treatments
-
-Extract every medication, route, dose, frequency, timing, intervention, procedure, sequence, protocol, safety step, contraindication, precaution, hold parameter, and notify threshold.
-
-Drug MOA belongs here only if explicitly stated in the PDF.
+Extract every medication, route, dose, frequency, timing, antidote, bedside nursing intervention, procedure, sequence, protocol, pre-administration check, safety step, contraindication, precaution, hold parameter, and notify threshold.
 Educate
 
-Extract every patient/family teaching point, discharge instruction, self-management point, follow-up instruction, and "when to call/seek care" trigger.
+Extract every patient/family teaching point, discharge instruction, self-management point, follow-up instruction, "when to call/seek care" trigger, and clinical outcome evaluation criterion.
 
 PHASE 3.5 — EXTRA FIELD RULES (LEAN BY DEFAULT)
 
@@ -714,7 +699,7 @@ Default Extra to empty.
 Populate it only with a useful explanation or contrast explicitly stated in the supplied source and not already conveyed by Text.
 Do not fill an otherwise empty Extra with generic captions, restatements, or inferred nursing explanations.
 Keep supporting mechanisms and explanations here, after answer reveal, when the supplied source states them. Do not invent a why when the source gives none.
-If a mechanism is itself a substantive testable fact, also give it a dedicated recall note in its appropriate LATTE bucket; mentioning it only in Extra does not replace testing it.
+If a mechanism is itself a substantive testable fact, also give it a dedicated recall note in its appropriate P-LATE bucket; mentioning it only in Extra does not replace testing it.
 For confusable pairs, prefer one brief source-supported contrast in Extra or a dedicated comparison note. Both sides must be supported by the supplied facts. Do not put a visible opposite answer on the front when it gives away the hidden target; do not force two unrelated answers into one review card.
 Default Extra Style
 
@@ -775,9 +760,9 @@ every patient education point
 every hold parameter
 every notify threshold
 every named condition/topic needed for tagging/sorting
-LATTE Completeness Check
+P-LATE Completeness Check
 
-For each named condition/topic, create at least one note in every LATTE bucket where the PDF provides content.
+For each named condition/topic, create at least one note in every P-LATE bucket where the PDF provides content.
 
 Do not invent notes for empty buckets.
 Coverage Calibration
@@ -794,8 +779,8 @@ PHASE 5 — PRE-OUTPUT AUDIT
 Before outputting, internally confirm:
 
 all substantive items were captured
-every note is in the correct LATTE bucket
-Look and Assess are not conflated
+every note is in the correct P-LATE bucket
+Look and Analyze are not conflated
 wording is fast and punchy
 no "name all" cards remain
 no near-duplicate templates remain
@@ -823,7 +808,7 @@ FINAL GATE (MUST PASS)
 Before output, internally confirm:
 
 Coverage: all drugs, values, units, contraindications, precautions, monitoring parameters, adverse effects, red flags, education points, hold parameters, notify thresholds, and key qualifiers are represented.
-LATTE accuracy: correct bucket assignment; Look vs Assess kept distinct.
+P-LATE accuracy: correct bucket assignment; Look vs Analyze kept distinct.
 Atomicity: notes are fast, specific, and not overloaded.
 Cloze correctness: max 3 unique cloze numbers; each cloze is uniquely answerable.
 Deduping: no repetitive template spam.
@@ -834,7 +819,7 @@ Specificity: shortened wording did not remove the context needed for one uniquel
 
 CRITICAL REMINDERS
 
-LATTE belongs in tags and organization first. Prefer consistent condition/topic anchors and specific retrieval labels without revealing the answer.
+P-LATE belongs in tags and organization first. Prefer consistent condition/topic anchors and specific retrieval labels without revealing the answer.
 One independently gradable clinical target per review card; one source fact may require several notes.
 A ledger link records source support, not complete recall coverage. Verify each planned target's hidden destination after shortening, splitting or combining notes.
 Never drop list items.
@@ -1286,6 +1271,9 @@ PART 2 — SELECTION & AUDIT  (generate BEFORE Part 3)
   Tag what the QUESTION ASKS, not what the content is about.
     · "best indicator of / is it working / did it happen"   → Evaluate Outcomes
     · "which statement indicates understanding"              → Evaluate Outcomes
+    · multi-timepoint T0 → T1 → T2 trend stems asking what a trajectory shift means or
+      whether the client is improving vs. deteriorating      → Analyze Cues or
+      Evaluate Outcomes (match whether T1 → T2 follows an intervention)
     · "what should the nurse teach / do / prioritize"        → Take Action or
       Generate Solutions — NOT Evaluate Outcomes, even if the content is preventive.
   Do NOT relabel a Take Action question as Evaluate Outcomes to satisfy the skill
@@ -1326,7 +1314,9 @@ Format exactly:
      question — irrelevant detail degrades clarity and can introduce bias.
      Use real NCLEX phrasing: "requires immediate intervention," "should the nurse
      prioritize," "indicates the client understands," "requires intervention by the
-     nurse."
+     nurse." Multi-timepoint T0 → T1 → T2 trend stems (velocity or trajectory shifts
+     across serial assessments or labs) are encouraged inside MCQ and SATA items when
+     grounded by the source.
      Prohibited: "all of the above," "none of the above," and negatively constructed
      stems — "which is NOT," "all are correct EXCEPT," "least likely."
      ("Requires intervention" and "requires follow-up" are standard false-response
@@ -1404,7 +1394,7 @@ Format exactly:
      Why C is wrong: [1 sentence] (Source: C3)
      Why D is wrong: [1 sentence] (Source: C9)
      Strategy: [see strategy test below]
-     Tags: NCLEX::SafetyInfectionControl | LATTE::Treatments | Tier 1 | Take Action
+     Tags: NCLEX::SafetyInfectionControl | PLATE::Treat | Tier 1 | Take Action
 
 ANCHOR CITATION RULE — every "Why" line carries the C-number of the anchor it traces to.
 Quote the verbatim anchor IN FULL for the CORRECT answer only. For distractors, the
@@ -1428,9 +1418,10 @@ explanation. Ask: would this tip help on a DIFFERENT question about a DIFFERENT 
          the Why lines.
 If your tip contains the word "memorize," rewrite it.
 
-LATTE SECONDARY TAG — map to exactly one of: BriefPatho | Look | Assess | Tests |
-Treatments | Educate. (Isolation precautions and nursing interventions = Treatments.
-Patient teaching = Educate. Diagnostic findings = Tests. Observed signs = Look.)
+PLATE SECONDARY TAG — map to exactly one of: Patho | Look | Analyze | Treat |
+Educate. (Medications, hold rules, isolation precautions, and bedside nursing
+interventions = Treat. Patient teaching and outcome evaluation = Educate. Labs,
+imaging, and ECG/diagnostics = Analyze. Bedside signs and physical exam = Look.)
 This preserves cross-filtering with existing Anki decks.
 
 
@@ -1534,17 +1525,17 @@ Never end mid-question or mid-rationale.
 ═══════════════════════════════════════════════
 
 ═══ SOURCE TYPE NOTE ═══
-The source may be a raw textbook or lecture PDF, OR a LATTE-formatted study guide
-(organized by Brief Patho / Look / Assess / Tests / Treatments / Educate, often with
-supplemental reference tables).
+The source may be a raw textbook or lecture PDF, OR a P-LATE (or legacy LATTE) study guide
+(organized by Patho / Look / Analyze / Treat / Educate, often with supplemental reference
+tables).
 
-If the source is a LATTE-formatted guide:
-- Its LATTE section headers are a reliable guide for the LATTE secondary tag — use them.
+If the source is a P-LATE or LATTE guide:
+- Its P-LATE section headers are a reliable guide for the PLATE secondary tag — use them.
 - Its bolded/flagged safety content, "CRITICAL" callouts, and numbered priority
   sequences are your Tier 1 signals.
 - Its supplemental tables (pharmacology, diagnostics, scoring tools, formulas) are the
   richest source of calculation and pharmacology questions — mine them deliberately.
-- A LATTE guide is already condensed, so nearly every line is a testable concept. Log
+- A structured guide is already condensed, so nearly every line is a testable concept. Log
   aggressively; the inventory floor of 25 should be easy to exceed.
 
 Either way, the ANCHOR RULE is unchanged: every option must trace to verbatim source text.
@@ -1835,11 +1826,11 @@ true but absent from the supplied facts makes the question unanswerable from the
 ### `NCLEX_DISTRACTOR_RULES` (810 chars)
 
 ````text
-DISTRACTOR RULES — every wrong answer must be ONE of these, built FROM THE SUPPLIED FACTS:
-  · A correct action for a DIFFERENT condition or context in the facts
-  · A partially correct action that is not the priority
-  · A misconception the facts explicitly correct
-  · A true fact that does not answer the question actually asked
+DISTRACTOR RULES — every wrong answer must be ONE of these 4-Pillar clinical traps, built FROM THE SUPPLIED FACTS:
+  · [Priority / First-Action Trap] — a valid action for this condition that is not the immediate priority
+  · [Twin-Diagnosis Trap] — a correct action or finding for a look-alike condition or opposite phase in the facts
+  · [Pharm / Lab Hold Trap] — an action or prescription made unsafe by a stated hold parameter, lab, vital sign, or contraindication in the facts
+  · [Further-Teaching / Context Trap] — a patient misconception the facts explicitly correct, or a true fact that fails to answer the question asked
 CONTEXTUAL PLAUSIBILITY: A distractor must be plausible IN THE STEM'S CONTEXT, not merely
 present somewhere in the facts. Ask: would a real nurse or patient in THIS scenario plausibly
 say or do this? Prefer distractors drawn from the same condition, or ones a genuinely confused
@@ -2087,30 +2078,104 @@ const KB_SOURCE_ANCHOR_RULES=`SOURCE & ANCHOR RULES:
 5. Zero-Tolerance Exclusion List: Never extract epidemiological statistics (incidence, prevalence, mortality percentages), historical background, cost-of-care data, general wellness platitudes, or universal nursing actions (hand hygiene, emotional support, routine documentation, generic "educate the patient").`;
 ````
 
-### `KB_CONCEPT_CURRICULUM_RULES` (2,642 source chars; tunable; v20.0 concept-curriculum LATTE + P rules appended by kbBuildFocusBlock)
+### `KB_CONCEPT_CURRICULUM_RULES` (2,640 source chars; tunable; v20.0 concept-curriculum P-LATE rules appended by kbBuildFocusBlock)
 
-SHA-256 of the raw template-literal body: `948b329c3f451388799186cd1d5adcb77475674c6d6eaff143ebe07de276868c`
+SHA-256 of the raw template-literal body: `a242b12a2c2fd23dc5a7cfa6ebe6e5848ddfc23a31751e6168e314d9a41a50c0`
 
 ````js
-const KB_CONCEPT_CURRICULUM_RULES=`CONCEPT-BASED CURRICULUM RULES (LATTE + P):
-1. Master Concept Overview ("entryRole": "concept"): Represent each overarching physiological or nursing concept covered in this chunk (e.g., Perfusion, Gas Exchange, Intracranial Regulation) as its own entry in "conditions" with "entryRole": "concept". Place baseline physiology and universal risk factors under "BriefPatho", and place shared assessment cues, diagnostics, nursing interventions, and patient teaching that apply across the concept's exemplars onto this master concept entry with fact field "conceptScope": "shared".
-2. Hidden "P" Concept Bridge ("entryRole": "exemplar"): Give every specific disease or clinical exemplar under an overarching concept "entryRole": "exemplar" and "concept": "<Exact Parent Concept Name>". Keep "BriefPatho" populated with source-supported pathophysiology facts that bridge how this exemplar disrupts or alters the parent concept's baseline physiology. When the source explicitly connects an exemplar or concept to one or more interrelated physiological concepts (e.g., Left Heart Failure under Perfusion impairing Gas Exchange), include "relatedConcepts": ["<Secondary Concept Name>"]. When a standalone medication, diagnostic, or scoring-tool entry belongs to one overarching concept in this chunk, include "concept": "<Exact Parent Concept Name>" on that entry as well.
-3. Exemplar Deltas Only ("conceptScope": "delta"): Under an exemplar's Look, Assess, Tests, Treatments, and Educate buckets, record ONLY what deviates from or specializes the parent concept — hallmark cues, confirmatory diagnostics, targeted medications/procedures, and exemplar-specific red flags — tagged "conceptScope": "delta". Route universal/shared cues and routine concept-level nursing care to the parent concept entry ("conceptScope": "shared") instead of repeating them on every exemplar. During a second-pass omission audit, treat shared facts already recorded under the parent concept entry as covered rather than omitted from each exemplar; if recovering a missed fact, set "conditionName" to the parent concept name for shared concept facts or to the exemplar name for exemplar-specific facts.
-4. Flag Priority Differentiators ("conceptScope": "differentiator"): Under an exemplar's "Assess" and "Treatments" buckets, when the source identifies a hallmark life-threatening complication, critical assessment cue, or first/priority bedside action that distinguishes this exemplar from sibling exemplars of the same concept, set "conceptScope": "differentiator" (instead of "delta"). Never invent a priority ranking or differentiator that the source does not support.`;
+const KB_CONCEPT_CURRICULUM_RULES=`CONCEPT-BASED CURRICULUM RULES (P-LATE):
+1. Master Concept Overview ("entryRole": "concept"): Represent each overarching physiological or nursing concept covered in this chunk (e.g., Perfusion, Gas Exchange, Intracranial Regulation) as its own entry in "conditions" with "entryRole": "concept". Place baseline physiology and universal risk factors under "Patho", and place shared bedside cues, diagnostics, nursing interventions, and patient teaching/evaluation that apply across the concept's exemplars onto this master concept entry with fact field "conceptScope": "shared".
+2. Hidden "P" Concept Bridge ("entryRole": "exemplar"): Give every specific disease or clinical exemplar under an overarching concept "entryRole": "exemplar" and "concept": "<Exact Parent Concept Name>". Keep "Patho" populated with source-supported pathophysiology facts that bridge how this exemplar disrupts or alters the parent concept's baseline physiology. When the source explicitly connects an exemplar or concept to one or more interrelated physiological concepts (e.g., Left Heart Failure under Perfusion impairing Gas Exchange), include "relatedConcepts": ["<Secondary Concept Name>"]. When a standalone medication, diagnostic, or scoring-tool entry belongs to one overarching concept in this chunk, include "concept": "<Exact Parent Concept Name>" on that entry as well.
+3. Exemplar Deltas Only ("conceptScope": "delta"): Under an exemplar's Look, Analyze, Treat, and Educate buckets, record ONLY what deviates from or specializes the parent concept — hallmark cues, confirmatory diagnostics, targeted medications/procedures, and exemplar-specific red flags — tagged "conceptScope": "delta". Route universal/shared cues and routine concept-level nursing care to the parent concept entry ("conceptScope": "shared") instead of repeating them on every exemplar. During a second-pass omission audit, treat shared facts already recorded under the parent concept entry as covered rather than omitted from each exemplar; if recovering a missed fact, set "conditionName" to the parent concept name for shared concept facts or to the exemplar name for exemplar-specific facts.
+4. Flag Priority Differentiators ("conceptScope": "differentiator"): Under an exemplar's "Look", "Analyze", and "Treat" buckets, when the source identifies a hallmark life-threatening complication, critical exam/lab differentiator, or first/priority bedside action that distinguishes this exemplar from sibling exemplars of the same concept, set "conceptScope": "differentiator" (instead of "delta"). Never invent a priority ranking or differentiator that the source does not support.`;
 ````
 
-### `KB_EXAM_TRAP_RULES` (5,312 source chars; tunable; v20.0 HESI/ATI/NGN Exam Trap mapping rules appended by kbBuildFocusBlock)
+### `KB_EXAM_TRAP_RULES` (5,307 source chars; tunable; v20.0 HESI/ATI/NGN Exam Trap mapping rules appended by kbBuildFocusBlock)
 
-SHA-256 of the raw template-literal body: `cb562ef559a6af7a1122930def59001904647b8fdd27940a15fa25e1153c27bd`
+SHA-256 of the raw template-literal body: `57cffbb60304cc52326fa0ecbbc098626830120e3155a98c0f75c0ddb5b754bd`
 
 ````js
 const KB_EXAM_TRAP_RULES=`EXAM TRAP MAPPING RULES (HESI / ATI / NGN):
 1. Twin-Diagnosis, Compensation-State & Artifact Contrast ("trapRole": "twin-cue" | "twin-rx-opposite", "contrastWith", "contrastPartners"): When the source contrasts look-alike mirror conditions (e.g., SIADH vs. Diabetes Insipidus, DKA vs. HHS, hyperkalemia vs. hypokalemia, left- vs. right-sided heart failure), acute-vs-chronic compensation states (e.g., acute uncompensated respiratory acidosis vs. chronic compensated COPD baseline), or a pre-analytical specimen/measurement artifact to rule out before treating (e.g., specimen hemolysis causing pseudohyperkalemia when asymptomatic with a normal ECG), extract the diverging tie-breaker cues with "trapRole": "twin-cue" and treatment opposites where Twin A's therapy worsens Twin B with "trapRole": "twin-rx-opposite". Set "contrastWith": "<Exact Counterpart Condition, State, or Artifact>" on that fact, and list counterpart conditions in "contrastPartners": ["<Partner Name>"] on the condition entry when present in this chunk.
 2. Slope, Trajectory & Deceptive "Pseudo-Improvement" Triggers ("trapRole": "trend-slope" | "pseudo-improvement" | "therapy-overshoot"): Preserve relative/percentage drops, serial lab or vital-sign velocity cues, and within-reference-range shifts alongside static cutoffs ("trapRole": "trend-slope", e.g., >50% platelet drop from baseline signaling HIT even above 150,000/mm3, or rising serum potassium paired with rising creatinine and oliguria <30 mL/hr). Tag deceptive clinical quietness that mimics improvement while heralding impending failure ("trapRole": "pseudo-improvement", e.g., loud wheezes fading into a silent chest with rising PaCO2 and new drowsiness in status asthmaticus, or abrupt pain relief before rebound peritonitis). Tag signs that therapy overshot or caused a secondary complication ("trapRole": "therapy-overshoot", e.g., new crackles or dyspnea during IV crystalloid boluses, rapid serum sodium overcorrection).
-3. Bedside-First vs. Ordered Escalation & Rescue Sequence ("trapRole": "bedside-first" | "ordered-escalation"): Under "Treatments", tag immediate independent RN bedside stabilization actions ("subtype": "independent", "trapRole": "bedside-first", e.g., stopping an offending potassium-containing infusion including Lactated Ringer's, elevating the head of the bed to high-Fowler's, targeted oxygen titration, continuous telemetry) separately from provider-ordered pharmacological or procedural rescue escalations ("subtype": "dependent", "trapRole": "ordered-escalation"). Whenever the source states a mandatory sequence among ordered rescue interventions (e.g., administer IV calcium gluconate first to stabilize cardiac membranes before IV regular insulin with dextrose), preserve that exact order explicitly in the "ordered-escalation" fact text.
+3. Bedside-First vs. Ordered Escalation & Rescue Sequence ("trapRole": "bedside-first" | "ordered-escalation"): Under "Treat", tag immediate independent RN bedside stabilization actions ("subtype": "independent", "trapRole": "bedside-first", e.g., stopping an offending potassium-containing infusion including Lactated Ringer's, elevating the head of the bed to high-Fowler's, targeted oxygen titration, continuous telemetry) separately from provider-ordered pharmacological or procedural rescue escalations ("subtype": "dependent", "trapRole": "ordered-escalation"). Whenever the source states a mandatory sequence among ordered rescue interventions (e.g., administer IV calcium gluconate first to stabilize cardiac membranes before IV regular insulin with dextrose), preserve that exact order explicitly in the "ordered-escalation" fact text.
 4. Cross-System Hold Triangles & Dynamic Safety Monitors ("trapRole": "hold-triangle" | "dynamic-monitor"): Preserve multi-factor medication hold rules and cross-system interaction triangles ("trapRole": "hold-triangle", e.g., loop diuretic + K+ <3.5 mEq/L + digoxin, holding spironolactone/ACE inhibitors/ARBs/K+ supplements when K+ >5.0 mEq/L or oliguria develops, holding opioids/benzodiazepines/non-selective beta-blockers when PaCO2 rises or somnolence develops) with every stated trigger intact. Pair acute conditions and high-alert rescue therapies with fast-changing bedside parameters that prove efficacy, progression, or treatment-induced iatrogenic harm ("trapRole": "dynamic-monitor", e.g., continuous ECG morphology, hourly serum potassium, capillary blood glucose during IV insulin + dextrose, hourly urine output/specific gravity, serial arterial pH and PaCO2 slopes) rather than static chronic labs.
 5. Never-Click Reflexive Clinical Errors ("trapRole": "never-click"): Tag explicit source-supported clinical errors across all four exam trap patterns with "trapRole": "never-click" (and "safetyCritical": true, "tier": 1 when harm-bearing): (a) direct contraindications or lethal administration errors (e.g., IV push KCl, PRN sedatives for hypercapnic restlessness, unmonitored high-flow oxygen in stable chronic CO2 retainers, platelet transfusion in HIT, saline boluses in cardiogenic shock), (b) mechanism or therapeutic-goal misconceptions (e.g., expecting IV calcium gluconate to lower serum potassium rather than stabilize myocardium), (c) wrong-sequence or slow-onset choices selected first during acute instability (e.g., choosing sodium polystyrene sulfonate first during acute QRS widening), and (d) misinterpreting a deceptive worsening cue as treatment success (e.g., reading disappearing wheezes with lethargy as bronchodilator success).
 6. Strict Source Grounding (Zero Invented Numbers or Traps): Omit "trapRole", "contrastWith", and "contrastPartners" on ordinary facts and conditions that do not carry a source-supported trap role. Never invent patient vignette serial numbers, numeric cutoffs, medication hold thresholds, sequences, or twin comparisons from outside NCLEX/HESI knowledge; during a second-pass omission audit, recover any source-stated percentage/velocity drop, pseudo-improvement warning, hold parameter, rescue sequence, dynamic safety monitor, or contraindication/misconception missed on Pass 1 with its "trapRole" and verbatim "sourceQuote".`;
+````
+
+### `KB_PLATE_BRIDGE_RULES` (1,919 source chars; tunable; v21.0 P-LATE RN vs. NP Mechanism Bridge tagging rules appended by kbBuildFocusBlock)
+
+SHA-256 of the raw template-literal body: `633346d5a55610f728f1dbc940f493b54aec41f9cd16c4f64936d9fc1de9c8db`
+
+````js
+const KB_PLATE_BRIDGE_RULES=`P-LATE MULTI-SOURCE & NP MECHANISM BRIDGE RULES (ZERO HALLUCINATION):
+1. Strict Source-Only Grounding: Tag "clinicalLayer": "bridge" ONLY when the fact is explicitly stated in this source chunk with a verbatim "sourceQuote" matching the chunk word-for-word. Never invent cellular/receptor mechanisms, RAAS/neurohormonal cascades, Forrester classifications, numeric lab cutoffs, "gold-standard" claims, or artificial 3-step chronological lists that do not appear in the chunk.
+2. When to Tag "clinicalLayer": "bridge":
+   - Pathophysiology / Mechanism Bridge (under "Patho"): cellular, neurohormonal, hemodynamic, or receptor-level mechanisms explaining the disease driver when coming from a bridge textbook (e.g., Porth) or advanced patho sidebar.
+   - Physical Exam & Differential Nuance (under "Look"): inspection/auscultation/palpation subtleties (e.g., S3 vs. S4 gallop mechanisms, Forrester warm/cold vs. wet/dry exam correlates) with "plateSlot": "exam-nuance" or "diff-tiebreaker".
+   - Diagnostic & Differential Nuance (under "Analyze"): gold-standard test hierarchies ("plateSlot": "gold-standard"), look-alike differential tie-breakers ("plateSlot": "diff-tiebreaker"), or false-positive/false-negative confounders (e.g., obesity lowering BNP, renal dysfunction raising BNP).
+   - Receptor & GDMT Pharmacologic Bridge (under "Treat"): receptor-level pharmacology or goal-directed medical therapy sequences ("plateSlot": "gdmt-bridge") explicitly stated in the chunk.
+   - Outcome Evaluation (under "Educate"): when explicitly stated as a bridge/prognostic nuance, set "subtype": "evaluate" and optionally "plateSlot": "evaluate".
+3. RN Safety Stays in RN Core: Do NOT demote acute RN stabilization priorities, airway/hemodynamic red flags, boxed warnings, antidotes, or medication hold parameters to the bridge layer — omit "clinicalLayer" (or set "clinicalLayer": "rn") for essential RN bedside safety facts.`;
+````
+
+### `NCLEX_PLATE_TRAP_RULES` (4,022 source chars; tunable; v21.0 P-LATE 4-Pillar distractor & Slope Red Flag runtime directive for NCLEXGenerator)
+
+SHA-256 of the raw template-literal body: `402a816a46918c84c3904f422b5bb06bd34478fad6420b23df548795e7da8c90`
+
+````js
+const NCLEX_PLATE_TRAP_RULES=`### P-LATE (TRIPLE-E) & 4-PILLAR DISTRACTOR ENGINEERING RULES
+Use your internal reasoning budget BEFORE writing PART 1-PART 4 to verify every item against these 5 rules:
+
+1. CLINICAL LAYER FIREWALL:
+   - Default Scope: Test ONLY facts supplied in this packet (when NP Bridge depth is off, only RN-layer and untagged facts are supplied).
+   - If no [NP BRIDGE] rows appear in this packet: NEVER require or assert un-supplied graduate-only mechanisms, receptor cascades, or provider prescribing logic in stems, options, or rationales; every rationale claim must trace strictly to a logged C# anchor from this packet.
+   - If [NP BRIDGE] rows DO appear in this packet: Actively test differential tie-breakers ([Slot: A.diff-tiebreaker]), hemodynamic/pathophysiologic mechanisms ([Slot: P.bridge]), physical-exam differentiators ([Slot: L.exam-technique]), and GDMT/hold logic ([Slot: T.pharm-hold]) where allocated.
+
+2. MANDATORY 4-PILLAR DISTRACTOR CONSTRUCTION (NO OBVIOUS FILLER OPTIONS):
+   Every incorrect option (distractor) MUST be a realistic clinical action or statement grounded in a logged C# anchor that fails for one of these 4 reasons—and its PART 4 "Why X is wrong:" rationale MUST explicitly label which trap it is while citing (Source: C#):
+   - [Priority / First-Action Trap]: A valid intervention for this condition (e.g., ordering a test, drawing labs, or notifying the primary health care provider) that is WRONG because an immediate bedside stabilization action in Treat / independent (e.g., positioning, airway/oxygen, stopping an offending infusion) must happen FIRST per PRIORITY ORDER.
+   - [Twin-Diagnosis Trap]: A gold-standard intervention or expected finding for a look-alike condition or opposite phase in the packet that is HARMFUL, contraindicated, or mismatched here.
+   - [Pharm / Lab Hold Trap]: Administering or continuing a medication when a specific lab, electrolyte, or vital sign in the stem violates a source-grounded hold parameter or contraindication in Treat / dependent.
+   - [Further-Teaching / Context Trap]: A subtle client self-management error corrected by an Educate fact, or a source-grounded statement that fails to answer the specific question asked.
+
+3. MULTI-CUE DIFFERENTIAL & ACTION-PARAMETER INTEGRATION (MCQ & SATA):
+   - Keep output strictly in the four plain-text formats parsed by this worksheet (MCQ, SATA, Ordering, Calculation — never emit JSON or unparsed widget syntax).
+   - When sibling exemplars, [PRIORITY DIFFERENTIATOR], or [TRAP: ...] rows appear in the batch, build at least 1-2 items that require linking Look (physical exam) + Analyze (labs/diagnostics) cues to select both the priority Treat action and the Evaluate/Analyze parameter that proves efficacy or early toxicity.
+
+4. NGN TREND STEM ARCHITECTURE (SLOPE RED FLAGS):
+   - Do NOT rely solely on blatantly abnormal static numbers when trajectory facts exist in the batch.
+   - Whenever the allocated facts support serial cues ([TRAP: trend-slope], [TRAP: pseudo-improvement], or Educate / evaluate), include at least 1 multi-timepoint T0 -> T1 -> T2 Trend stem (MCQ or SATA) where VELOCITY or TRAJECTORY signals impending decompensation or treatment response using ONLY thresholds and directions grounded in the packet (e.g., steep drop toward a hold cutoff, pseudo-normalization from exhausting compensation, narrowing pulse pressure, or rising heart rate with falling blood pressure). Never invent unstated numeric cutoffs.
+
+5. SINGLE DEFENSIBLE ANSWER AUDIT (ANTI-AMBIGUITY CHECK):
+   - For single-best-answer / Priority items: Verify that no two options represent simultaneous equal-priority actions; the keyed answer must clearly precede every distractor under explicit source sequence or PRIORITY ORDER (rules 1-8 and tiebreakers).
+   - For SATA: Every correct and incorrect option must trace to a logged C# anchor; never make an option wrong solely via a semantic absolute ("always/never")—make it wrong via physiological, priority, or safety incompatibility grounded in the packet.`;
+````
+
+### `CASE_SLOPE_SYNC_RULES` (3,222 source chars; tunable; v21.0 Unfolding EHR State-Machine & Cross-Stage Synchronization directive for CaseStudyGenerator)
+
+SHA-256 of the raw template-literal body: `0da1dd94a7d68cb9a7a4194fb37c5323c31f82cd56a6a3f5546ef601b362318a`
+
+````js
+const CASE_SLOPE_SYNC_RULES=`═══ UNFOLDING EHR STATE-MACHINE & CROSS-STAGE SYNCHRONIZATION RULES ═══
+Before emitting JSON, construct a synchronized stage-by-stage physiological timeline across Stage 1 -> Stage N in your reasoning trace and enforce 100% cross-stage consistency:
+
+1. ZERO CROSS-STAGE DRIFT & STRUCTURED DATA ONLY:
+   - Keep stage "narrative" strictly qualitative and free of ALL clinical numbers, units, blood-pressure pairs, doses, and time spans (every vital sign, lab value, physical exam measurement, medication prescription, and I&O figure MUST live exclusively inside stage "data" rows with cited factIds so prose validation passes).
+   - Within "data" rows (e.g. Vital Signs, Physical Exam, Labs, Diagnostics, Prescriptions / MAR, Intake & Output), physiological direction and math MUST lock together across stages using ONLY values directly stated in or validly "instantiated" from cited factIds:
+     * Worsening respiratory or pulmonary findings in Look/Treat must align with the direction of any respiratory rate, oxygen saturation, or heart-rate thresholds cited in the packet.
+     * Medication administration in an earlier stage (e.g., diuretic, vasoactive, insulin, anticoagulant) must align with subsequent stage "data" trends in the monitored labs, vital signs, or urine output grounded by the packet.
+     * Never invent unstated normal/panic ranges or unstated lab numbers; only instantiate concrete client numbers when a cited factId provides the governing threshold or range.
+
+2. P-LATE (TRIPLE-E) CLINICAL PROGRESSION ACROSS UNFOLDING QUESTIONS:
+   Distribute the case's questions across the P-LATE workflow in chronological clinical order as stages unfold:
+   - Early Stage(s) — Recognize & Analyze Cues (Look + Analyze + Patho): Identify priority bedside cues (Look) and diagnostic/lab red flags (Analyze), and link presentation to the underlying pathophysiological driver (Patho) or twin-diagnosis differentiator ([PRIORITY DIFFERENTIATOR] / [Slot: A.diff-tiebreaker]).
+   - Middle Stage(s) — Prioritize Bedside Action & Safe Pharm/Hold Rules (Treat): Sequence immediate independent bedside stabilization actions (Treat / independent) ahead of dependent orders per PRIORITY ORDER, and evaluate prescriptions against source-grounded hold parameters, labs, and vital signs (Treat / dependent — include a Pharm / Lab Hold Trap when supported by the packet).
+   - Later Stage(s) — Evaluate Slope Red Flags & Self-Management (Educate / evaluate + Educate / discharge): Interpret multi-stage T0 -> T1 -> T2 trajectory shifts or Slope Red Flags ([TRAP: trend-slope] / [TRAP: pseudo-improvement] / Educate / evaluate) to judge improvement vs. decompensation, and evaluate client self-management or discharge statements for "further teaching needed" traps (Educate / discharge).
+
+3. STRICT FACT-ID GROUNDING & 4-PILLAR DISTRACTORS:
+   - Every stage "data" entry, correct option, and distractor rationale must cite exact supplied factIds from CASE SOURCE PACKET, and every distractor rationale should name its clinical trap category ([Priority / First-Action Trap], [Twin-Diagnosis Trap], [Pharm / Lab Hold Trap], or [Further-Teaching / Context Trap]) without repeating unsupported distractor quantities as sourced facts.`;
 ````
 
 ### `GIZMO_CONVERT_PROMPT` (2,401 source chars; tunable; v20.0 Anki-to-Gizmo strict verbatim chunk formatter)
