@@ -12,7 +12,18 @@
      policy and uses only its own inline style block and system fonts. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com">
 <title>P-LATE Study Suite</title>
-<!-- v21.2 (2026-11-13): Multi-Select Source Role Checkboxes & Inline Role Reference Guide in Step 01 Knowledge Base Intake.
+<!-- v21.3 (2026-11-14): Export-Time 4-Pillar Exam Trap Audit in Anki Extra (Always-Open Default + Collapsible Toggle).
+     All 11 frozen prompt constants unchanged.
+     (1) DETERMINISTIC 4-PILLAR TRAP AUDIT IN ANKI EXTRA (ankiTrapAuditIndex, ankiCardTrapAudit, ankiExportText,
+     AnkiReviewCard, AnkiGenerator): Appends a concise, source-grounded 4-Pillar Trap Audit ([1] Twin, [2] 1st vs. Rx,
+     [3] Hold / Never, [4] Slope — capped to 1 top RN-Core fact per pillar, omitting unstated pillars and skipping
+     multi-condition Topic::Contrast, Concept Overview, standalone entity, and non-trap notes) to the exported Extra
+     (Back Extra) field at .txt export time (and Anki Preview card backs after reveal) without mutating card.extra,
+     triggering false ankiNumericAudit warnings, or bloating Gizmo live-deck imports.
+     (2) ALWAYS-OPEN DEFAULT + DISPLAY & INCLUDE TOGGLES (includeTrapAudit, trapAuditMode): Enabled and Always open
+     (<br> multi-line block under #html:true) by default for zero-tap 2-second peripheral reinforcement on iOS AnkiMobile,
+     with both an Include/Exclude checkbox and an Always open vs. Collapsible (<details>) toggle.
+     v21.2 (2026-11-13): Multi-Select Source Role Checkboxes & Inline Role Reference Guide in Step 01 Knowledge Base Intake.
      All 11 frozen prompt constants unchanged.
      (1) MULTI-SELECT SOURCE ROLES (kbNormalizeSourceRoles, kbToggleSourceRole, kbBuildFocusBlock, kbCoercePlateFields,
      mergeLatteParts): Replaces the single-select Step 01 role dropdown with multi-select checkboxes (both default roles and
@@ -8279,15 +8290,164 @@ function ankiSourcePointers(card,batch,current){
   }
   return pointers;
 }
-function ankiExportText(cards,batch,current,tier,html,references){
+// v21.3: deterministic export-only 4-Pillar Exam Trap Audit for Anki Extra (Back Extra). Composed at export/preview
+// time from the immutable batch snapshot (like ankiSourcePointers) so card.extra, lintAnkiCard, ankiNumericAudit,
+// source-check packets, and Gizmo live-deck imports stay untouched. Cached per batch via WeakMap.
+const _ankiTrapAuditCache=new WeakMap();
+function ankiTrapAuditIndex(batch){
+  if(!batch||typeof batch!=='object'||!batch.snapshot||!Array.isArray(batch.snapshot.facts))return null;
+  if(_ankiTrapAuditCache.has(batch))return _ankiTrapAuditCache.get(batch);
+  const norm=s=>String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+  const escRe=s=>String(s||'').replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  const clean=s=>String(s||'').replace(/\|/g,'\u00b7').replace(/[\r\n]+/g,' ').replace(/\s+/g,' ').trim();
+  const srcKB=batch.sourceKB&&typeof batch.sourceKB==='object'?batch.sourceKB:null;
+  const entityNames=new Set(),contraFactIds=new Set();
+  if(srcKB){
+    for(const col of [srcKB.medications,srcKB.diagnostics,srcKB.scoringTools]){
+      for(const ent of (Array.isArray(col)?col:[])){
+        if(ent&&ent.name)entityNames.add(norm(ent.name));
+        for(const ef of (ent&&Array.isArray(ent.facts)?ent.facts:[]))if(ef&&ef.factType==='contraindication'&&ef.id)contraFactIds.add(String(ef.id).toLowerCase());
+      }
+    }
+    for(const cond of (Array.isArray(srcKB.conditions)?srcKB.conditions:[])){
+      if(cond&&cond.entityKind&&cond.name)entityNames.add(norm(cond.name));
+      for(const cf of (cond&&Array.isArray(cond.facts)?cond.facts:[]))if(cf&&cf.factType==='contraindication'&&cf.id)contraFactIds.add(String(cf.id).toLowerCase());
+    }
+  }
+  const groups=new Map();
+  for(const f of batch.snapshot.facts){
+    if(!f||typeof f!=='object')continue;
+    const cName=clean(f.condition);if(!cName)continue;
+    let g=groups.get(cName);
+    if(!g){
+      g={name:cName,key:norm(cName),aliases:Array.isArray(f.aliases)?f.aliases.map(clean).filter(Boolean):[],entryRole:f.entryRole||'',concept:clean(f.concept),contrastPartners:Array.isArray(f.contrastPartners)?f.contrastPartners.map(clean).filter(Boolean):[],isEntity:entityNames.has(norm(cName)),facts:[]};
+      groups.set(cName,g);
+    }
+    g.facts.push(f);
+  }
+  const realConds=[...groups.values()].filter(g=>!g.isEntity&&g.entryRole!=='concept');
+  const entityGroups=[...groups.values()].filter(g=>g.isEntity);
+  const rank=(a,b)=>(b.trapRole?2:0)-(a.trapRole?2:0)||(b.conceptScope==='differentiator'?1:0)-(a.conceptScope==='differentiator'?1:0)||(Number(a.tier)||2)-(Number(b.tier)||2);
+  const byCondition=new Map();
+  for(const g of realConds){
+    const ownKeys=new Set([g.name,...g.aliases].map(norm).filter(Boolean));
+    const rnFacts=g.facts.filter(f=>f.clinicalLayer!=='bridge'&&clean(f.text));
+    if(!rnFacts.length)continue;
+    const explicitWanted=new Set([...g.contrastPartners,...rnFacts.map(f=>f.contrastWith).filter(Boolean)].map(norm).filter(Boolean));
+    const explicitPartners=[],siblingPartners=[];
+    for(const other of realConds){
+      if(other===g)continue;
+      const otherKeys=[other.name,...other.aliases].map(norm).filter(Boolean);
+      if(otherKeys.some(k=>ownKeys.has(k)))continue;
+      const otherRn=other.facts.filter(f=>f.clinicalLayer!=='bridge'&&clean(f.text));
+      const otherWanted=new Set([...other.contrastPartners,...otherRn.map(f=>f.contrastWith).filter(Boolean)].map(norm).filter(Boolean));
+      if(otherKeys.some(k=>explicitWanted.has(k))||[...ownKeys].some(k=>otherWanted.has(k))){explicitPartners.push({g:other,rn:otherRn});continue;}
+      if(g.concept&&other.concept&&norm(g.concept)===norm(other.concept))siblingPartners.push({g:other,rn:otherRn});
+    }
+    const partners=[...explicitPartners,...siblingPartners];
+    const ownBlob=rnFacts.map(f=>clean(f.text).toLowerCase()).join(' | ');
+    const ownLabels=[g.name,...g.aliases].filter(l=>l.length>=3);
+    const linkedEntityFacts=[];
+    for(const eg of entityGroups){
+      const eFacts=eg.facts.filter(f=>f.clinicalLayer!=='bridge'&&clean(f.text));
+      if(!eFacts.length)continue;
+      const eBlob=eFacts.map(f=>clean(f.text).toLowerCase()).join(' | ');
+      const condInEnt=ownLabels.some(l=>new RegExp('(^|[^a-z0-9])'+escRe(l.toLowerCase())+'s?($|[^a-z0-9])','i').test(eBlob));
+      const entInCond=eg.name.length>=4&&new RegExp('(^|[^a-z0-9])'+escRe(eg.name.toLowerCase())+'s?($|[^a-z0-9])','i').test(ownBlob);
+      if(condInEnt||entInCond){
+        for(const ef of eFacts)if(ef.trapRole||contraFactIds.has(ef.id))linkedEntityFacts.push(ef);
+      }
+    }
+    const hasExplicitTrap=Boolean(
+      g.contrastPartners.length||
+      rnFacts.some(f=>f.trapRole||f.contrastWith)||
+      explicitPartners.some(p=>p.rn.some(f=>f.trapRole==='twin-cue'||f.trapRole==='twin-rx-opposite'))||
+      linkedEntityFacts.some(f=>f.trapRole)
+    );
+    if(!hasExplicitTrap)continue;
+    const lines=[];
+    const ownTwin=[...rnFacts].filter(f=>f.trapRole==='twin-cue'||f.trapRole==='twin-rx-opposite'||f.contrastWith||f.plateSlot==='diff-tiebreaker').sort(rank)[0];
+    if(ownTwin){
+      const txt=clean(ownTwin.text),cw=clean(ownTwin.contrastWith);
+      const pfx=cw&&!txt.toLowerCase().includes(cw.toLowerCase())?'[vs. '+cw+'] ':'';
+      lines.push({key:'twin',tag:'[1] Twin:',text:pfx+txt});
+    }else if(partners[0]){
+      const pName=partners[0].g.name,pTwin=[...partners[0].rn].filter(f=>f.trapRole==='twin-cue'||f.trapRole==='twin-rx-opposite').sort(rank)[0];
+      if(pTwin)lines.push({key:'twin',tag:'[1] Twin:',text:'[vs. '+pName+'] '+clean(pTwin.text)});
+      else{
+        const ownDiff=[...rnFacts].filter(f=>f.conceptScope==='differentiator').sort(rank)[0];
+        const sibDiff=[...partners[0].rn].filter(f=>f.conceptScope==='differentiator').sort(rank)[0];
+        if(ownDiff&&sibDiff)lines.push({key:'twin',tag:'[1] Twin:',text:clean(ownDiff.text)+' [vs. '+pName+': '+clean(sibDiff.text)+']'});
+      }
+    }
+    const isTreat=f=>f.bucket==='Treat'||f.bucket==='Treatments';
+    const bedFact=[...rnFacts].filter(f=>f.trapRole==='bedside-first').sort(rank)[0]||([...rnFacts].filter(f=>isTreat(f)&&f.subtype==='independent').sort(rank)[0]);
+    const ordFact=[...rnFacts].filter(f=>f.trapRole==='ordered-escalation').sort(rank)[0]||([...rnFacts].filter(f=>isTreat(f)&&f.subtype==='dependent').sort(rank)[0]);
+    if(bedFact||ordFact){
+      const parts=[];
+      if(bedFact)parts.push('1st (bedside): '+clean(bedFact.text));
+      if(ordFact&&(!bedFact||ordFact.id!==bedFact.id))parts.push('Order/Rx: '+clean(ordFact.text));
+      if(parts.length)lines.push({key:'firstVsBest',tag:'[2] 1st vs. Rx:',text:parts.join(' \u00b7 ')});
+    }
+    const holdPool=[...rnFacts.filter(f=>f.trapRole==='hold-triangle'),...linkedEntityFacts.filter(f=>f.trapRole==='hold-triangle')].sort(rank);
+    const monPool=[...rnFacts.filter(f=>f.trapRole==='dynamic-monitor'),...linkedEntityFacts.filter(f=>f.trapRole==='dynamic-monitor')].sort(rank);
+    const neverPool=[...rnFacts.filter(f=>f.trapRole==='never-click'),...linkedEntityFacts.filter(f=>f.trapRole==='never-click'),...rnFacts.filter(f=>contraFactIds.has(f.id)),...linkedEntityFacts.filter(f=>contraFactIds.has(f.id))].sort(rank);
+    const p3Parts=[],usedIds=new Set();
+    if(holdPool[0]){p3Parts.push('Hold: '+clean(holdPool[0].text));usedIds.add(holdPool[0].id);}
+    else if(monPool[0]){p3Parts.push('Monitor: '+clean(monPool[0].text));usedIds.add(monPool[0].id);}
+    const topNever=neverPool.find(f=>!usedIds.has(f.id));
+    if(topNever)p3Parts.push('Never: '+clean(topNever.text));
+    if(p3Parts.length)lines.push({key:'holdNever',tag:'[3] Hold / Never:',text:p3Parts.join(' \u00b7 ')});
+    const slopePool=[
+      ...rnFacts.filter(f=>f.trapRole==='trend-slope'||f.trapRole==='pseudo-improvement'||f.trapRole==='therapy-overshoot'),
+      ...rnFacts.filter(f=>(f.bucket==='Educate'||f.bucket==='Assess')&&(f.subtype==='evaluate'||f.plateSlot==='evaluate'))
+    ];
+    const seenSlope=new Set(),dedupSlope=slopePool.filter(f=>{if(seenSlope.has(f.id))return false;seenSlope.add(f.id);return true;}).sort(rank);
+    if(dedupSlope[0]){
+      const sf=dedupSlope[0],st=clean(sf.text);
+      const spfx=sf.trapRole==='pseudo-improvement'&&!/pseudo-improvement|silent/i.test(st)?'[Pseudo-improvement] ':sf.trapRole==='therapy-overshoot'&&!/overshoot|overcorrect/i.test(st)?'[Therapy overshoot] ':'';
+      lines.push({key:'slope',tag:'[4] Slope:',text:spfx+st});
+    }
+    if(lines.length)byCondition.set(g.name,{condition:g.name,lines});
+  }
+  const out={byCondition};
+  _ankiTrapAuditCache.set(batch,out);
+  return out;
+}
+function ankiCardTrapAudit(card,batch,current){
+  if(!current||!batch||!batch.snapshot)return null;
+  if(/(?:^|\s)Topic::Contrast(?:\s|$)/i.test(String(card&&card.tags||'')))return null;
+  const ids=ankiLinkedIds(card,batch.snapshot);
+  if(!ids.length)return null;
+  const conds=[...new Set(ids.map(id=>String(batch.snapshot.byId[id]?.condition||'').replace(/\|/g,'\u00b7').replace(/[\r\n]+/g,' ').replace(/\s+/g,' ').trim()).filter(Boolean))];
+  if(conds.length!==1)return null;
+  const idx=ankiTrapAuditIndex(batch);
+  return (idx&&idx.byCondition.get(conds[0]))||null;
+}
+function ankiExportText(cards,batch,current,tier,html,references,trapAudit=false){
   const kept=ankiSelection(cards,current,tier).kept;if(!kept.length)return '';
   const escape=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   // v16.9: lint rejects pipes and newlines in a field but not quotes. A field holding a quote
   // lost it on import, and an unmatched leading quote swallowed the following notes into one
   // record; a leading # is an importer comment. Only those fields change; the rest are as before.
   const field=v=>{const t=String(v??'');return /^#|"/.test(t)?'"'+t.replace(/"/g,'""')+'"':t;};
+  const trapMode=trapAudit==='collapsible'?'collapsible':(trapAudit?'open':'');
   const body=kept.map(c=>{
     let extra=html?escape(c.extra):c.extra;
+    if(trapMode&&typeof ankiCardTrapAudit==='function'){
+      const audit=ankiCardTrapAudit(c,batch,current);
+      if(audit&&audit.lines.length){
+        if(html){
+          const rowsHtml=audit.lines.map(l=>'<b>'+escape(l.tag)+'</b> '+escape(l.text)).join('<br>');
+          extra+=trapMode==='collapsible'
+            ?(extra?'<br>':'')+'<details><summary><b>\u26a1 4-Pillar Trap Audit \u2014 '+escape(audit.condition)+'</b></summary>'+rowsHtml+'</details>'
+            :(extra?'<br><br>':'')+'<b>\u26a1 4-Pillar Trap Audit \u2014 '+escape(audit.condition)+':</b><br>'+rowsHtml;
+        }else{
+          const plainAudit='\u26a1 4-Pillar Trap Audit ('+audit.condition+'): '+audit.lines.map(l=>l.tag+' '+l.text).join(' \u00b7 ');
+          extra+=(extra?' \u2014 ':'')+plainAudit;
+        }
+      }
+    }
     if(references){const source='Source: '+(ankiSourcePointers(c,batch,current).join('; ')||'unavailable');extra+=(extra?(html?'<br>':' — '):'')+(html?escape(source):source);}
     return [html?escape(c.text):c.text,extra,c.tags].map(field).join('|');
   }).join('\n');
@@ -8925,7 +9085,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '21.2';}
+function suiteVersion(){return '21.3';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -9293,7 +9453,7 @@ function AnkiNoteDiagnostics({card,audit,current}){
     {card.sourceLinksNeedReview&&<div>Text or Extra changed; review and confirm the source links.</div>}
   </details>;
 }
-function AnkiReviewCard({card,initialIndex}){
+function AnkiReviewCard({card,initialIndex,trapAudit=null,trapAuditMode='open'}){
   // v16.0: named controls, visible selection states, and reflowing groups replace inaccessible fixed layouts.
   // v15.17: any malformed field blocks preview, including separators outside Text.
   const parsed=parseAnkiClozes(card.text),structure=lintAnkiCard(card),indices=structure.length?[]:parsed.indices;
@@ -9310,6 +9470,9 @@ function AnkiReviewCard({card,initialIndex}){
     <div style={{fontSize:15,lineHeight:1.6,whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{structure.length?'Structural error: '+structure.map(x=>LINT_LABEL[x]||x).join('; ')+'. Edit in Table.':ankiPreviewText(card.text,index,revealed)}</div>
     {indices.length>0?<button className="btn-secondary" style={{marginTop:10}} aria-expanded={revealed} onClick={()=>setRevealed(v=>!v)}>{revealed?'Hide answer':'Show answer'}</button>:<div style={{color:'var(--accent-warm)',marginTop:8}}>Correct the structural issues in Table to preview this note.</div>}
     {revealed&&!structure.length&&card.extra&&<div style={{fontSize:12,lineHeight:1.5,color:'var(--text-dim)',marginTop:10,whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>Extra: {card.extra}</div>}
+    {revealed&&!structure.length&&trapAudit&&trapAudit.lines.length>0&&(trapAuditMode==='collapsible'
+      ?<details style={{fontSize:12,lineHeight:1.55,color:'var(--text-dim)',marginTop:8,padding:'6px 10px',background:'var(--bg-deep)',border:'1px solid var(--border)',borderRadius:6}}><summary style={{cursor:'pointer',fontWeight:600,color:'var(--accent-warm)'}}>⚡ 4-Pillar Trap Audit — {trapAudit.condition}</summary><div style={{marginTop:4}}>{trapAudit.lines.map((l,i)=><div key={i}><b style={{color:'var(--text)'}}>{l.tag}</b> {l.text}</div>)}</div></details>
+      :<div style={{fontSize:12,lineHeight:1.55,color:'var(--text-dim)',marginTop:8,padding:'6px 10px',background:'var(--bg-deep)',border:'1px solid var(--border)',borderRadius:6}}><div style={{fontWeight:600,color:'var(--accent-warm)',marginBottom:2}}>⚡ 4-Pillar Trap Audit — {trapAudit.condition}:</div>{trapAudit.lines.map((l,i)=><div key={i}><b style={{color:'var(--text)'}}>{l.tag}</b> {l.text}</div>)}</div>)}
   </div>;
 }
 
@@ -9515,6 +9678,9 @@ function AnkiGenerator(){
   const [showUncovered,setShowUncovered]=useState(false);
   const [ankiHeader,setAnkiHeader]=useState(false);
   const [includeSources,setIncludeSources]=useState(false);
+  // v21.3: export-only 4-Pillar Trap Audit in Extra — enabled and always-open (<br>) by default, with collapsible (<details>) toggle.
+  const [includeTrapAudit,setIncludeTrapAudit]=useState(true);
+  const [trapAuditMode,setTrapAuditMode]=useState('open');
   const [abortCtl,setAbortCtl]=useState(null);
 
   const {model,level:toolLevel}=cfg.forTool('anki');
@@ -9829,12 +9995,13 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
   })),[]);
 
   const exportTxt=useCallback(()=>{
-    // v15.17: validate current fields and batch identity again at the export boundary.
-    const text=ankiExportText(cards,batch,current,tierFilter,ankiHeader,includeSources);if(!text)return;
+    // v15.17/v21.3: validate current fields and batch identity again at the export boundary; compose optional 4-Pillar Trap Audit at export.
+    const text=ankiExportText(cards,batch,current,tierFilter,ankiHeader,includeSources,includeTrapAudit?trapAuditMode:false);if(!text)return;
     downloadBlob(new Blob([text],{type:'text/plain'}),'latte_anki_import'+(tierFilter!=='all'?'_tier'+tierFilter:'')+'.txt');
-  },[cards,batch,current,tierFilter,ankiHeader,includeSources]);
+  },[cards,batch,current,tierFilter,ankiHeader,includeSources,includeTrapAudit,trapAuditMode]);
 
   const keptCount=selected.kept.length;
+  const trapAuditCount=useMemo(()=>selected.kept.filter(c=>ankiCardTrapAudit(c,batch,current)).length,[selected.kept,batch,current]);
   const liveLint=useMemo(()=>cards.filter(c=>c.lint&&c.lint.length).length,[cards]);
   const liveAbbrev=useMemo(()=>cards.filter(c=>c.abbrev&&c.abbrev.length).length,[cards]);
 
@@ -9910,7 +10077,15 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
               <input type="checkbox" checked={ankiHeader} onChange={e=>setAnkiHeader(e.target.checked)} style={{accentColor:'var(--accent)'}}/>Anki header
             </label>
             <label><input type="checkbox" checked={includeSources} onChange={e=>setIncludeSources(e.target.checked)}/>Include source references</label>
-            <span>Export options apply to the .txt file, not to what you see here.</span>
+            <label title="Injects a concise, source-grounded 4-Pillar Trap Audit ([1] Twin, [2] 1st vs. Rx, [3] Hold / Never, [4] Slope) into the exported Extra (Back Extra) field for every single-exemplar note whose condition has trap-mapped facts. Leaves editable Extra cells, numeric checks, and Gizmo imports untouched.">
+              <input id="anki-include-trap-audit" type="checkbox" checked={includeTrapAudit} onChange={e=>setIncludeTrapAudit(e.target.checked)} style={{accentColor:'var(--accent)'}}/>4-Pillar Trap Audit in Extra{trapAuditCount>0&&<span> ({trapAuditCount})</span>}
+            </label>
+            {includeTrapAudit&&<span role="group" aria-label="4-Pillar Trap Audit display mode" style={{display:'inline-flex',gap:4,alignItems:'center',flexWrap:'wrap'}}>
+              <button type="button" className="btn-secondary" aria-pressed={trapAuditMode==='open'} style={{padding:'2px 8px',fontSize:11,borderColor:trapAuditMode==='open'?'var(--accent)':undefined,color:trapAuditMode==='open'?'var(--accent)':undefined}} onClick={()=>setTrapAuditMode('open')}>Always open</button>
+              <button type="button" className="btn-secondary" aria-pressed={trapAuditMode==='collapsible'} style={{padding:'2px 8px',fontSize:11,borderColor:trapAuditMode==='collapsible'?'var(--accent)':undefined,color:trapAuditMode==='collapsible'?'var(--accent)':undefined}} onClick={()=>{setTrapAuditMode('collapsible');if(!ankiHeader)setAnkiHeader(true);}}>Collapsible (&lt;details&gt;)</button>
+            </span>}
+            {includeTrapAudit&&trapAuditCount>0&&!ankiHeader&&<span style={{color:'var(--accent-warm)'}}>Check <b>Anki header</b> (#html:true) for multi-line iOS formatting (<button type="button" className="btn-ghost" style={{padding:'0 4px',fontSize:11,textDecoration:'underline'}} onClick={()=>setAnkiHeader(true)}>enable</button>).</span>}
+            <span>Export options apply to the .txt file (and Preview card backs); editable Extra cells stay unchanged.</span>
       </div>
       {batch?.outcome&&<p role="status" style={{color:batch.outcome.level==='ok'?'var(--accent-green)':'var(--accent-warm)'}}>{batch.outcome.label}{batch.truncated?' · response truncated':''}{batch.chunkIssues?.length?' · '+batch.chunkIssues.length+' chunk(s) returned no note records':''}. Original responses remain in batch diagnostics.</p>}
       {batch&&!current&&<p role="alert" style={{color:'var(--accent-warm)'}}>These notes belong to an earlier Knowledge Base. Generate a new batch to restore source links, coverage, and export.</p>}
@@ -9998,7 +10173,7 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
     </>}
       {cards.length>0&&view==='preview'&&<div style={{display:'grid',gap:10}}>{pagedCards.map(c=><div key={c.id} style={{padding:12,background:c.keep?'var(--bg-input)':'var(--bg-card-alt)',border:'1px solid var(--border)',borderRadius:8}}>
         <div style={{display:'flex',gap:8,alignItems:'center'}}><label style={{fontSize:12}}><input type="checkbox" checked={c.keep} onChange={()=>toggle(c.id)}/> Keep</label><TierBadge tier={getTier(c.tags)}/><button className="btn-secondary" style={{marginLeft:'auto',padding:'3px 9px'}} onClick={()=>editNote(c.id)}>Edit in Table</button></div>
-        <AnkiReviewCard card={c}/>
+        <AnkiReviewCard card={c} trapAudit={includeTrapAudit?ankiCardTrapAudit(c,batch,current):null} trapAuditMode={trapAuditMode}/>
         <AnkiStyleBadges issues={styleWarnings(c)}/><AnkiNoteDiagnostics card={c} audit={numericAudits.get(c.id)} current={current}/><AnkiCollisionReferences groups={collisionsByNote.get(c.id)}/><AnkiReviewSource conditionCheck={conditionTagIssues.get(c.id)} card={c} batch={batch} current={current} onSourcesChange={busy?null:updateSourceLinks}/>
         {(c.lint||[]).length>0&&<div style={{color:'var(--accent-red)',fontSize:12,marginTop:5}}>Structural lint: {c.lint.map(x=>LINT_LABEL[x]||x).join(', ')}</div>}
         {(c.abbrev||[]).map((msg,i)=><div key={i} style={{color:'var(--accent-warm)',fontSize:12,marginTop:5}}>{msg}</div>)}

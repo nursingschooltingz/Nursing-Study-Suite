@@ -31,7 +31,7 @@ module.exports = async function run(S, t) {
     span('function kbSourceText(f){', '\n') + '\n' +
     span('function kbUsableFactCount(', '// ── KB source chunking') + '\n' +
     span('function ankiParseCards(raw', 'function AnkiStyleBadges(') + '\n' +
-    ';return {kbForAnki,ankiSourceSnapshot,ankiConditionTagCheck,ankiNormalizeConditionTags,ANKI_TRAP_TAG_MAP,ankiCardTraps,ankiStampConceptTags,ankiStampTrapTags,ankiFilterFactView,lintAnkiCard,ankiNumericAudit};'
+    ';return {kbForAnki,ankiSourceSnapshot,ankiConditionTagCheck,ankiNormalizeConditionTags,ANKI_TRAP_TAG_MAP,ankiCardTraps,ankiStampConceptTags,ankiStampTrapTags,ankiFilterFactView,lintAnkiCard,ankiNumericAudit,ankiTrapAuditIndex,ankiCardTrapAudit,ankiExportText};'
   )(() => 'syn-trap-id');
 
   const selectCaseFacts = new Function(span('function selectCaseFacts(', '// Sufficiency check') + ';return selectCaseFacts;')();
@@ -380,6 +380,51 @@ module.exports = async function run(S, t) {
       cleanAudit.status === 'No numeric mismatch detected' &&
       inventedAudit.status === 'Numeric discrepancy' &&
       trapsOnlyView.conditions.reduce((n, c) => n + c.facts.length, 0) === 14);
+
+    // v21.3: Export-time 4-Pillar Trap Audit in Extra (Always-Open default + Collapsible <details> + Plain + Non-Trap/Contrast/Entity exclusions)
+    const fullBatch = { sourceKB: referenceKb, snapshot: trapSnap };
+    const plainBatch = { sourceKB: plainKb, snapshot: plainSnap };
+    const conceptSnap = ANKI.ankiSourceSnapshot({ conditions: [{ name: 'Fluid & Electrolytes', entryRole: 'concept', facts: [{ id: 'fact-c1', latteBucket: 'Look', tier: 1, trapRole: 'trend-slope', text: 'Track daily weights.' }] }] });
+    const plainCard = { id: 'p1', text: '[Gout] Toe pain: {{c1::podagra}}', extra: '', tags: 'Nursing::PLATE::Look Condition::Gout Tier::1', pipeCount: 2, parseIssues: [], mappingIssues: [], factIds: ['fact-1'], keep: true };
+    const conceptCard = { id: 'co1', text: '[Fluid & Electrolytes] Shared rule: {{c1::daily weights}}', extra: '', tags: 'Nursing::PLATE::Look Condition::FluidAndElectrolytes Tier::1', pipeCount: 2, parseIssues: [], mappingIssues: [], factIds: ['fact-c1'], keep: true };
+    const medFact = trapSnap.facts.find(f => f.condition === 'Spironolactone');
+    const medCard = { id: 'm1', text: '[Spironolactone] Hold cutoff: {{c1::K+ > 5.0 mEq/L}}', extra: '', tags: 'Nursing::PLATE::Treat Condition::Spironolactone Tier::1', pipeCount: 2, parseIssues: [], mappingIssues: [], factIds: medFact ? [medFact.id] : [], keep: true };
+    const hyperNoteWithExtra = { ...stamped[1], extra: 'Card-specific ECG note' };
+    const hyperAudit = ANKI.ankiCardTrapAudit(hyperNoteWithExtra, fullBatch, true);
+    const respAudit = ANKI.ankiCardTrapAudit(stamped[0], fullBatch, true);
+    const openHtml = ANKI.ankiExportText([hyperNoteWithExtra], fullBatch, true, 'all', true, true, 'open');
+    const collapseHtml = ANKI.ankiExportText([hyperNoteWithExtra], fullBatch, true, 'all', true, false, 'collapsible');
+    const plainLine = ANKI.ankiExportText([hyperNoteWithExtra], fullBatch, true, 'all', false, false, 'open');
+    const offExport = ANKI.ankiExportText([hyperNoteWithExtra], fullBatch, true, 'all', true, false, false);
+
+    t('v21.3 (Anki 4-Pillar Trap Audit in Extra): builds 1-fact-per-pillar audit from RN-Core + linked meds, omits unstated pillars, skips plain/Concept/Contrast/entity/stale notes, supports Always-Open <br> & Collapsible <details> & pipe-safe plain export, and never mutates card.extra or numeric audit',
+      ANKI.ankiCardTrapAudit(plainCard, plainBatch, true) === null &&
+      ANKI.ankiExportText([plainCard], plainBatch, true, 'all', false, false, 'open') === plainCard.text + '||' + plainCard.tags &&
+      ANKI.ankiCardTrapAudit(conceptCard, { snapshot: conceptSnap }, true) === null &&
+      ANKI.ankiCardTrapAudit(medCard, fullBatch, true) === null &&
+      ANKI.ankiCardTrapAudit(validTwinNote, { snapshot: nonConceptTwins }, true) === null &&
+      ANKI.ankiCardTrapAudit(hyperNoteWithExtra, fullBatch, false) === null &&
+      hyperAudit !== null &&
+      hyperAudit.condition === 'Acute Hyperkalemia' &&
+      hyperAudit.lines.map(l => l.key).join(',') === 'twin,firstVsBest,holdNever,slope' &&
+      hyperAudit.lines.find(l => l.key === 'holdNever').text.includes('Hold spironolactone') &&
+      hyperAudit.lines.find(l => l.key === 'holdNever').text.includes('Never:') &&
+      respAudit !== null &&
+      respAudit.lines.map(l => l.key).join(',') === 'twin,holdNever,slope' &&
+      !respAudit.lines.some(l => l.key === 'firstVsBest') &&
+      !JSON.stringify(respAudit).includes('[not stated in source]') &&
+      openHtml.includes('Card-specific ECG note<br><br><b>⚡ 4-Pillar Trap Audit — Acute Hyperkalemia:</b><br><b>[1] Twin:</b>') &&
+      openHtml.includes('<br>Source: ') &&
+      collapseHtml.includes('Card-specific ECG note<br><details><summary><b>⚡ 4-Pillar Trap Audit — Acute Hyperkalemia</b></summary><b>[1] Twin:</b>') &&
+      collapseHtml.includes('</details>|') &&
+      plainLine.split('|').length === 3 &&
+      plainLine.split('\n').length === 1 &&
+      plainLine.includes(' — ⚡ 4-Pillar Trap Audit (Acute Hyperkalemia): [1] Twin:') &&
+      !plainLine.includes('<br>') &&
+      !plainLine.includes('<details>') &&
+      !offExport.includes('4-Pillar Trap Audit') &&
+      hyperNoteWithExtra.extra === 'Card-specific ECG note' &&
+      ANKI.ankiNumericAudit(stamped[1], fullBatch, true).status !== 'Numeric discrepancy');
   }
 
   // ── 6. Priority, NCLEX, Case Connectors & UI Source Contracts ──
@@ -435,5 +480,16 @@ module.exports = async function run(S, t) {
       count(kbBuilder, 'mdToSafeHtml(') === 1 &&
       ankiGen.includes('<option value="traps">') &&
       ankiGen.includes('EXAM TRAPS:'));
+
+    const reviewCardSpan = span('function AnkiReviewCard(', 'function AnkiSourceLinkEditor(');
+    t('v21.3 (Anki UI toggles & Preview card back): AnkiGenerator defaults includeTrapAudit=true and trapAuditMode="open" with both an Include checkbox and Always open / Collapsible (<details>) toggle, and AnkiReviewCard renders the 4-Pillar block only when revealed',
+      ankiGen.includes('const [includeTrapAudit,setIncludeTrapAudit]=useState(true);') &&
+      ankiGen.includes("const [trapAuditMode,setTrapAuditMode]=useState('open');") &&
+      ankiGen.includes('id="anki-include-trap-audit"') &&
+      ankiGen.includes('aria-label="4-Pillar Trap Audit display mode"') &&
+      ankiGen.includes('>Always open</button>') &&
+      ankiGen.includes('>Collapsible (&lt;details&gt;)</button>') &&
+      ankiGen.includes('trapAudit={includeTrapAudit?ankiCardTrapAudit(c,batch,current):null} trapAuditMode={trapAuditMode}') &&
+      reviewCardSpan.includes('revealed&&!structure.length&&trapAudit&&trapAudit.lines.length>0'));
   }
 };

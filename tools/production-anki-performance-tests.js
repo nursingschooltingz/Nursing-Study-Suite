@@ -68,6 +68,6 @@ module.exports=function productionAnkiPerformanceTests(S,t){
   new Function('useEffect','editFocus','view','tierFilter','warningFilter','styleOnly','notePage','document','setEditFocus',focusSource)(fn=>fn(),'note-101','table','all','all',false,2,{getElementById:id=>id==='anki-text-note-101'?{scrollIntoView(){focused.push('scroll');},focus(){focused.push('focus');}}:null},value=>focused.push(value));
   t('Anki page-aware edit focus reaches the mounted textarea once',JSON.stringify(focused)===JSON.stringify(['scroll','focus',null]));
   t('Anki table list and preview all render the bounded collection',S.includes('{pagedCards.map(c=><tr')&&S.includes("view==='list'&&pagedCards.map")&&S.includes("view==='preview'&&<div style={{display:'grid',gap:10}}>{pagedCards.map"));
-  t('Anki paging does not enter the export selection pipeline',S.includes('const text=ankiExportText(cards,batch,current,tierFilter,ankiHeader,includeSources);'));
+  t('Anki paging does not enter the export selection pipeline',S.includes('const text=ankiExportText(cards,batch,current,tierFilter,ankiHeader,includeSources,includeTrapAudit?trapAuditMode:false);'));
   t('Anki performance extraction reaches live source-check state and provenance helpers',typeof H.ankiAuditReviewItems==='function'&&source.includes('function ankiNoteProvenance(cards)')&&H.ankiPageRows([],0).total===0);
 };

@@ -9,6 +9,25 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [21.3] — 2026-11-14
+
+Export-time 4-Pillar Exam Trap Audit injection in Anki `Extra` (`Back Extra`) — enabled and **Always open (`<br>`)** by default for zero-tap 2-second peripheral reinforcement on iOS AnkiMobile, with both an Include/Exclude checkbox and an **Always open** vs. **Collapsible (`<details>`)** display toggle. All 11 frozen prompt constants remain byte-identical (`prompt-baseline.json` unchanged).
+
+### Added
+
+- **Deterministic Export-Time 4-Pillar Trap Audit in Anki `Extra` (`_ankiTrapAuditCache`, `ankiTrapAuditIndex`, `ankiCardTrapAudit`, `ankiExportText`, `AnkiReviewCard`, `AnkiGenerator`).** Appends a concise, 100% source-grounded **4-Pillar Trap Audit** (`[1] Twin:`, `[2] 1st vs. Rx:`, `[3] Hold / Never:`, `[4] Slope:`) to the exported `Extra` (`Back Extra`) field at `.txt` export time—and after clicking `Show answer` in the Anki `Preview` tab—for every single-exemplar note whose condition has trap-mapped facts. Caps each pillar to its single highest-priority RN-Core fact (including linked standalone medication `hold-triangle` / `never-click` facts), keeps genuine card-specific `Extra` text first at the top, omits unstated pillars cleanly without `[not stated in source]`, and skips multi-condition `Topic::Contrast`, Concept Overview, standalone entity, and plain non-trap notes. Because it composes at export time (matching `Include source references`), `card.extra`, `lintAnkiCard`, `ankiNumericAudit`, `Check against KB`, and `08 · Import to Gizmo` remain untouched.
+- **Always-Open Default + Include & Display Mode Toggles (`includeTrapAudit`, `trapAuditMode`).** Defaults to **enabled (`includeTrapAudit = true`)** and **`Always open`** (`<br>` multi-line HTML under `#html:true`, or pipe-safe single-line plain text when `Anki header` is unchecked), alongside an **`Include / Exclude`** checkbox (`#anki-include-trap-audit` with live eligible-note count) and an **`Always open`** vs. **`Collapsible (<details>)`** toggle (auto-enabling `#html:true` when `Collapsible (<details>)` is selected).
+
+### Verification
+
+- **2 new assertions (4,058 total)** in `tools/exam-trap-block-tests.js` (exercising `ankiTrapAuditIndex`, `ankiCardTrapAudit`, `ankiExportText` across `Always open`, `Collapsible (<details>)`, plain pipe-safe export, disabled toggle, `Include source references` composition, linked standalone medication hold/never-click pickup, unstated-pillar omission, plain/Concept/Contrast/entity/stale exclusions, non-mutation of `card.extra` and `ankiNumericAudit`, and `AnkiGenerator` / `AnkiReviewCard` state & UI controls).
+- **Prompt bytes.** All 11 frozen hashes in `prompt-baseline.json` are unchanged. `Prompts.md` regenerated and verified across all 22 documented prompt constants.
+- **SRI.** All eight SRI-pinned scripts and both PDF worker copies were re-hashed against their CDNs and match.
+
+See the [release verification record](docs/reviews/v21.3-release.md).
+
+---
+
 ## [21.2] — 2026-11-13
 
 Multi-select Source Role checkboxes + inline role breakdown in Step 01 Knowledge Base intake, full Priority Analyzer (`R1–R8` + `B1–B2` + `LOC vs. AIRWAY` + deceptive pseudo-improvement) alignment across NCLEX/Case generators, and NGN `Q1 → Q6` sub-section ordering in Study View. All 11 frozen prompt constants remain byte-identical (`prompt-baseline.json` unchanged).

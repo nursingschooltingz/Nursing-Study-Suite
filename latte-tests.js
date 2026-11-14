@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 4056;
+const EXPECTED_ASSERTIONS = 4058;
 
 let file;
 try {
@@ -2126,7 +2126,7 @@ section('v15.8 — Phase 2 fixes');
 {
   t('Anki edits recompute lint',S.includes('next.lint=lintAnkiCard(next);'));
   t('Anki edits recompute the abbreviation scan',S.includes("ankiUnsafeAbbrevScan(next.text,'Text',found);"));
-  t('edits retain manual selection and derive structural eligibility',S.includes('const text=ankiExportText(cards,batch,current,tierFilter,ankiHeader,includeSources);')&&!S.includes('if(hadLint&&!next.lint.length)next.keep=true;'));
+  t('edits retain manual selection and derive structural eligibility',S.includes('const text=ankiExportText(cards,batch,current,tierFilter,ankiHeader,includeSources,includeTrapAudit?trapAuditMode:false);')&&!S.includes('if(hadLint&&!next.lint.length)next.keep=true;'));
   t('abbrev findings never flip keep',!S.includes('next.abbrev.length)next.keep'));
 }
 
@@ -2254,9 +2254,9 @@ section('v15.16 — Anki preview and style checks');
   t('clearing style warnings never rechecks a manually excluded note',edited[0].keep===false);
   // Capture the actual export callback using a tiny Blob recorder; no file download
   // or Gemini call occurs. A review-only filter must not shrink exported coverage.
-  const exportSource=spanFrom('const exportTxt=useCallback(', '  },[cards,batch,current,tierFilter,ankiHeader,includeSources]);', 'function AnkiGenerator()');
+  const exportSource=spanFrom('const exportTxt=useCallback(', '  },[cards,batch,current,tierFilter,ankiHeader,includeSources,includeTrapAudit,trapAuditMode]);', 'function AnkiGenerator()');
   let exported='';
-  const makeExport=(cards,filtered,tier,header)=>new Function('cards','filteredCards','tierFilter','ankiHeader','downloadBlob','useCallback','Blob',helpers+'const current=true,batch=null,includeSources=false;'+exportSource+';return exportTxt;')(
+  const makeExport=(cards,filtered,tier,header)=>new Function('cards','filteredCards','tierFilter','ankiHeader','downloadBlob','useCallback','Blob',helpers+'const current=true,batch=null,includeSources=false,includeTrapAudit=true,trapAuditMode="open";'+exportSource+';return exportTxt;')(
     cards,filtered,tier,header,b=>{exported=b.body;},fn=>fn,class{constructor(parts){this.body=parts.join('');}});
   makeExport(notes,notes,'all',false)();
   t('export keeps clean and warned notes regardless of review filter',exported.split('\n').length===2&&exported.includes(good.text)&&exported.includes(weak.text));
