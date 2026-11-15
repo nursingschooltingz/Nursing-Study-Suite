@@ -12,7 +12,27 @@
      policy and uses only its own inline style block and system fonts. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com">
 <title>P-LATE Study Suite</title>
-<!-- v21.3 (2026-11-14): Export-Time 4-Pillar Exam Trap Audit in Anki Extra (Always-Open Default + Collapsible Toggle).
+<!-- v21.4 (2026-11-15): Local Textbook PDF TOC Inspector & Section Slicer in Step 01 + CLI Slicer + Gizmo Import Prompt Restoration & Back-Field Guardrails.
+     13 frozen prompt constants enforced in prompt-baseline.json (2 approved Gizmo constants added; all 11 prior frozen hashes unchanged).
+     (1) STEP 01 TEXTBOOK TOC INSPECTOR & SECTION SLICER (kbMergePageRanges, kbParsePageRanges, kbSuggestTextbookRole,
+     kbClassifyTocFeature, kbBuildTocTree, kbMatchTocNodes, kbResolveTocSelectionRanges, kbFormatTocSlicePlanMd,
+     kbResolvePdfDestPage, kbScanPrintedTocFallback, kbInspectPdfToc, kbSourceUnits, kbGroupUnits, KnowledgeBaseBuilder):
+     Adds a local, zero-API-call "Textbook TOC & section slicer" panel inside Step 01 · Knowledge Base that inspects PDF
+     bookmark outlines (or falls back to scanning printed Table of Contents pages with printed-to-PDF page offset estimation),
+     auto-detects textbook source role lenses (Saunders/Ignatavicius -> RN Core, Porth/McCance -> Patho Bridge, Jarvis/Bates ->
+     Exam / Diff Bridge, McCuistion/Lehne -> Pharm / GDMT Bridge), filters chapters/sections by exam exemplar keywords with
+     1-click presets (Select matches, + Abnormal Findings, + Nursing Process / Prototype boxes), and slices non-contiguous PDF
+     page ranges directly in-browser during Build Knowledge Base without extracting unselected pages.
+     (2) STANDALONE ZERO-DEPENDENCY CLI SLICER (tools/pdf-toc-slice.js): Inspects textbook PDFs from the command line across
+     both classic PDF 1.4 xref tables and PDF 1.5-1.7 compressed /Type /XRef + /Type /ObjStm streams (including PNG 10..15 and
+     TIFF 2 predictors, /PageLabels, /Outlines, /Names /Dests, and UTF-16BE titles) and outputs ready-to-paste page ranges.
+     (3) GIZMO IMPORT PROMPT RESTORATION & BACK-FIELD GUARDRAILS (GIZMO_DEFAULT_IMPORT_PROMPT, GIZMO_CONVERT_PROMPT,
+     GIZMO_LEGACY_IMPORT_PROMPT_V1, gizmoSanitizeBackNoBrackets, gizmoVerifyUnchangedProse, GizmoImporter): Restores
+     GIZMO_DEFAULT_IMPORT_PROMPT to the concise 4-line user prompt (auto-migrating cached verbose localStorage overrides),
+     promotes GIZMO_DEFAULT_IMPORT_PROMPT and GIZMO_CONVERT_PROMPT into prompt-baseline.json (13 frozen constants total), and
+     enforces deterministic post-processing that strips accidental [bracket] blanks on Back/Explanation fields and rejects
+     parenthetical abbreviation blanks while verifying 100% prose fidelity.
+     v21.3 (2026-11-14): Export-Time 4-Pillar Exam Trap Audit in Anki Extra (Always-Open Default + Collapsible Toggle).
      All 11 frozen prompt constants unchanged.
      (1) DETERMINISTIC 4-PILLAR TRAP AUDIT IN ANKI EXTRA (ankiTrapAuditIndex, ankiCardTrapAudit, ankiExportText,
      AnkiReviewCard, AnkiGenerator): Appends a concise, source-grounded 4-Pillar Trap Audit ([1] Twin, [2] 1st vs. Rx,
@@ -1890,6 +1910,343 @@ async function extractPdfTextSpaced(file,signal){
 }
 
 async function getPdfPageCount(file){const pdf=await getPdfDoc(file);return pdf.numPages;}
+
+// v21.3: Local zero-API-call Textbook PDF Table of Contents (TOC) Inspector & Section Slicer.
+// Reads embedded PDF bookmarks (or falls back to front-matter printed TOC pages when bookmarks are absent),
+// computes exact start-to-finish PDF page ranges + printed book page labels, matches exam topics/exemplars/drugs,
+// formats Ctrl+P Custom Page strings, and slices selected page ranges directly inside Step 01 without external tools.
+function kbMergePageRanges(ranges,maxPages=Infinity){
+  const cap=Number.isFinite(maxPages)&&maxPages>0?Math.floor(maxPages):Infinity;
+  const clean=[];
+  for(const r of Array.isArray(ranges)?ranges:[]){
+    if(!r||typeof r!=='object')continue;
+    let a=Math.floor(Number(r.start)),b=Math.floor(Number(r.end));
+    if(!Number.isFinite(a)||!Number.isFinite(b)||a<1||b<1)continue;
+    if(a>b){const tmp=a;a=b;b=tmp;}
+    if(a>cap)continue;
+    b=Math.min(b,cap);
+    clean.push({start:a,end:b});
+  }
+  clean.sort((x,y)=>x.start-y.start||x.end-y.end);
+  const merged=[];
+  for(const r of clean){
+    const last=merged[merged.length-1];
+    if(last&&r.start<=last.end+1)last.end=Math.max(last.end,r.end);
+    else merged.push({start:r.start,end:r.end});
+  }
+  return merged;
+}
+function kbFormatPageRanges(ranges,maxPages=Infinity){
+  return kbMergePageRanges(ranges,maxPages).map(r=>r.start===r.end?String(r.start):r.start+'-'+r.end).join(', ');
+}
+function kbCountPagesInRanges(ranges,maxPages=Infinity){
+  return kbMergePageRanges(ranges,maxPages).reduce((n,r)=>n+(r.end-r.start+1),0);
+}
+function kbParsePageRanges(input,maxPages=Infinity){
+  const cap=Number.isFinite(maxPages)&&maxPages>0?Math.floor(maxPages):Infinity;
+  if(Array.isArray(input)){
+    const ranges=kbMergePageRanges(input,cap);
+    return{ranges,invalid:[],pageCount:kbCountPagesInRanges(ranges,cap),formatted:kbFormatPageRanges(ranges,cap)};
+  }
+  const raw=String(input||'').trim();
+  if(!raw)return{ranges:[],invalid:[],pageCount:0,formatted:''};
+  const parts=raw.split(/[,;\n]+/).map(s=>s.trim()).filter(Boolean);
+  const valid=[],invalid=[];
+  for(const tok of parts){
+    const stripped=tok.replace(/^(?:pdf\s+)?(?:pages?|pp?\.?)\s*/i,'').trim();
+    const m=stripped.match(/^(\d+)\s*(?:[-\u2013\u2014]\s*(\d+))?$/);
+    if(!m){invalid.push(tok);continue;}
+    const a=Number.parseInt(m[1],10),b=m[2]!=null?Number.parseInt(m[2],10):a;
+    if(!Number.isFinite(a)||!Number.isFinite(b)||a<1||b<1||a>b||a>cap){invalid.push(tok);continue;}
+    valid.push({start:a,end:Math.min(b,cap)});
+  }
+  const ranges=kbMergePageRanges(valid,cap);
+  return{ranges,invalid,pageCount:kbCountPagesInRanges(ranges,cap),formatted:kbFormatPageRanges(ranges,cap)};
+}
+function kbSuggestTextbookRole(filename='',titles=[]){
+  const probe=(String(filename||'')+' '+(Array.isArray(titles)?titles.slice(0,12).join(' '):'')).toLowerCase().replace(/[^a-z0-9]+/g,' ');
+  if(/\b(?:porths?|mccances?|huethers?|brashers|norris|pathophysiology)\b/.test(probe))return{roles:['patho-bridge'],badge:'Patho Bridge',reason:'Pathophysiology text detected (Porth / McCance)'};
+  if(/\b(?:jarvis|bates|bickleys?|dains|seidels?|health\s+assessment|physical\s+examination)\b/.test(probe))return{roles:['exam-bridge'],badge:'Exam / Diff Bridge',reason:'Health Assessment text detected (Jarvis / Bates / Dains)'};
+  if(/\b(?:lehnes?|burchum|rosenthal|katzung|goodman)\b/.test(probe))return{roles:['pharm-bridge'],badge:'Pharm / GDMT Bridge',reason:'Mechanistic Pharmacology text detected (Lehne)'};
+  if(/\b(?:mccuistions?|lilleys?|karch|adams|pharmacology)\b/.test(probe))return{roles:['rn'],badge:'RN Core (Pharm)',reason:'Nursing-Process Pharmacology text detected (McCuistion / Lilley)'};
+  return{roles:['rn'],badge:'RN Core',reason:'Standard RN Core source'};
+}
+function kbClassifyTocFeature(title){
+  const t=String(title||'');
+  if(/\babnormal\s+findings\b|\btables?\s+of\s+abnormal\b|\bdifferential\s+diagnos/i.test(t))return'abnormal-table';
+  if(/\bprototype\s+drug\b|\bsummary\s+drug\b|\bdrug\s+chart\b|\bdrug\s+therapy\s+table/i.test(t))return'prototype-drug';
+  if(/\bnursing\s+process\b|\bpatient[-\s]centered\s+collaborative\s+care\b|\bnursing\s+management\b/i.test(t))return'nursing-process';
+  if(/\bkey\s+concepts?\b|\bchapter\s+summary\b|\breview\s+of\s+key/i.test(t))return'key-concepts';
+  return null;
+}
+function kbBuildTocTree(rawNodes,numPages,pageLabels=null){
+  const totalPages=Math.max(1,Math.floor(Number(numPages))||1);
+  const labels=Array.isArray(pageLabels)&&pageLabels.length===totalPages?pageLabels:null;
+  let seq=0;
+  const flat=[];
+  const firstValidPage=items=>{
+    for(const it of Array.isArray(items)?items:[]){
+      const p=Math.floor(Number(it?.page));
+      if(Number.isFinite(p)&&p>=1&&p<=totalPages)return p;
+      const childP=firstValidPage(it?.items);
+      if(childP)return childP;
+    }
+    return null;
+  };
+  const walk=(items,depth,parentId,ancestors,parentTitles)=>{
+    const ids=[];
+    for(const raw of Array.isArray(items)?items:[]){
+      const title=String(raw?.title||'').replace(/\s+/g,' ').trim();
+      const ownPage=Math.floor(Number(raw?.page));
+      const page=Number.isFinite(ownPage)&&ownPage>=1&&ownPage<=totalPages?ownPage:firstValidPage(raw?.items);
+      if(!title||!page)continue;
+      const id='toc-'+(++seq);
+      const node={id,title,depth,page,startPage:page,endPage:page,pageCount:1,parentId:parentId||null,ancestorIds:[...ancestors],parentPath:parentTitles.join(' › '),feature:kbClassifyTocFeature(title),childIds:[],bookStart:null,bookEnd:null,bookLabelDiffers:false};
+      flat.push(node);
+      ids.push(id);
+      if(Array.isArray(raw?.items)&&raw.items.length){
+        node.childIds=walk(raw.items,depth+1,id,[...ancestors,id],[...parentTitles,title]);
+      }
+    }
+    return ids;
+  };
+  const roots=walk(rawNodes,0,null,[],[]);
+  for(let i=0;i<flat.length;i++){
+    const cur=flat[i];
+    let nextPeerPage=null;
+    for(let j=i+1;j<flat.length;j++){
+      if(flat[j].depth<=cur.depth&&flat[j].page>=cur.page){nextPeerPage=flat[j].page;break;}
+    }
+    cur.endPage=nextPeerPage===null?totalPages:(nextPeerPage>cur.page?nextPeerPage-1:cur.page);
+  }
+  const byId=new Map(flat.map(n=>[n.id,n]));
+  for(let i=flat.length-1;i>=0;i--){
+    const n=flat[i];
+    for(const cid of n.childIds){
+      const ch=byId.get(cid);
+      if(ch&&ch.endPage>n.endPage)n.endPage=Math.min(totalPages,ch.endPage);
+    }
+    n.pageCount=Math.max(1,n.endPage-n.startPage+1);
+    if(labels){
+      const bs=String(labels[n.startPage-1]??'').trim(),be=String(labels[n.endPage-1]??'').trim();
+      if(bs){
+        n.bookStart=bs;n.bookEnd=be||bs;
+        n.bookLabelDiffers=bs!==String(n.startPage)||(be&&be!==String(n.endPage));
+      }
+    }
+  }
+  const hasBookLabels=flat.some(n=>n.bookLabelDiffers);
+  return{flat,roots,numPages:totalPages,hasBookLabels};
+}
+function _kbStemToken(w){
+  const s=String(w||'').toLowerCase();
+  if(s.length>=6&&s.endsWith('ies'))return s.slice(0,-3)+'y';
+  if(s.length>=5&&s.endsWith('es')&&!/(?:ses|xes|zes|ches|shes)$/.test(s))return s.slice(0,-1);
+  if(s.length>=5&&s.endsWith('s')&&!s.endsWith('ss')&&!s.endsWith('is')&&!s.endsWith('us'))return s.slice(0,-1);
+  return s;
+}
+function _kbNormSearchTokens(str){
+  const STOP=new Set(['the','and','for','with','from','into','across','under','over','care','client','patient','patients','nursing','chapter','unit','part','section','disorder','disorders']);
+  return String(str||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(w=>w.length>=2&&!STOP.has(w)).map(_kbStemToken);
+}
+function kbMatchTocNodes(flatNodes,queryText){
+  const rawTerms=String(queryText||'').split(/[\n,;]+/).map(s=>s.replace(/^\s*(?:[-*•]|\d+[.)]|P\d+[:.)]?)\s*/i,'').trim()).filter(s=>s.length>=2);
+  const matchedIds=new Set(),recommendedIds=new Set(),matchedTermsById=new Map();
+  if(!rawTerms.length||!Array.isArray(flatNodes)||!flatNodes.length)return{terms:[],matchedIds,recommendedIds,matchedTermsById};
+  const nodeMeta=flatNodes.map(n=>{
+    const normTitle=n.title.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+    const normFull=(n.parentPath+' '+n.title).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+    const titleToks=new Set(_kbNormSearchTokens(n.title));
+    const fullToks=new Set(_kbNormSearchTokens(n.parentPath+' '+n.title));
+    return{node:n,normTitle,normFull,titleToks,fullToks};
+  });
+  for(const term of rawTerms){
+    const normTerm=term.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+    if(!normTerm)continue;
+    const qToks=_kbNormSearchTokens(term);
+    const directHits=[],contextHits=[];
+    for(const m of nodeMeta){
+      const exactSub=normTerm.length>=3&&new RegExp('(?:^|\\s)'+normTerm.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?:s|es)?(?:\\s|$)').test(m.normTitle);
+      const tokHit=qToks.length>0&&qToks.every(qt=>m.titleToks.has(qt)||[...m.titleToks].some(tt=>tt.length>=4&&qt.length>=4&&(tt.startsWith(qt)||qt.startsWith(tt))));
+      if(exactSub||tokHit){
+        directHits.push(m.node);
+        matchedIds.add(m.node.id);
+        if(!matchedTermsById.has(m.node.id))matchedTermsById.set(m.node.id,[]);
+        if(!matchedTermsById.get(m.node.id).includes(term))matchedTermsById.get(m.node.id).push(term);
+        continue;
+      }
+      if(qToks.length>=2&&qToks.every(qt=>m.fullToks.has(qt))&&qToks.some(qt=>m.titleToks.has(qt))){
+        contextHits.push(m.node);
+      }
+    }
+    const candidates=directHits.length?directHits:contextHits;
+    if(!candidates.length)continue;
+    for(const c of candidates){
+      matchedIds.add(c.id);
+      if(!matchedTermsById.has(c.id))matchedTermsById.set(c.id,[]);
+      if(!matchedTermsById.get(c.id).includes(term))matchedTermsById.get(c.id).push(term);
+    }
+    const candIds=new Set(candidates.map(c=>c.id));
+    // Prefer the most specific matched node (no matched descendant for the same term) so "Heart Failure" inside
+    // "Ch 20: Heart Failure and Shock -> Heart Failure in Adults" slices the exact 9-page Heart Failure section,
+    // while "Heart Failure -> Pathophysiology / Manifestations / Treatment" keeps the whole Heart Failure parent.
+    let specific=candidates.filter(c=>!candidates.some(other=>other.id!==c.id&&Array.isArray(other.ancestorIds)&&other.ancestorIds.includes(c.id)));
+    const nonMega=specific.filter(c=>!(c.depth===0&&c.pageCount>65&&/^(?:part|unit|section)\b/i.test(c.title)));
+    if(nonMega.length)specific=nonMega;
+    for(const s of specific)if(candIds.has(s.id))recommendedIds.add(s.id);
+  }
+  return{terms:rawTerms,matchedIds,recommendedIds,matchedTermsById};
+}
+function kbResolveTocSelectionRanges(flatNodes,selectedIds,{padEnd=0,numPages=Infinity}={}){
+  const selSet=selectedIds instanceof Set?selectedIds:new Set(Array.isArray(selectedIds)?selectedIds:[]);
+  const pad=Math.max(0,Math.min(5,Math.floor(Number(padEnd))||0));
+  const cap=Number.isFinite(numPages)&&numPages>0?Math.floor(numPages):Infinity;
+  const selectedNodes=(Array.isArray(flatNodes)?flatNodes:[]).filter(n=>selSet.has(n.id));
+  const rawRanges=selectedNodes.map(n=>({start:n.startPage,end:Math.min(cap,n.endPage+pad)}));
+  const ranges=kbMergePageRanges(rawRanges,cap);
+  return{ranges,formatted:kbFormatPageRanges(ranges,cap),pageCount:kbCountPagesInRanges(ranges,cap),selectedNodes};
+}
+function kbFormatTocSlicePlanMd(report,selection,{padEnd=0}={}){
+  if(!report||!selection)return'';
+  const lines=[
+    '### Textbook Slice Plan — '+(report.fileName||'PDF'),
+    '- **Ctrl+P Custom Pages:** `'+(selection.formatted||'none')+'` ('+selection.pageCount+' of '+report.numPages+' PDF pages'+(padEnd>0?' · includes +'+padEnd+' boundary page pad':'')+')',
+    '- **Suggested Step 01 Role:** '+(report.suggestedRole?.badge||'RN Core')+' — '+(report.suggestedRole?.reason||''),
+  ];
+  if(report.source==='printed-toc')lines.push('- **TOC Source:** Printed front-matter Table of Contents scan (estimated PDF offset '+(report.tocOffset>=0?'+'+report.tocOffset:report.tocOffset)+'; verify first page before printing)');
+  if(selection.selectedNodes.length){
+    lines.push('- **Selected Sections ('+selection.selectedNodes.length+'):**');
+    for(const n of selection.selectedNodes){
+      const pdfSpan=n.startPage===n.endPage?'PDF p. '+n.startPage:'PDF pp. '+n.startPage+'–'+n.endPage;
+      const bookSpan=n.bookLabelDiffers?' (Book '+(n.bookStart===n.bookEnd?'p. '+n.bookStart:'pp. '+n.bookStart+'–'+n.bookEnd)+')':'';
+      lines.push('  - '+(n.parentPath?n.parentPath+' › ':'')+'**'+n.title+'** — '+pdfSpan+bookSpan+' ('+n.pageCount+' pp.)');
+    }
+  }
+  return lines.join('\n');
+}
+async function kbResolvePdfDestPage(pdf,dest){
+  try{
+    let d=dest;
+    if(typeof d==='string')d=await pdf.getDestination(d);
+    if(!Array.isArray(d)||!d.length)return null;
+    const ref=d[0];
+    if(typeof ref==='number'&&Number.isFinite(ref))return Math.floor(ref)+1;
+    if(ref&&typeof ref==='object'){
+      const idx=await pdf.getPageIndex(ref);
+      if(Number.isFinite(idx))return idx+1;
+    }
+  }catch(e){}
+  return null;
+}
+async function kbScanPrintedTocFallback(file,numPages,{signal}={}){
+  const maxScan=Math.min(numPages,35);
+  const tocEntries=[];
+  let tocEndPdfPage=0;
+  const lineRe=/^(?:(unit|part|section|chapter|ch\.?)\s+([0-9ivxlcdm]+)\s*[:.—–-]?\s*)?([A-Za-z][^\n\t]{3,110}?)(?:\s*[.\u2024\u00b7…]{2,}\s*|\s{2,}|\t+)(\d{1,4})\s*$/i;
+  await pdfWalkPages(file,{signal,from:1,to:maxScan,onPage:(text,pdfPage)=>{
+    const lines=String(text||'').split('\n').map(l=>l.trim()).filter(Boolean);
+    const headerBlob=lines.slice(0,6).join(' ').toLowerCase();
+    const looksLikeToc=/\b(?:contents|table\s+of\s+contents|brief\s+contents)\b/.test(headerBlob)||(tocEntries.length>0&&pdfPage<=tocEndPdfPage+2);
+    let pageHits=0;
+    const pending=[];
+    for(const ln of lines){
+      const m=ln.match(lineRe);
+      if(!m)continue;
+      const kind=(m[1]||'').toLowerCase(),num=m[2]||'',rawTitle=m[3].replace(/\s*[.\u2024\u00b7…]+\s*$/,'').trim(),bookPage=Number.parseInt(m[4],10);
+      if(!rawTitle||!Number.isFinite(bookPage)||bookPage<1||bookPage>numPages+100)continue;
+      if(/^(?:figure|table|box|chart|appendix|index|glossary)\s+\d/i.test(rawTitle))continue;
+      const isUnit=/^(?:unit|part|section)$/i.test(kind);
+      const isChap=/^(?:chapter|ch\.?)$/i.test(kind);
+      const fullTitle=kind?(kind[0].toUpperCase()+kind.slice(1)+' '+num+': '+rawTitle):rawTitle;
+      pending.push({title:fullTitle,bookPage,level:isUnit?0:isChap?1:2});
+      pageHits++;
+    }
+    if((looksLikeToc&&pageHits>=2)||pageHits>=5){
+      tocEntries.push(...pending);
+      tocEndPdfPage=Math.max(tocEndPdfPage,pdfPage);
+    }
+  }});
+  if(!tocEntries.length)return{rawNodes:[],offset:0};
+  // Estimate PDF-page minus printed-book-page offset by sampling a few pages right after the TOC.
+  const offsets=[];
+  const probeStart=Math.min(numPages,Math.max(tocEndPdfPage+1,2)),probeEnd=Math.min(numPages,probeStart+25);
+  if(probeStart<=probeEnd){
+    await pdfWalkPages(file,{signal,from:probeStart,to:probeEnd,onPage:(text,pdfPage)=>{
+      const lines=String(text||'').split('\n').map(l=>l.trim()).filter(Boolean);
+      for(const edge of [lines[0],lines[1],lines[lines.length-1],lines[lines.length-2]]){
+        if(!edge||/^(?:chapter|ch\.?|unit|part|section)\s+\d+$/i.test(edge))continue;
+        const m=edge.match(/^(?:page\s+)?(\d{1,3})$/i)||edge.match(/\b(\d{1,3})\s*$/);
+        if(m){
+          const bp=Number.parseInt(m[1],10);
+          const diff=pdfPage-bp;
+          if(bp>=1&&bp<=60&&diff>=0&&diff<=80){offsets.push(diff);break;}
+        }
+      }
+    }});
+  }
+  offsets.sort((a,b)=>a-b);
+  const offset=offsets.length?offsets[Math.floor(offsets.length/2)]:tocEndPdfPage;
+  // Build nested structure from level 0/1/2
+  const hasUnits=tocEntries.some(e=>e.level===0),hasChaps=tocEntries.some(e=>e.level===1);
+  const roots=[];let curUnit=null,curChap=null;
+  for(const e of tocEntries){
+    const pdfPage=Math.max(1,Math.min(numPages,e.bookPage+offset));
+    const item={title:e.title,page:pdfPage,items:[]};
+    if(e.level===0){roots.push(item);curUnit=item;curChap=null;}
+    else if(e.level===1){if(hasUnits&&curUnit)curUnit.items.push(item);else roots.push(item);curChap=item;}
+    else{if(hasChaps&&curChap)curChap.items.push(item);else if(hasUnits&&curUnit)curUnit.items.push(item);else roots.push(item);}
+  }
+  return{rawNodes:roots,offset};
+}
+async function kbInspectPdfToc(file,{signal}={}){
+  if(signal?.aborted)throw new DOMException('Aborted','AbortError');
+  if(!file||!(/\.pdf$/i.test(file.name||'')||file.type==='application/pdf'))throw new Error('Select a PDF textbook file to inspect its Table of Contents.');
+  try{
+    const pdf=await getPdfDoc(file);
+    if(signal?.aborted)throw new DOMException('Aborted','AbortError');
+    const numPages=pdf.numPages;
+    let outline=null,pageLabels=null;
+    try{outline=await pdf.getOutline();}catch(e){outline=null;}
+    if(typeof pdf.getPageLabels==='function'){try{pageLabels=await pdf.getPageLabels();}catch(e){pageLabels=null;}}
+    const resolveItems=async items=>{
+      const out=[];
+      for(const it of Array.isArray(items)?items:[]){
+        if(signal?.aborted)throw new DOMException('Aborted','AbortError');
+        const page=await kbResolvePdfDestPage(pdf,it.dest);
+        const kids=Array.isArray(it.items)&&it.items.length?await resolveItems(it.items):[];
+        out.push({title:it.title||'',page,items:kids});
+      }
+      return out;
+    };
+    let source='outline',tocOffset=0;
+    let resolved=outline&&outline.length?await resolveItems(outline):[];
+    let tree=kbBuildTocTree(resolved,numPages,pageLabels);
+    if(!tree.flat.length){
+      const fb=await kbScanPrintedTocFallback(file,numPages,{signal});
+      if(fb.rawNodes.length){
+        source='printed-toc';tocOffset=fb.offset;
+        tree=kbBuildTocTree(fb.rawNodes,numPages,pageLabels);
+      }else{
+        source='none';
+      }
+    }
+    const topTitles=tree.flat.filter(n=>n.depth<=1).slice(0,15).map(n=>n.title);
+    const suggestedRole=kbSuggestTextbookRole(file.name,topTitles);
+    return{
+      fileName:file.name||'textbook.pdf',
+      fileSize:file.size||0,
+      numPages,
+      source,
+      tocOffset,
+      hasBookLabels:tree.hasBookLabels,
+      roots:tree.roots,
+      flat:tree.flat,
+      suggestedRole
+    };
+  }finally{
+    destroyPdfDoc(file);
+  }
+}
 
 // Markdown to plain text
 function markdownToPlainText(md){
@@ -4738,7 +5095,7 @@ function kbUnitLabel(units){
   const a=units[0],b=units[units.length-1];
   return a.n===b.n?`${a.kind} ${a.n}`:`${a.kind}s ${a.n}–${b.n}`;
 }
-async function kbSourceUnits(file,{signal,onProgress,composition}={}){
+async function kbSourceUnits(file,{signal,onProgress,composition,pageRanges}={}){
   const name=(file.name||'').toLowerCase();
   if(name.endsWith('.pptx')){
     // v16.7: PPTX extraction must share the same Cancel signal as PDF extraction.
@@ -4758,6 +5115,22 @@ async function kbSourceUnits(file,{signal,onProgress,composition}={}){
     // probe still runs before cleanup, because pdfWalkPages cleans up in a finally AFTER
     // awaiting onPage — the operator list is exactly what cleanup() releases.
     const units=[];
+    // v21.3: when a textbook PDF carries an explicit page slice in Step 01, walk only those exact segments
+    // while keeping each unit's true PDF page number `i` intact for citations.
+    const _segs=Array.isArray(pageRanges)&&pageRanges.length?(typeof kbMergePageRanges==='function'?kbMergePageRanges(pageRanges):pageRanges.filter(r=>r&&r.start>=1&&r.end>=r.start)):[];
+    if(_segs.length){
+      const seen=new Set(),sliceTotal=_segs.reduce((n,r)=>n+Math.max(0,r.end-r.start+1),0);
+      let sliceDone=0;
+      for(const seg of _segs){
+        await pdfWalkPages(file,{signal,from:seg.start,to:seg.end,onPage:async(text,i,pg)=>{
+          if(seen.has(i))return;seen.add(i);sliceDone++;
+          units.push({kind:'page',n:i,text:'\n--- PAGE '+i+' ---\n'+text});
+          if(composition){try{units[units.length-1].composition=await kbPageComposition(pg);}catch(e){units[units.length-1].compositionError=String(e.message||e);}}
+          if(onProgress&&(sliceDone%10===0||sliceDone>=sliceTotal))onProgress(sliceDone,sliceTotal);
+        }});
+      }
+      return units;
+    }
     await pdfWalkPages(file,{signal,onPage:async(text,i,pg,total)=>{
       units.push({kind:'page',n:i,text:'\n--- PAGE '+i+' ---\n'+text});
       // v16.7: unavailable composition evidence must not look like a successful empty probe.
@@ -4777,15 +5150,21 @@ function kbGroupUnits(units,maxChars,overlap){
   if(!units||!units.length)return[];
   const groups=[];let cur=[],len=0;
   for(let i=0;i<units.length;i++){
-    if(cur.length&&len+units[i].text.length>maxChars){groups.push(cur);cur=[];len=0;}
+    // v21.3: break groups at non-contiguous page jumps (e.g. sliced pp. 410-414 + pp. 580-584) so chunk labels stay truthful and distant chapters never share a chunk.
+    const pageJump=cur.length>0&&Number.isFinite(units[i]?.n)&&Number.isFinite(units[i-1]?.n)&&units[i].n>units[i-1].n+1;
+    if(pageJump||(cur.length&&len+units[i].text.length>maxChars)){groups.push(cur);cur=[];len=0;}
     cur.push(i);len+=units[i].text.length;
   }
   if(cur.length)groups.push(cur);
   return groups.map((g,gi)=>{
     let idx=g;
     if(gi>0&&overlap>0){
-      const prev=groups[gi-1],carry=prev.slice(Math.max(0,prev.length-overlap)),have=new Set(idx);
-      idx=[...carry.filter(x=>!have.has(x)),...idx];
+      const prev=groups[gi-1],lastPrev=units[prev[prev.length-1]],firstCur=units[g[0]];
+      const contiguous=!Number.isFinite(lastPrev?.n)||!Number.isFinite(firstCur?.n)||firstCur.n<=lastPrev.n+1;
+      if(contiguous){
+        const carry=prev.slice(Math.max(0,prev.length-overlap)),have=new Set(idx);
+        idx=[...carry.filter(x=>!have.has(x)),...idx];
+      }
     }
     const u=idx.map(x=>units[x]);
     return{text:u.map(x=>x.text).join('\n'),label:kbUnitLabel(u),units:u};
@@ -5563,7 +5942,24 @@ function KnowledgeBaseBuilder(){
   const [txReviewed,setTxReviewed]=useState(false);
   const txAbortRef=useRef(null),replacementSlot=useRef(createOperationSlot()),currentFiles=useRef(files);
   currentFiles.current=files;
-  useEffect(()=>()=>{replacementSlot.current.cancel();txAbortRef.current?.abort();txAbortRef.current=null;currentFiles.current.forEach(destroyPdfDoc);},[]);
+  const [sourcePageRanges,setSourcePageRanges]=useState({});
+  // v21.3: local zero-API-call Textbook TOC Inspector & Section Slicer state inside KnowledgeBaseBuilder.
+  const [tocOpen,setTocOpen]=useState(false);
+  const [tocFile,setTocFile]=useState(null);
+  const [tocBusy,setTocBusy]=useState(false);
+  const [tocErr,setTocErr]=useState('');
+  const [tocReport,setTocReport]=useState(null);
+  const [tocSelectedIds,setTocSelectedIds]=useState([]);
+  const [tocExpandedIds,setTocExpandedIds]=useState([]);
+  const [tocQuery,setTocQuery]=useState('');
+  const [tocPadEnd,setTocPadEnd]=useState(false);
+  const [tocFilterMatched,setTocFilterMatched]=useState(false);
+  const [tocShowPanel,setTocShowPanel]=useState(true);
+  const [tocNotice,setTocNotice]=useState('');
+  const [tocManualRange,setTocManualRange]=useState('');
+  const tocFileRef=useRef(null),tocAbortRef=useRef(null),tocNoticeTimer=useRef(null),currentTocFile=useRef(null);
+  currentTocFile.current=tocFile;
+  useEffect(()=>()=>{replacementSlot.current.cancel();txAbortRef.current?.abort();txAbortRef.current=null;tocAbortRef.current?.abort();tocAbortRef.current=null;if(tocNoticeTimer.current)clearTimeout(tocNoticeTimer.current);if(currentTocFile.current)destroyPdfDoc(currentTocFile.current);currentFiles.current.forEach(destroyPdfDoc);},[]);
   const [kbOutcomes,setKbOutcomes]=useState('');
   const [kbPoints,setKbPoints]=useState('');
   const [kbExtra,setKbExtra]=useState('');
@@ -5579,6 +5975,80 @@ function KnowledgeBaseBuilder(){
   const [kbPlateBridge,setKbPlateBridge]=useState(false);
   const [kbCapBridgeTier,setKbCapBridgeTier]=useState(true);
   const [kbView,setKbView]=useState('study');
+  const noteTocStatus=msg=>{setTocNotice(msg);if(tocNoticeTimer.current)clearTimeout(tocNoticeTimer.current);tocNoticeTimer.current=setTimeout(()=>setTocNotice(''),3200);};
+  const tocMatchInfo=useMemo(()=>tocReport?kbMatchTocNodes(tocReport.flat,tocQuery):{terms:[],matchedIds:new Set(),recommendedIds:new Set(),matchedTermsById:new Map()},[tocReport,tocQuery]);
+  const tocSelection=useMemo(()=>tocReport?kbResolveTocSelectionRanges(tocReport.flat,tocSelectedIds,{padEnd:tocPadEnd?1:0,numPages:tocReport.numPages}):{ranges:[],formatted:'',pageCount:0,selectedNodes:[]},[tocReport,tocSelectedIds,tocPadEnd]);
+  const inspectPdfForSlice=async(file,queryOverride)=>{
+    if(!file)return;
+    tocAbortRef.current?.abort();
+    const ctl=new AbortController();tocAbortRef.current=ctl;
+    setTocOpen(true);setTocFile(file);setTocBusy(true);setTocErr('');setTocShowPanel(true);setTocNotice('');
+    const fallbackFocus=[kbConcepts,kbPoints,kbOutcomes].map(s=>String(s||'').trim()).filter(Boolean).join('\n');
+    const effectiveQuery=typeof queryOverride==='string'?queryOverride:(tocQuery.trim()||fallbackFocus);
+    if(!tocQuery.trim()&&effectiveQuery)setTocQuery(effectiveQuery);
+    try{
+      const rep=await kbInspectPdfToc(file,{signal:ctl.signal});
+      if(tocAbortRef.current!==ctl||ctl.signal.aborted)return;
+      setTocReport(rep);
+      const matches=effectiveQuery?kbMatchTocNodes(rep.flat,effectiveQuery):{matchedIds:new Set(),recommendedIds:new Set()};
+      setTocSelectedIds([...matches.recommendedIds]);
+      const exp=new Set(rep.roots.length<=12?rep.roots:[]);
+      for(const n of rep.flat){if(matches.matchedIds.has(n.id))for(const aid of n.ancestorIds)exp.add(aid);}
+      setTocExpandedIds([...exp]);
+      setTocFilterMatched(false);
+    }catch(e){
+      if(tocAbortRef.current!==ctl||e?.name==='AbortError')return;
+      setTocReport(null);setTocSelectedIds([]);setTocExpandedIds([]);
+      setTocErr(e.message||String(e));
+    }finally{
+      if(tocAbortRef.current===ctl){tocAbortRef.current=null;setTocBusy(false);}
+    }
+  };
+  const autoSelectTocMatches=(overrideQuery)=>{
+    if(!tocReport)return;
+    const q=typeof overrideQuery==='string'?overrideQuery:tocQuery;
+    const m=kbMatchTocNodes(tocReport.flat,q);
+    const ids=[...m.recommendedIds];
+    setTocSelectedIds(ids);
+    if(m.matchedIds.size){
+      setTocExpandedIds(prev=>{
+        const next=new Set(prev);
+        for(const n of tocReport.flat){if(m.matchedIds.has(n.id))for(const aid of n.ancestorIds)next.add(aid);}
+        return[...next];
+      });
+    }
+    noteTocStatus(ids.length?'✓ Selected '+ids.length+' matching section(s)':'No matching TOC headings found');
+  };
+  const addTocFeatureNodes=kinds=>{
+    if(!tocReport)return;
+    const want=new Set(Array.isArray(kinds)?kinds:[kinds]);
+    const hits=tocReport.flat.filter(n=>n.feature&&want.has(n.feature)).map(n=>n.id);
+    if(!hits.length){noteTocStatus('No headings of that type in this TOC');return;}
+    setTocSelectedIds(prev=>[...new Set([...prev,...hits])]);
+    setTocExpandedIds(prev=>{
+      const next=new Set(prev);
+      for(const n of tocReport.flat){if(n.feature&&want.has(n.feature))for(const aid of n.ancestorIds)next.add(aid);}
+      return[...next];
+    });
+    noteTocStatus('✓ Added '+hits.length+' section(s)');
+  };
+  const applyTocSliceToStep1=({applyRole=true,customRange}={})=>{
+    if(!tocFile)return;
+    const rangeStr=typeof customRange==='string'?customRange.trim():tocSelection.formatted;
+    const parsed=kbParsePageRanges(rangeStr,tocReport?.numPages||Infinity);
+    if(!parsed.ranges.length||parsed.invalid.length){
+      setTocErr('Select at least one section in the TOC tree or enter a valid PDF page range (e.g. 512-520, 531-536) before sending to Step 01.');
+      return;
+    }
+    setTocErr('');
+    const fid=cardFileId(tocFile);
+    setFiles(prev=>prev.some(x=>cardFileId(x)===fid)?prev:[...prev,tocFile]);
+    setSourcePageRanges(prev=>({...prev,[fid]:parsed.formatted}));
+    if(applyRole&&tocReport?.suggestedRole?.roles?.length){
+      setSourceRoles(prev=>({...prev,[fid]:tocReport.suggestedRole.roles}));
+    }
+    noteTocStatus('✓ Sent pp. '+parsed.formatted+' ('+parsed.pageCount+' pp.'+(applyRole&&tocReport?.suggestedRole?.badge?' · '+tocReport.suggestedRole.badge:'')+') to Step 01');
+  };
   // A Knowledge Base restored from persistence never ran through build()/importJSON(), so
   // nothing was selected and the detail pane sat on "Select a condition." after every reload.
   // Select the first condition whenever the current selection is absent from the loaded KB.
@@ -5745,6 +6215,7 @@ function KnowledgeBaseBuilder(){
     const _normRoles=r=>typeof kbNormalizeSourceRoles==='function'?kbNormalizeSourceRoles(r):(Array.isArray(r)?(r.length?r:['rn']):[r||'rn']);
     const _defaultRoles=typeof defaultSourceRoles!=='undefined'?_normRoles(defaultSourceRoles):['rn'];
     const _sourceRoles=typeof sourceRoles==='object'&&sourceRoles?sourceRoles:{};
+    const _sourcePageRanges=typeof sourcePageRanges==='object'&&sourcePageRanges?sourcePageRanges:{};
     const baseFocusBlock=kbBuildFocusBlock(kbOutcomes,kbPoints,kbExtra,focusMode,_concepts,_conceptAuto,_examTraps,_plateBridge,'rn');
     const hasFocusText=Boolean(String(kbOutcomes||'').trim()||String(kbPoints||'').trim()||String(kbExtra||'').trim());
     const scoped=hasFocusText&&focusMode==='scope';
@@ -5774,10 +6245,24 @@ function KnowledgeBaseBuilder(){
       }
       for(const f of files.filter(x=>!cardIsImage(x))){
         // v21.0/v21.2: guard cardFileId so standalone build() source-regression closures without card helpers in scope still run.
-        const rawFileRoles=_sourceRoles[typeof cardFileId==='function'?cardFileId(f):f.name]||_defaultRoles;
+        const fid=typeof cardFileId==='function'?cardFileId(f):f.name;
+        const rawFileRoles=_sourceRoles[fid]||_defaultRoles;
         const normFileRoles=_normRoles(rawFileRoles);
         const fileRole=normFileRoles.length===1?normFileRoles[0]:normFileRoles;
-        try{const chunks=await kbBuildSourceChunks(f,chunkChars,overlapUnits,{signal:controller.signal,onProgress:(p,tot)=>owned_addLog(`Reading ${f.name} — page ${p}/${tot}`),
+        // v21.3: apply optional per-PDF page slices from Step 01 / Textbook TOC Slicer while preserving isolated build() test closures.
+        const isPdfSrc=/\.pdf$/i.test(f.name||'')||f.type==='application/pdf';
+        const rawSlice=isPdfSrc&&typeof _sourcePageRanges[fid]==='string'?_sourcePageRanges[fid].trim():(isPdfSrc&&typeof _sourcePageRanges[f.name]==='string'?_sourcePageRanges[f.name].trim():'');
+        let sliceRanges=null;
+        if(rawSlice&&typeof kbParsePageRanges==='function'){
+          const parsedSlice=kbParsePageRanges(rawSlice);
+          if(parsedSlice.invalid.length||!parsedSlice.ranges.length){
+            const msg=f.name+': invalid page slice "'+rawSlice+'"'+(parsedSlice.invalid.length?' (unrecognized: '+parsedSlice.invalid.join(', ')+')':'')+' — file skipped.';
+            owned_addLog('✕ '+msg,'err');problems.push(msg);continue;
+          }
+          sliceRanges=parsedSlice.ranges;
+          owned_addLog(`✂ ${f.name}: slicing PDF pages ${parsedSlice.formatted} (${parsedSlice.pageCount} page(s))`,'ok');
+        }
+        try{const chunks=await kbBuildSourceChunks(f,chunkChars,overlapUnits,{...(sliceRanges?{pageRanges:sliceRanges}:{}),signal:controller.signal,onProgress:(p,tot)=>owned_addLog(`Reading ${f.name} — page ${p}/${tot}`),
           composition:probeComposition,
           onComposition:c=>{composition[f.name]=c;},
           onDiagnostic:d=>{const issue={file:f.name,...d};diagnosticsUnavailable.push(issue);const msg=f.name+': '+d.kind+' diagnostics unavailable — '+d.message;problems.push(msg);owned_addLog('⚠ '+msg,'warn');},
@@ -6092,7 +6577,7 @@ function KnowledgeBaseBuilder(){
     setup={<>
       <Step n="01" title="Sources" note={files.length?files.length+(files.length===1?' file':' files'):'none yet'} lede="PDFs and PPTX decks are read as text. Flashcard photos have no text layer, so they are transcribed first and reviewed before they become facts.">
     <div role="button" tabIndex={0} aria-label="Add PDF, PPTX, or flashcard image source files" onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fileRef.current?.click();}}} className="upload-zone" onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();addFiles(e.dataTransfer.files)}}><h3>Drop PDF, PPTX, or flashcard photos</h3><p>Large sources are processed in page or slide chunks; successful chunks are retained even if another chunk fails. Flashcard photos are transcribed first, and you review the transcript before it becomes facts.</p><input aria-label="Source files" ref={fileRef} type="file" multiple accept=".pdf,.pptx,.jpg,.jpeg,.png,.webp,.heic,.heif" style={{display:'none'}} onChange={e=>{addFiles(e.target.files);e.target.value=''}}/></div>
-    {files.length>0&&<div style={{marginTop:8}}>{files.map((f,i)=>{const fid=cardFileId(f),fRoles=kbNormalizeSourceRoles(sourceRoles[fid]||normDefRoles);return <div className="file-chip" key={cardFileId(f)} style={{flexWrap:'wrap'}}><div className={'f-icon '+getExt(f.name)}>{getExt(f.name)}</div><span className="f-name">{f.name}</span><span className="f-size">{formatSize(f.size)}</span><button className="f-rm" aria-label={'Remove source '+f.name} onClick={()=>{destroyPdfDoc(f);currentFiles.current=currentFiles.current.filter(x=>cardFileId(x)!==fid);txAbortRef.current?.abort();if(busy)abortRef.current?.abort();setTranscripts(p=>{const n={...p};delete n[cardFileId(f)];return n;});setTxReviewed(false);setSourceRoles(p=>{const n={...p};delete n[fid];return n;});setFiles(currentFiles.current);}}>×</button><div role="group" aria-label={'Source roles for '+f.name} style={{width:'100%',display:'flex',flexWrap:'wrap',gap:'4px 6px',paddingTop:5,marginTop:2,borderTop:'1px solid var(--border)'}}>{KB_SOURCE_ROLES.map(([rv,rl])=>{const checked=fRoles.includes(rv);return <label key={rv} title={KB_SOURCE_ROLE_GUIDE[rv]} style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:11,padding:'1px 6px',borderRadius:4,border:'1px solid '+(checked?'var(--blue-line)':'var(--border)'),background:checked?'var(--blue-tint)':'var(--bg-deep)',color:checked?'var(--blue-deep)':'var(--text-dim)',cursor:'pointer',fontWeight:checked?600:400}}><input type="checkbox" aria-label={rl+' role for '+f.name} checked={checked} onChange={()=>setSourceRoles(p=>({...p,[fid]:kbToggleSourceRole(p[fid]||normDefRoles,rv)}))} style={{accentColor:'var(--accent)',margin:0}}/><span>{rl}</span></label>;})}</div></div>;})}</div>}
+    {files.length>0&&<div style={{marginTop:8}}>{files.map((f,i)=>{const fid=cardFileId(f),fRoles=kbNormalizeSourceRoles(sourceRoles[fid]||normDefRoles),isPdf=/\.pdf$/i.test(f.name||'')||f.type==='application/pdf',rawSlice=isPdf?(sourcePageRanges[fid]||''):'',parsedSlice=rawSlice?kbParsePageRanges(rawSlice):null;return <div className="file-chip" key={cardFileId(f)} style={{flexWrap:'wrap'}}><div className={'f-icon '+getExt(f.name)}>{getExt(f.name)}</div><span className="f-name">{f.name}</span><span className="f-size">{formatSize(f.size)}</span>{isPdf&&<button type="button" className="btn-ghost" style={{fontSize:11,padding:'1px 7px',minHeight:22}} title="Inspect PDF Table of Contents and choose exact sections to slice (0 API calls)" onClick={()=>inspectPdfForSlice(f)}>✂ Slice / TOC</button>}<button className="f-rm" aria-label={'Remove source '+f.name} onClick={()=>{destroyPdfDoc(f);currentFiles.current=currentFiles.current.filter(x=>cardFileId(x)!==fid);txAbortRef.current?.abort();if(busy)abortRef.current?.abort();setTranscripts(p=>{const n={...p};delete n[cardFileId(f)];return n;});setTxReviewed(false);setSourceRoles(p=>{const n={...p};delete n[fid];return n;});setSourcePageRanges(p=>{const n={...p};delete n[fid];return n;});setFiles(currentFiles.current);}}>×</button><div role="group" aria-label={'Source roles for '+f.name} style={{width:'100%',display:'flex',flexWrap:'wrap',gap:'4px 6px',paddingTop:5,marginTop:2,borderTop:'1px solid var(--border)'}}>{KB_SOURCE_ROLES.map(([rv,rl])=>{const checked=fRoles.includes(rv);return <label key={rv} title={KB_SOURCE_ROLE_GUIDE[rv]} style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:11,padding:'1px 6px',borderRadius:4,border:'1px solid '+(checked?'var(--blue-line)':'var(--border)'),background:checked?'var(--blue-tint)':'var(--bg-deep)',color:checked?'var(--blue-deep)':'var(--text-dim)',cursor:'pointer',fontWeight:checked?600:400}}><input type="checkbox" aria-label={rl+' role for '+f.name} checked={checked} onChange={()=>setSourceRoles(p=>({...p,[fid]:kbToggleSourceRole(p[fid]||normDefRoles,rv)}))} style={{accentColor:'var(--accent)',margin:0}}/><span>{rl}</span></label>;})}</div>{isPdf&&<div style={{width:'100%',display:'flex',alignItems:'center',gap:6,flexWrap:'wrap',paddingTop:5,marginTop:3,borderTop:'1px dashed var(--border)'}}><span style={{fontSize:11,color:'var(--text-dim)',fontWeight:600}}>Page slice:</span><input type="text" aria-label={'Page slice for '+f.name} value={rawSlice} onChange={e=>setSourcePageRanges(p=>({...p,[fid]:e.target.value}))} placeholder="All pages (or e.g. 512-520, 531-536)" style={{flex:1,minWidth:170,fontSize:11.5,padding:'2px 7px',height:24,fontFamily:'JetBrains Mono'}}/>{parsedSlice&&(parsedSlice.invalid.length>0||!parsedSlice.ranges.length?<span style={{fontSize:11,color:'var(--accent-red)',fontWeight:600}}>Invalid range</span>:<span style={{fontSize:11,color:'var(--accent-green)',fontFamily:'JetBrains Mono'}}>{parsedSlice.pageCount} pp. ({parsedSlice.formatted})</span>)}{rawSlice&&<button type="button" className="btn-ghost" style={{fontSize:11,padding:'1px 6px',minHeight:22}} onClick={()=>setSourcePageRanges(p=>{const n={...p};delete n[fid];return n;})}>All pages</button>}</div>}</div>;})}</div>}
     <div className="field-block" style={{marginTop:10,padding:'9px 11px',borderRadius:'var(--radius)',border:'1px solid var(--border)',background:'var(--bg-deep)'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6,flexWrap:'wrap',marginBottom:5}}>
         <span style={{fontSize:12,fontWeight:600,color:'var(--text-bright)'}}>Source roles <span className="badge-opt">select one or more</span></span>
@@ -6148,6 +6633,46 @@ function KnowledgeBaseBuilder(){
       <div style={{fontSize:12,color:'var(--accent)'}}>Transcribe: {cfg.forTool('cardTranscribe').model} · {cfg.forTool('cardTranscribe').level}</div>
       {txErr&&<div className="error-banner" style={{marginTop:10}}>⚠ {txErr}</div>}
       </Step>}
+      <Disclose summary="Textbook TOC & section slicer" open={tocOpen} note={tocBusy?'scanning…':tocReport?(tocSelection.pageCount?tocSelection.pageCount+' pp. selected':tocReport.flat.length+' headings'):'local · 0 API calls'}>
+        <p className="sect-lede">Inspect a 1,500-page textbook PDF locally (Porth, McCuistion, Jarvis, Lehne, Saunders) with zero API calls. Match your exam topics to exact start-to-finish sections, copy the <code>Ctrl + P</code> Custom Pages range, or send the sliced PDF straight to Step 01 so Build reads only those pages.</p>
+        <div role="button" tabIndex={0} aria-label="Choose a textbook PDF to inspect its Table of Contents" onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();tocFileRef.current?.click();}}} className="upload-zone" style={{padding:'12px 14px',marginBottom:8}} onClick={()=>tocFileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();const f=Array.from(e.dataTransfer.files||[]).find(x=>/\.pdf$/i.test(x.name||'')||x.type==='application/pdf');if(f)inspectPdfForSlice(f);}}>
+          <h3 style={{fontSize:13,marginBottom:3}}>{tocFile?'📄 '+tocFile.name:'Drop or choose a textbook PDF to inspect'}</h3>
+          <p style={{fontSize:11.5,margin:0}}>{tocReport?`${tocReport.numPages} PDF pages · ${tocReport.flat.length} TOC entries · Suggested lens: ${tocReport.suggestedRole?.badge||'RN Core'}`:'Reads embedded PDF bookmarks (or front-matter Contents pages) right in your browser — nothing is uploaded.'}</p>
+          <input aria-label="Textbook PDF for TOC inspection" ref={tocFileRef} type="file" accept=".pdf,application/pdf" style={{display:'none'}} onChange={e=>{const f=e.target.files?.[0];if(f)inspectPdfForSlice(f);e.target.value='';}}/>
+        </div>
+        {files.some(f=>/\.pdf$/i.test(f.name||'')||f.type==='application/pdf')&&<div style={{display:'flex',gap:5,flexWrap:'wrap',marginBottom:8}}>
+          <span style={{fontSize:11,color:'var(--text-dim)',alignSelf:'center'}}>From Step 01:</span>
+          {files.filter(f=>/\.pdf$/i.test(f.name||'')||f.type==='application/pdf').map(f=><button key={cardFileId(f)} type="button" className="btn-ghost" style={{fontSize:11,padding:'2px 7px',minHeight:22}} onClick={()=>inspectPdfForSlice(f)}>Inspect {f.name}</button>)}
+        </div>}
+        <div className="field-block" style={{marginBottom:8}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6,flexWrap:'wrap',marginBottom:4}}>
+            <label htmlFor="kb-toc-query" style={{fontSize:12,margin:0}}>Exam topics, exemplars, or drug classes <span className="badge-opt">optional</span></label>
+            {(kbConcepts.trim()||kbPoints.trim()||kbOutcomes.trim())&&<button type="button" className="btn-ghost" style={{fontSize:11,padding:'1px 6px',minHeight:22}} onClick={()=>{const merged=[kbConcepts,kbPoints,kbOutcomes].map(s=>String(s||'').trim()).filter(Boolean).join('\n');setTocQuery(merged);if(tocReport)autoSelectTocMatches(merged);}}>↳ Pull from Concepts / Focus</button>}
+          </div>
+          <textarea id="kb-toc-query" rows={2} value={tocQuery} onChange={e=>setTocQuery(e.target.value)} placeholder="e.g. Heart Failure, Loop Diuretics, Cardiac Glycosides, Abnormal Findings"/>
+          {tocReport&&tocQuery.trim()&&<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6,flexWrap:'wrap',marginTop:5}}>
+            <span style={{fontSize:11.5,color:tocMatchInfo.recommendedIds.size?'var(--accent-green)':'var(--text-dim)'}}>{tocMatchInfo.recommendedIds.size?`${tocMatchInfo.recommendedIds.size} exact section(s) matched (${tocMatchInfo.matchedIds.size} total hits)`:'No TOC heading matched those terms yet'}</span>
+            {tocMatchInfo.recommendedIds.size>0&&<button type="button" className="btn-secondary" style={{fontSize:11,padding:'2px 8px'}} onClick={()=>autoSelectTocMatches()}>🎯 Select {tocMatchInfo.recommendedIds.size} match(es)</button>}
+          </div>}
+        </div>
+        <label style={{display:'flex',alignItems:'flex-start',gap:8,fontSize:12,color:'var(--text)',cursor:'pointer',marginBottom:tocReport?9:2}}>
+          <input id="kb-toc-pad" type="checkbox" checked={tocPadEnd} onChange={e=>setTocPadEnd(e.target.checked)} style={{accentColor:'var(--accent)',marginTop:2}}/>
+          <span>Pad section ends by +1 PDF page <span className="badge-opt">catches shared mid-page endings</span></span>
+        </label>
+        {tocReport&&<div style={{padding:'8px 10px',borderRadius:'var(--radius)',border:'1px solid var(--border)',background:'var(--bg-deep)',fontSize:12}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+            <span style={{fontWeight:600,color:'var(--text-bright)'}}>Ctrl+P Custom Pages:</span>
+            <span style={{fontSize:11.5,color:'var(--text-dim)'}}>{tocSelection.pageCount} of {tocReport.numPages} pp.</span>
+          </div>
+          <div style={{fontFamily:'JetBrains Mono',fontSize:12,color:tocSelection.formatted?'var(--accent)':'var(--text-dim)',margin:'4px 0 7px',wordBreak:'break-word'}}>{tocSelection.formatted||'(check sections in the TOC tree on the right)'}</div>
+          <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+            <button type="button" className="btn-secondary" style={{fontSize:11.5,padding:'3px 9px'}} disabled={!tocSelection.formatted} onClick={()=>{copyText(tocSelection.formatted);noteTocStatus('✓ Copied Ctrl+P pages: '+tocSelection.formatted);}}>📋 Copy Ctrl+P Pages</button>
+            <button type="button" className="btn-primary" style={{fontSize:11.5,padding:'3px 10px'}} disabled={!tocSelection.ranges.length} onClick={()=>applyTocSliceToStep1({applyRole:true})}>➕ Send Sliced PDF to Step 01</button>
+            {!tocShowPanel&&<button type="button" className="btn-ghost" style={{fontSize:11.5,padding:'3px 8px'}} onClick={()=>setTocShowPanel(true)}>Show TOC Tree</button>}
+          </div>
+          {tocNotice&&<div style={{fontSize:11.5,color:'var(--accent-green)',marginTop:6,fontWeight:600}}>{tocNotice}</div>}
+        </div>}
+      </Disclose>
       <Disclose summary="Focus context" note={focusMode==='scope'?'scope · lossy':(kbOutcomes||kbPoints||kbExtra)?'set':'not set'}>
         <p className="sect-lede">Tailors extraction when a source covers more than your exam does. Leave blank to extract everything at normal priority.</p>
       <div className="segmented-control" role="group" aria-label="Extraction focus mode" style={{marginBottom:12}}>
@@ -6217,6 +6742,106 @@ function KnowledgeBaseBuilder(){
       Extraction diagnostics: {diag.chunks.length} failed chunk(s). {kbQuoteCheckSummary(diag).text}
       <button className="btn-secondary" style={{marginLeft:8}} onClick={exportDiag}>Export failed-build diagnostics</button>
     </div>}
+    {tocShowPanel&&(tocBusy||tocErr||tocReport)&&<Panel title="Textbook TOC & section slicer" className="fade-up" actions={<div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>{tocNotice&&<span style={{fontSize:11.5,color:'var(--accent-green)',fontWeight:600}}>{tocNotice}</span>}{tocBusy&&<button type="button" className="btn-danger" style={{fontSize:11.5,padding:'2px 8px'}} onClick={()=>tocAbortRef.current?.abort()}>Cancel</button>}<button type="button" className="btn-ghost" style={{fontSize:11.5,padding:'2px 8px'}} onClick={()=>setTocShowPanel(false)}>Hide</button></div>}>
+      {tocBusy&&<RunStatus label="Inspecting PDF Table of Contents" value={100} caption="Local · 0 API calls" detail={'Reading bookmarks and page boundaries from '+(tocFile?.name||'PDF')+'…'}/>}
+      {tocErr&&<div className="error-banner" style={{marginBottom:tocReport?10:0}}>⚠ {tocErr}</div>}
+      {tocReport&&(()=>{
+        const selSet=new Set(tocSelectedIds);
+        const expSet=new Set(tocExpandedIds);
+        const hasAbnormal=tocReport.flat.some(n=>n.feature==='abnormal-table');
+        const hasPharmBoxes=tocReport.flat.some(n=>n.feature==='prototype-drug'||n.feature==='nursing-process');
+        const hasKeySummaries=tocReport.flat.some(n=>n.feature==='key-concepts');
+        const matchAncestors=new Set(),matchDescendants=new Set();
+        if(tocFilterMatched&&tocMatchInfo.matchedIds.size>0){
+          for(const n of tocReport.flat){
+            if(tocMatchInfo.matchedIds.has(n.id))for(const aid of n.ancestorIds)matchAncestors.add(aid);
+            else if(n.ancestorIds.some(aid=>tocMatchInfo.matchedIds.has(aid)))matchDescendants.add(n.id);
+          }
+        }
+        const visibleNodes=tocReport.flat.filter(n=>{
+          if(tocFilterMatched&&tocMatchInfo.matchedIds.size>0)return tocMatchInfo.matchedIds.has(n.id)||matchAncestors.has(n.id)||matchDescendants.has(n.id);
+          return n.depth===0||n.ancestorIds.every(aid=>expSet.has(aid));
+        });
+        const savedPct=tocReport.numPages>0&&tocSelection.pageCount>0?Math.max(0,Math.round((1-tocSelection.pageCount/tocReport.numPages)*100)):0;
+        const featBadge=f=>f==='abnormal-table'?'⚡ Abnormal Findings':f==='prototype-drug'?'💊 Prototype / Drug Table':f==='nursing-process'?'🩺 Nursing Process':f==='key-concepts'?'📌 Key Concepts':null;
+        return <>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap',marginBottom:9,fontSize:12}}>
+            <div>
+              <strong style={{color:'var(--text-bright)'}}>{tocReport.fileName}</strong>
+              <span style={{color:'var(--text-dim)'}}> · {tocReport.numPages.toLocaleString()} PDF pages · {tocReport.source==='outline'?`Embedded bookmarks (${tocReport.flat.length})`:tocReport.source==='printed-toc'?`Printed TOC scan (${tocReport.flat.length} entries · offset ${tocReport.tocOffset>=0?'+'+tocReport.tocOffset:tocReport.tocOffset})`:'No bookmarks found'}</span>
+            </div>
+            <span style={{fontSize:11.5,padding:'2px 8px',borderRadius:999,border:'1px solid var(--blue-line)',background:'var(--blue-tint)',color:'var(--blue-deep)',fontWeight:600}} title={tocReport.suggestedRole?.reason||''}>Suggested Step 01 lens: {tocReport.suggestedRole?.badge||'RN Core'}</span>
+          </div>
+          {tocReport.source==='printed-toc'&&<div className="tip-banner" style={{marginBottom:9,fontSize:12,lineHeight:1.5}}>ⓘ This PDF has no embedded bookmark outline, so the suite scanned the printed front-matter Table of Contents and estimated a PDF page offset of <b>{tocReport.tocOffset>=0?'+'+tocReport.tocOffset:tocReport.tocOffset}</b>. Spot-check the first section&apos;s starting PDF page before printing or building.</div>}
+          {tocReport.source==='none'
+            ?<div className="tip-banner" style={{fontSize:12,lineHeight:1.55}}>
+              <div>This PDF does not carry embedded bookmarks or a machine-readable Table of Contents in its first 35 pages. You can still slice exact PDF page numbers directly into Step 01 (zero external tools required):</div>
+              <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center',marginTop:8}}>
+                <input id="kb-toc-manual-range" aria-label="Manual PDF page slice" type="text" value={tocManualRange} onChange={e=>setTocManualRange(e.target.value)} placeholder="Enter PDF pages, e.g. 410-418, 425-429" style={{flex:1,minWidth:220,fontFamily:'JetBrains Mono',fontSize:12}}/>
+                <button type="button" className="btn-primary" style={{fontSize:12,padding:'4px 11px'}} onClick={()=>applyTocSliceToStep1({applyRole:true,customRange:tocManualRange})}>➕ Send Manual Slice to Step 01</button>
+              </div>
+            </div>
+            :<>
+              <div style={{padding:'9px 11px',borderRadius:8,border:'1px solid var(--border)',background:'var(--bg-deep)',marginBottom:9}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+                  <div style={{fontSize:12}}>
+                    <span style={{fontWeight:600,color:'var(--text-bright)'}}>Ctrl+P Custom Pages: </span>
+                    <code style={{fontSize:12.5,color:tocSelection.formatted?'var(--accent)':'var(--text-dim)'}}>{tocSelection.formatted||'Check one or more sections below'}</code>
+                    {tocSelection.pageCount>0&&<span style={{color:'var(--text-dim)',marginLeft:6}}>({tocSelection.pageCount} of {tocReport.numPages} PDF pp. · <b>{savedPct}% fewer pages</b>{tocPadEnd?' · includes +1 end-page pad':''})</span>}
+                  </div>
+                  <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                    <button type="button" className="btn-secondary" style={{fontSize:11.5,padding:'3px 9px'}} disabled={!tocSelection.formatted} onClick={()=>{copyText(tocSelection.formatted);noteTocStatus('✓ Copied Ctrl+P range: '+tocSelection.formatted);}}>📋 Copy Ctrl+P Pages</button>
+                    <button type="button" className="btn-secondary" style={{fontSize:11.5,padding:'3px 9px'}} disabled={!tocSelection.ranges.length} onClick={()=>{copyText(kbFormatTocSlicePlanMd(tocReport,tocSelection,{padEnd:tocPadEnd?1:0}));noteTocStatus('✓ Copied Markdown slice plan');}}>📋 Copy Slice Plan (.md)</button>
+                    <button type="button" className="btn-primary" style={{fontSize:11.5,padding:'3px 10px'}} disabled={!tocSelection.ranges.length} onClick={()=>applyTocSliceToStep1({applyRole:true})}>➕ Send Sliced PDF + {tocReport.suggestedRole?.badge||'Role'} to Step 01</button>
+                    <button type="button" className="btn-ghost" style={{fontSize:11.5,padding:'3px 8px'}} disabled={!tocSelection.ranges.length} onClick={()=>applyTocSliceToStep1({applyRole:false})}>Send Slice Only</button>
+                  </div>
+                </div>
+              </div>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6,flexWrap:'wrap',marginBottom:8}}>
+                <div style={{display:'flex',gap:5,flexWrap:'wrap',alignItems:'center'}}>
+                  {tocMatchInfo.recommendedIds.size>0&&<button type="button" className="btn-secondary" style={{fontSize:11,padding:'2px 8px'}} onClick={()=>autoSelectTocMatches()}>🎯 Auto-select {tocMatchInfo.recommendedIds.size} topic match(es)</button>}
+                  {hasAbnormal&&<button type="button" className="btn-ghost" style={{fontSize:11,padding:'2px 7px'}} onClick={()=>addTocFeatureNodes(['abnormal-table'])}>+ ⚡ Abnormal Findings</button>}
+                  {hasPharmBoxes&&<button type="button" className="btn-ghost" style={{fontSize:11,padding:'2px 7px'}} onClick={()=>addTocFeatureNodes(['prototype-drug','nursing-process'])}>+ 💊 Prototypes &amp; Nursing Process</button>}
+                  {hasKeySummaries&&<button type="button" className="btn-ghost" style={{fontSize:11,padding:'2px 7px'}} onClick={()=>addTocFeatureNodes(['key-concepts'])}>+ 📌 Key Concepts</button>}
+                  {tocMatchInfo.matchedIds.size>0&&<label style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:11.5,color:'var(--text-dim)',cursor:'pointer',marginLeft:4}}><input id="kb-toc-filter-matched" type="checkbox" checked={tocFilterMatched} onChange={e=>setTocFilterMatched(e.target.checked)} style={{accentColor:'var(--accent)'}}/>Only show matches</label>}
+                </div>
+                <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+                  <button type="button" className="btn-ghost" style={{fontSize:11,padding:'2px 7px'}} onClick={()=>setTocExpandedIds(tocReport.flat.filter(n=>n.childIds.length>0).map(n=>n.id))}>Expand all</button>
+                  <button type="button" className="btn-ghost" style={{fontSize:11,padding:'2px 7px'}} onClick={()=>setTocExpandedIds([])}>Collapse</button>
+                  {tocSelectedIds.length>0&&<button type="button" className="btn-ghost" style={{fontSize:11,padding:'2px 7px'}} onClick={()=>setTocSelectedIds([])}>Clear ({tocSelectedIds.length})</button>}
+                </div>
+              </div>
+              <div role="group" aria-label="Textbook Table of Contents sections" style={{maxHeight:390,overflowY:'auto',border:'1px solid var(--border)',borderRadius:8,background:'var(--bg-deep)',padding:'4px 0'}}>
+                {visibleNodes.map(n=>{
+                  const checked=selSet.has(n.id);
+                  const coveredByParent=!checked&&n.ancestorIds.some(aid=>selSet.has(aid));
+                  const isRecommended=tocMatchInfo.recommendedIds.has(n.id);
+                  const isMatched=tocMatchInfo.matchedIds.has(n.id);
+                  const hasKids=n.childIds.length>0;
+                  const expanded=expSet.has(n.id)||(tocFilterMatched&&tocMatchInfo.matchedIds.size>0);
+                  const fb=featBadge(n.feature);
+                  const pdfSpan=n.startPage===n.endPage?`PDF p. ${n.startPage}`:`PDF pp. ${n.startPage}–${n.endPage}`;
+                  const bookSpan=n.bookLabelDiffers?` · Book ${n.bookStart===n.bookEnd?'p. '+n.bookStart:'pp. '+n.bookStart+'–'+n.bookEnd}`:'';
+                  return <div key={n.id} style={{display:'flex',alignItems:'center',gap:6,padding:'4px 10px',paddingLeft:8+n.depth*18,borderBottom:'1px solid rgba(148,163,184,0.08)',background:checked?'var(--blue-tint)':isRecommended?'rgba(34,197,94,0.08)':coveredByParent?'rgba(56,189,248,0.04)':'transparent',fontSize:12}}>
+                    {hasKids
+                      ?<button type="button" aria-label={(expanded?'Collapse ':'Expand ')+n.title} aria-expanded={expanded} onClick={()=>setTocExpandedIds(prev=>prev.includes(n.id)?prev.filter(x=>x!==n.id):[...prev,n.id])} style={{width:18,height:18,padding:0,border:'none',background:'transparent',color:'var(--text-dim)',cursor:'pointer',fontSize:11,flexShrink:0}}>{expanded?'▾':'▸'}</button>
+                      :<span style={{width:18,flexShrink:0}}/>}
+                    <label style={{display:'flex',alignItems:'center',gap:7,flex:1,minWidth:0,cursor:'pointer'}}>
+                      <input type="checkbox" aria-label={'Slice section '+n.title+' ('+pdfSpan+')'} checked={checked} onChange={()=>setTocSelectedIds(prev=>prev.includes(n.id)?prev.filter(x=>x!==n.id):[...prev,n.id])} style={{accentColor:'var(--accent)',margin:0,flexShrink:0}}/>
+                      <span style={{fontWeight:n.depth===0?600:checked||isRecommended?600:400,color:checked?'var(--blue-deep)':isMatched?'var(--text-bright)':'var(--text)',overflow:'hidden',textOverflow:'ellipsis'}}>{n.title}</span>
+                      {isRecommended&&<span style={{fontSize:10.5,padding:'0 5px',borderRadius:4,background:'var(--success-bg)',border:'1px solid var(--success-border)',color:'var(--accent-green)',fontWeight:600,flexShrink:0}}>🎯 match</span>}
+                      {fb&&<span style={{fontSize:10.5,padding:'0 5px',borderRadius:4,background:'var(--bg)',border:'1px solid var(--border)',color:'var(--text-dim)',flexShrink:0}}>{fb}</span>}
+                      {coveredByParent&&<span style={{fontSize:10.5,color:'var(--text-dim)',fontStyle:'italic',flexShrink:0}}>(in selected parent)</span>}
+                    </label>
+                    <span style={{fontFamily:'JetBrains Mono',fontSize:11,color:'var(--text-dim)',whiteSpace:'nowrap',flexShrink:0}}>{pdfSpan}{bookSpan} <span style={{opacity:0.75}}>({n.pageCount} pp.)</span></span>
+                  </div>;
+                })}
+              </div>
+              <div style={{fontSize:11.5,color:'var(--text-dim)',marginTop:6,lineHeight:1.45}}>Tip: Checking a section grabs its complete start-to-finish PDF page span (prose + boxes + tables + diagrams together). Sending to Step 01 slices locally during Build — no need to print a separate PDF unless you want to save a slim chapter copy via <code>Ctrl + P</code> → <b>Save as PDF</b> → <b>Pages: Custom</b>.</div>
+            </>}
+        </>;
+      })()}
+    </Panel>}
     {cardChunks.length>0&&<Panel title="Pass 1 · transcript review" className="fade-up">
         <div style={{fontSize:12,fontWeight:600,color:'var(--text-bright)',marginBottom:6}}>{cardChunks.length} card(s) transcribed — review before building</div>
         {cardChunks.map((c,i)=><div key={c.key} style={{marginBottom:9,padding:'9px 11px',borderRadius:8,background:'var(--bg-deep)',border:'1px solid '+(c.legibility==='clean'?'var(--border)':'var(--warning-border)')}}>
@@ -9085,7 +9710,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '21.3';}
+function suiteVersion(){return '21.4';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -17536,6 +18161,9 @@ function CaseRenderer({caseStudy:cs}){
 // plus strict deterministic post-verification so zero cards are dropped, zero Back text is invented on
 // empty-Extra cards, and only genuine Anki cloze targets stay inside [square brackets].
 const GIZMO_PROMPT_STORAGE_KEY='latte_gizmo_import_prompt_v1';
+const GIZMO_LEGACY_IMPORT_PROMPT_V1=`Convert each line of this tab-separated text (Front <TAB> Back) into exactly ONE 2-sided flashcard:\n\n1. STRICT 1-TO-1 MAPPING (NO SPLITTING OR INVENTING):\n   - 1 input line = 1 card. Never split a line into multiple cards, never merge lines, and never create inverse/reverse cards.\n2. FRONT OF CARD (TEXT BEFORE THE TAB ONLY):\n   - Convert ONLY words inside square brackets [like this] into green fill-in-the-blank highlights, then remove the [ ] characters.\n   - Keep ALL bracketed [blanks] from the same line on the SAME card front.\n   - NEVER highlight unbracketed words, medical abbreviations, or words inside parentheses (like (CRP) or (hint)). Parentheses are NOT blanks.\n3. BACK OF CARD (TEXT AFTER THE TAB ONLY — ZERO BLANKS ALLOWED):\n   - Copy the text after the tab character verbatim into the Back / Explanation field as plain text.\n   - NEVER put green fill-in-the-blank highlights on the Back of a card. The Back must contain ZERO blanks.\n   - If there is no text after the tab, leave the Back completely blank/empty. Never invent or move text to the Back.\n4. 100% VERBATIM:\n   - Never reword, summarize, swap Front and Back, or turn statements into questions or True/False items.\n\nExample:\nTopic: Marker (CRP) indicates [inflammation] in [autoimmune disorders].\tDoes not diagnose a specific immune dysfunction.\n-> Front: Topic: Marker (CRP) indicates {blank: inflammation} in {blank: autoimmune disorders}. (Keep "(CRP)" as plain text — NOT a blank!)\n-> Back: Does not diagnose a specific immune dysfunction. (Plain text only — ZERO green blanks on Back!)`;
+// v21.3: keep the original 4-line Gizmo.ai import instructions verbatim so Gizmo's parser reliably converts [brackets]
+// into green blanks instead of falling back to multiple choice; auto-reset any stored verbose v21.3 prompt back to the original.
 const GIZMO_DEFAULT_IMPORT_PROMPT=`Create standard 2-sided flashcards from this tab-separated text:\n\n1. ONE CARD PER LINE: Do not duplicate cards. Keep all blanks for a sentence on the SAME card.\n2. FRONT OF CARD: Use the sentence before the tab. Highlight every phrase inside square brackets [like this] in green as a blank. Remove the bracket symbols from the final text. Do not highlight any unbracketed words.\n3. BACK OF CARD: Place the exact text after the tab into the Back/Explanation field. Do not omit or shorten this text.\n4. VERBATIM: Do not summarize, rephrase, or convert into questions or True/False cards. Keep the wording identical to the input.`;
 const GIZMO_DEFAULT_PAGES_PER_CHUNK=5;
 const GIZMO_DEFAULT_CARDS_PER_PAGE=18;
@@ -17549,14 +18177,16 @@ Return valid JSON only, with shape: {"cards":[{"index":1,"front":"string","back"
 
 STRICT RULES — ZERO HALLUCINATION:
 1. 1-TO-1 ORDER & COUNT: Return exactly one output object per input card, preserving every input "index" in order. Never skip, merge, split, or duplicate cards.
-2. STRICT VERBATIM WORDING: Keep all clinical wording, numbers, decimals, units, signs (+, -, <, >, ≤, ≥), drug names, and negations identical to the input. NEVER summarize, paraphrase, reword, or turn statements into questions or True/False items.
-3. NEVER INVENT BACK TEXT:
+2. STRICT VERBATIM WORDING: Keep all clinical wording, numbers, decimals, units, signs (+, -, <, >, ≤, ≥), drug names, parenthetical abbreviations like (CRP), and negations identical to the input. NEVER summarize, paraphrase, reword, swap Front and Back, or turn statements into questions or True/False items.
+3. NEVER INVENT BACK TEXT & ZERO BRACKETS ON BACK:
    - If input "rawBack" is empty (""), output "back" MUST be "" (empty string). Never generate explanations, definitions, or answers for an empty back.
    - If input "rawBack" is non-empty, preserve its exact wording as clean single-line plain text.
-4. FRONT SQUARE BRACKETS = BLANKS ONLY:
+   - Output "back" MUST NEVER contain square brackets [ or ] (convert any [ or ] in "rawBack" into parentheses ( or ) so Gizmo never places green fill-in-the-blank highlights on the Back of a card).
+4. FRONT SQUARE BRACKETS = CLOZE BLANKS ONLY (NEVER PARENTHESES):
    - Gizmo highlights EVERY phrase inside [square brackets] on "front" in green as a fill-in-the-blank target.
    - Convert every Anki cloze deletion {{c1::answer}}, {{c2::answer}}, {{c3::answer}} on the card into [answer]. Keep ALL blanks from that card on the SAME "front" line regardless of c1/c2/c3 numbering.
    - Cloze hints: Convert {{c1::answer::hint}} into [answer] (hint) so only the answer is inside square brackets and the hint stays visible in parentheses.
+   - Parenthetical text: Keep parenthetical abbreviations or qualifiers like (CRP) or (1 full min) inside parentheses (...) — NEVER convert parentheses into [square brackets].
    - Leading topic/condition labels: Convert a leading bracketed label like "[Heart Failure] Hallmark: ..." or "[Perfusion → Heart Failure] ..." or "[DKA — NEVER DO] ..." into "Heart Failure: Hallmark: ..." (label followed by colon + space, NO square brackets).
    - Non-cloze brackets: Convert any other pre-existing square brackets in "rawFront" that were NOT {{cN::...}} clozes into parentheses (...) so Gizmo never turns non-blank text into a blank. Strip any residual [P1], [P2], or [NONE] point-anchor tags.
 5. SINGLE-LINE PLAIN TEXT:
@@ -17566,7 +18196,8 @@ STRICT RULES — ZERO HALLUCINATION:
 function loadGizmoImportPrompt(storage){
   try{
     const v=storage&&storage.getItem(GIZMO_PROMPT_STORAGE_KEY);
-    return typeof v==='string'&&v.trim()?v:GIZMO_DEFAULT_IMPORT_PROMPT;
+    if(typeof v==='string'&&v.trim()&&v!==GIZMO_LEGACY_IMPORT_PROMPT_V1)return v;
+    return GIZMO_DEFAULT_IMPORT_PROMPT;
   }catch{return GIZMO_DEFAULT_IMPORT_PROMPT;}
 }
 function saveGizmoImportPrompt(storage,text){
@@ -17805,7 +18436,8 @@ function gizmoDeterministicCard(srcCard){
     return '['+item.ans+']'+(item.hint?' ('+item.hint+')':'');
   });
   front=front.replace(/\s+/g,' ').trim();
-  const back=gizmoCleanPlainText(rawBack);
+  // v21.3: strip any square brackets on Back to parentheses so Gizmo never places green fill-in-the-blank highlights on Back/Explanation.
+  const back=gizmoCleanPlainText(rawBack).replace(/\[/g,'(').replace(/\]/g,')').replace(/\{\{|\}\}/g,'').replace(/\s+/g,' ').trim();
   return {front,back,blankCount:blanks.length,blanks};
 }
 
@@ -17833,6 +18465,13 @@ function gizmoNumericSignature(s){
   const matches=String(s||'').match(/\d+(?:\.\d+)?/g)||[];
   return matches.slice().sort().join('|');
 }
+// v21.3: verify unbracketed prose word sequence and parenthetical tokens so AI cannot reword, drop negations, or turn `(CRP)` into `[CRP]`.
+function gizmoProseSignature(s){
+  return String(s||'').replace(/\[|\]/g,' ').toLowerCase().replace(/\s+/g,' ').trim();
+}
+function gizmoParenSignature(s){
+  return (Array.from(String(s||'').matchAll(/\(([^()]+)\)/g),m=>m[1].toLowerCase().replace(/\s+/g,' ').trim())).join('|');
+}
 
 function gizmoReconcileChunk(inputChunk,aiResponse){
   const byIndex=new Map();
@@ -17845,6 +18484,9 @@ function gizmoReconcileChunk(inputChunk,aiResponse){
   const out=[],warnings=[];let repairedCount=0;
   for(const src of inputChunk||[]){
     const det=gizmoDeterministicCard(src);
+    if(det.blankCount===0){
+      warnings.push('Card #'+src.index+': Front has 0 [square bracket] blanks — Gizmo may invent blanks on unbracketed cards unless a [blank] is added.');
+    }
     const ai=byIndex.get(src.index);
     if(!ai||typeof ai.front!=='string'||!ai.front.trim()){
       out.push({index:src.index,lineNumber:src.lineNumber,front:det.front,back:det.back,blankCount:det.blankCount});
@@ -17859,15 +18501,23 @@ function gizmoReconcileChunk(inputChunk,aiResponse){
       warnings.push('Card #'+src.index+': discarded non-source Back text because source Extra was empty.');
       repairedCount++;
     }
+    if(/[\[\]]/.test(aiBack)){
+      aiBack=aiBack.replace(/\[/g,'(').replace(/\]/g,')').replace(/\s+/g,' ').trim();
+      warnings.push('Card #'+src.index+': stripped square brackets from Back so Gizmo never highlights blanks on the Back.');
+      repairedCount++;
+    }
     const bracketCheck=gizmoExtractBrackets(aiFront);
     const hasRawCloze=/\{\{|\}\}/.test(aiFront)||/\{\{|\}\}/.test(aiBack);
     const blanksMatch=bracketCheck.valid&&bracketCheck.spans.length===det.blanks.length&&
       bracketCheck.spans.every((sp,i)=>gizmoNormCompare(sp)===gizmoNormCompare(det.blanks[i]));
+    const parensMatch=gizmoParenSignature(aiFront)===gizmoParenSignature(det.front);
+    const proseMatch=gizmoProseSignature(aiFront)===gizmoProseSignature(det.front)&&
+      gizmoProseSignature(aiBack)===gizmoProseSignature(det.back);
     const numsMatch=gizmoNumericSignature(aiFront+' '+aiBack)===gizmoNumericSignature(det.front+' '+det.back);
     const nonEmptyBackLost=!!det.back&&!aiBack;
-    if(!blanksMatch||hasRawCloze||!numsMatch||nonEmptyBackLost){
+    if(!blanksMatch||!parensMatch||!proseMatch||hasRawCloze||!numsMatch||nonEmptyBackLost){
       out.push({index:src.index,lineNumber:src.lineNumber,front:det.front,back:det.back,blankCount:det.blankCount});
-      const reason=!numsMatch?'numeric mismatch':nonEmptyBackLost?'missing source Back text':'bracketed blank mismatch';
+      const reason=!numsMatch?'numeric mismatch':nonEmptyBackLost?'missing source Back text':!blanksMatch?'bracketed blank mismatch':!parensMatch?'parenthetical token mismatch':'verbatim wording drift';
       warnings.push('Card #'+src.index+': repaired '+reason+' so wording, numbers, and [blanks] match the source verbatim.');
       repairedCount++;
       continue;
@@ -18301,7 +18951,7 @@ function GizmoImporter(){
     </>}>
       <div className="field-block" style={{marginBottom:0}}>
         <label htmlFor="gizmo-import-prompt">Paste into Gizmo.ai's import instructions (editable &amp; saveable)</label>
-        <textarea id="gizmo-import-prompt" rows={6} value={importPrompt} onChange={e=>setImportPrompt(e.target.value)} style={{fontFamily:'var(--font-ui)',fontSize:13,lineHeight:1.5}}/>
+        <textarea id="gizmo-import-prompt" rows={11} value={importPrompt} onChange={e=>setImportPrompt(e.target.value)} style={{fontFamily:'var(--font-ui)',fontSize:13,lineHeight:1.5}}/>
       </div>
     </Panel>
 

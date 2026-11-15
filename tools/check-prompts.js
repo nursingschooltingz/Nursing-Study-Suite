@@ -20,7 +20,7 @@ function checkFrozenPrompts({ suiteFile, baselineFile = BASELINE_FILE }) {
   const expectedNames = Object.keys(baseline.prompts || {}).sort();
   const frozenNames = [...FROZEN_PROMPTS].sort();
   if (JSON.stringify(expectedNames) !== JSON.stringify(frozenNames)) {
-    throw new Error('prompt-baseline.json must contain exactly the 11 frozen prompt names');
+    throw new Error('prompt-baseline.json must contain exactly the ' + FROZEN_PROMPTS.length + ' frozen prompt names');
   }
 
   const changed = [];

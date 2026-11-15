@@ -25,9 +25,9 @@ module.exports = function runGizmoImportTests(S, t) {
   const H = new Function(
     'TextDecoder', 'uid',
     kbPointHelpers + '\n' + ankiHelpers + '\n' + gizmoHelpers + '\n' +
-    'return {GIZMO_PROMPT_STORAGE_KEY,GIZMO_DEFAULT_IMPORT_PROMPT,GIZMO_DEFAULT_PAGES_PER_CHUNK,GIZMO_DEFAULT_CARDS_PER_PAGE,GIZMO_DEFAULT_PAGE_CHARS,GIZMO_DEFAULT_AI_BATCH,' +
+    'return {GIZMO_PROMPT_STORAGE_KEY,GIZMO_LEGACY_IMPORT_PROMPT_V1,GIZMO_DEFAULT_IMPORT_PROMPT,GIZMO_CONVERT_PROMPT,GIZMO_DEFAULT_PAGES_PER_CHUNK,GIZMO_DEFAULT_CARDS_PER_PAGE,GIZMO_DEFAULT_PAGE_CHARS,GIZMO_DEFAULT_AI_BATCH,' +
     'loadGizmoImportPrompt,saveGizmoImportPrompt,gizmoDecodeFileBytes,gizmoParseDelimitedRecords,gizmoLooksLikeTagField,gizmoParseAnkiInput,gizmoCardsFromLiveAnki,' +
-    'gizmoCleanPlainText,gizmoDeterministicCard,gizmoExtractBrackets,gizmoReconcileChunk,gizmoFormatTsv,gizmoPaginateCards,gizmoBuildPageChunks,gizmoSlicePageRange,gizmoRenderHighlightedFront};'
+    'gizmoCleanPlainText,gizmoDeterministicCard,gizmoExtractBrackets,gizmoProseSignature,gizmoParenSignature,gizmoReconcileChunk,gizmoFormatTsv,gizmoPaginateCards,gizmoBuildPageChunks,gizmoSlicePageRange,gizmoRenderHighlightedFront};'
   )(TextDecoder, () => 'synthetic-id');
 
   // 1. Navigation, profile defaults, and live Anki bridge wiring
@@ -48,7 +48,7 @@ module.exports = function runGizmoImportTests(S, t) {
     S.includes('publishAnkiDeck:setSharedAnkiDeck') &&
     S.includes('<AnkiDeckCtx.Provider value={sharedAnkiDeck}>'));
 
-  // 2. Preloaded, editable, saveable Gizmo Import Prompt contract
+  // 2. Preloaded, editable, saveable Gizmo Import Prompt contract (original 4-rule Gizmo.ai instructions)
   const expectedImportPrompt = [
     'Create standard 2-sided flashcards from this tab-separated text:',
     '',
@@ -57,7 +57,7 @@ module.exports = function runGizmoImportTests(S, t) {
     '3. BACK OF CARD: Place the exact text after the tab into the Back/Explanation field. Do not omit or shorten this text.',
     '4. VERBATIM: Do not summarize, rephrase, or convert into questions or True/False cards. Keep the wording identical to the input.'
   ].join('\n');
-  t('GIZMO_DEFAULT_IMPORT_PROMPT matches the exact 4-rule Gizmo.ai instructions verbatim',
+  t('GIZMO_DEFAULT_IMPORT_PROMPT matches the original 4-rule Gizmo.ai instructions verbatim',
     H.GIZMO_DEFAULT_IMPORT_PROMPT === expectedImportPrompt && H.GIZMO_DEFAULT_PAGES_PER_CHUNK === 5);
 
   const memStore = (() => {
@@ -68,7 +68,9 @@ module.exports = function runGizmoImportTests(S, t) {
     };
   })();
   const throwStore = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); } };
-  t('loadGizmoImportPrompt and saveGizmoImportPrompt preload default, persist custom edits, and survive blocked storage',
+  t('loadGizmoImportPrompt and saveGizmoImportPrompt preload default, auto-upgrade legacy v1 default, persist custom edits, and survive blocked storage',
+    H.loadGizmoImportPrompt(memStore) === expectedImportPrompt &&
+    H.saveGizmoImportPrompt(memStore, H.GIZMO_LEGACY_IMPORT_PROMPT_V1) === true &&
     H.loadGizmoImportPrompt(memStore) === expectedImportPrompt &&
     H.saveGizmoImportPrompt(memStore, 'Custom Gizmo prompt rule') === true &&
     H.loadGizmoImportPrompt(memStore) === 'Custom Gizmo prompt rule' &&
@@ -157,11 +159,11 @@ module.exports = function runGizmoImportTests(S, t) {
 
   const detHtmlBack = H.gizmoDeterministicCard({
     rawFront: '<div><b>[DKA — NEVER DO]</b> Never start {{c1::insulin}} when K+ &lt; {{c2::3.3 mEq/L}}.</div>',
-    rawBack: '<i>Replete potassium first</i><br>Check BMP &amp; ECG [P2]'
+    rawBack: '<i>Replete potassium first</i><br>Check BMP &amp; ECG [P2] and [serum Mg2+]'
   });
-  t('gizmoDeterministicCard strips HTML tags, joins <br> with semicolons, strips [P#] anchors, and preserves non-empty Back verbatim',
+  t('gizmoDeterministicCard strips HTML tags, joins <br> with semicolons, strips [P#] anchors, and converts any Back [brackets] to parentheses',
     detHtmlBack.front === 'DKA — NEVER DO: Never start [insulin] when K+ < [3.3 mEq/L].' &&
-    detHtmlBack.back === 'Replete potassium first; Check BMP & ECG');
+    detHtmlBack.back === 'Replete potassium first; Check BMP & ECG and (serum Mg2+)');
 
   // 7. Anti-hallucination AI chunk reconciliation
   const chunkInput = [
@@ -200,6 +202,31 @@ module.exports = function runGizmoImportTests(S, t) {
   );
   t('gizmoReconcileChunk accepts clean AI output with zero repairs or warnings',
     cleanAi.repairedCount === 0 && cleanAi.warnings.length === 0 && cleanAi.cards[0].blankCount === 1);
+
+  const crpAndBackGuards = H.gizmoReconcileChunk(
+    [
+      { index: 1, lineNumber: 1, rawFront: '[Immunity] C-reactive protein (CRP) clinical use: determines {{c1::inflammation}} and tracks treatment response in {{c2::autoimmune disorders}}.', rawBack: 'Does not diagnose a specific immune dysfunction.' },
+      { index: 2, lineNumber: 2, rawFront: '[Immunity — NEVER DO] Do not use C-reactive protein (CRP) to {{c1::diagnose a specific immune dysfunction}}.', rawBack: 'Only determines inflammation and tracks autoimmune treatment response.' },
+      { index: 3, lineNumber: 3, rawFront: '[Immunity — NEVER DO] Uncloze statement without any blanks.', rawBack: 'Plain back.' }
+    ],
+    {
+      cards: [
+        // Card 1: AI dropped "not" in Back -> proseMatch must reject and restore deterministic card
+        { index: 1, front: 'Immunity: C-reactive protein (CRP) clinical use: determines [inflammation] and tracks treatment response in [autoimmune disorders].', back: 'Does diagnose a specific immune dysfunction.' },
+        // Card 2: AI put [inflammation] and [autoimmune] brackets on Back -> Back bracket stripper converts them to parens or repairs
+        { index: 2, front: 'Immunity — NEVER DO: Do not use C-reactive protein (CRP) to [diagnose a specific immune dysfunction].', back: 'Only determines [inflammation] and tracks [autoimmune] treatment response.' },
+        // Card 3: 0 blanks on Front -> emits warning about 0 square-bracket blanks
+        { index: 3, front: 'Immunity — NEVER DO: Uncloze statement without any blanks.', back: 'Plain back.' }
+      ]
+    }
+  );
+  t('gizmoReconcileChunk repairs dropped negations (prose drift), strips Back [brackets] so Back has zero blanks, and warns on 0-blank fronts',
+    crpAndBackGuards.cards[0].back === 'Does not diagnose a specific immune dysfunction.' &&
+    !/[\[\]]/.test(crpAndBackGuards.cards[1].back) &&
+    crpAndBackGuards.cards[1].back === 'Only determines inflammation and tracks autoimmune treatment response.' &&
+    crpAndBackGuards.warnings.some(w => w.includes('verbatim wording drift')) &&
+    crpAndBackGuards.warnings.some(w => w.includes('stripped square brackets from Back')) &&
+    crpAndBackGuards.warnings.some(w => w.includes('Front has 0 [square bracket] blanks')));
 
   // 8. Virtual textbook PDF pagination, 5-page chunk slideshow, Copy All TSV, and Page Range slicing
   const syntheticConverted = Array.from({ length: 40 }, (_, i) => ({

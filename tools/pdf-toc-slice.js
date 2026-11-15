@@ -1,0 +1,1138 @@
+#!/usr/bin/env node
+'use strict';
+
+// Local, zero-dependency, zero-API-call Textbook PDF Table of Contents (TOC) Inspector & Section Slicer.
+// Usage:
+//   node tools/pdf-toc-slice.js <textbook.pdf>
+//   node tools/pdf-toc-slice.js <textbook.pdf> --match "Heart Failure, Loop Diuretics, Abnormal Findings"
+//   node tools/pdf-toc-slice.js <textbook.pdf> --match "Perfusion" --pad 1 --features
+//   node tools/pdf-toc-slice.js <textbook.pdf> --depth 3 --json
+
+const fs = require('fs');
+const path = require('path');
+const zlib = require('zlib');
+
+// ── Shared Range, Role, Tree & Topic-Matching Helpers ──
+
+function mergePageRanges(ranges, maxPages = Infinity) {
+  const cap = Number.isFinite(maxPages) && maxPages > 0 ? Math.floor(maxPages) : Infinity;
+  const clean = [];
+  for (const r of Array.isArray(ranges) ? ranges : []) {
+    if (!r || typeof r !== 'object') continue;
+    let a = Math.floor(Number(r.start)), b = Math.floor(Number(r.end));
+    if (!Number.isFinite(a) || !Number.isFinite(b) || a < 1 || b < 1) continue;
+    if (a > b) { const tmp = a; a = b; b = tmp; }
+    if (a > cap) continue;
+    b = Math.min(b, cap);
+    clean.push({ start: a, end: b });
+  }
+  clean.sort((x, y) => x.start - y.start || x.end - y.end);
+  const merged = [];
+  for (const r of clean) {
+    const last = merged[merged.length - 1];
+    if (last && r.start <= last.end + 1) last.end = Math.max(last.end, r.end);
+    else merged.push({ start: r.start, end: r.end });
+  }
+  return merged;
+}
+
+function formatPageRanges(ranges, maxPages = Infinity) {
+  return mergePageRanges(ranges, maxPages).map(r => r.start === r.end ? String(r.start) : r.start + '-' + r.end).join(', ');
+}
+
+function countPagesInRanges(ranges, maxPages = Infinity) {
+  return mergePageRanges(ranges, maxPages).reduce((n, r) => n + (r.end - r.start + 1), 0);
+}
+
+function parsePageRanges(input, maxPages = Infinity) {
+  const cap = Number.isFinite(maxPages) && maxPages > 0 ? Math.floor(maxPages) : Infinity;
+  if (Array.isArray(input)) {
+    const ranges = mergePageRanges(input, cap);
+    return { ranges, invalid: [], pageCount: countPagesInRanges(ranges, cap), formatted: formatPageRanges(ranges, cap) };
+  }
+  const raw = String(input || '').trim();
+  if (!raw) return { ranges: [], invalid: [], pageCount: 0, formatted: '' };
+  const parts = raw.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
+  const valid = [], invalid = [];
+  for (const tok of parts) {
+    const stripped = tok.replace(/^(?:pdf\s+)?(?:pages?|pp?\.?)\s*/i, '').trim();
+    const m = stripped.match(/^(\d+)\s*(?:[-\u2013\u2014]\s*(\d+))?$/);
+    if (!m) { invalid.push(tok); continue; }
+    const a = Number.parseInt(m[1], 10), b = m[2] != null ? Number.parseInt(m[2], 10) : a;
+    if (!Number.isFinite(a) || !Number.isFinite(b) || a < 1 || b < 1 || a > b || a > cap) { invalid.push(tok); continue; }
+    valid.push({ start: a, end: Math.min(b, cap) });
+  }
+  const ranges = mergePageRanges(valid, cap);
+  return { ranges, invalid, pageCount: countPagesInRanges(ranges, cap), formatted: formatPageRanges(ranges, cap) };
+}
+
+function suggestTextbookRole(filename = '', titles = []) {
+  const probe = (String(filename || '') + ' ' + (Array.isArray(titles) ? titles.slice(0, 12).join(' ') : '')).toLowerCase().replace(/[^a-z0-9]+/g, ' ');
+  if (/\b(?:porths?|mccances?|huethers?|brashers|norris|pathophysiology)\b/.test(probe)) {
+    return { roles: ['patho-bridge'], badge: 'Patho Bridge', reason: 'Pathophysiology text detected (Porth / McCance)' };
+  }
+  if (/\b(?:jarvis|bates|bickleys?|dains|seidels?|health\s+assessment|physical\s+examination)\b/.test(probe)) {
+    return { roles: ['exam-bridge'], badge: 'Exam / Diff Bridge', reason: 'Health Assessment text detected (Jarvis / Bates / Dains)' };
+  }
+  if (/\b(?:lehnes?|burchum|rosenthal|katzung|goodman)\b/.test(probe)) {
+    return { roles: ['pharm-bridge'], badge: 'Pharm / GDMT Bridge', reason: 'Mechanistic Pharmacology text detected (Lehne)' };
+  }
+  if (/\b(?:mccuistions?|lilleys?|karch|adams|pharmacology)\b/.test(probe)) {
+    return { roles: ['rn'], badge: 'RN Core (Pharm)', reason: 'Nursing-Process Pharmacology text detected (McCuistion / Lilley)' };
+  }
+  return { roles: ['rn'], badge: 'RN Core', reason: 'Standard RN Core source' };
+}
+
+function classifyTocFeature(title) {
+  const t = String(title || '');
+  if (/\babnormal\s+findings\b|\btables?\s+of\s+abnormal\b|\bdifferential\s+diagnos/i.test(t)) return 'abnormal-table';
+  if (/\bprototype\s+drug\b|\bsummary\s+drug\b|\bdrug\s+chart\b|\bdrug\s+therapy\s+table/i.test(t)) return 'prototype-drug';
+  if (/\bnursing\s+process\b|\bpatient[-\s]centered\s+collaborative\s+care\b|\bnursing\s+management\b/i.test(t)) return 'nursing-process';
+  if (/\bkey\s+concepts?\b|\bchapter\s+summary\b|\breview\s+of\s+key/i.test(t)) return 'key-concepts';
+  return null;
+}
+
+function buildTocTree(rawNodes, numPages, pageLabels = null) {
+  const totalPages = Math.max(1, Math.floor(Number(numPages)) || 1);
+  const labels = Array.isArray(pageLabels) && pageLabels.length === totalPages ? pageLabels : null;
+  let seq = 0;
+  const flat = [];
+  const firstValidPage = items => {
+    for (const it of Array.isArray(items) ? items : []) {
+      const p = Math.floor(Number(it && it.page));
+      if (Number.isFinite(p) && p >= 1 && p <= totalPages) return p;
+      const childP = firstValidPage(it && it.items);
+      if (childP) return childP;
+    }
+    return null;
+  };
+  const walk = (items, depth, parentId, ancestors, parentTitles) => {
+    const ids = [];
+    for (const raw of Array.isArray(items) ? items : []) {
+      const title = String((raw && raw.title) || '').replace(/\s+/g, ' ').trim();
+      const ownPage = Math.floor(Number(raw && raw.page));
+      const page = Number.isFinite(ownPage) && ownPage >= 1 && ownPage <= totalPages ? ownPage : firstValidPage(raw && raw.items);
+      if (!title || !page) continue;
+      const id = 'toc-' + (++seq);
+      const node = {
+        id, title, depth, page, startPage: page, endPage: page, pageCount: 1,
+        parentId: parentId || null, ancestorIds: [...ancestors], parentPath: parentTitles.join(' › '),
+        feature: classifyTocFeature(title), childIds: [],
+        bookStart: null, bookEnd: null, bookLabelDiffers: false,
+      };
+      flat.push(node);
+      ids.push(id);
+      if (Array.isArray(raw && raw.items) && raw.items.length) {
+        node.childIds = walk(raw.items, depth + 1, id, [...ancestors, id], [...parentTitles, title]);
+      }
+    }
+    return ids;
+  };
+  const roots = walk(rawNodes, 0, null, [], []);
+  for (let i = 0; i < flat.length; i++) {
+    const cur = flat[i];
+    let nextPeerPage = null;
+    for (let j = i + 1; j < flat.length; j++) {
+      if (flat[j].depth <= cur.depth && flat[j].page >= cur.page) { nextPeerPage = flat[j].page; break; }
+    }
+    cur.endPage = nextPeerPage === null ? totalPages : (nextPeerPage > cur.page ? nextPeerPage - 1 : cur.page);
+  }
+  const byId = new Map(flat.map(n => [n.id, n]));
+  for (let i = flat.length - 1; i >= 0; i--) {
+    const n = flat[i];
+    for (const cid of n.childIds) {
+      const ch = byId.get(cid);
+      if (ch && ch.endPage > n.endPage) n.endPage = Math.min(totalPages, ch.endPage);
+    }
+    n.pageCount = Math.max(1, n.endPage - n.startPage + 1);
+    if (labels) {
+      const bs = String(labels[n.startPage - 1] ?? '').trim();
+      const be = String(labels[n.endPage - 1] ?? '').trim();
+      if (bs) {
+        n.bookStart = bs;
+        n.bookEnd = be || bs;
+        n.bookLabelDiffers = bs !== String(n.startPage) || Boolean(be && be !== String(n.endPage));
+      }
+    }
+  }
+  const hasBookLabels = flat.some(n => n.bookLabelDiffers);
+  return { flat, roots, numPages: totalPages, hasBookLabels };
+}
+
+function stemToken(w) {
+  const s = String(w || '').toLowerCase();
+  if (s.length >= 6 && s.endsWith('ies')) return s.slice(0, -3) + 'y';
+  if (s.length >= 5 && s.endsWith('es') && !/(?:ses|xes|zes|ches|shes)$/.test(s)) return s.slice(0, -1);
+  if (s.length >= 5 && s.endsWith('s') && !s.endsWith('ss') && !s.endsWith('is') && !s.endsWith('us')) return s.slice(0, -1);
+  return s;
+}
+
+function normSearchTokens(str) {
+  const STOP = new Set(['the', 'and', 'for', 'with', 'from', 'into', 'across', 'under', 'over', 'care', 'client', 'patient', 'patients', 'nursing', 'chapter', 'unit', 'part', 'section', 'disorder', 'disorders']);
+  return String(str || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter(w => w.length >= 2 && !STOP.has(w)).map(stemToken);
+}
+
+function matchTocNodes(flatNodes, queryText) {
+  const rawTerms = String(queryText || '').split(/[\n,;]+/).map(s => s.replace(/^\s*(?:[-*•]|\d+[.)]|P\d+[:.)]?)\s*/i, '').trim()).filter(s => s.length >= 2);
+  const matchedIds = new Set(), recommendedIds = new Set(), matchedTermsById = new Map();
+  if (!rawTerms.length || !Array.isArray(flatNodes) || !flatNodes.length) {
+    return { terms: [], matchedIds, recommendedIds, matchedTermsById };
+  }
+  const nodeMeta = flatNodes.map(n => {
+    const normTitle = n.title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const normFull = (n.parentPath + ' ' + n.title).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const titleToks = new Set(normSearchTokens(n.title));
+    const fullToks = new Set(normSearchTokens(n.parentPath + ' ' + n.title));
+    return { node: n, normTitle, normFull, titleToks, fullToks };
+  });
+  for (const term of rawTerms) {
+    const normTerm = term.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    if (!normTerm) continue;
+    const qToks = normSearchTokens(term);
+    const directHits = [], contextHits = [];
+    for (const m of nodeMeta) {
+      const exactSub = normTerm.length >= 3 && new RegExp('(?:^|\\s)' + normTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:s|es)?(?:\\s|$)').test(m.normTitle);
+      const tokHit = qToks.length > 0 && qToks.every(qt => m.titleToks.has(qt) || [...m.titleToks].some(tt => tt.length >= 4 && qt.length >= 4 && (tt.startsWith(qt) || qt.startsWith(tt))));
+      if (exactSub || tokHit) {
+        directHits.push(m.node);
+        continue;
+      }
+      if (qToks.length >= 2 && qToks.every(qt => m.fullToks.has(qt)) && qToks.some(qt => m.titleToks.has(qt))) {
+        contextHits.push(m.node);
+      }
+    }
+    const candidates = directHits.length ? directHits : contextHits;
+    if (!candidates.length) continue;
+    for (const c of candidates) {
+      matchedIds.add(c.id);
+      if (!matchedTermsById.has(c.id)) matchedTermsById.set(c.id, []);
+      if (!matchedTermsById.get(c.id).includes(term)) matchedTermsById.get(c.id).push(term);
+    }
+    const candIds = new Set(candidates.map(c => c.id));
+    let specific = candidates.filter(c => !candidates.some(other => other.id !== c.id && Array.isArray(other.ancestorIds) && other.ancestorIds.includes(c.id)));
+    const nonMega = specific.filter(c => !(c.depth === 0 && c.pageCount > 65 && /^(?:part|unit|section)\b/i.test(c.title)));
+    if (nonMega.length) specific = nonMega;
+    for (const s of specific) if (candIds.has(s.id)) recommendedIds.add(s.id);
+  }
+  return { terms: rawTerms, matchedIds, recommendedIds, matchedTermsById };
+}
+
+function resolveSelectionRanges(flatNodes, selectedIds, { padEnd = 0, numPages = Infinity } = {}) {
+  const selSet = selectedIds instanceof Set ? selectedIds : new Set(Array.isArray(selectedIds) ? selectedIds : []);
+  const pad = Math.max(0, Math.min(5, Math.floor(Number(padEnd)) || 0));
+  const cap = Number.isFinite(numPages) && numPages > 0 ? Math.floor(numPages) : Infinity;
+  const selectedNodes = (Array.isArray(flatNodes) ? flatNodes : []).filter(n => selSet.has(n.id));
+  const rawRanges = selectedNodes.map(n => ({ start: n.startPage, end: Math.min(cap, n.endPage + pad) }));
+  const ranges = mergePageRanges(rawRanges, cap);
+  return { ranges, formatted: formatPageRanges(ranges, cap), pageCount: countPagesInRanges(ranges, cap), selectedNodes };
+}
+
+// ── Pure-Node PDF 1.4–1.7 Outline / Page-Tree / PageLabel Reader ──
+
+const PDF_DOC_ENCODING_LOW = {
+  0x80: '\u2022', 0x81: '\u2020', 0x82: '\u2021', 0x83: '\u2026', 0x84: '\u2014', 0x85: '\u2013',
+  0x86: '\u0192', 0x87: '\u2044', 0x88: '\u2039', 0x89: '\u203A', 0x8A: '\u2212', 0x8B: '\u2030',
+  0x8C: '\u201E', 0x8D: '\u201C', 0x8E: '\u201D', 0x8F: '\u2018', 0x90: '\u2019', 0x91: '\u201A',
+  0x92: '\u2122', 0x93: '\uFB01', 0x94: '\uFB02', 0x95: '\u0141', 0x96: '\u0152', 0x97: '\u0160',
+  0x98: '\u0178', 0x99: '\u017D', 0x9A: '\u0131', 0x9B: '\u0142', 0x9C: '\u0153', 0x9D: '\u0161',
+  0x9E: '\u017E', 0xA0: '\u20AC',
+};
+
+function decodePdfBytes(bytes) {
+  if (!bytes || !bytes.length) return '';
+  if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) {
+    let out = '';
+    for (let i = 2; i + 1 < bytes.length; i += 2) {
+      out += String.fromCharCode((bytes[i] << 8) | bytes[i + 1]);
+    }
+    return out;
+  }
+  if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
+    return Buffer.from(bytes.slice(3)).toString('utf8');
+  }
+  let out = '';
+  for (let i = 0; i < bytes.length; i++) {
+    const b = bytes[i];
+    out += PDF_DOC_ENCODING_LOW[b] || String.fromCharCode(b);
+  }
+  return out;
+}
+
+function isPdfWs(b) {
+  return b === 0x00 || b === 0x09 || b === 0x0A || b === 0x0C || b === 0x0D || b === 0x20;
+}
+
+function isPdfDelim(b) {
+  return b === 0x28 || b === 0x29 || b === 0x3C || b === 0x3E || b === 0x5B || b === 0x5D ||
+    b === 0x7B || b === 0x7D || b === 0x2F || b === 0x25;
+}
+
+class PdfCursor {
+  constructor(buf, pos = 0, end = buf.length) {
+    this.buf = buf;
+    this.pos = pos;
+    this.end = Math.min(buf.length, end);
+  }
+  skipWs() {
+    while (this.pos < this.end) {
+      const b = this.buf[this.pos];
+      if (isPdfWs(b)) { this.pos++; continue; }
+      if (b === 0x25) { // % comment
+        this.pos++;
+        while (this.pos < this.end && this.buf[this.pos] !== 0x0A && this.buf[this.pos] !== 0x0D) this.pos++;
+        continue;
+      }
+      break;
+    }
+  }
+  peek() {
+    this.skipWs();
+    return this.pos < this.end ? this.buf[this.pos] : -1;
+  }
+  readWord() {
+    this.skipWs();
+    const start = this.pos;
+    while (this.pos < this.end && !isPdfWs(this.buf[this.pos]) && !isPdfDelim(this.buf[this.pos])) this.pos++;
+    return this.buf.slice(start, this.pos).toString('latin1');
+  }
+  readName() {
+    this.pos++; // skip '/'
+    let raw = '';
+    while (this.pos < this.end && !isPdfWs(this.buf[this.pos]) && !isPdfDelim(this.buf[this.pos])) {
+      if (this.buf[this.pos] === 0x23 && this.pos + 2 < this.end) {
+        const hex = this.buf.slice(this.pos + 1, this.pos + 3).toString('latin1');
+        if (/^[0-9a-fA-F]{2}$/.test(hex)) {
+          raw += String.fromCharCode(Number.parseInt(hex, 16));
+          this.pos += 3;
+          continue;
+        }
+      }
+      raw += String.fromCharCode(this.buf[this.pos++]);
+    }
+    return { kind: 'name', value: raw };
+  }
+  readLiteralString() {
+    this.pos++; // skip '('
+    const bytes = [];
+    let depth = 1;
+    while (this.pos < this.end && depth > 0) {
+      const b = this.buf[this.pos++];
+      if (b === 0x5C) { // backslash
+        if (this.pos >= this.end) break;
+        const esc = this.buf[this.pos++];
+        if (esc === 0x6E) bytes.push(0x0A);
+        else if (esc === 0x72) bytes.push(0x0D);
+        else if (esc === 0x74) bytes.push(0x09);
+        else if (esc === 0x62) bytes.push(0x08);
+        else if (esc === 0x66) bytes.push(0x0C);
+        else if (esc === 0x0D) { if (this.pos < this.end && this.buf[this.pos] === 0x0A) this.pos++; }
+        else if (esc === 0x0A) { /* line continuation */ }
+        else if (esc >= 0x30 && esc <= 0x37) {
+          let oct = esc - 0x30;
+          for (let k = 0; k < 2 && this.pos < this.end && this.buf[this.pos] >= 0x30 && this.buf[this.pos] <= 0x37; k++) {
+            oct = (oct << 3) + (this.buf[this.pos++] - 0x30);
+          }
+          bytes.push(oct & 0xFF);
+        } else {
+          bytes.push(esc);
+        }
+        continue;
+      }
+      if (b === 0x28) { depth++; bytes.push(b); continue; }
+      if (b === 0x29) { depth--; if (depth > 0) bytes.push(b); continue; }
+      bytes.push(b);
+    }
+    return { kind: 'string', bytes, value: decodePdfBytes(bytes) };
+  }
+  readHexString() {
+    this.pos++; // skip '<'
+    let hex = '';
+    while (this.pos < this.end) {
+      const b = this.buf[this.pos++];
+      if (b === 0x3E) break;
+      if (isPdfWs(b)) continue;
+      hex += String.fromCharCode(b);
+    }
+    if (hex.length % 2 === 1) hex += '0';
+    const bytes = [];
+    for (let i = 0; i < hex.length; i += 2) {
+      const v = Number.parseInt(hex.slice(i, i + 2), 16);
+      bytes.push(Number.isFinite(v) ? v : 0);
+    }
+    return { kind: 'string', bytes, value: decodePdfBytes(bytes) };
+  }
+  readArray() {
+    this.pos++; // skip '['
+    const items = [];
+    while (this.pos < this.end) {
+      const pk = this.peek();
+      if (pk < 0 || pk === 0x5D) { if (pk === 0x5D) this.pos++; break; }
+      const val = this.readObject();
+      if (val === undefined) break;
+      items.push(val);
+    }
+    return items;
+  }
+  readDictOrStream(allowStream = true) {
+    this.pos += 2; // skip '<<'
+    const dict = Object.create(null);
+    while (this.pos < this.end) {
+      const pk = this.peek();
+      if (pk < 0) break;
+      if (pk === 0x3E && this.pos + 1 < this.end && this.buf[this.pos + 1] === 0x3E) {
+        this.pos += 2;
+        break;
+      }
+      if (pk !== 0x2F) {
+        const junk = this.readObject();
+        if (junk === undefined) break;
+        continue;
+      }
+      const key = this.readName().value;
+      const val = this.readObject();
+      if (val !== undefined) dict[key] = val;
+    }
+    if (!allowStream) return { kind: 'dict', dict };
+    const saved = this.pos;
+    const nextTok = this.readWord();
+    if (nextTok === 'stream') {
+      if (this.pos < this.end && this.buf[this.pos] === 0x0D) this.pos++;
+      if (this.pos < this.end && this.buf[this.pos] === 0x0A) this.pos++;
+      const streamStart = this.pos;
+      let streamEnd = -1;
+      if (typeof dict.Length === 'number' && dict.Length >= 0 && streamStart + dict.Length <= this.end) {
+        streamEnd = streamStart + dict.Length;
+      } else {
+        const idx = this.buf.indexOf('endstream', streamStart, 'latin1');
+        streamEnd = idx >= 0 ? idx : this.end;
+        while (streamEnd > streamStart && (this.buf[streamEnd - 1] === 0x0A || this.buf[streamEnd - 1] === 0x0D)) streamEnd--;
+      }
+      const rawStream = this.buf.slice(streamStart, streamEnd);
+      const endMarker = this.buf.indexOf('endstream', streamEnd, 'latin1');
+      this.pos = endMarker >= 0 ? endMarker + 9 : streamEnd;
+      return { kind: 'stream', dict, rawStream };
+    }
+    this.pos = saved;
+    return { kind: 'dict', dict };
+  }
+  readObject(allowStream = true) {
+    const pk = this.peek();
+    if (pk < 0) return undefined;
+    if (pk === 0x2F) return this.readName();
+    if (pk === 0x28) return this.readLiteralString();
+    if (pk === 0x5B) return this.readArray();
+    if (pk === 0x3C) {
+      if (this.pos + 1 < this.end && this.buf[this.pos + 1] === 0x3C) return this.readDictOrStream(allowStream);
+      return this.readHexString();
+    }
+    const word = this.readWord();
+    if (!word) { this.pos++; return undefined; }
+    if (word === 'true') return true;
+    if (word === 'false') return false;
+    if (word === 'null') return null;
+    if (/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(word)) {
+      const num = Number(word);
+      if (/^\d+$/.test(word)) {
+        const save1 = this.pos;
+        const w2 = this.readWord();
+        if (/^\d+$/.test(w2)) {
+          const w3 = this.readWord();
+          if (w3 === 'R') return { kind: 'ref', num, gen: Number(w2) };
+        }
+        this.pos = save1;
+      }
+      return num;
+    }
+    return { kind: 'keyword', value: word };
+  }
+}
+
+function paethPredictor(a, b, c) {
+  const p = a + b - c;
+  const pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
+  if (pa <= pb && pa <= pc) return a;
+  return pb <= pc ? b : c;
+}
+
+function applyPdfPredictor(data, parms) {
+  const predictor = Number(parms && parms.Predictor) || 1;
+  if (predictor <= 1) return data;
+  const colors = Math.max(1, Number(parms && parms.Colors) || 1);
+  const bpc = Math.max(1, Number(parms && parms.BitsPerComponent) || 8);
+  const columns = Math.max(1, Number(parms && parms.Columns) || 1);
+  const bpp = Math.max(1, Math.ceil((colors * bpc) / 8));
+  const rowBytes = Math.ceil((columns * colors * bpc) / 8);
+  if (predictor === 2) {
+    const out = Buffer.from(data);
+    for (let r = 0; r + rowBytes <= out.length; r += rowBytes) {
+      for (let i = bpp; i < rowBytes; i++) out[r + i] = (out[r + i] + out[r + i - bpp]) & 0xFF;
+    }
+    return out;
+  }
+  if (predictor >= 10 && predictor <= 15) {
+    const stride = rowBytes + 1;
+    const rows = Math.floor(data.length / stride);
+    const out = Buffer.alloc(rows * rowBytes);
+    let prevRow = Buffer.alloc(rowBytes);
+    for (let r = 0; r < rows; r++) {
+      const filter = data[r * stride];
+      const curRow = Buffer.alloc(rowBytes);
+      for (let i = 0; i < rowBytes; i++) {
+        const raw = data[r * stride + 1 + i];
+        const left = i >= bpp ? curRow[i - bpp] : 0;
+        const up = prevRow[i];
+        const upLeft = i >= bpp ? prevRow[i - bpp] : 0;
+        if (filter === 0) curRow[i] = raw;
+        else if (filter === 1) curRow[i] = (raw + left) & 0xFF;
+        else if (filter === 2) curRow[i] = (raw + up) & 0xFF;
+        else if (filter === 3) curRow[i] = (raw + Math.floor((left + up) / 2)) & 0xFF;
+        else if (filter === 4) curRow[i] = (raw + paethPredictor(left, up, upLeft)) & 0xFF;
+        else curRow[i] = raw;
+      }
+      curRow.copy(out, r * rowBytes);
+      prevRow = curRow;
+    }
+    return out;
+  }
+  return data;
+}
+
+class PdfReader {
+  constructor(buf) {
+    this.buf = Buffer.isBuffer(buf) ? buf : Buffer.from(buf);
+    this.xref = new Map(); // objNum -> { type: 1, offset } | { type: 2, stmObj, index }
+    this.objCache = new Map();
+    this.stmCache = new Map();
+    this.rootRef = null;
+    this.initXref();
+  }
+
+  decompressStream(streamObj) {
+    let data = streamObj.rawStream;
+    const dict = streamObj.dict || {};
+    let filters = dict.Filter;
+    let parms = dict.DecodeParms;
+    if (!filters) return data;
+    if (!Array.isArray(filters)) filters = [filters];
+    if (!Array.isArray(parms)) parms = [parms];
+    for (let i = 0; i < filters.length; i++) {
+      const fName = filters[i] && filters[i].kind === 'name' ? filters[i].value : '';
+      const p = (parms[i] && parms[i].kind === 'dict') ? parms[i].dict : null;
+      if (fName === 'FlateDecode' || fName === 'Fl') {
+        try { data = zlib.inflateSync(data); }
+        catch (_) { data = zlib.inflateRawSync(data); }
+        if (p) data = applyPdfPredictor(data, p);
+      }
+    }
+    return data;
+  }
+
+  readIndirectAt(offset, expectedNum = null) {
+    const cur = new PdfCursor(this.buf, offset);
+    const n1 = cur.readWord();
+    const n2 = cur.readWord();
+    const kw = cur.readWord();
+    if (!/^\d+$/.test(n1) || !/^\d+$/.test(n2) || kw !== 'obj') return undefined;
+    if (expectedNum !== null && Number(n1) !== expectedNum) return undefined;
+    const obj = cur.readObject(true);
+    if (obj && obj.kind === 'stream' && obj.dict && typeof obj.dict.Length === 'object' && obj.dict.Length.kind === 'ref') {
+      const resolvedLen = this.deref(obj.dict.Length);
+      if (typeof resolvedLen === 'number' && resolvedLen >= 0) {
+        // Re-slice exact stream bytes when /Length was an indirect reference
+        const reCur = new PdfCursor(this.buf, offset);
+        reCur.readWord(); reCur.readWord(); reCur.readWord();
+        const dictOnly = reCur.readObject(false);
+        if (dictOnly && dictOnly.kind === 'dict') {
+          const w = reCur.readWord();
+          if (w === 'stream') {
+            if (reCur.pos < reCur.end && this.buf[reCur.pos] === 0x0D) reCur.pos++;
+            if (reCur.pos < reCur.end && this.buf[reCur.pos] === 0x0A) reCur.pos++;
+            obj.rawStream = this.buf.slice(reCur.pos, Math.min(this.buf.length, reCur.pos + resolvedLen));
+          }
+        }
+      }
+    }
+    return obj;
+  }
+
+  parseXrefAt(offset, visited = new Set()) {
+    if (!Number.isFinite(offset) || offset < 0 || offset >= this.buf.length || visited.has(offset)) return null;
+    visited.add(offset);
+    const cur = new PdfCursor(this.buf, offset);
+    const first = cur.readWord();
+    if (first === 'xref') {
+      while (cur.pos < cur.end) {
+        const save = cur.pos;
+        const w = cur.readWord();
+        if (w === 'trailer') break;
+        const countWord = cur.readWord();
+        if (!/^\d+$/.test(w) || !/^\d+$/.test(countWord)) { cur.pos = save; break; }
+        const startNum = Number(w), count = Number(countWord);
+        for (let i = 0; i < count; i++) {
+          const offStr = cur.readWord();
+          const genStr = cur.readWord();
+          const flag = cur.readWord();
+          const objNum = startNum + i;
+          if (flag === 'n' && !this.xref.has(objNum)) {
+            this.xref.set(objNum, { type: 1, offset: Number(offStr), gen: Number(genStr) });
+          }
+        }
+      }
+      const tr = cur.readObject(false);
+      const trailer = tr && tr.kind === 'dict' ? tr.dict : null;
+      if (trailer) {
+        if (!this.rootRef && trailer.Root && trailer.Root.kind === 'ref') this.rootRef = trailer.Root;
+        if (typeof trailer.XRefStm === 'number') this.parseXrefAt(trailer.XRefStm, visited);
+        if (typeof trailer.Prev === 'number') this.parseXrefAt(trailer.Prev, visited);
+      }
+      return trailer;
+    }
+    // PDF 1.5+ compressed /Type /XRef stream
+    const xrefObj = this.readIndirectAt(offset);
+    if (xrefObj && xrefObj.kind === 'stream' && xrefObj.dict) {
+      const d = xrefObj.dict;
+      if (!this.rootRef && d.Root && d.Root.kind === 'ref') this.rootRef = d.Root;
+      const W = Array.isArray(d.W) ? d.W.map(Number) : [];
+      if (W.length === 3) {
+        const [w0, w1, w2] = W;
+        const entryLen = w0 + w1 + w2;
+        const size = Number(d.Size) || 0;
+        const indexArr = Array.isArray(d.Index) && d.Index.length >= 2 ? d.Index.map(Number) : [0, size];
+        const raw = this.decompressStream(xrefObj);
+        let pos = 0;
+        const readInt = width => {
+          let v = 0;
+          for (let b = 0; b < width; b++) v = (v * 256) + (raw[pos + b] || 0);
+          pos += width;
+          return v;
+        };
+        for (let s = 0; s + 1 < indexArr.length; s += 2) {
+          const firstObj = indexArr[s], count = indexArr[s + 1];
+          for (let k = 0; k < count && pos + entryLen <= raw.length; k++) {
+            const t = w0 === 0 ? 1 : readInt(w0);
+            const f1 = w1 === 0 ? 0 : readInt(w1);
+            const f2 = w2 === 0 ? 0 : readInt(w2);
+            const objNum = firstObj + k;
+            if (!this.xref.has(objNum)) {
+              if (t === 1) this.xref.set(objNum, { type: 1, offset: f1, gen: f2 });
+              else if (t === 2) this.xref.set(objNum, { type: 2, stmObj: f1, index: f2 });
+            }
+          }
+        }
+      }
+      if (typeof d.Prev === 'number') this.parseXrefAt(d.Prev, visited);
+      return d;
+    }
+    return null;
+  }
+
+  fallbackScanObjects() {
+    const text = this.buf.toString('latin1');
+    const re = /(?:^|[\r\n])\s*(\d+)\s+(\d+)\s+obj\b/g;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      const objNum = Number(m[1]);
+      const localOff = m.index + m[0].indexOf(m[1]);
+      this.xref.set(objNum, { type: 1, offset: localOff, gen: Number(m[2]) });
+    }
+    if (!this.rootRef) {
+      for (const [objNum] of this.xref) {
+        const obj = this.getObject(objNum);
+        const d = obj && obj.dict;
+        if (d && d.Type && d.Type.kind === 'name' && d.Type.value === 'Catalog') {
+          this.rootRef = { kind: 'ref', num: objNum, gen: 0 };
+          break;
+        }
+      }
+    }
+  }
+
+  initXref() {
+    const tailSize = Math.min(this.buf.length, 8192);
+    const tail = this.buf.slice(this.buf.length - tailSize).toString('latin1');
+    const matches = [...tail.matchAll(/startxref\s+(\d+)/g)];
+    if (matches.length) {
+      const startXref = Number(matches[matches.length - 1][1]);
+      this.parseXrefAt(startXref);
+    }
+    if (!this.xref.size || !this.rootRef) this.fallbackScanObjects();
+  }
+
+  getObjectFromStream(stmObjNum, indexInStm) {
+    if (!this.stmCache.has(stmObjNum)) {
+      const map = new Map();
+      const stm = this.getObject(stmObjNum);
+      if (stm && stm.kind === 'stream' && stm.dict) {
+        const n = Number(stm.dict.N) || 0;
+        const first = Number(stm.dict.First) || 0;
+        const data = this.decompressStream(stm);
+        const headerCur = new PdfCursor(data, 0, first);
+        const pairs = [];
+        for (let i = 0; i < n; i++) {
+          const onum = Number(headerCur.readWord());
+          const off = Number(headerCur.readWord());
+          if (Number.isFinite(onum) && Number.isFinite(off)) pairs.push({ onum, off: first + off, idx: i });
+        }
+        for (let i = 0; i < pairs.length; i++) {
+          const endOff = i + 1 < pairs.length ? pairs[i + 1].off : data.length;
+          const objCur = new PdfCursor(data, pairs[i].off, endOff);
+          const val = objCur.readObject(false);
+          map.set(pairs[i].idx, { onum: pairs[i].onum, val });
+          map.set('obj:' + pairs[i].onum, val);
+        }
+      }
+      this.stmCache.set(stmObjNum, map);
+    }
+    const stmMap = this.stmCache.get(stmObjNum);
+    const byIdx = stmMap.get(indexInStm);
+    return byIdx ? byIdx.val : undefined;
+  }
+
+  getObject(objNum, depth = 0) {
+    if (depth > 20) return undefined;
+    if (this.objCache.has(objNum)) return this.objCache.get(objNum);
+    const entry = this.xref.get(objNum);
+    if (!entry) return undefined;
+    let val;
+    if (entry.type === 1) val = this.readIndirectAt(entry.offset, objNum);
+    else if (entry.type === 2) {
+      val = this.getObjectFromStream(entry.stmObj, entry.index);
+      if (val === undefined && this.stmCache.has(entry.stmObj)) {
+        val = this.stmCache.get(entry.stmObj).get('obj:' + objNum);
+      }
+    }
+    this.objCache.set(objNum, val);
+    return val;
+  }
+
+  deref(val, depth = 0) {
+    if (depth > 20 || !val || typeof val !== 'object') return val;
+    if (val.kind === 'ref') return this.deref(this.getObject(val.num, depth + 1), depth + 1);
+    return val;
+  }
+}
+
+function toRoman(num, lower = true) {
+  let n = Math.floor(Number(num));
+  if (!Number.isFinite(n) || n <= 0 || n >= 4000) return String(num);
+  const table = [
+    [1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'],
+    [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I'],
+  ];
+  let out = '';
+  for (const [v, sym] of table) { while (n >= v) { out += sym; n -= v; } }
+  return lower ? out.toLowerCase() : out;
+}
+
+function toAlphaLabel(num, lower = true) {
+  const n = Math.max(1, Math.floor(Number(num)) || 1);
+  const ch = String.fromCharCode(((n - 1) % 26) + (lower ? 97 : 65));
+  return ch.repeat(Math.floor((n - 1) / 26) + 1);
+}
+
+function buildPageMap(reader, catalogDict) {
+  const pageObjToPageNum = new Map();
+  let pageCount = 0;
+  const visited = new Set();
+  const walk = refOrObj => {
+    let refNum = null;
+    if (refOrObj && refOrObj.kind === 'ref') {
+      refNum = refOrObj.num;
+      if (visited.has(refNum)) return;
+      visited.add(refNum);
+    }
+    const obj = reader.deref(refOrObj);
+    const d = obj && obj.dict;
+    if (!d) return;
+    const tp = d.Type && d.Type.kind === 'name' ? d.Type.value : '';
+    const kids = reader.deref(d.Kids);
+    if (tp === 'Pages' || Array.isArray(kids)) {
+      for (const k of Array.isArray(kids) ? kids : []) walk(k);
+    } else if (tp === 'Page' || refNum !== null) {
+      pageCount++;
+      if (refNum !== null) pageObjToPageNum.set(refNum, pageCount);
+    }
+  };
+  if (catalogDict && catalogDict.Pages) walk(catalogDict.Pages);
+  return { pageObjToPageNum, numPages: Math.max(1, pageCount) };
+}
+
+function collectNumberTree(reader, nodeObj, out = [], visited = new Set()) {
+  if (!nodeObj) return out;
+  if (nodeObj.kind === 'ref') {
+    if (visited.has(nodeObj.num)) return out;
+    visited.add(nodeObj.num);
+  }
+  const resolved = reader.deref(nodeObj);
+  const d = resolved && resolved.dict;
+  if (!d) return out;
+  const nums = reader.deref(d.Nums);
+  if (Array.isArray(nums)) {
+    for (let i = 0; i + 1 < nums.length; i += 2) {
+      const k = reader.deref(nums[i]);
+      const v = reader.deref(nums[i + 1]);
+      if (typeof k === 'number') out.push([k, v]);
+    }
+  }
+  const kids = reader.deref(d.Kids);
+  if (Array.isArray(kids)) for (const kid of kids) collectNumberTree(reader, kid, out, visited);
+  return out;
+}
+
+function buildPageLabels(reader, catalogDict, numPages) {
+  if (!catalogDict || !catalogDict.PageLabels) return null;
+  const entries = collectNumberTree(reader, catalogDict.PageLabels);
+  if (!entries.length) return null;
+  entries.sort((a, b) => a[0] - b[0]);
+  const labels = new Array(numPages).fill('');
+  for (let s = 0; s < entries.length; s++) {
+    const startIdx = Math.max(0, Math.floor(entries[s][0]));
+    const nextIdx = s + 1 < entries.length ? Math.min(numPages, Math.floor(entries[s + 1][0])) : numPages;
+    const spec = (entries[s][1] && entries[s][1].dict) || {};
+    const style = spec.S && spec.S.kind === 'name' ? spec.S.value : '';
+    const prefixObj = reader.deref(spec.P);
+    const prefix = prefixObj && prefixObj.kind === 'string' ? prefixObj.value : '';
+    const st = typeof spec.St === 'number' ? Math.max(1, Math.floor(spec.St)) : 1;
+    for (let p = startIdx; p < nextIdx && p < numPages; p++) {
+      const n = st + (p - startIdx);
+      let numPart = '';
+      if (style === 'D') numPart = String(n);
+      else if (style === 'r') numPart = toRoman(n, true);
+      else if (style === 'R') numPart = toRoman(n, false);
+      else if (style === 'a') numPart = toAlphaLabel(n, true);
+      else if (style === 'A') numPart = toAlphaLabel(n, false);
+      labels[p] = prefix + numPart;
+    }
+  }
+  return labels;
+}
+
+function collectNameTree(reader, nodeObj, map = new Map(), visited = new Set()) {
+  if (!nodeObj) return map;
+  if (nodeObj.kind === 'ref') {
+    if (visited.has(nodeObj.num)) return map;
+    visited.add(nodeObj.num);
+  }
+  const resolved = reader.deref(nodeObj);
+  const d = resolved && resolved.dict;
+  if (!d) return map;
+  const names = reader.deref(d.Names);
+  if (Array.isArray(names)) {
+    for (let i = 0; i + 1 < names.length; i += 2) {
+      const kObj = reader.deref(names[i]);
+      const key = kObj && kObj.kind === 'string' ? kObj.value : (kObj && kObj.kind === 'name' ? kObj.value : null);
+      if (key !== null) map.set(key, names[i + 1]);
+    }
+  }
+  const kids = reader.deref(d.Kids);
+  if (Array.isArray(kids)) for (const kid of kids) collectNameTree(reader, kid, map, visited);
+  return map;
+}
+
+function buildNamedDestLookup(reader, catalogDict) {
+  const map = new Map();
+  if (!catalogDict) return map;
+  if (catalogDict.Dests) {
+    const destsObj = reader.deref(catalogDict.Dests);
+    if (destsObj && destsObj.dict) {
+      for (const [k, v] of Object.entries(destsObj.dict)) map.set(k, v);
+    }
+  }
+  if (catalogDict.Names) {
+    const namesRoot = reader.deref(catalogDict.Names);
+    if (namesRoot && namesRoot.dict && namesRoot.dict.Dests) {
+      collectNameTree(reader, namesRoot.dict.Dests, map);
+    }
+  }
+  return map;
+}
+
+function resolveDestPage(reader, rawDest, pageObjToPageNum, namedDests, numPages, depth = 0) {
+  if (!rawDest || depth > 8) return null;
+  const d = reader.deref(rawDest);
+  if (!d) return null;
+  if (Array.isArray(d) && d.length > 0) {
+    const first = d[0];
+    if (first && first.kind === 'ref') {
+      return pageObjToPageNum.get(first.num) || null;
+    }
+    if (typeof first === 'number' && Number.isFinite(first)) {
+      const p = Math.floor(first) + 1;
+      return p >= 1 && p <= numPages ? p : null;
+    }
+    return null;
+  }
+  if (d.kind === 'dict' && d.dict && d.dict.D) {
+    return resolveDestPage(reader, d.dict.D, pageObjToPageNum, namedDests, numPages, depth + 1);
+  }
+  if (d.kind === 'string' || d.kind === 'name') {
+    const target = namedDests.get(d.value);
+    if (target) return resolveDestPage(reader, target, pageObjToPageNum, namedDests, numPages, depth + 1);
+  }
+  return null;
+}
+
+function readOutlineItems(reader, firstRef, pageObjToPageNum, namedDests, numPages, depth = 0) {
+  if (!firstRef || depth > 24) return [];
+  const items = [];
+  const seenSiblings = new Set();
+  let cur = firstRef;
+  while (cur) {
+    if (cur.kind === 'ref') {
+      if (seenSiblings.has(cur.num)) break;
+      seenSiblings.add(cur.num);
+    }
+    const obj = reader.deref(cur);
+    const d = obj && obj.dict;
+    if (!d) break;
+    const titleObj = reader.deref(d.Title);
+    const title = titleObj && titleObj.kind === 'string' ? titleObj.value.replace(/\s+/g, ' ').trim() : '';
+    let destSpec = d.Dest || null;
+    if (!destSpec && d.A) {
+      const act = reader.deref(d.A);
+      if (act && act.dict) {
+        const sType = act.dict.S && act.dict.S.kind === 'name' ? act.dict.S.value : '';
+        if (!sType || sType === 'GoTo') destSpec = act.dict.D || null;
+      }
+    }
+    const page = resolveDestPage(reader, destSpec, pageObjToPageNum, namedDests, numPages);
+    const kids = d.First ? readOutlineItems(reader, d.First, pageObjToPageNum, namedDests, numPages, depth + 1) : [];
+    items.push({ title, page, items: kids });
+    cur = d.Next || null;
+  }
+  return items;
+}
+
+function inspectPdfTocBuffer(buf, fileName = 'textbook.pdf') {
+  if (!buf || buf.length < 8 || buf.slice(0, 5).toString('latin1') !== '%PDF-') {
+    throw new Error('Not a valid PDF file: ' + fileName);
+  }
+  const reader = new PdfReader(buf);
+  const catalogObj = reader.rootRef ? reader.deref(reader.rootRef) : null;
+  const catalogDict = (catalogObj && catalogObj.dict) || null;
+  const { pageObjToPageNum, numPages } = buildPageMap(reader, catalogDict);
+  const pageLabels = buildPageLabels(reader, catalogDict, numPages);
+  const namedDests = buildNamedDestLookup(reader, catalogDict);
+  let rawOutline = [];
+  if (catalogDict && catalogDict.Outlines) {
+    const outlinesObj = reader.deref(catalogDict.Outlines);
+    if (outlinesObj && outlinesObj.dict && outlinesObj.dict.First) {
+      rawOutline = readOutlineItems(reader, outlinesObj.dict.First, pageObjToPageNum, namedDests, numPages);
+    }
+  }
+  const tree = buildTocTree(rawOutline, numPages, pageLabels);
+  const topTitles = tree.flat.filter(n => n.depth <= 1).slice(0, 15).map(n => n.title);
+  const suggestedRole = suggestTextbookRole(fileName, topTitles);
+  return {
+    fileName: path.basename(fileName),
+    fileSize: buf.length,
+    numPages,
+    source: tree.flat.length ? 'outline' : 'none',
+    hasBookLabels: tree.hasBookLabels,
+    suggestedRole,
+    roots: tree.roots,
+    flat: tree.flat,
+  };
+}
+
+function inspectPdfTocFile(filePath) {
+  const resolved = path.resolve(filePath);
+  if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
+    throw new Error('PDF file not found: ' + resolved);
+  }
+  return inspectPdfTocBuffer(fs.readFileSync(resolved), path.basename(resolved));
+}
+
+// ── CLI Runner ──
+
+function parseCli(argv) {
+  const opts = { file: '', match: '', pad: 0, depth: 2, all: false, features: false, json: false, help: false };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '-h' || a === '--help') { opts.help = true; continue; }
+    if (a === '--all') { opts.all = true; continue; }
+    if (a === '--features') { opts.features = true; continue; }
+    if (a === '--json') { opts.json = true; continue; }
+    if (a === '-m' || a === '--match') {
+      const next = argv[++i];
+      if (next === undefined) throw new Error('Missing value for ' + a);
+      opts.match = opts.match ? opts.match + ', ' + next : next;
+      continue;
+    }
+    if (a === '--pad') {
+      const next = Number(argv[++i]);
+      if (!Number.isFinite(next) || next < 0 || next > 5) throw new Error('--pad must be an integer 0..5');
+      opts.pad = Math.floor(next);
+      continue;
+    }
+    if (a === '--depth') {
+      const next = Number(argv[++i]);
+      if (!Number.isFinite(next) || next < 1 || next > 12) throw new Error('--depth must be an integer 1..12');
+      opts.depth = Math.floor(next);
+      continue;
+    }
+    if (a.startsWith('-')) throw new Error('Unknown option: ' + a);
+    if (!opts.file) opts.file = a;
+    else throw new Error('Unexpected positional argument: ' + a);
+  }
+  return opts;
+}
+
+function formatFeatureTag(feat) {
+  if (feat === 'abnormal-table') return ' [Abnormal Findings]';
+  if (feat === 'prototype-drug') return ' [Prototype / Drug Table]';
+  if (feat === 'nursing-process') return ' [Nursing Process]';
+  if (feat === 'key-concepts') return ' [Key Concepts]';
+  return '';
+}
+
+function formatNodeLine(n) {
+  const indent = '  '.repeat(n.depth);
+  const pdfSpan = n.startPage === n.endPage ? 'PDF p. ' + n.startPage : 'PDF pp. ' + n.startPage + '-' + n.endPage;
+  const bookSpan = n.bookLabelDiffers ? ' (Book ' + (n.bookStart === n.bookEnd ? 'p. ' + n.bookStart : 'pp. ' + n.bookStart + '-' + n.bookEnd) + ')' : '';
+  return `${indent}- ${n.title}${formatFeatureTag(n.feature)}  ->  ${pdfSpan}${bookSpan}  [${n.pageCount} pp.]`;
+}
+
+function printHelp() {
+  console.log([
+    'Nursing Study Suite — Local PDF TOC Inspector & Section Slicer (0 API calls)',
+    '',
+    'Usage:',
+    '  node tools/pdf-toc-slice.js <textbook.pdf> [options]',
+    '',
+    'Options:',
+    '  -m, --match "<topics>"  Comma-separated exam topics, exemplars, or drug classes',
+    '  --pad <0..5>            Pad each selected section end by N PDF pages (default: 0)',
+    '  --features              Also include Abnormal Findings / Prototype / Nursing Process / Key Concepts',
+    '                          sections inside matched chapters (or across the book if no --match)',
+    '  --depth <1..12>         Max outline depth when browsing without --match (default: 2)',
+    '  --all                   Print all outline levels when browsing',
+    '  --json                  Print machine-readable JSON output',
+    '  -h, --help              Show this help message',
+    '',
+    'Examples:',
+    '  node tools/pdf-toc-slice.js Porth-Essentials.pdf --match "Heart Failure"',
+    '  node tools/pdf-toc-slice.js McCuistion-Pharm.pdf --match "Loop Diuretics, Cardiac Glycosides"',
+    '  node tools/pdf-toc-slice.js Jarvis-Assessment.pdf --match "Heart and Neck Vessels" --features',
+  ].join('\n'));
+}
+
+function main() {
+  const opts = parseCli(process.argv.slice(2));
+  if (opts.help || !opts.file) {
+    printHelp();
+    process.exit(opts.help ? 0 : 1);
+  }
+  const report = inspectPdfTocFile(opts.file);
+  const matchInfo = opts.match ? matchTocNodes(report.flat, opts.match) : { terms: [], matchedIds: new Set(), recommendedIds: new Set(), matchedTermsById: new Map() };
+  const selectedIds = new Set(matchInfo.recommendedIds);
+
+  if (opts.features) {
+    if (opts.match && matchInfo.matchedIds.size > 0) {
+      // Include high-yield feature sections belonging to any matched chapter/unit or matched section
+      const matchedChapIds = new Set();
+      for (const n of report.flat) {
+        if (matchInfo.matchedIds.has(n.id)) {
+          matchedChapIds.add(n.id);
+          for (const aid of n.ancestorIds) {
+            const anc = report.flat.find(x => x.id === aid);
+            if (anc && anc.depth >= 1) matchedChapIds.add(aid);
+          }
+        }
+      }
+      for (const n of report.flat) {
+        if (n.feature && (matchedChapIds.has(n.id) || n.ancestorIds.some(aid => matchedChapIds.has(aid)))) {
+          selectedIds.add(n.id);
+        }
+      }
+    } else {
+      for (const n of report.flat) if (n.feature) selectedIds.add(n.id);
+    }
+  }
+
+  const selection = resolveSelectionRanges(report.flat, selectedIds, { padEnd: opts.pad, numPages: report.numPages });
+
+  if (opts.json) {
+    console.log(JSON.stringify({
+      fileName: report.fileName,
+      numPages: report.numPages,
+      source: report.source,
+      suggestedRole: report.suggestedRole,
+      matchedTerms: matchInfo.terms,
+      customPages: selection.formatted,
+      selectedPageCount: selection.pageCount,
+      selectedSections: selection.selectedNodes.map(n => ({
+        title: n.title,
+        parentPath: n.parentPath,
+        startPage: n.startPage,
+        endPage: n.endPage,
+        pageCount: n.pageCount,
+        bookStart: n.bookStart,
+        bookEnd: n.bookEnd,
+        feature: n.feature,
+      })),
+      tocCount: report.flat.length,
+      ...(opts.match ? {} : { toc: report.flat.filter(n => opts.all || n.depth < opts.depth) }),
+    }, null, 2));
+    return;
+  }
+
+  console.log(`Book:      ${report.fileName} (${report.numPages.toLocaleString()} PDF pages)`);
+  console.log(`Step 01:   ${report.suggestedRole.badge} — ${report.suggestedRole.reason}`);
+  console.log(`Bookmarks: ${report.flat.length ? report.flat.length + ' embedded TOC entries' : 'None found (open in Nursing Study Suite -> Knowledge Base -> Textbook TOC & section slicer for printed-TOC scan or manual page slicing)'}`);
+  console.log('');
+
+  if (!report.flat.length) return;
+
+  if (opts.match || opts.features) {
+    if (!selection.selectedNodes.length) {
+      console.log(`No TOC headings matched "${opts.match}". Try broader chapter words or run without --match to browse.`);
+      return;
+    }
+    const savedPct = Math.max(0, Math.round((1 - selection.pageCount / report.numPages) * 100));
+    console.log(`Recommended Sections to Slice (${selection.selectedNodes.length}):`);
+    for (const n of selection.selectedNodes) {
+      const crumb = n.parentPath ? n.parentPath + ' > ' : '';
+      const pdfSpan = n.startPage === n.endPage ? 'PDF p. ' + n.startPage : 'PDF pp. ' + n.startPage + '-' + n.endPage;
+      const bookSpan = n.bookLabelDiffers ? ` (Book ${n.bookStart === n.bookEnd ? 'p. ' + n.bookStart : 'pp. ' + n.bookStart + '-' + n.bookEnd})` : '';
+      console.log(`  * ${crumb}${n.title}${formatFeatureTag(n.feature)}`);
+      console.log(`      ${pdfSpan}${bookSpan}  (${n.pageCount} pp.)`);
+    }
+    console.log('');
+    console.log('================================================================');
+    console.log(`Ctrl+P -> Save as PDF -> Pages (Custom):  ${selection.formatted}`);
+    console.log(`Step 01 Page Slice (or paste directly):   ${selection.formatted}`);
+    console.log(`Total Sliced Size: ${selection.pageCount} of ${report.numPages} PDF pages (${savedPct}% fewer pages${opts.pad ? ', +' + opts.pad + ' pad' : ''})`);
+    console.log('================================================================');
+  } else {
+    const maxD = opts.all ? Infinity : opts.depth;
+    const shown = report.flat.filter(n => n.depth < maxD);
+    console.log(`Table of Contents (showing depth <= ${opts.all ? 'all' : opts.depth}; ${shown.length} of ${report.flat.length} entries):`);
+    for (const n of shown) console.log(formatNodeLine(n));
+    if (shown.length < report.flat.length) {
+      console.log(`\n(${report.flat.length - shown.length} deeper sub-headings hidden — pass --all or --match "<topic>" to drill in.)`);
+    }
+  }
+}
+
+if (require.main === module) {
+  try { main(); }
+  catch (err) {
+    console.error('Error: ' + (err && err.message ? err.message : String(err)));
+    process.exit(1);
+  }
+}
+
+module.exports = {
+  mergePageRanges,
+  formatPageRanges,
+  countPagesInRanges,
+  parsePageRanges,
+  suggestTextbookRole,
+  classifyTocFeature,
+  buildTocTree,
+  matchTocNodes,
+  resolveSelectionRanges,
+  inspectPdfTocBuffer,
+  inspectPdfTocFile,
+};

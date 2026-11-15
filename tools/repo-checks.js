@@ -20,6 +20,8 @@ const FROZEN_PROMPTS = Object.freeze([
   'NCLEX_ANCHOR_RULES',
   'NCLEX_RATIONALE_RULES',
   'NCLEX_COMPLETENESS_RULES',
+  'GIZMO_DEFAULT_IMPORT_PROMPT',
+  'GIZMO_CONVERT_PROMPT',
 ]);
 
 const DOCUMENTED_PROMPTS = Object.freeze([
@@ -40,8 +42,6 @@ const DOCUMENTED_PROMPTS = Object.freeze([
   // v21.0: the P-LATE 4-Pillar distractor & Slope Red Flag runtime directives for NCLEX and Case Studies (not frozen).
   'NCLEX_PLATE_TRAP_RULES',
   'CASE_SLOPE_SYNC_RULES',
-  // v20.0: the strict verbatim Anki-to-Gizmo chunk formatter prompt (not frozen).
-  'GIZMO_CONVERT_PROMPT',
 ]);
 
 function listSuiteFiles(rootDir = process.cwd()) {

@@ -9,6 +9,30 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [21.4] — 2026-11-15
+
+Local Textbook PDF Table of Contents (TOC) Inspector & Section Slicer in Step 01 (`01 · Knowledge Base`), standalone zero-dependency CLI slicer (`tools/pdf-toc-slice.js`), and Gizmo Import prompt restoration & Back-field guardrails. All 13 frozen prompt constants are enforced in `prompt-baseline.json` (the 11 existing frozen prompt hashes remain unchanged, and `GIZMO_DEFAULT_IMPORT_PROMPT` + `GIZMO_CONVERT_PROMPT` are promoted into the frozen baseline per [`docs/history/GIZMO-v21.3-frozen-prompts.diff`](docs/history/GIZMO-v21.3-frozen-prompts.diff)).
+
+### Added
+
+- **Step 01 Textbook TOC & Section Slicer (`kbMergePageRanges`, `kbParsePageRanges`, `kbSuggestTextbookRole`, `kbClassifyTocFeature`, `kbBuildTocTree`, `kbMatchTocNodes`, `kbResolveTocSelectionRanges`, `kbFormatTocSlicePlanMd`, `kbResolvePdfDestPage`, `kbScanPrintedTocFallback`, `kbInspectPdfToc`, `kbSourceUnits`, `kbGroupUnits`, `KnowledgeBaseBuilder`).** Adds a local, zero-API-call **Textbook TOC & section slicer** panel inside Step 01 (`01 · Knowledge Base`) that inspects PDF bookmark outlines via PDF.js (`getOutline()` + `getPageIndex()`) or falls back to scanning printed Table of Contents pages in the first 35 PDF pages with automatic printed-to-PDF page offset estimation. Auto-suggests textbook source role lenses from filenames/titles (`Saunders` / `Ignatavicius` → `RN Core`, `Porth` / `McCance` → `Patho Bridge`, `Jarvis` / `Bates` → `Exam / Diff Bridge`, `McCuistion` / `Lehne` → `Pharm / GDMT Bridge`), tags special sub-sections (`abnormal-findings`, `nursing-process`, `prototype-drug`, `summary-table`, `health-history`, `case-study`), filters chapters and sections by exam exemplar keywords (`Heart Failure, Loop Diuretics, Digoxin`), provides 1-click presets (**Select matches**, **+ Abnormal Findings**, **+ Nursing Process / Prototype boxes**, **Apply suggested role**, **Copy slice plan (.md)**), and slices non-contiguous PDF page ranges directly in-browser during **Build Knowledge Base** without extracting unselected pages.
+- **Standalone Zero-Dependency Local CLI Slicer (`tools/pdf-toc-slice.js`).** Provides a zero-dependency Node.js CLI (`node tools/pdf-toc-slice.js <file.pdf> [--query "..."] [--include-abnormal] [--include-boxes] [--json]`) that parses both classic PDF 1.4 `xref` tables and PDF 1.5–1.7 compressed `/Type /XRef` + `/Type /ObjStm` streams (including PNG row predictors `10..15` and TIFF predictor `2`), `/PageLabels`, `/Outlines`, `/Names /Dests`, and UTF-16BE bookmark strings to print a Markdown slice plan and ready-to-paste page ranges.
+- **Gizmo Back-Field Sanitizer & Prose Fidelity Guard (`gizmoSanitizeBackNoBrackets`, `gizmoVerifyUnchangedProse`, `GIZMO_LEGACY_IMPORT_PROMPT_V1`).** Deterministically strips accidental `[bracket]` blanks from the Back/Explanation field while preserving clinical text, rejects parenthetical abbreviation blanks (e.g., `([CRP])`) while verifying 100% character-identical prose once brackets are stripped, and auto-resets cached legacy verbose `gizmo_import_prompt_v1` `localStorage` entries back to the concise 4-line default.
+
+### Changed
+
+- **Gizmo Import Prompt Restoration & Baseline Promotion (`GIZMO_DEFAULT_IMPORT_PROMPT`, `GIZMO_CONVERT_PROMPT`, `prompt-baseline.json`).** Restores `GIZMO_DEFAULT_IMPORT_PROMPT` to the concise 4-line user prompt, tightens `GIZMO_CONVERT_PROMPT` against parenthetical abbreviation blanks and Back-field blanks, and promotes both constants into `prompt-baseline.json` (13 frozen constants total; 23 documented prompt constants in `Prompts.md`).
+
+### Verification
+
+- **9 new assertions (4,067 total)** across `tools/pdf-toc-slicer-tests.js` (7 assertions exercising `kbParsePageRanges`, `kbMergePageRanges`, `kbSuggestTextbookRole`, `kbClassifyTocFeature`, `kbBuildTocTree`, `kbMatchTocNodes`, `kbResolveTocSelectionRanges`, `kbFormatTocSlicePlanMd`, `kbInspectPdfToc` outline and printed-TOC fallback modes, `kbSourceUnits` non-contiguous PDF page slicing, and `tools/pdf-toc-slice.js` across classic PDF 1.4 `xref` and PDF 1.5+ `/XRef` + `/ObjStm` fixtures) and `tools/gizmo-import-tests.js` (2 assertions exercising `GIZMO_DEFAULT_IMPORT_PROMPT`, `GIZMO_CONVERT_PROMPT`, `gizmoSanitizeBackNoBrackets`, and `gizmoVerifyUnchangedProse`).
+- **Prompt bytes.** All 13 frozen hashes in `prompt-baseline.json` pass `tools/check-prompts.js`. `Prompts.md` regenerated and verified across all 23 documented prompt constants.
+- **SRI.** All eight SRI-pinned scripts and both PDF worker copies were re-hashed against their CDNs and match.
+
+See the [release verification record](docs/reviews/v21.4-release.md).
+
+---
+
 ## [21.3] — 2026-11-14
 
 Export-time 4-Pillar Exam Trap Audit injection in Anki `Extra` (`Back Extra`) — enabled and **Always open (`<br>`)** by default for zero-tap 2-second peripheral reinforcement on iOS AnkiMobile, with both an Include/Exclude checkbox and an **Always open** vs. **Collapsible (`<details>`)** display toggle. All 11 frozen prompt constants remain byte-identical (`prompt-baseline.json` unchanged).

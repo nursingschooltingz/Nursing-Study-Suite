@@ -29,6 +29,7 @@ const APPENDIX_PROMPTS = [
   'KB_PLATE_BRIDGE_RULES',
   'NCLEX_PLATE_TRAP_RULES',
   'CASE_SLOPE_SYNC_RULES',
+  'GIZMO_DEFAULT_IMPORT_PROMPT',
   'GIZMO_CONVERT_PROMPT',
 ];
 
@@ -62,9 +63,7 @@ function buildGeneratedAppendix(source) {
                   ? 'tunable; v21.0 P-LATE 4-Pillar distractor & Slope Red Flag runtime directive for NCLEXGenerator'
                   : name === 'CASE_SLOPE_SYNC_RULES'
                     ? 'tunable; v21.0 Unfolding EHR State-Machine & Cross-Stage Synchronization directive for CaseStudyGenerator'
-                    : name === 'GIZMO_CONVERT_PROMPT'
-                      ? 'tunable; v20.0 Anki-to-Gizmo strict verbatim chunk formatter'
-                      : 'byte-frozen';
+                    : 'byte-frozen';
     return promptBlock(extractPromptLiteral(source, name), status);
   });
   return [
@@ -72,7 +71,7 @@ function buildGeneratedAppendix(source) {
     '## Appendix · NCLEX Extractor, card-transcription and NCLEX to Anki constants',
     '',
     'Generated verbatim from the shipped HTML by `node tools/render-prompts.js --write`.',
-    'Do not edit inside these markers. The three extractor prompts are among the 11 byte-frozen',
+    'Do not edit inside these markers. The three extractor prompts and two Gizmo prompts are among the 13 byte-frozen',
     'constants. `CARD_TRANSCRIBE_PROMPT` is not byte-frozen, but its safety rules are load-bearing.',
     'The two `I2A_` prompts belong to the NCLEX to Anki image reader and are not byte-frozen either.',
     '',

@@ -1,0 +1,41 @@
+--- a/Nursing-Study-Suite v21.3.html
++++ b/Nursing-Study-Suite v21.3.html
+@@ -17538,24 +17538,32 @@
+ const GIZMO_PROMPT_STORAGE_KEY='latte_gizmo_import_prompt_v1';
+-const GIZMO_DEFAULT_IMPORT_PROMPT=`Create standard 2-sided flashcards from this tab-separated text:\n\n1. ONE CARD PER LINE: Do not duplicate cards. Keep all blanks for a sentence on the SAME card.\n2. FRONT OF CARD: Use the sentence before the tab. Highlight every phrase inside square brackets [like this] in green as a blank. Remove the bracket symbols from the final text. Do not highlight any unbracketed words.\n3. BACK OF CARD: Place the exact text after the tab into the Back/Explanation field. Do not omit or shorten this text.\n4. VERBATIM: Do not summarize, rephrase, or convert into questions or True/False cards. Keep the wording identical to the input.`;
++const GIZMO_LEGACY_IMPORT_PROMPT_V1=`Convert each line of this tab-separated text (Front <TAB> Back) into exactly ONE 2-sided flashcard:\n\n1. STRICT 1-TO-1 MAPPING (NO SPLITTING OR INVENTING):\n   - 1 input line = 1 card. Never split a line into multiple cards, never merge lines, and never create inverse/reverse cards.\n2. FRONT OF CARD (TEXT BEFORE THE TAB ONLY):\n   - Convert ONLY words inside square brackets [like this] into green fill-in-the-blank highlights, then remove the [ ] characters.\n   - Keep ALL bracketed [blanks] from the same line on the SAME card front.\n   - NEVER highlight unbracketed words, medical abbreviations, or words inside parentheses (like (CRP) or (hint)). Parentheses are NOT blanks.\n3. BACK OF CARD (TEXT AFTER THE TAB ONLY — ZERO BLANKS ALLOWED):\n   - Copy the text after the tab character verbatim into the Back / Explanation field as plain text.\n   - NEVER put green fill-in-the-blank highlights on the Back of a card. The Back must contain ZERO blanks.\n   - If there is no text after the tab, leave the Back completely blank/empty. Never invent or move text to the Back.\n4. 100% VERBATIM:\n   - Never reword, summarize, swap Front and Back, or turn statements into questions or True/False items.\n\nExample:\nTopic: Marker (CRP) indicates [inflammation] in [autoimmune disorders].\tDoes not diagnose a specific immune dysfunction.\n-> Front: Topic: Marker (CRP) indicates {blank: inflammation} in {blank: autoimmune disorders}. (Keep "(CRP)" as plain text — NOT a blank!)\n-> Back: Does not diagnose a specific immune dysfunction. (Plain text only — ZERO green blanks on Back!)`;
++// v21.3: keep the original 4-line Gizmo.ai import instructions verbatim so Gizmo's parser reliably converts [brackets]
++// into green blanks instead of falling back to multiple choice; auto-reset any stored verbose v21.3 prompt back to the original.
++const GIZMO_DEFAULT_IMPORT_PROMPT=`Create standard 2-sided flashcards from this tab-separated text:\n\n1. ONE CARD PER LINE: Do not duplicate cards. Keep all blanks for a sentence on the SAME card.\n2. FRONT OF CARD: Use the sentence before the tab. Highlight every phrase inside square brackets [like this] in green as a blank. Remove the bracket symbols from the final text. Do not highlight any unbracketed words.\n3. BACK OF CARD: Place the exact text after the tab into the Back/Explanation field. Do not omit or shorten this text.\n4. VERBATIM: Do not summarize, rephrase, or convert into questions or True/False cards. Keep the wording identical to the input.`;
+ const GIZMO_DEFAULT_PAGES_PER_CHUNK=5;
+ const GIZMO_DEFAULT_CARDS_PER_PAGE=18;
+ const GIZMO_DEFAULT_PAGE_CHARS=2500;
+ const GIZMO_DEFAULT_AI_BATCH=25;
+ const GIZMO_PREVIEW_LIMIT=40;
+ 
+ const GIZMO_CONVERT_PROMPT=`You are a strict, verbatim Anki-to-Gizmo flashcard formatter.
+ Convert each supplied Anki card in INPUT_CARDS into clean, single-line Front and Back fields for Gizmo.ai tab-separated import.
+ Return valid JSON only, with shape: {"cards":[{"index":1,"front":"string","back":"string"}]}
+ 
+ STRICT RULES — ZERO HALLUCINATION:
+ 1. 1-TO-1 ORDER & COUNT: Return exactly one output object per input card, preserving every input "index" in order. Never skip, merge, split, or duplicate cards.
+-2. STRICT VERBATIM WORDING: Keep all clinical wording, numbers, decimals, units, signs (+, -, <, >, ≤, ≥), drug names, and negations identical to the input. NEVER summarize, paraphrase, reword, or turn statements into questions or True/False items.
+-3. NEVER INVENT BACK TEXT:
++2. STRICT VERBATIM WORDING: Keep all clinical wording, numbers, decimals, units, signs (+, -, <, >, ≤, ≥), drug names, parenthetical abbreviations like (CRP), and negations identical to the input. NEVER summarize, paraphrase, reword, swap Front and Back, or turn statements into questions or True/False items.
++3. NEVER INVENT BACK TEXT & ZERO BRACKETS ON BACK:
+    - If input "rawBack" is empty (""), output "back" MUST be "" (empty string). Never generate explanations, definitions, or answers for an empty back.
+-   - If input "rawBack" is non-empty, preserve its exact wording as clean single-line plain text.
+-4. SQUARE BRACKETS = CLOZE BLANKS ONLY:
+-   - Gizmo highlights EVERY phrase inside [square brackets] in green as a fill-in-the-blank target.
++   - If input "rawBack" is non-empty, preserve its exact wording as clean single-line plain text.
++   - Output "back" MUST NEVER contain square brackets [ or ] (convert any [ or ] in "rawBack" into parentheses ( or ) so Gizmo never places green fill-in-the-blank highlights on the Back of a card).
++4. FRONT SQUARE BRACKETS = CLOZE BLANKS ONLY (NEVER PARENTHESES):
++   - Gizmo highlights EVERY phrase inside [square brackets] on "front" in green as a fill-in-the-blank target.
+    - Convert every Anki cloze deletion {{c1::answer}}, {{c2::answer}}, {{c3::answer}} on the card into [answer]. Keep ALL blanks from that card on the SAME "front" line regardless of c1/c2/c3 numbering.
+    - Cloze hints: Convert {{c1::answer::hint}} into [answer] (hint) so only the answer is inside square brackets and the hint stays visible in parentheses.
++   - Parenthetical text: Keep parenthetical abbreviations or qualifiers like (CRP) or (1 full min) inside parentheses (...) — NEVER convert parentheses into [square brackets].
+    - Leading topic/condition labels: Convert a leading bracketed label like "[Heart Failure] Hallmark: ..." or "[Perfusion → Heart Failure] ..." or "[DKA — NEVER DO] ..." into "Heart Failure: Hallmark: ..." (label followed by colon + space, NO square brackets).
+    - Non-cloze brackets: Convert any other pre-existing square brackets in "rawFront" that were NOT {{cN::...}} clozes into parentheses (...) so Gizmo never turns non-blank text into a blank. Strip any residual [P1], [P2], or [NONE] point-anchor tags.
+ 5. SINGLE-LINE PLAIN TEXT:
+    - Strip HTML tags (<b>, <i>, <u>, <div>, <span>, <p>) while keeping their inner text verbatim, convert <br> or embedded line breaks into "; ", and decode HTML entities (&gt; -> >, &lt; -> <, &amp; -> &, &quot; -> ", &#39; -> ', &nbsp; -> space).
+    - Output "front" and "back" MUST NOT contain tab characters (\\t) or line breaks (\\r, \\n).`;

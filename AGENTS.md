@@ -10,7 +10,7 @@ Maintained by one working LPN in an LPN-to-RN bridge program between clinical sh
 
 ## Hard invariants — explicit approval required to cross them
 
-1. **The 11 prompt constants are byte-frozen.** `KB_EXTRACTION_PROMPT`, `KB_VERIFY_PROMPT`, `ANKI_MASTER_PROMPT`, `NCLEX_INLINE_PROMPT`, `NCLEX_SPLIT_PROMPT`, `NCLEX_AI_PAIR_PROMPT`, `NCLEX_GEN_PROMPT`, `NCLEX_DISTRACTOR_RULES`, `NCLEX_ANCHOR_RULES`, `NCLEX_RATIONALE_RULES`, `NCLEX_COMPLETENESS_RULES`. `prompt-baseline.json` enforces their source bytes. Never update the baseline merely to make a failure pass. For an approved prompt edit, state the need first, make the smallest possible change, show the exact diff, then update the baseline deliberately.
+1. **The 13 prompt constants are byte-frozen.** `KB_EXTRACTION_PROMPT`, `KB_VERIFY_PROMPT`, `ANKI_MASTER_PROMPT`, `NCLEX_INLINE_PROMPT`, `NCLEX_SPLIT_PROMPT`, `NCLEX_AI_PAIR_PROMPT`, `NCLEX_GEN_PROMPT`, `NCLEX_DISTRACTOR_RULES`, `NCLEX_ANCHOR_RULES`, `NCLEX_RATIONALE_RULES`, `NCLEX_COMPLETENESS_RULES`, `GIZMO_DEFAULT_IMPORT_PROMPT`, `GIZMO_CONVERT_PROMPT`. `prompt-baseline.json` enforces their source bytes. Never update the baseline merely to make a failure pass. For an approved prompt edit, state the need first, make the smallest possible change, show the exact diff, then update the baseline deliberately.
 2. **Single file, no build pipeline.** The application remains one `.html`, loaded from fixed CDNs and compiled by in-browser Babel. Never introduce a bundler, npm build, TypeScript migration, module split, backend, or new application runtime dependency.
 3. **The unified verifier must pass before any commit.** Do not weaken, skip, or replace a gate to obtain green output.
 4. **New behavior gets a regression assertion.** The harness extracts live functions from the shipped HTML. If an extraction anchor moves, fix the anchor and preserve a non-vacuous tail assertion.
@@ -29,7 +29,7 @@ On a machine without the scratch Babel tool, run once:
 node verify-repo.js --setup-babel
 ```
 
-The setup installs `@babel/standalone` under the operating-system temp directory, never in this repository. The verifier requires one unambiguous suite HTML, rejects Proton Drive Name clash copies, checks LF bytes and version agreement, verifies all 11 frozen prompt hashes, checks `Prompts.md`, runs the regression harness with its enforced assertion total, Babel-transforms the full JSX block with the options the page's `data-presets="react"` script tag gets in the browser, has V8 compile that output and the plain head scripts, and evaluates the app's top level once against inert stubs (no network, DOM or rendering), so an invalid regex or a read-before-declaration cannot pass.
+The setup installs `@babel/standalone` under the operating-system temp directory, never in this repository. The verifier requires one unambiguous suite HTML, rejects Proton Drive Name clash copies, checks LF bytes and version agreement, verifies all 13 frozen prompt hashes, checks `Prompts.md`, runs the regression harness with its enforced assertion total, Babel-transforms the full JSX block with the options the page's `data-presets="react"` script tag gets in the browser, has V8 compile that output and the plain head scripts, and evaluates the app's top level once against inert stubs (no network, DOM or rendering), so an invalid regex or a read-before-declaration cannot pass.
 
 `neia-retest.js` and `davis-transcribe-test.js` make live Gemini API calls and consume quota. **Never run either without explicit user authorization for that run.** They are not repository gates and must never run in CI or through `verify-repo.js`.
 
@@ -62,7 +62,7 @@ Ignored PDFs, decks, card photos, transcripts, knowledge bases, diagnostics, and
 
 ## Conventions
 
-- `CARD_TRANSCRIBE_PROMPT` is not one of the 11 byte-frozen constants, but its rules are load-bearing. Remeasure with two runs per card after an edit.
+- `CARD_TRANSCRIBE_PROMPT` is not one of the 13 byte-frozen constants, but its rules are load-bearing. Remeasure with two runs per card after an edit.
 - Warn-tier validators remain warnings unless the user explicitly approves promotion.
 - `Test Plan Alignment` can warn but never fail until the actual Test Plan activity statements are supplied to the generators.
 - Scratch plans named `run-node-*.md` are gitignored.

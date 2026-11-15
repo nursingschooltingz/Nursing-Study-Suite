@@ -1,8 +1,8 @@
 # Nursing Study Suite — Prompt Library
 
-The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, the item-quality auditor, the NCLEX to Anki image reader, and the Import to Gizmo chunk formatter, **extracted verbatim from the shipped v21.3 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
+The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, the item-quality auditor, the NCLEX to Anki image reader, and the Import to Gizmo chunk formatter, **extracted verbatim from the shipped v21.4 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
 
-> **Coverage.** All 22 named prompt constants are represented from live HTML bytes. Eleven are byte-frozen (with user-approved v21.0 updates to five constants recorded in `docs/history/PLATE-v21.0-frozen-prompts.diff`); `CARD_TRANSCRIBE_PROMPT` is deliberately tunable but requires two transcription runs per card after an edit. `I2A_TRANSCRIBE_PROMPT` and `I2A_ANSWER_PROMPT` (NCLEX to Anki, v17.9) are copied from img2anki.py and are not frozen. `PRIORITY_ORDER_RULES` (v18.1), `KB_SOURCE_ANCHOR_RULES` (v19.0), `KB_CONCEPT_CURRICULUM_RULES` (v19.2), `KB_EXAM_TRAP_RULES` (v19.2), `GIZMO_CONVERT_PROMPT` (Import to Gizmo, v19.2), `KB_PLATE_BRIDGE_RULES` (v21.0), `NCLEX_PLATE_TRAP_RULES` (v21.0), and `CASE_SLOPE_SYNC_RULES` (v21.0) are not frozen; harness assertions keep them in step with their workflows. The generated appendix is maintained by `node tools/render-prompts.js --write` and checked by `node verify-repo.js`.
+> **Coverage.** All 23 named prompt constants are represented from live HTML bytes. Thirteen are byte-frozen (with user-approved v21.0 updates to five constants recorded in `docs/history/PLATE-v21.0-frozen-prompts.diff` and user-approved v21.3 promotion of `GIZMO_DEFAULT_IMPORT_PROMPT` and `GIZMO_CONVERT_PROMPT` into `prompt-baseline.json`); `CARD_TRANSCRIBE_PROMPT` is deliberately tunable but requires two transcription runs per card after an edit. `I2A_TRANSCRIBE_PROMPT` and `I2A_ANSWER_PROMPT` (NCLEX to Anki, v17.9) are copied from img2anki.py and are not frozen. `PRIORITY_ORDER_RULES` (v18.1), `KB_SOURCE_ANCHOR_RULES` (v19.0), `KB_CONCEPT_CURRICULUM_RULES` (v19.2), `KB_EXAM_TRAP_RULES` (v19.2), `KB_PLATE_BRIDGE_RULES` (v21.0), `NCLEX_PLATE_TRAP_RULES` (v21.0), and `CASE_SLOPE_SYNC_RULES` (v21.0) are not frozen; harness assertions keep them in step with their workflows. The generated appendix is maintained by `node tools/render-prompts.js --write` and checked by `node verify-repo.js`.
 
 How to read them: text inside `${...}` is filled in at runtime by the app (your settings, your Knowledge Base, the current chunk). The Priority, Case, and audit prompts are shown as their complete builder functions because the assembly logic is part of the design.
 
@@ -1901,7 +1901,7 @@ at the end of the correct option's rationale in a case.
 ## Appendix · NCLEX Extractor, card-transcription and NCLEX to Anki constants
 
 Generated verbatim from the shipped HTML by `node tools/render-prompts.js --write`.
-Do not edit inside these markers. The three extractor prompts are among the 11 byte-frozen
+Do not edit inside these markers. The three extractor prompts and two Gizmo prompts are among the 13 byte-frozen
 constants. `CARD_TRANSCRIBE_PROMPT` is not byte-frozen, but its safety rules are load-bearing.
 The two `I2A_` prompts belong to the NCLEX to Anki image reader and are not byte-frozen either.
 
@@ -2184,9 +2184,17 @@ Before emitting JSON, construct a synchronized stage-by-stage physiological time
    - Every stage "data" entry, correct option, and distractor rationale must cite exact supplied factIds from CASE SOURCE PACKET, and every distractor rationale should name its clinical trap category ([Priority / First-Action Trap], [Twin-Diagnosis Trap], [Pharm / Lab Hold Trap], or [Further-Teaching / Context Trap]) without repeating unsupported distractor quantities as sourced facts.`;
 ````
 
-### `GIZMO_CONVERT_PROMPT` (2,401 source chars; tunable; v20.0 Anki-to-Gizmo strict verbatim chunk formatter)
+### `GIZMO_DEFAULT_IMPORT_PROMPT` (631 source chars; byte-frozen)
 
-SHA-256 of the raw template-literal body: `a9f8acfce190699818e2db7fb87fb585de4bdf6c96157d865fb02ffd2c589125`
+SHA-256 of the raw template-literal body: `259d2cda6920b456119dc8d85ed39079c656700debe033a2868b8423f0bd9394`
+
+````js
+const GIZMO_DEFAULT_IMPORT_PROMPT=`Create standard 2-sided flashcards from this tab-separated text:\n\n1. ONE CARD PER LINE: Do not duplicate cards. Keep all blanks for a sentence on the SAME card.\n2. FRONT OF CARD: Use the sentence before the tab. Highlight every phrase inside square brackets [like this] in green as a blank. Remove the bracket symbols from the final text. Do not highlight any unbracketed words.\n3. BACK OF CARD: Place the exact text after the tab into the Back/Explanation field. Do not omit or shorten this text.\n4. VERBATIM: Do not summarize, rephrase, or convert into questions or True/False cards. Keep the wording identical to the input.`;
+````
+
+### `GIZMO_CONVERT_PROMPT` (2,887 source chars; byte-frozen)
+
+SHA-256 of the raw template-literal body: `503ca4a1e50fdd54588e696548062762e621339aa42c8ec76434405673869867`
 
 ````js
 const GIZMO_CONVERT_PROMPT=`You are a strict, verbatim Anki-to-Gizmo flashcard formatter.
@@ -2195,14 +2203,16 @@ Return valid JSON only, with shape: {"cards":[{"index":1,"front":"string","back"
 
 STRICT RULES — ZERO HALLUCINATION:
 1. 1-TO-1 ORDER & COUNT: Return exactly one output object per input card, preserving every input "index" in order. Never skip, merge, split, or duplicate cards.
-2. STRICT VERBATIM WORDING: Keep all clinical wording, numbers, decimals, units, signs (+, -, <, >, ≤, ≥), drug names, and negations identical to the input. NEVER summarize, paraphrase, reword, or turn statements into questions or True/False items.
-3. NEVER INVENT BACK TEXT:
+2. STRICT VERBATIM WORDING: Keep all clinical wording, numbers, decimals, units, signs (+, -, <, >, ≤, ≥), drug names, parenthetical abbreviations like (CRP), and negations identical to the input. NEVER summarize, paraphrase, reword, swap Front and Back, or turn statements into questions or True/False items.
+3. NEVER INVENT BACK TEXT & ZERO BRACKETS ON BACK:
    - If input "rawBack" is empty (""), output "back" MUST be "" (empty string). Never generate explanations, definitions, or answers for an empty back.
    - If input "rawBack" is non-empty, preserve its exact wording as clean single-line plain text.
-4. FRONT SQUARE BRACKETS = BLANKS ONLY:
+   - Output "back" MUST NEVER contain square brackets [ or ] (convert any [ or ] in "rawBack" into parentheses ( or ) so Gizmo never places green fill-in-the-blank highlights on the Back of a card).
+4. FRONT SQUARE BRACKETS = CLOZE BLANKS ONLY (NEVER PARENTHESES):
    - Gizmo highlights EVERY phrase inside [square brackets] on "front" in green as a fill-in-the-blank target.
    - Convert every Anki cloze deletion {{c1::answer}}, {{c2::answer}}, {{c3::answer}} on the card into [answer]. Keep ALL blanks from that card on the SAME "front" line regardless of c1/c2/c3 numbering.
    - Cloze hints: Convert {{c1::answer::hint}} into [answer] (hint) so only the answer is inside square brackets and the hint stays visible in parentheses.
+   - Parenthetical text: Keep parenthetical abbreviations or qualifiers like (CRP) or (1 full min) inside parentheses (...) — NEVER convert parentheses into [square brackets].
    - Leading topic/condition labels: Convert a leading bracketed label like "[Heart Failure] Hallmark: ..." or "[Perfusion → Heart Failure] ..." or "[DKA — NEVER DO] ..." into "Heart Failure: Hallmark: ..." (label followed by colon + space, NO square brackets).
    - Non-cloze brackets: Convert any other pre-existing square brackets in "rawFront" that were NOT {{cN::...}} clozes into parentheses (...) so Gizmo never turns non-blank text into a blank. Strip any residual [P1], [P2], or [NONE] point-anchor tags.
 5. SINGLE-LINE PLAIN TEXT:

@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 4058;
+const EXPECTED_ASSERTIONS = 4067;
 
 let file;
 try {
@@ -2801,8 +2801,11 @@ section('v15.14 — clamps, backoff, storage');
   section('repository verification tooling');
   const baseline = JSON.parse(fs.readFileSync('prompt-baseline.json', 'utf8'));
   const frozenNames = Object.keys(baseline.prompts || {});
-  t('the prompt baseline contains exactly 11 constants and excludes the tunable card prompt',
-    frozenNames.length === 11 && !frozenNames.includes('CARD_TRANSCRIBE_PROMPT'));
+  t('the prompt baseline contains all 13 frozen constants (including Gizmo prompts) and excludes the tunable card prompt',
+    frozenNames.length === 13 &&
+    frozenNames.includes('GIZMO_DEFAULT_IMPORT_PROMPT') &&
+    frozenNames.includes('GIZMO_CONVERT_PROMPT') &&
+    !frozenNames.includes('CARD_TRANSCRIBE_PROMPT'));
   const resolvedSuite = resolveSuiteFile({ rootDir: process.cwd(), explicit: file });
   t('the shared resolver preserves an explicitly selected canonical suite HTML', resolvedSuite === file);
   t('the shared resolver recognises Proton Drive Name clash filenames',
@@ -2939,6 +2942,9 @@ section('v15.14 — clamps, backoff, storage');
 
   section('v21.1 Concept-Curriculum x P-LATE matrix, standalone med/diagnostic auto-linking, cascade framing, and Step 6 concept linker');
   await require('./tools/v21-1-concept-plate-tests')(S,t);
+
+  section('v21.3 Textbook PDF Table of Contents (TOC) Inspector & Section Slicer (KnowledgeBaseBuilder + tools/pdf-toc-slice.js)');
+  await require('./tools/pdf-toc-slicer-tests')(S,t);
 
   console.log('\n════════════════════════════');
   const total = pass + fail;
