@@ -1,7 +1,7 @@
 # P-LATE (Triple-E), Tagging System & Exam Study Guide
 
-> **Nursing Study Suite (v21.3) Reference Guide**
-> This guide covers the **5-bucket P-LATE (Triple-E)** clinical framework, the **7-dimension hierarchical tagging architecture**, and the **phased exam-prep sorting workflow** across Knowledge Base, Priority Analyzer, Anki, NCLEX Generator, and Case Studies.
+> **Nursing Study Suite (v21.4) Reference Guide**
+> This guide covers the **5-bucket P-LATE (Triple-E)** clinical framework, the **7-dimension hierarchical tagging architecture**, the **Step 01 Textbook TOC & Section Slicer**, the **course-by-course textbook & Giddens concept blueprint**, and the **phased exam-prep sorting workflow** across Knowledge Base, Priority Analyzer, Anki, NCLEX Generator, and Case Studies.
 
 ---
 
@@ -82,16 +82,33 @@ flowchart TD
 
 ---
 
-### Step 0: Scope Before You Build (The Golden Rule)
+### Step 0: Scope & Slice Before You Build (The Golden Rule)
 
-1. **Upload only the chapters/slides on your current exam** into **01 · Source — P-LATE Knowledge Base** (never the whole 1,000-page textbook).
-2. **Paste your instructor's study guide or blueprint bullets into the `Points` box** (one per line).
+1. **Slice only the exact exemplar sections on your current exam** inside **01 · Source — P-LATE Knowledge Base** (never upload a whole 1,300-page textbook uncut):
+   - **Use the built-in `Textbook TOC & section slicer` (`v21.4`):**
+     1. Drop your textbook PDFs into Step 01 and open **Textbook TOC & section slicer** under **Step 1 — Setup**.
+     2. Enter your exam's exemplars in **Exam exemplars / chapters to find** (e.g., `Heart Failure, Loop Diuretics, Digoxin`) and click **Inspect TOC** on each PDF (100% local, zero API calls).
+     3. Click **Select matches** (plus **+ Abnormal Findings** for *Jarvis* or **+ Nursing Process / Prototype boxes** for *McCuistion*) to grab the complete start-to-finish section (narrative prose + diagrams + boxes + tables together) while leaving out untested chapters.
+     4. Click **Apply suggested role** so each textbook gets its exact `RN Core` / `Bridge` lens automatically, or run the local CLI helper (`node tools/pdf-toc-slice.js <book.pdf> --query "Heart Failure"`).
+   - **Why exemplar-level section slicing beats whole-chapter or table-only uploads:** You keep **100% of the prose depth, mechanism, and nursing process boxes** on your tested exemplars without diluting your Knowledge Base or burning API quota on 25 pages of untested disorders in the same chapter.
+2. **Recommended Course-by-Course Textbook & Source Role Stack:**
+
+| Course | Primary `RN Core` (`clinicalLayer: 'rn'`) | Companion Bridge Lens (`clinicalLayer: 'bridge'`) | High-Yield Section-Slicing Tip |
+| :--- | :--- | :--- | :--- |
+| **Giddens Concepts** *(All Courses)* | **Giddens** (*Concepts for Nursing Practice*) → check **`RN Core`** | — | Upload ONLY the **4–6 page Concept Overview** (`Concept::Perfusion`, `Concept::GasExchange`), not the brief 1-page exemplar snapshots at the back of the Giddens chapter. |
+| **Med-Surg** | **Saunders** + Lecture Slides → **`RN Core`** | **Porth's** → **`Patho Bridge`**<br>**Jarvis** *(Abnormal Findings section)* → **`Exam / Diff Bridge`** | Slice Porth's 5–6 page exemplar section + Jarvis's back-of-chapter *Abnormal Findings* tables/paragraphs (skip the 20 pages of normal healthy-adult interview questions). |
+| **Pharmacology** | **Saunders** → **`RN Core`**<br>**McCuistion** → **`RN Core` + `Pharm / GDMT Bridge`** *(both checked)* | **Pharm Phlash!** *(Card Intake / rapid recall)* → **`RN Core`** | In McCuistion, slice the prototype drug's prose + *Prototype Drug* box + *Nursing Process: Patient-Centered Collaborative Care* box. |
+| **Mental Health** | **Saunders** + Lecture Slides → **`RN Core`** | **Patho Phlash!** *(neurotransmitter & receptor cards)* → **`Patho Bridge`** | Keep therapeutic communication, safety/milieu (suicide/elopement/seclusion), and psychotropic tox/food traps (`MAOI`, `Lithium`, `Clozapine`, `SSRI/NMS`) in `RN Core`. |
+| **OB / Maternity** | **Saunders** + **Evolve / Sherpath** packets → **`RN Core`** | **Jarvis** *(Pregnant Female / Breast / Neonatal Abnormal Findings)* → **`Exam / Diff Bridge`** | Pair fetal heart rate (`VEAL CHOP`), labor stages, and high-risk OB emergencies (*Preeclampsia/Mag Sulfate*, *Previa vs. Abruption*, *PPH*) in `RN Core`. |
+| **Pediatrics** | **Saunders** + Lecture Slides → **`RN Core`** | **Patho Phlash!** *(congenital/peds cards)* → **`Patho Bridge`**<br>**Jarvis** *(Pediatric Abnormal Findings)* → **`Exam / Diff Bridge`** | Slice Jarvis's pediatric abnormal physical cues (fontanels, retractions, congenital murmurs, dehydration) + Patho Phlash! congenital shunts (`TOF`, `VSD`, `PDA`, `CoA`). |
+
+3. **Paste your instructor's study guide or blueprint bullets into the `Points` box** (one per line).
    - The suite automatically numbers them `P1, P2, … Pn` and links every extracted fact to its matching `[P#]` anchor.
    - Check the **Point-to-Fact Audit** panel right after building:
-     - **`0 facts` (Uncovered Points):** Topics on your professor's review sheet that were missing from your uploaded slides—add the textbook section covering those points before you start studying.
+     - **`0 facts` (Uncovered Points):** Topics on your professor's review sheet that were missing from your uploaded slides—slice and add the textbook section covering those points before you start studying.
      - **`[NONE]` (Unmapped Facts):** Material in the slides/chapters that falls outside your review sheet (deprioritize if pressed for time).
      - **`> 2× Median` (Bleed Suspects):** Broad points carrying most of the exam's weight.
-3. **Turn on Concept Mode (if applicable):** Enter your unit's overarching concepts (e.g., *Perfusion, Gas Exchange*) or check **Auto-detect overarching concepts from source** so the suite builds a **Sibling Exemplar P-LATE Matrix** and hoists shared nursing care onto the parent Concept Overview.
+4. **Turn on Concept Mode (`Overarching Concepts` in Step 01):** Enter your unit's Giddens concepts (e.g., `Perfusion, Gas Exchange, Clotting`) and check **Auto-detect overarching concepts from source** so the suite builds a **Sibling Exemplar P-LATE Matrix** and hoists shared nursing care onto the parent Concept Overview without repeating it on every disease card.
 
 ---
 
