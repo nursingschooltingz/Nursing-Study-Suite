@@ -16,7 +16,8 @@ module.exports = async function run(S, t) {
     span('function kbBuildFocusBlock(', '// Underextraction flag:') + '\n' +
     span('function kbSlug(', '// ── Durable Knowledge Base persistence') + '\n' +
     ';return {KB_FACT_BUCKETS,KB_LEGACY_LATTE_BUCKETS,KB_SOURCE_ROLES,KB_SOURCE_ROLE_GUIDE,KB_PLATE_SLOTS,KB_PLATE_BRIDGE_RULES,' +
-    'kbNormalizeSourceRoles,kbToggleSourceRole,kbMigrateLegacyBucket,kbCoercePlateFields,kbBuildFocusBlock,kbConditionMatchKeys,mergeLatteParts,kbNormalizeImported,normalizeKbEntities};'
+    'KB_SOURCE_ANCHOR_RULES,KB_CONCEPT_CURRICULUM_RULES,KB_EXAM_TRAP_RULES,' +
+    'kbNormalizeSourceRoles,kbToggleSourceRole,kbResolveLegacyAssessBucket,kbMigrateLegacyBucket,kbCoerceEntityBucket,kbCoercePlateFields,kbBuildFocusBlock,kbConditionMatchKeys,mergeLatteParts,kbNormalizeImported,normalizeKbEntities};'
   )();
 
   const VIEW = new Function(
@@ -431,5 +432,79 @@ module.exports = async function run(S, t) {
       orderFixtureMd.includes('### T — Treat (Priority Nursing Interventions & Medications)') &&
       orderFixtureMd.indexOf('Position upright in high-Fowler') < orderFixtureMd.indexOf('Administer nebulized albuterol') &&
       orderFixtureMd.indexOf('Sudden silent chest with rising PaCO2') < orderFixtureMd.indexOf('Rinse mouth after inhaled corticosteroid use'));
+  }
+
+  // 9. v21.5 Retention-first P-LATE prompt contracts, legacy Assess/entity rescue, capBridgeTier differentiator guard, & Anki partial-scope UI guard
+  {
+    const { extractPromptLiteral } = require('./repo-checks');
+    const kbExtPrompt = extractPromptLiteral(S, 'KB_EXTRACTION_PROMPT').body;
+    const ankiMasterPrompt = extractPromptLiteral(S, 'ANKI_MASTER_PROMPT').body;
+    const ankiAdapter = new Function(extractPromptLiteral(S, 'kbAdapter').declaration + ';return kbAdapter;')();
+    const ankiGenSpan = span('function AnkiGenerator(){', '\n// ──── TOOL: NCLEX Extractor ────');
+
+    t('plate-bridge (v21.5 retention-first prompt contracts): routes bedside exams/scales to Look, rescues demographic/hygiene cutoffs in Point mode, adds Minimum Exemplar Anchor + single-chunk Pass-2 guard, and tags multi-way classification sets + pre-procedure safety checks',
+      kbExtPrompt.includes('Snellen, Romberg, monofilament, capillary refill, 6 Ps') &&
+      kbExtPrompt.includes('Braden, Morse, GCS, NRS/Wong-Baker') &&
+      kbExtPrompt.includes('never hands-on physical exam maneuvers or bedside clinical scales') &&
+      ankiMasterPrompt.includes('Snellen, Romberg, monofilament, capillary refill, 6 Ps') &&
+      ankiMasterPrompt.includes('Braden, Morse, GCS, NRS/Wong-Baker') &&
+      KB.KB_SOURCE_ANCHOR_RULES.includes('ALWAYS KEEP source-stated age/sex/population risk cutoffs') &&
+      KB.KB_SOURCE_ANCHOR_RULES.includes('20-second soap-and-water wash vs. alcohol rub') &&
+      KB.KB_CONCEPT_CURRICULUM_RULES.includes('When uncertain whether a detail is shared or exemplar-specific, KEEP IT on the exemplar as "delta"') &&
+      KB.KB_CONCEPT_CURRICULUM_RULES.includes('MINIMUM EXEMPLAR ANCHOR:') &&
+      KB.KB_CONCEPT_CURRICULUM_RULES.includes("visibly present in this chunk's extracted-facts list (Part B — never assume another chunk recorded it)") &&
+      KB.KB_CONCEPT_CURRICULUM_RULES.includes('Types I–IV hypersensitivity, IgG/IgA/IgM/IgE/IgD classes') &&
+      KB.KB_EXAM_TRAP_RULES.includes('Twin-Diagnosis, Classification-Set, Compensation-State & Artifact Contrast') &&
+      KB.KB_EXAM_TRAP_RULES.includes('COX-1 vs. COX-2, A-delta vs. C pain fibers, conductive vs. sensorineural hearing loss') &&
+      KB.KB_EXAM_TRAP_RULES.includes('mandatory pre-/post-procedure nursing safety checks around provider-ordered diagnostics'));
+
+    // Medication bedside toxicity vs lab monitoring, pre-procedure diagnostic check -> Treat, bedside scales -> Look, 3-way entity coercion, and capBridgeTier differentiator/trap preservation
+    const medToxicityFact = { id: 'm1', latteBucket: 'Assess', tier: 1, text: 'Assess client for tinnitus, visual halos, or angioedema.' };
+    const medLabFact = { id: 'm2', latteBucket: 'Assess', tier: 1, text: 'Monitor serum potassium, creatinine, and trough level.' };
+    const preProcFact = { id: 'm3', latteBucket: 'Assess', tier: 1, text: 'Before CT scan with iodinated contrast, check eGFR and hold metformin for 48 hours.' };
+    const bedsideScaleFact = { id: 'm4', latteBucket: 'Assess', tier: 1, text: 'Perform Snellen, Romberg, monofilament, and Braden Scale assessment.' };
+    const unmigMedGroup = { name: 'Furosemide', entityKind: 'medication', facts: [medToxicityFact, medLabFact, preProcFact, bedsideScaleFact] };
+
+    const { kb: normScoringKb } = KB.normalizeKbEntities({
+      conditions: [],
+      medications: [],
+      diagnostics: [{ name: 'Serum BNP', normalRange: '< 100 pg/mL' }],
+      scoringTools: [{ name: 'Braden Scale', scoringRange: '6 to 23', interpretation: '<= 18 indicates pressure injury risk' }]
+    });
+
+    const bridgeDiff = { latteBucket: 'Look', clinicalLayer: 'bridge', conceptScope: 'differentiator', tier: 1, safetyCritical: false, text: 'Unilateral blindness and ataxia.' };
+    const bridgeTwin = { latteBucket: 'Patho', clinicalLayer: 'bridge', trapRole: 'twin-cue', tier: 1, safetyCritical: false, text: 'Type I hypersensitivity is IgE-mediated.' };
+    const bridgePlain = { latteBucket: 'Patho', clinicalLayer: 'bridge', tier: 1, safetyCritical: false, text: 'Granular intracellular kinase phosphorylation cascade.' };
+    KB.kbCoercePlateFields(bridgeDiff, { sourceRole: 'exam-bridge', capBridgeTier: true });
+    KB.kbCoercePlateFields(bridgeTwin, { sourceRole: 'patho-bridge', capBridgeTier: true });
+    KB.kbCoercePlateFields(bridgePlain, { sourceRole: 'patho-bridge', capBridgeTier: true });
+
+    t('plate-bridge (v21.5 legacy Assess & entity bucket rescue + capBridgeTier protection): keeps med bedside toxicities & clinical scales in Look, routes pre-procedure checks to Treat, preserves 3-way entity fallbacks, and protects differentiator/twin bridge facts at Tier 1',
+      KB.kbMigrateLegacyBucket('Assess', medToxicityFact, 'medications').bucket === 'Look' &&
+      KB.kbMigrateLegacyBucket('Assess', medLabFact, 'medications').bucket === 'Analyze' &&
+      KB.kbMigrateLegacyBucket('Assess', preProcFact, '').bucket === 'Treat' &&
+      KB.kbMigrateLegacyBucket('Assess', bedsideScaleFact, '').bucket === 'Look' &&
+      VIEW.kbBucketFacts(unmigMedGroup, 'Look').map(f => f.id).join(',') === 'm1,m4' &&
+      VIEW.kbBucketFacts(unmigMedGroup, 'Analyze').map(f => f.id).join(',') === 'm2' &&
+      VIEW.kbBucketFacts(unmigMedGroup, 'Treat').map(f => f.id).join(',') === 'm3' &&
+      KB.kbCoerceEntityBucket('Score', 'scoringTools') === 'Look' &&
+      KB.kbCoerceEntityBucket(null, 'medications') === 'Treat' &&
+      KB.kbCoerceEntityBucket(null, 'scoringTools') === 'Look' &&
+      KB.kbCoerceEntityBucket(null, 'diagnostics') === 'Analyze' &&
+      normScoringKb.scoringTools[0].facts.every(f => f.latteBucket === 'Look') &&
+      normScoringKb.diagnostics[0].facts.every(f => f.latteBucket === 'Analyze') &&
+      bridgeDiff.tier === 1 &&
+      bridgeTwin.tier === 1 &&
+      bridgePlain.tier === 2);
+
+    t('plate-bridge (v21.5 Anki ZERO-SKIP c1-c3 packing & live partial-scope warning UI): replaces card-layer filtering with ZERO-SKIP non-lossy c1-c3 packing and warns live when partial cram scopes exclude entries',
+      !ankiAdapter.includes('Filter at the Card Layer') &&
+      ankiAdapter.includes('Convert ALL substantive supplied FACT lines (ZERO-SKIP') &&
+      ankiAdapter.includes('Non-Lossy Multi-Cloze Packing (c1–c3 max):') &&
+      ankiAdapter.includes('NEVER omit or leave visible-only a 4th substantive target to stay under c3') &&
+      ankiGenSpan.includes('Full Coverage — All concept + exemplar facts (recommended)') &&
+      ankiGenSpan.includes('Full Coverage — RN Core only (exclude NP Bridge)') &&
+      ankiGenSpan.includes('Partial Cram — Exam Traps only (skips non-trap topics)') &&
+      ankiGenSpan.includes('Partial scope excludes ${dropC} of ${totC} entries'));
   }
 };

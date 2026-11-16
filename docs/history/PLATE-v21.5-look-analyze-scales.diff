@@ -1,0 +1,40 @@
+# v21.5 Approved Frozen Prompt Changes (Bedside Functional Exam & Clinical Scale Look vs. Analyze Boundary)
+
+## KB_EXTRACTION_PROMPT
+- Old SHA-256 (v21.0–v21.4): `9f6149e2ff2a0405056bf465560ea907a278563ca9e8a2ddcaa3fffb91ca9f23`
+- New SHA-256 (v21.5): `8826cd6727b8a4c933d471d58333f47048c795da6d4638baac6c692ee36d1b50`
+
+```diff
+--- a/KB_EXTRACTION_PROMPT
++++ b/KB_EXTRACTION_PROMPT
+@@ -51,8 +51,8 @@ Every fact must belong to exactly one P-LATE bucket. If a sentence spans multipl
+ 
+ Look vs Analyze (strict zero-overlap boundary):
+-- Look = bedside signs, symptoms, and physical exam findings on the client (never lab values, imaging, or ECG strips).
+-- Analyze = laboratory values, drug levels, imaging, ECG/telemetry strips, and diagnostic tests (never bedside physical exam findings).
++- Look = bedside signs, symptoms, physical exam findings, vital-sign trends, bedside sensory/cranial-nerve/neurovascular exams (e.g., Snellen, Romberg, monofilament, capillary refill, 6 Ps), and bedside clinical risk/severity scales (e.g., Braden, Morse, GCS, NRS/Wong-Baker) performed directly on the client (never specimen lab values, imaging, or ECG strips).
++- Analyze = specimen laboratory values, therapeutic drug levels, microbiology/biopsy results, diagnostic imaging/endoscopy, ECG/telemetry strips, and pre/post-diagnostic test confounders (never hands-on physical exam maneuvers or bedside clinical scales).
+ 
+ Quick bucket rules:
+ - disease cause, etiology, classification, drug class, or drug mechanism of action stated in the source -> Patho
+```
+
+## ANKI_MASTER_PROMPT
+- Old SHA-256 (v21.0–v21.4): `90c0df24df8319c409e2205f79f48dd92e182c50f710983899c888b2624510f6`
+- New SHA-256 (v21.5): `d83460cca9f0b37295df2b50cb9d39a90654a50d7d3ea817dfe8beb51c921a0b`
+
+```diff
+--- a/ANKI_MASTER_PROMPT
++++ b/ANKI_MASTER_PROMPT
+@@ -269,8 +269,8 @@ Rule
+ Every note must belong to exactly one P-LATE bucket. If a sentence spans multiple buckets, split it.
+ Look vs Analyze
+ 
+-Look = bedside signs, symptoms, and physical exam findings on the client
+-Analyze = laboratory values, drug levels, imaging, ECG/telemetry strips, and diagnostic tests
++Look = bedside signs, symptoms, physical exam findings, vital-sign trends, bedside sensory/cranial-nerve/neurovascular exams (e.g., Snellen, Romberg, monofilament, capillary refill, 6 Ps), and bedside clinical risk/severity scales (e.g., Braden, Morse, GCS, NRS/Wong-Baker) performed directly on the client
++Analyze = specimen laboratory values, therapeutic drug levels, microbiology/biopsy results, diagnostic imaging/endoscopy, ECG/telemetry strips, and diagnostic interpretations or confounders
+ Quick Bucket Rules
+ 
+ disease cause/etiology, classification, drug class, or drug MOA stated in PDF -> Patho
+```

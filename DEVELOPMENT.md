@@ -4,7 +4,7 @@ This is the task map for maintainers and coding agents. `AGENTS.md` remains the 
 
 ## Repository shape
 
-- `Nursing-Study-Suite v21.4.html` is the complete application.
+- `Nursing-Study-Suite v21.5.html` is the complete application.
 - `latte-tests.js` is the deterministic regression harness and extracts live functions by anchor.
 - `verify-repo.js` is the only ordinary repository verification entry point.
 - `prompt-baseline.json` stores the 13 frozen prompt hashes.
@@ -42,6 +42,8 @@ The approved v18.4 change to `KB_EXTRACTION_PROMPT` and `KB_VERIFY_PROMPT` (sche
 The approved v21.0 5-bucket P-LATE cutover across `KB_EXTRACTION_PROMPT`, `KB_VERIFY_PROMPT`, `ANKI_MASTER_PROMPT`, and `NCLEX_GEN_PROMPT`, plus surgical 4-Pillar distractor trap and multi-timepoint `T0 -> T1 -> T2` trend updates in `NCLEX_DISTRACTOR_RULES` and `NCLEX_GEN_PROMPT`, is recorded in `docs/history/PLATE-v21.0-frozen-prompts.diff`; only those five baseline hashes changed.
 
 The approved v21.3 Gizmo prompt hardening (`GIZMO_DEFAULT_IMPORT_PROMPT` and `GIZMO_CONVERT_PROMPT`, forbidding parenthetical blanks like `(CRP)` and forbidding any green blanks on the Back/Explanation field) and promotion of both Gizmo prompts to the frozen baseline (`prompt-baseline.json`, 13 frozen constants total) is recorded in `docs/history/GIZMO-v21.3-frozen-prompts.diff`.
+
+The approved v21.5 `Look vs. Analyze` bedside functional exam and clinical risk/severity scale clarification across `KB_EXTRACTION_PROMPT` and `ANKI_MASTER_PROMPT` is recorded in `docs/history/PLATE-v21.5-look-analyze-scales.diff`; only those two baseline hashes changed.
 
 The approved v16.5 Anki master and runtime adapter changes are recorded in `docs/history/ANKI-v16.5-target-allocation.diff` and `docs/history/ANKI-v16.5-adapter.diff`. Internal target planning and reconciliation keep the same two-block response contract. Prompt-contract assertions protect instructions and formatting, not model adherence.
 

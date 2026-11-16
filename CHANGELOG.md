@@ -9,6 +9,30 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [21.5] — 2026-11-16
+
+Retention-first **P-LATE exemplar, taxonomic-set, and bedside-scale rescue** across Knowledge Base extraction, legacy `Assess` / standalone entity migration, and `capBridgeTier`, plus **Anki `ZERO-SKIP` `c1`–`c3` multi-cloze packing** and live partial-scope exclusion warnings under `#anki-scope-mode`. All 13 frozen prompt constants are enforced in `prompt-baseline.json` (`KB_EXTRACTION_PROMPT` + `ANKI_MASTER_PROMPT` carry the user-approved `Look vs. Analyze` bedside functional exam and clinical scale boundary per [`docs/history/PLATE-v21.5-look-analyze-scales.diff`](docs/history/PLATE-v21.5-look-analyze-scales.diff); the remaining 11 frozen prompt hashes are unchanged).
+
+### Added
+
+- **Live Anki Partial-Scope Exclusion Warning Banner & Clear Scope Labels (`AnkiGenerator`, `#anki-scope-mode`).** Relabels `#anki-scope-mode` options clearly into **`Full Coverage — ...`** vs. **`Partial Cram — ...`** modes and renders a live `role="status"` warning banner showing exact excluded/kept entry and fact counts whenever a partial cram filter (`traps`, `differentiator`, `overview-diff`, `exemplar-delta`) or text filter is active so non-procedural chapters are never silently excluded.
+
+### Changed
+
+- **Bedside Functional Exams & Clinical Scales in `Look` (`KB_EXTRACTION_PROMPT`, `ANKI_MASTER_PROMPT`, `kbCoerceEntityBucket`, `normalizeKbEntities`).** Clarifies `Look vs. Analyze` so bedside sensory/cranial-nerve/neurovascular exams (`Snellen`, `Romberg`, `monofilament`, `capillary refill`, `6 Ps`) and clinical risk/severity scales (`Braden`, `Morse`, `GCS`, `NRS/Wong-Baker`) route deterministically into `Look` (including standalone `scoringTools` flat-field derivation and 3-way `kbCoerceEntityBucket` fallback preserving `Treat` for `medications` and `Analyze` for `diagnostics`).
+- **Retention-First Concept Exemplar Anchors, Taxonomic Sets, & Pre-Procedure Safety Rescue (`KB_SOURCE_ANCHOR_RULES`, `KB_CONCEPT_CURRICULUM_RULES`, `KB_EXAM_TRAP_RULES`).** Narrows `KB_SOURCE_ANCHOR_RULES` Rule 5 strictly to non-clinical filler while keeping demographic/age risk cutoffs, screening thresholds, and specific infection-control/hand-hygiene protocols; replaces lossy exemplar pruning in `KB_CONCEPT_CURRICULUM_RULES` Rule 3 with retention-first delta guidance (`MINIMUM EXEMPLAR ANCHOR` + single-chunk Part B Pass-2 visibility guard); tags parallel taxonomic/classification sets (`Types I–IV hypersensitivity`, `IgG–IgD`, `innate vs. active/passive immunity`, `COX-1 vs. COX-2`, `A-delta vs. C pain fibers`, `Stage 1–4/unstageable/DTPI`) under `KB_CONCEPT_CURRICULUM_RULES` Rule 4 (`conceptScope: "differentiator"`) and `KB_EXAM_TRAP_RULES` Rule 1 (`trapRole: "twin-cue"` / `"twin-rx-opposite"`); and rescues mandatory pre-/post-procedure diagnostic nursing safety checks into `Treat` under `KB_EXAM_TRAP_RULES` Rule 3.
+- **Legacy Medication `Assess` Toxicity Routing, Bridge Differentiator Protection, & Anki `ZERO-SKIP` Packing (`kbResolveLegacyAssessBucket`, `kbMigrateLegacyBucket`, `kbBucketFacts`, `kbCoercePlateFields`, `AnkiGenerator` `kbAdapter`).** Keeps observable bedside medication toxicities (`tinnitus`, `visual halos`, `angioedema`, `respiratory depression`, `sedation`, `orthostatic hypotension`, `bleeding`) in `Look` instead of forcing 100% of legacy medication `Assess` facts into `Analyze`, gives pre-procedure hold/safety rules precedence into `Treat`, protects `conceptScope === 'differentiator'` and active contrast/safety `trapRole` bridge facts at Tier 1 when `capBridgeTier` is enabled, and replaces `kbAdapter` card-layer filtering with `ZERO-SKIP` conversion and non-lossy `c1`–`c3` multi-cloze packing.
+
+### Verification
+
+- **3 new assertions (4,070 total)** in `tools/plate-bridge-tests.js` (exercising retention-first P-LATE prompt contracts, legacy medication `Assess` toxicity vs. lab routing, pre-procedure diagnostic safety `Treat` routing, 3-way entity bucket coercion + `scoringTools` `Look` derivation, `capBridgeTier` differentiator/trap protection, Anki `ZERO-SKIP` `c1`–`c3` packing, and live `#anki-scope-mode` exclusion warnings).
+- **Prompt bytes.** All 13 frozen hashes in `prompt-baseline.json` pass `tools/check-prompts.js`. `Prompts.md` regenerated and verified across all 23 documented prompt constants.
+- **SRI.** All eight SRI-pinned scripts and both PDF worker copies were re-hashed against their CDNs and match.
+
+See the [release verification record](docs/reviews/v21.5-release.md).
+
+---
+
 ## [21.4] — 2026-11-15
 
 Local Textbook PDF Table of Contents (TOC) Inspector & Section Slicer in Step 01 (`01 · Knowledge Base`), standalone zero-dependency CLI slicer (`tools/pdf-toc-slice.js`), and Gizmo Import prompt restoration & Back-field guardrails. All 13 frozen prompt constants are enforced in `prompt-baseline.json` (the 11 existing frozen prompt hashes remain unchanged, and `GIZMO_DEFAULT_IMPORT_PROMPT` + `GIZMO_CONVERT_PROMPT` are promoted into the frozen baseline per [`docs/history/GIZMO-v21.3-frozen-prompts.diff`](docs/history/GIZMO-v21.3-frozen-prompts.diff)).

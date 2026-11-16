@@ -12,7 +12,31 @@
      policy and uses only its own inline style block and system fonts. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com">
 <title>P-LATE Study Suite</title>
-<!-- v21.4 (2026-11-15): Local Textbook PDF TOC Inspector & Section Slicer in Step 01 + CLI Slicer + Gizmo Import Prompt Restoration & Back-Field Guardrails.
+<!-- v21.5 (2026-11-16): Retention-First P-LATE Exemplar, Taxonomic-Set & Bedside-Scale Rescue + Anki Zero-Skip Packing & Partial-Scope Guardrails.
+     13 frozen prompt constants enforced in prompt-baseline.json (KB_EXTRACTION_PROMPT + ANKI_MASTER_PROMPT carry the user-approved
+     Look vs. Analyze bedside functional exam and clinical scale boundary per docs/history/PLATE-v21.5-look-analyze-scales.diff;
+     all remaining 11 frozen hashes unchanged).
+     (1) BEDSIDE FUNCTIONAL EXAMS & CLINICAL SCALES IN LOOK (KB_EXTRACTION_PROMPT, ANKI_MASTER_PROMPT, kbCoerceEntityBucket,
+     normalizeKbEntities): Clarifies Look vs. Analyze so bedside sensory/cranial-nerve/neurovascular exams (Snellen, Romberg,
+     monofilament, capillary refill, 6 Ps) and clinical risk/severity scales (Braden, Morse, GCS, NRS/Wong-Baker) route
+     deterministically to Look (including standalone scoringTools flat-field derivation and 3-way entity bucket coercion).
+     (2) RETENTION-FIRST CONCEPT EXEMPLAR ANCHORS & TAXONOMIC SETS (KB_SOURCE_ANCHOR_RULES, KB_CONCEPT_CURRICULUM_RULES,
+     KB_EXAM_TRAP_RULES): Narrows KB_SOURCE_ANCHOR_RULES Rule 5 strictly to non-clinical filler while keeping demographic/age
+     risk cutoffs and specific hand-hygiene protocols; replaces lossy exemplar pruning in KB_CONCEPT_CURRICULUM_RULES Rule 3
+     with retention-first delta guidance, Minimum Exemplar Anchor, and single-chunk Part B Pass-2 visibility guard; tags parallel
+     classification sets (Types I-IV hypersensitivity, IgG-IgD, innate vs. active/passive immunity, COX-1/2, A-delta/C) as
+     conceptScope="differentiator" and trapRole="twin-cue"/"twin-rx-opposite"; and rescues pre-/post-procedure diagnostic
+     nursing safety checks (contrast eGFR/metformin, NPO/gag return, MRI metal screen, post-biopsy neurovascular checks) into Treat.
+     (3) LEGACY MEDICATION TOXICITY & BRIDGE DIFFERENTIATOR RESCUE (kbResolveLegacyAssessBucket, kbMigrateLegacyBucket,
+     kbBucketFacts, kbCoercePlateFields): Stops forcing 100% of legacy medication Assess facts into Analyze (keeping observable
+     bedside drug toxicities such as tinnitus, visual halos, angioedema, and respiratory depression in Look), gives pre-procedure
+     hold/safety rules precedence into Treat, and protects conceptScope="differentiator" plus active contrast/safety trapRoles
+     at Tier 1 when capBridgeTier is enabled.
+     (4) ANKI ZERO-SKIP C1-C3 PACKING & PARTIAL-SCOPE WARNING BANNER (AnkiGenerator kbAdapter, #anki-scope-mode): Replaces
+     card-layer filtering with ZERO-SKIP conversion and non-lossy c1-c3 multi-cloze packing, labels Full Coverage vs. Partial
+     Cram scope options clearly, and renders a live role="status" banner showing exact excluded entry/fact counts whenever a
+     partial cram mode or text filter is active.
+     v21.4 (2026-11-15): Local Textbook PDF TOC Inspector & Section Slicer in Step 01 + CLI Slicer + Gizmo Import Prompt Restoration & Back-Field Guardrails.
      13 frozen prompt constants enforced in prompt-baseline.json (2 approved Gizmo constants added; all 11 prior frozen hashes unchanged).
      (1) STEP 01 TEXTBOOK TOC INSPECTOR & SECTION SLICER (kbMergePageRanges, kbParsePageRanges, kbSuggestTextbookRole,
      kbClassifyTocFeature, kbBuildTocTree, kbMatchTocNodes, kbResolveTocSelectionRanges, kbFormatTocSlicePlanMd,
@@ -2783,8 +2807,8 @@ Educate = patient/family discharge teaching, home self-management, follow-up, wh
 Every fact must belong to exactly one P-LATE bucket. If a sentence spans multiple buckets, split it into separate atomic facts.
 
 Look vs Analyze (strict zero-overlap boundary):
-- Look = bedside signs, symptoms, and physical exam findings on the client (never lab values, imaging, or ECG strips).
-- Analyze = laboratory values, drug levels, imaging, ECG/telemetry strips, and diagnostic tests (never bedside physical exam findings).
+- Look = bedside signs, symptoms, physical exam findings, vital-sign trends, bedside sensory/cranial-nerve/neurovascular exams (e.g., Snellen, Romberg, monofilament, capillary refill, 6 Ps), and bedside clinical risk/severity scales (e.g., Braden, Morse, GCS, NRS/Wong-Baker) performed directly on the client (never specimen lab values, imaging, or ECG strips).
+- Analyze = specimen laboratory values, therapeutic drug levels, microbiology/biopsy results, diagnostic imaging/endoscopy, ECG/telemetry strips, and pre/post-diagnostic test confounders (never hands-on physical exam maneuvers or bedside clinical scales).
 
 Quick bucket rules:
 - disease cause, etiology, classification, drug class, or drug mechanism of action stated in the source -> Patho
@@ -3053,7 +3077,7 @@ const KB_SOURCE_ANCHOR_RULES=`SOURCE & ANCHOR RULES:
 2. Keep Tags Out of Fact Prose: Place the Point ID tag at the very end of the fact entry (or in its dedicated metadata field), never woven into the sentence, so downstream audio/TTS and flashcards remain clean.
 3. Preserve Causal Context: When a Point covers a condition, lab, or intervention, include the underlying mechanism/pathophysiology from the textbook if it directly explains that Point. Do not use a broad Point ID as a dumping ground for adjacent textbook subsections.
 4. Inverse Consolidation (Multi-Anchor Allowed): Merge opposing states into a single comparative fact and tag both Point IDs (e.g., contrast Hypokalemia and Hyperkalemia ECG changes in one entry tagged [P3, P4]).
-5. Zero-Tolerance Exclusion List: Never extract epidemiological statistics (incidence, prevalence, mortality percentages), historical background, cost-of-care data, general wellness platitudes, or universal nursing actions (hand hygiene, emotional support, routine documentation, generic "educate the patient").`;
+5. Zero-Tolerance Exclusion List: Omit only pure non-clinical filler — historical background, cost-of-care dollar figures, author/citation metadata, and vague platitudes with no clinical parameter (e.g., generic "provide emotional support" or "educate the patient"). ALWAYS KEEP source-stated age/sex/population risk cutoffs, screening age thresholds, and specific infection-control or hand-hygiene protocols/durations (e.g., 20-second soap-and-water wash vs. alcohol rub, isolation precautions).`;
 
 // v19.2: Concept-based curriculum LATTE + P layer (Giddens/Elsevier style). Standalone disease-by-disease LATTE sheets
 // repeat shared cues and nursing care across exemplars and hide cross-condition physiological transfer. Keeping the
@@ -3062,11 +3086,12 @@ const KB_SOURCE_ANCHOR_RULES=`SOURCE & ANCHOR RULES:
 // concept bridge, routes shared nursing care to the parent concept so exemplars record deltas, and flags source-supported
 // priority differentiators under Assess and Treatments.
 // v21.0: Updated to P-LATE bucket names (Patho, Look, Analyze, Treat, Educate).
+// v21.5: Retention-first delta rule, Minimum Exemplar Anchor, single-chunk Pass-2 guard, and taxonomic-set differentiators.
 const KB_CONCEPT_CURRICULUM_RULES=`CONCEPT-BASED CURRICULUM RULES (P-LATE):
 1. Master Concept Overview ("entryRole": "concept"): Represent each overarching physiological or nursing concept covered in this chunk (e.g., Perfusion, Gas Exchange, Intracranial Regulation) as its own entry in "conditions" with "entryRole": "concept". Place baseline physiology and universal risk factors under "Patho", and place shared bedside cues, diagnostics, nursing interventions, and patient teaching/evaluation that apply across the concept's exemplars onto this master concept entry with fact field "conceptScope": "shared".
 2. Hidden "P" Concept Bridge ("entryRole": "exemplar"): Give every specific disease or clinical exemplar under an overarching concept "entryRole": "exemplar" and "concept": "<Exact Parent Concept Name>". Keep "Patho" populated with source-supported pathophysiology facts that bridge how this exemplar disrupts or alters the parent concept's baseline physiology. When the source explicitly connects an exemplar or concept to one or more interrelated physiological concepts (e.g., Left Heart Failure under Perfusion impairing Gas Exchange), include "relatedConcepts": ["<Secondary Concept Name>"]. When a standalone medication, diagnostic, or scoring-tool entry belongs to one overarching concept in this chunk, include "concept": "<Exact Parent Concept Name>" on that entry as well.
-3. Exemplar Deltas Only ("conceptScope": "delta"): Under an exemplar's Look, Analyze, Treat, and Educate buckets, record ONLY what deviates from or specializes the parent concept — hallmark cues, confirmatory diagnostics, targeted medications/procedures, and exemplar-specific red flags — tagged "conceptScope": "delta". Route universal/shared cues and routine concept-level nursing care to the parent concept entry ("conceptScope": "shared") instead of repeating them on every exemplar. During a second-pass omission audit, treat shared facts already recorded under the parent concept entry as covered rather than omitted from each exemplar; if recovering a missed fact, set "conditionName" to the parent concept name for shared concept facts or to the exemplar name for exemplar-specific facts.
-4. Flag Priority Differentiators ("conceptScope": "differentiator"): Under an exemplar's "Look", "Analyze", and "Treat" buckets, when the source identifies a hallmark life-threatening complication, critical exam/lab differentiator, or first/priority bedside action that distinguishes this exemplar from sibling exemplars of the same concept, set "conceptScope": "differentiator" (instead of "delta"). Never invent a priority ranking or differentiator that the source does not support.`;
+3. Retention-First Exemplar Deltas ("conceptScope": "delta"): Under an exemplar's Look, Analyze, Treat, and Educate buckets, tag hallmark cues, confirmatory diagnostics, targeted medications/procedures, modified frequencies/thresholds, and exemplar-specific red flags as "conceptScope": "delta", while routing clearly universal baseline concept care to the parent concept entry ("conceptScope": "shared"). When uncertain whether a detail is shared or exemplar-specific, KEEP IT on the exemplar as "delta" rather than omitting it (exact cross-sibling duplicates are merged automatically). MINIMUM EXEMPLAR ANCHOR: Every named clinical exemplar in the source chunk MUST retain its source-stated hallmark cue(s) ("Look"/"Analyze") and targeted intervention(s) ("Treat") when present in the chunk — never collapse a named exemplar to zero L/A/T facts by over-generalizing its cues to the parent concept. During a second-pass omission audit, treat a shared concept fact as covered ONLY if it is visibly present in this chunk's extracted-facts list (Part B — never assume another chunk recorded it); if recovering a missed fact, set "conditionName" to the parent concept name for shared concept facts or to the exemplar name for exemplar-specific facts.
+4. Flag Priority Differentiators & Taxonomic Sets ("conceptScope": "differentiator"): Under "Patho", "Look", "Analyze", and "Treat", when the source identifies (a) a hallmark life-threatening complication, critical exam/lab differentiator, or first/priority bedside action distinguishing sibling exemplars, OR (b) a high-yield parallel classification set tested by contrast (e.g., Types I–IV hypersensitivity, IgG/IgA/IgM/IgE/IgD classes, innate vs. active/passive immunity, COX-1 vs. COX-2, A-delta vs. C pain fibers, Stage 1–4/unstageable/DTPI pressure injuries), set "conceptScope": "differentiator" (instead of "delta"). Never invent a priority ranking or contrast that the source does not support.`;
 const KB_CONCEPT_ROLES=['concept','exemplar'];
 const KB_CONCEPT_SCOPES=['shared','delta','differentiator'];
 function kbParseConceptNames(raw){
@@ -3254,9 +3279,9 @@ function kbAssignConditionConcept(kb,conditionIdOrName,targetConcept){
 // slope/pseudo-improvement trajectories, bedside-first vs ordered escalations, hold triangles + dynamic monitors, and
 // 4-part never-click clinical errors without altering any of the 11 byte-frozen prompt constants.
 const KB_EXAM_TRAP_RULES=`EXAM TRAP MAPPING RULES (HESI / ATI / NGN):
-1. Twin-Diagnosis, Compensation-State & Artifact Contrast ("trapRole": "twin-cue" | "twin-rx-opposite", "contrastWith", "contrastPartners"): When the source contrasts look-alike mirror conditions (e.g., SIADH vs. Diabetes Insipidus, DKA vs. HHS, hyperkalemia vs. hypokalemia, left- vs. right-sided heart failure), acute-vs-chronic compensation states (e.g., acute uncompensated respiratory acidosis vs. chronic compensated COPD baseline), or a pre-analytical specimen/measurement artifact to rule out before treating (e.g., specimen hemolysis causing pseudohyperkalemia when asymptomatic with a normal ECG), extract the diverging tie-breaker cues with "trapRole": "twin-cue" and treatment opposites where Twin A's therapy worsens Twin B with "trapRole": "twin-rx-opposite". Set "contrastWith": "<Exact Counterpart Condition, State, or Artifact>" on that fact, and list counterpart conditions in "contrastPartners": ["<Partner Name>"] on the condition entry when present in this chunk.
+1. Twin-Diagnosis, Classification-Set, Compensation-State & Artifact Contrast ("trapRole": "twin-cue" | "twin-rx-opposite", "contrastWith", "contrastPartners"): When the source contrasts look-alike mirror conditions (e.g., SIADH vs. Diabetes Insipidus, DKA vs. HHS, hyperkalemia vs. hypokalemia, left- vs. right-sided heart failure), multi-type physiological or pharmacologic classification sets tested as contrast pairs (e.g., Types I–IV hypersensitivity, innate vs. active/passive immunity, IgG/IgA/IgM/IgE/IgD classes, COX-1 vs. COX-2, A-delta vs. C pain fibers, conductive vs. sensorineural hearing loss, open-angle vs. angle-closure glaucoma), acute-vs-chronic compensation states (e.g., acute uncompensated respiratory acidosis vs. chronic compensated COPD baseline), or a pre-analytical specimen/measurement artifact to rule out before treating (e.g., specimen hemolysis causing pseudohyperkalemia when asymptomatic with a normal ECG), extract the diverging tie-breaker cues with "trapRole": "twin-cue" and treatment opposites where Twin A's therapy worsens Twin B with "trapRole": "twin-rx-opposite". Set "contrastWith": "<Exact Counterpart Condition, Class, State, or Artifact>" on that fact, and list counterpart conditions in "contrastPartners": ["<Partner Name>"] on the condition entry when present in this chunk.
 2. Slope, Trajectory & Deceptive "Pseudo-Improvement" Triggers ("trapRole": "trend-slope" | "pseudo-improvement" | "therapy-overshoot"): Preserve relative/percentage drops, serial lab or vital-sign velocity cues, and within-reference-range shifts alongside static cutoffs ("trapRole": "trend-slope", e.g., >50% platelet drop from baseline signaling HIT even above 150,000/mm3, or rising serum potassium paired with rising creatinine and oliguria <30 mL/hr). Tag deceptive clinical quietness that mimics improvement while heralding impending failure ("trapRole": "pseudo-improvement", e.g., loud wheezes fading into a silent chest with rising PaCO2 and new drowsiness in status asthmaticus, or abrupt pain relief before rebound peritonitis). Tag signs that therapy overshot or caused a secondary complication ("trapRole": "therapy-overshoot", e.g., new crackles or dyspnea during IV crystalloid boluses, rapid serum sodium overcorrection).
-3. Bedside-First vs. Ordered Escalation & Rescue Sequence ("trapRole": "bedside-first" | "ordered-escalation"): Under "Treat", tag immediate independent RN bedside stabilization actions ("subtype": "independent", "trapRole": "bedside-first", e.g., stopping an offending potassium-containing infusion including Lactated Ringer's, elevating the head of the bed to high-Fowler's, targeted oxygen titration, continuous telemetry) separately from provider-ordered pharmacological or procedural rescue escalations ("subtype": "dependent", "trapRole": "ordered-escalation"). Whenever the source states a mandatory sequence among ordered rescue interventions (e.g., administer IV calcium gluconate first to stabilize cardiac membranes before IV regular insulin with dextrose), preserve that exact order explicitly in the "ordered-escalation" fact text.
+3. Bedside-First vs. Ordered Escalation & Rescue Sequence ("trapRole": "bedside-first" | "ordered-escalation"): Under "Treat", tag immediate independent RN bedside stabilization actions ("subtype": "independent", "trapRole": "bedside-first", e.g., stopping an offending potassium-containing infusion including Lactated Ringer's, elevating the head of the bed to high-Fowler's, targeted oxygen titration, continuous telemetry) separately from provider-ordered pharmacological or procedural rescue escalations ("subtype": "dependent", "trapRole": "ordered-escalation"). Include mandatory pre-/post-procedure nursing safety checks around provider-ordered diagnostics (e.g., checking renal function/eGFR or holding metformin before iodinated contrast, verifying NPO/gag-reflex return, MRI metal screening, post-biopsy/catheterization bleeding and distal neurovascular checks) under "Treat" with "trapRole": "bedside-first" (or "hold-triangle" when medication-linked) so RN safety checks around diagnostics are never dropped as provider trivia. Whenever the source states a mandatory sequence among ordered rescue interventions (e.g., administer IV calcium gluconate first to stabilize cardiac membranes before IV regular insulin with dextrose), preserve that exact order explicitly in the "ordered-escalation" fact text.
 4. Cross-System Hold Triangles & Dynamic Safety Monitors ("trapRole": "hold-triangle" | "dynamic-monitor"): Preserve multi-factor medication hold rules and cross-system interaction triangles ("trapRole": "hold-triangle", e.g., loop diuretic + K+ <3.5 mEq/L + digoxin, holding spironolactone/ACE inhibitors/ARBs/K+ supplements when K+ >5.0 mEq/L or oliguria develops, holding opioids/benzodiazepines/non-selective beta-blockers when PaCO2 rises or somnolence develops) with every stated trigger intact. Pair acute conditions and high-alert rescue therapies with fast-changing bedside parameters that prove efficacy, progression, or treatment-induced iatrogenic harm ("trapRole": "dynamic-monitor", e.g., continuous ECG morphology, hourly serum potassium, capillary blood glucose during IV insulin + dextrose, hourly urine output/specific gravity, serial arterial pH and PaCO2 slopes) rather than static chronic labs.
 5. Never-Click Reflexive Clinical Errors ("trapRole": "never-click"): Tag explicit source-supported clinical errors across all four exam trap patterns with "trapRole": "never-click" (and "safetyCritical": true, "tier": 1 when harm-bearing): (a) direct contraindications or lethal administration errors (e.g., IV push KCl, PRN sedatives for hypercapnic restlessness, unmonitored high-flow oxygen in stable chronic CO2 retainers, platelet transfusion in HIT, saline boluses in cardiogenic shock), (b) mechanism or therapeutic-goal misconceptions (e.g., expecting IV calcium gluconate to lower serum potassium rather than stabilize myocardium), (c) wrong-sequence or slow-onset choices selected first during acute instability (e.g., choosing sodium polystyrene sulfonate first during acute QRS widening), and (d) misinterpreting a deceptive worsening cue as treatment success (e.g., reading disappearing wheezes with lethargy as bronchodilator success).
 6. Strict Source Grounding (Zero Invented Numbers or Traps): Omit "trapRole", "contrastWith", and "contrastPartners" on ordinary facts and conditions that do not carry a source-supported trap role. Never invent patient vignette serial numbers, numeric cutoffs, medication hold thresholds, sequences, or twin comparisons from outside NCLEX/HESI knowledge; during a second-pass omission audit, recover any source-stated percentage/velocity drop, pseudo-improvement warning, hold parameter, rescue sequence, dynamic safety monitor, or contraindication/misconception missed on Pass 1 with its "trapRole" and verbatim "sourceQuote".`;
@@ -3290,24 +3315,31 @@ function kbSanitizeContrastPartners(raw,selfName='',aliases=[]){
 // v21.0: P-LATE (Triple-E) multi-source RN Core + NP Bridge helpers and lossless legacy 6-bucket LATTE migration.
 // Placed inside the kbSlug..kbDedupEntities span so standalone import, entity, and merge tests compile cleanly.
 const KB_LEGACY_LATTE_BUCKETS=['BriefPatho','Assess','Tests','Treatments'];
+// v21.5: shared legacy Assess -> P-LATE resolver. Previously collection==='medications' forced 100% of medication Assess
+// facts (including bedside toxicities like tinnitus, visual halos, angioedema) into Analyze, and hasBedside omitted vitals,
+// neuro/LOC, pain scales, and bedside functional/risk exams (Snellen, Romberg, monofilament, Braden, GCS, Morse), while
+// pre-/post-procedure nursing safety checks around diagnostics fell into Analyze instead of Treat.
+function kbResolveLegacyAssessBucket(f,isMedication=false){
+  const sub=f&&f.subtype!=null?f.subtype:(f&&f.plateSlot==='evaluate'?'evaluate':null);
+  const txt=String(f&&f.text||'');
+  if(sub==='evaluate'||/\b(?:expected\s+outcome|goal\s+met|therapeutic\s+response|indicates?\s+(?:improvement|effectiveness|effective\s+treatment)|treatment\s+effectiveness)\b/i.test(txt)){
+    return{bucket:'Educate',subtype:'evaluate'};
+  }
+  if(/\b(?:hold\s+(?:if|when|for|dose|medication|metformin|anticoagulant\w*)|withhold|before\s+(?:administer\w*|giving|each\s+dose|offering\s+(?:food|fluids?|oral))|apical\s+pulse\s+for\s+1\s+full\s+minute|contraindicat\w*|(?:before|prior\s+to)\s+(?:contrast|iodinated|ct|mri|biops\w*|bronchoscop\w*|endoscop\w*|catheteriz\w*|procedur\w*|surger\w*)|gag\s+reflex\s+return|verify\s+(?:informed\s+)?consent)\b/i.test(txt)){
+    return{bucket:'Treat',subtype:sub||'dependent'};
+  }
+  const hasBedside=/\b(?:auscultat\w*|palpat\w*|percuss\w*|inspect\w*|skin\s+turgor|breath\s+sounds?|lung\s+sounds?|heart\s+sounds?|bowel\s+sounds?|capillary\s+refill|edema|jugular|jvd|gallop|murmur|crackles|wheez\w*|blood\s+pressure|hypotens\w*|hypertens\w*|heart\s+rate|tachycard\w*|bradycard\w*|respirat\w*|tachypn\w*|bradypn\w*|spo2|pulse\s+ox\w*|temp(?:erature)?|fever|pain\s+scale|wong-baker|braden|glasgow|gcs|morse|snellen|romberg|monofilament|tinnitus|halos?|angioedema|rash|urticaria|extravasat\w*|paresthesia\w*|sedation|letharg\w*|confusion|orientat\w*)\b/i.test(txt);
+  const hasDiag=/\b(?:serum|plasma|lab(?:oratory)?|bnp|nt-probnp|troponin|creatinine|bun|gfr|egfr|potassium|sodium|calcium|magnesium|hemoglobin|hematocrit|wbc|platelets?|inr|aptt|ptt|abg|paco2|pao2|hco3|lactate|glucose|a1c|tsh|prealbumin|albumin|crp|esr|therapeutic\s+(?:range|level)|trough|peak\s+level|x-ray|cxr|ct\s+scan|mri|ultrasound|echocardiogram|echo|ecg|ekg|telemetry|biops\w*|culture|dxa|dexa|colonoscop\w*)\b/i.test(txt);
+  if(!hasBedside&&hasDiag)return{bucket:'Analyze',subtype:sub};
+  if(isMedication&&hasDiag&&/\b(?:monitor\s+(?:lab|serum|level|renal|liver|cbc|inr|aptt|trough|peak))\b/i.test(txt))return{bucket:'Analyze',subtype:sub};
+  return{bucket:'Look',subtype:sub};
+}
 function kbMigrateLegacyBucket(bucket,f,collection=''){
   const sub=f&&f.subtype!=null?f.subtype:null;
   if(bucket==='BriefPatho')return{bucket:'Patho',subtype:sub};
   if(bucket==='Tests')return{bucket:'Analyze',subtype:sub};
   if(bucket==='Treatments')return{bucket:'Treat',subtype:sub};
-  if(bucket==='Assess'){
-    const txt=String(f&&f.text||'');
-    if(sub==='evaluate'||/\b(?:expected\s+outcome|goal\s+met|therapeutic\s+response|indicates?\s+(?:improvement|effectiveness|effective\s+treatment)|treatment\s+effectiveness)\b/i.test(txt)){
-      return{bucket:'Educate',subtype:'evaluate'};
-    }
-    if(/\b(?:hold\s+(?:if|when|for|dose|medication)|withhold|before\s+(?:administer|giving|each\s+dose)|apical\s+pulse\s+for\s+1\s+full\s+minute)\b/i.test(txt)){
-      return{bucket:'Treat',subtype:sub||'dependent'};
-    }
-    const hasBedside=/\b(?:auscultat|palpat|percuss|inspect|skin\s+turgor|breath\s+sounds?|lung\s+sounds?|heart\s+sounds?|bowel\s+sounds?|capillary\s+refill|edema|jugular|jvd|gallop|murmur|crackles|wheez)\b/i.test(txt);
-    const hasDiag=/\b(?:serum|plasma|lab(?:oratory)?|bnp|nt-probnp|troponin|creatinine|bun|gfr|egfr|potassium|sodium|calcium|magnesium|hemoglobin|hematocrit|wbc|platelets?|inr|aptt|ptt|abg|paco2|pao2|hco3|lactate|glucose|a1c|tsh|therapeutic\s+(?:range|level)|trough|peak\s+level|x-ray|cxr|ct\s+scan|mri|ultrasound|echocardiogram|echo\b|ecg|ekg|telemetry|biopsy|culture)\b/i.test(txt);
-    if(collection==='medications'||(!hasBedside&&hasDiag))return{bucket:'Analyze',subtype:sub};
-    return{bucket:'Look',subtype:sub};
-  }
+  if(bucket==='Assess')return kbResolveLegacyAssessBucket(f,collection==='medications');
   return{bucket,subtype:sub};
 }
 const KB_CLINICAL_LAYERS=['rn','bridge'];
@@ -3374,7 +3406,8 @@ function kbCoercePlateFields(f,{sourceRole='rn',capBridgeTier=false}={}){
       delete f.plateSlot;
     }
   }else if('plateSlot' in f)delete f.plateSlot;
-  if(capBridgeTier&&f.clinicalLayer==='bridge'&&!f.safetyCritical&&f.factType!=='threshold'&&f.factType!=='contraindication'&&f.trapRole!=='hold-triangle'&&f.trapRole!=='never-click'){
+  // v21.5: protect conceptScope='differentiator' and active contrast/safety trapRoles from Tier-2 demotion under capBridgeTier so Tier-1 exports keep bridge tie-breakers and rescue checks.
+  if(capBridgeTier&&f.clinicalLayer==='bridge'&&!f.safetyCritical&&f.conceptScope!=='differentiator'&&f.factType!=='threshold'&&f.factType!=='contraindication'&&!['hold-triangle','never-click','twin-cue','twin-rx-opposite','bedside-first','pseudo-improvement'].includes(f.trapRole)){
     f.tier=Math.max(2,Number(f.tier)||2);
   }
   return warnings.join('; ');
@@ -3635,16 +3668,17 @@ function kbEntityValueTexts(value){
 // v17.15 (review H11): KB_FACT_BUCKETS must equal KB_BUCKETS; placed ahead of normalizeKbEntities so entity fact normalization shares the same bucket allowlist.
 // v21.0: P-LATE buckets replace legacy 6-bucket LATTE.
 const KB_FACT_BUCKETS=['Patho','Look','Analyze','Treat','Educate'];
+// v21.5: route bedside scale/score/screen keywords and scoringTools fallback to Look while keeping diagnostics fallback in Analyze.
 function kbCoerceEntityBucket(bucket,collection){
   if(KB_FACT_BUCKETS.includes(bucket))return bucket;
   const s=typeof bucket==='string'?bucket.trim():'';
   if(/^(?:brief\s*)?patho/i.test(s))return 'Patho';
-  if(/^(?:look|sign|symptom|cue|present|manifest)/i.test(s))return 'Look';
-  if(/^(?:analyz|test|lab|diag|imag|score|thresh|level|ecg|ekg|tele)/i.test(s))return 'Analyze';
-  if(/^(?:assess|monitor|vital)/i.test(s))return collection==='medications'?'Analyze':'Look';
+  if(/^(?:look|sign|symptom|cue|present|manifest|scale|score|screen|physical)/i.test(s))return 'Look';
+  if(/^(?:analyz|lab|diag|imag|level|trough|peak|ecg|ekg|tele|biops|cultur|test)/i.test(s))return 'Analyze';
+  if(/^(?:assess|monitor|vital)/i.test(s))return collection==='diagnostics'?'Analyze':'Look';
   if(/^(?:treat|med|interven|pharm|therap|admin|manage|action|nurs|hold)/i.test(s))return 'Treat';
   if(/^(?:educ|teach|discharg|instruct|counsel|evaluat)/i.test(s))return 'Educate';
-  return collection==='medications'?'Treat':'Analyze';
+  return collection==='medications'?'Treat':collection==='scoringTools'?'Look':'Analyze';
 }
 function normalizeKbEntities(kb,{rekey=false}={}){
   // v20.2: null-prototype unmapped map blocks prototype-key pollution, and entity facts coerce invalid latteBucket values onto KB_FACT_BUCKETS.
@@ -3703,7 +3737,8 @@ function normalizeKbEntities(kb,{rekey=false}={}){
           if(!value||(field==='genericName'&&value.toLowerCase()===name.toLowerCase()))continue;
           const text=label?name+' — '+label+': '+value
             :name+' is '+(/^[aeiou]/i.test(value)?'an ':'a ')+(/^[A-Z][a-z]/.test(value)?value[0].toLowerCase()+value.slice(1):value)+(/[.!?]$/.test(value)?'':'.');
-          const effBucket=key!=='medications'&&(field==='indications'||field==='indication')?'Analyze':(key==='medications'&&(field==='monitoring'||field==='monitoringParameters')&&/\b(?:hold|withhold|before\s+(?:administer|giving|each\s+dose)|apical\s+pulse|blood\s+pressure|bp\s*<|hr\s*<)\b/i.test(value))?'Treat':bucket;
+          // v21.5: bedside scoringTools (Braden, GCS, Morse, NRS/Wong-Baker) derive into Look, while diagnostics stay in Analyze.
+          const effBucket=key==='scoringTools'&&(bucket==='Analyze'||field==='indications'||field==='indication')?'Look':key!=='medications'&&(field==='indications'||field==='indication')?'Analyze':(key==='medications'&&(field==='monitoring'||field==='monitoringParameters')&&/\b(?:hold|withhold|before\s+(?:administer|giving|each\s+dose)|apical\s+pulse|blood\s+pressure|bp\s*<|hr\s*<)\b/i.test(value))?'Treat':bucket;
           const effSubtype=(field==='evaluation'||field==='expectedOutcomes')?'evaluate':null;
           facts.push({id:nextId(),text,latteBucket:effBucket,subtype:effSubtype,factType,
             safetyCritical,tier:1,sourceQuote:null,sources:source?[source]:[],derived:true,derivedFrom:{collection:key,field},...(entryLayer==='bridge'?{clinicalLayer:'bridge'}:{}),...(hadAnchors?{pointAnchors}:{})});
@@ -4554,19 +4589,22 @@ function kbFactView(kb,{boxTableFirst=false}={}){
 
 function kbBucketFacts(c,bucket,subtype){
   // v21.0: previously mapped every unmigrated legacy Assess fact to Analyze, which put physical-exam Assess cues under Labs
-  // when rendering unmigrated in-memory fixtures. Now mirrors kbMigrateLegacyBucket deterministically without external helpers.
+  // when rendering unmigrated in-memory fixtures. Mirrors kbResolveLegacyAssessBucket deterministically even in isolated VIEW test spans.
+  const isMed=Boolean(c&&c.entityKind==='medication');
   const mapLegacy=f=>{
     const b=f&&f.latteBucket,sub=f&&f.subtype!=null?f.subtype:(f&&f.plateSlot==='evaluate'?'evaluate':null);
     if(b==='BriefPatho')return['Patho',sub];
     if(b==='Tests')return['Analyze',sub];
     if(b==='Treatments')return['Treat',sub];
     if(b==='Assess'){
+      if(typeof kbResolveLegacyAssessBucket==='function'){const r=kbResolveLegacyAssessBucket(f,isMed);return[r.bucket,r.subtype];}
       const txt=String(f&&f.text||'');
       if(sub==='evaluate'||/\b(?:expected\s+outcome|goal\s+met|therapeutic\s+response|indicates?\s+(?:improvement|effectiveness|effective\s+treatment)|treatment\s+effectiveness)\b/i.test(txt))return['Educate','evaluate'];
-      if(/\b(?:hold\s+(?:if|when|for|dose|medication)|withhold|before\s+(?:administer|giving|each\s+dose)|apical\s+pulse\s+for\s+1\s+full\s+minute)\b/i.test(txt))return['Treat',sub||'dependent'];
-      const hasBedside=/\b(?:auscultat|palpat|percuss|inspect|skin\s+turgor|breath\s+sounds?|lung\s+sounds?|heart\s+sounds?|bowel\s+sounds?|capillary\s+refill|edema|jugular|jvd|gallop|murmur|crackles|wheez)\b/i.test(txt);
-      const hasDiag=/\b(?:serum|plasma|lab(?:oratory)?|bnp|nt-probnp|troponin|creatinine|bun|gfr|egfr|potassium|sodium|calcium|magnesium|hemoglobin|hematocrit|wbc|platelets?|inr|aptt|ptt|abg|paco2|pao2|hco3|lactate|glucose|a1c|tsh|therapeutic\s+(?:range|level)|trough|peak\s+level|x-ray|cxr|ct\s+scan|mri|ultrasound|echocardiogram|echo\b|ecg|ekg|telemetry|biopsy|culture)\b/i.test(txt);
-      if((c&&c.entityKind==='medication')||(!hasBedside&&hasDiag))return['Analyze',sub];
+      if(/\b(?:hold\s+(?:if|when|for|dose|medication|metformin|anticoagulant\w*)|withhold|before\s+(?:administer\w*|giving|each\s+dose|offering\s+(?:food|fluids?|oral))|apical\s+pulse\s+for\s+1\s+full\s+minute|contraindicat\w*|(?:before|prior\s+to)\s+(?:contrast|iodinated|ct|mri|biops\w*|bronchoscop\w*|endoscop\w*|catheteriz\w*|procedur\w*|surger\w*)|gag\s+reflex\s+return|verify\s+(?:informed\s+)?consent)\b/i.test(txt))return['Treat',sub||'dependent'];
+      const hasBedside=/\b(?:auscultat\w*|palpat\w*|percuss\w*|inspect\w*|skin\s+turgor|breath\s+sounds?|lung\s+sounds?|heart\s+sounds?|bowel\s+sounds?|capillary\s+refill|edema|jugular|jvd|gallop|murmur|crackles|wheez\w*|blood\s+pressure|hypotens\w*|hypertens\w*|heart\s+rate|tachycard\w*|bradycard\w*|respirat\w*|tachypn\w*|bradypn\w*|spo2|pulse\s+ox\w*|temp(?:erature)?|fever|pain\s+scale|wong-baker|braden|glasgow|gcs|morse|snellen|romberg|monofilament|tinnitus|halos?|angioedema|rash|urticaria|extravasat\w*|paresthesia\w*|sedation|letharg\w*|confusion|orientat\w*)\b/i.test(txt);
+      const hasDiag=/\b(?:serum|plasma|lab(?:oratory)?|bnp|nt-probnp|troponin|creatinine|bun|gfr|egfr|potassium|sodium|calcium|magnesium|hemoglobin|hematocrit|wbc|platelets?|inr|aptt|ptt|abg|paco2|pao2|hco3|lactate|glucose|a1c|tsh|prealbumin|albumin|crp|esr|therapeutic\s+(?:range|level)|trough|peak\s+level|x-ray|cxr|ct\s+scan|mri|ultrasound|echocardiogram|echo|ecg|ekg|telemetry|biops\w*|culture|dxa|dexa|colonoscop\w*)\b/i.test(txt);
+      if(!hasBedside&&hasDiag)return['Analyze',sub];
+      if(isMed&&hasDiag&&/\b(?:monitor\s+(?:lab|serum|level|renal|liver|cbc|inr|aptt|trough|peak))\b/i.test(txt))return['Analyze',sub];
       return['Look',sub];
     }
     return[b,sub];
@@ -8020,8 +8058,8 @@ Rule
 Every note must belong to exactly one P-LATE bucket. If a sentence spans multiple buckets, split it.
 Look vs Analyze
 
-Look = bedside signs, symptoms, and physical exam findings on the client
-Analyze = laboratory values, drug levels, imaging, ECG/telemetry strips, and diagnostic tests
+Look = bedside signs, symptoms, physical exam findings, vital-sign trends, bedside sensory/cranial-nerve/neurovascular exams (e.g., Snellen, Romberg, monofilament, capillary refill, 6 Ps), and bedside clinical risk/severity scales (e.g., Braden, Morse, GCS, NRS/Wong-Baker) performed directly on the client
+Analyze = specimen laboratory values, therapeutic drug levels, microbiology/biopsy results, diagnostic imaging/endoscopy, ECG/telemetry strips, and diagnostic interpretations or confounders
 Quick Bucket Rules
 
 disease cause/etiology, classification, drug class, or drug MOA stated in PDF -> Patho
@@ -9710,7 +9748,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '21.4';}
+function suiteVersion(){return '21.5';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -10508,11 +10546,12 @@ function AnkiGenerator(){
         // v19.0: Step 7 — 4 exam-testable categories covering full P-LATE scope (including T & E), front-anchored clozes, closed sets vs open lists, and strict source grounding for priorities/thresholds.
         const kbAdapter=`\n\nKNOWLEDGE BASE ADAPTER — THIS RUN USES A STRUCTURED KNOWLEDGE BASE, NOT RAW PDF TEXT.
 - The structured FACT lines below are the sole source of truth. Each already carries a source-grounded meaning, exactly one P-LATE bucket, and exactly one Tier. Strip all [P#] or [NONE] tags from card text.
-- Filter at the Card Layer across four exam-testable categories covering full P-LATE scope:
-  1. Clinical Discriminators: Hallmark vs. early findings, expected side effect vs. adverse reaction to report immediately, Condition A vs. Condition B, and priority/first actions.
-  2. Exact Numeric Parameters: Normal lab ranges, therapeutic drug levels, hold parameters, infusion rate limits, and calculation formulas.
-  3. Direct Clinical Associations: Drug classes/suffixes, mechanisms of action that dictate nursing care, reversal agents/antidotes, and definitive diagnostic tests.
-  4. Nursing Interventions & Patient Education (P-LATE T & E): Specific nursing actions, administration/procedural safety rules, therapeutic positioning, contraindications, and actionable patient teaching (diet/activity rules, self-care, and signs to report to the provider), plus expected vs. worsening evaluation trends.
+- Convert ALL substantive supplied FACT lines (ZERO-SKIP — when uncertain whether a detail is testable, convert or pack it rather than mapping it to line #0) across four exam-testable categories covering full P-LATE scope:
+  1. Clinical Discriminators: Hallmark vs. early findings, expected side effect vs. adverse reaction to report immediately, Condition A vs. Condition B, parallel taxonomic/classification sets (e.g., Types I–IV hypersensitivity, IgG–IgD, COX-1 vs. COX-2, A-delta vs. C fibers), bedside functional exams/scales, and priority/first actions.
+  2. Exact Numeric Parameters: Normal lab ranges, therapeutic drug levels, hold parameters, demographic/age/screening cutoffs, infusion rate limits, and calculation formulas.
+  3. Direct Clinical Associations: Pathophysiology/etiology mechanisms, drug classes/suffixes, mechanisms of action that dictate nursing care, reversal agents/antidotes, and definitive diagnostic tests.
+  4. Nursing Interventions & Patient Education (P-LATE T & E): Specific nursing actions, pre-/post-procedure and administration safety rules, therapeutic positioning, contraindications, and actionable patient teaching (diet/activity rules, self-care, and signs to report to the provider), plus expected vs. worsening evaluation trends.
+- Non-Lossy Multi-Cloze Packing (c1–c3 max): Keep deck size compact without dropping content by packing tightly linked companion facts (e.g., a causal mechanism, demographic risk cutoff, or pre-procedure safety check paired with its hallmark cue or intervention) onto one parent/delta note using {{c2::...}} and {{c3::...}} (hard cap of 3 distinct cloze indices per note; map every supporting fact-<n> ID to that note line in CODE BLOCK #2). NEVER omit or leave visible-only a 4th substantive target to stay under c3 — split into an additional note whenever needed so zero substantive facts are lost. When a FACT carries "Layer: bridge" in a mixed packet, prefer routing provider-scope diagnostic/prescribing background as concise supporting context or packing only RN-relevant mechanisms unless NP Bridge scope is explicitly requested.
 - Front-Anchored Clozes: The text outside the cloze must uniquely cue the exact answer inside the blank (specify whether the blank asks for the earliest sign, hallmark finding, normal range, mechanism, antidote, patient teaching point, or priority action — never leave bare blanks like "treated with {{c1::...}}").
 - Closed Sets vs. Open Symptom Lists: For open-ended symptom lists, split distinct hallmark, earliest, or dangerous cues across atomic notes (max 1–2 items per cloze; never drop a substantive source-supported target). For testable closed sets or triads (e.g., Cushing's triad, Beck's triad, classic SATA clusters), preserve the full set by stating the item count in words outside the blank and assigning one numbered cloze per item (e.g., "[Increased ICP] Cushing's triad (three classic findings): {{c1::bradycardia}}, {{c2::widening pulse pressure}}, and {{c3::irregular respirations}}").
 - Strict Source Grounding for Priorities & Thresholds: Generate "first/priority action" cards or numeric hold-parameter cards ONLY when the KB explicitly states that sequence or number. Never invent ordering or numeric cutoffs from general NCLEX knowledge.
@@ -10646,18 +10685,28 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
           <input id="anki-condition-filter" type="text" value={ankiConditionFilter} onChange={e=>setAnkiConditionFilter(e.target.value)} placeholder="e.g. Perfusion or heart failure — blank uses all"/>
           {kbConceptNames.length>0&&<div style={{display:'flex',gap:5,flexWrap:'wrap',marginTop:6,alignItems:'center'}}><span style={{fontSize:11,color:'var(--text-dim)'}}>Concepts:</span>{kbConceptNames.map(cn=>{const active=ankiConditionFilter.trim().toLowerCase()===cn.toLowerCase();return <button key={cn} type="button" className="btn-secondary" aria-pressed={active} style={{padding:'2px 8px',fontSize:11,borderColor:active?'var(--accent)':undefined,color:active?'var(--accent)':undefined}} onClick={()=>setAnkiConditionFilter(active?'':cn)}>{cn}</button>;})}</div>}
         </div>
-        {(kbConceptNames.length>0||kbHasTraps||kbHasBridge||ankiScopeMode!=='all')&&<div className="field-block" style={{marginBottom:0}}>
+        {(kbConceptNames.length>0||kbHasTraps||kbHasBridge||ankiScopeMode!=='all')&&(()=>{
+          // v21.5: surface live condition/fact exclusion counts whenever a partial scope or text filter is active so non-trap concepts are never silently starved.
+          const fullV=kbFactView(K.knowledgeBase),totC=(fullV.conditions||[]).length,totF=kbUsableFactCount(fullV);
+          const hasFlt=Boolean(ankiConditionFilter.trim()||ankiScopeMode!=='all');
+          const subV=hasFlt&&totC?ankiFilterFactView(fullV,ankiConditionFilter,ankiScopeMode):null;
+          const keptC=subV?(subV.conditions||[]).length:totC,keptF=subV?kbUsableFactCount(subV):totF;
+          const dropC=Math.max(0,totC-keptC),isPartial=!['all','rn-only'].includes(ankiScopeMode);
+          return <div className="field-block" style={{marginBottom:0}}>
           <label htmlFor="anki-scope-mode" style={{fontSize:12}}>Concept / trap / layer scope <span className="badge-opt">P-LATE + Bridge</span></label>
           <select id="anki-scope-mode" value={ankiScopeMode} onChange={e=>setAnkiScopeMode(e.target.value)}>
-            <option value="all">Full concept + exemplar facts (all)</option>
-            <option value="rn-only">RN Core only (exclude NP Bridge)</option>
-            <option value="bridge-only">NP Bridge only (mechanism &amp; differential prep)</option>
-            <option value="core">Concept Overviews + P Bridges + Differentiators</option>
-            <option value="differentiator">Priority Differentiators only (rapid exam cram)</option>
-            <option value="deltas">Exemplar Deltas + P Bridges + Differentiators</option>
-            <option value="traps">Exam Traps only (Twin, Slope, Hold &amp; Monitor, Never-Click)</option>
+            <option value="all">Full Coverage — All concept + exemplar facts (recommended)</option>
+            <option value="rn-only">Full Coverage — RN Core only (exclude NP Bridge)</option>
+            <option value="bridge-only">Partial Cram — NP Bridge only (mechanism &amp; differential prep)</option>
+            <option value="core">Partial Cram — Concept Overviews + P Bridges + Differentiators</option>
+            <option value="differentiator">Partial Cram — Priority Differentiators only (rapid exam cram)</option>
+            <option value="deltas">Partial Cram — Exemplar Deltas + P Bridges + Differentiators</option>
+            <option value="traps">Partial Cram — Exam Traps only (skips non-trap topics)</option>
           </select>
-        </div>}
+          {hasFlt&&totC>0&&(dropC>0||isPartial)&&<div role="status" style={{marginTop:6,padding:'6px 8px',borderRadius:6,fontSize:11,lineHeight:1.4,background:'rgba(245,158,11,0.1)',border:'1px solid rgba(245,158,11,0.35)',color:'var(--accent-warm)'}}>
+            <strong>{dropC>0?`\u26a0 Partial scope excludes ${dropC} of ${totC} entries`:'\u2139 Partial scope active'}:</strong> includes {keptC}/{totC} entries ({keptF}/{totF} facts).{isPartial?' Choose "Full Coverage" above to retain all exam topics.':''}
+          </div>}
+        </div>;})()}
         </>:<><div style={{fontSize:13,fontWeight:700,color:'var(--accent-warm)'}}>No Knowledge Base loaded</div><div style={{fontSize:12,color:'var(--text-dim)',marginTop:4}}>Open Knowledge and build it from your source files first.</div></>}
       </Step>
       <Disclose summary="Focus context" note={(outcomes||points||focusContext)?'set':'not set'}>
