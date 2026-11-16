@@ -8,7 +8,7 @@ function runAnkiReviewQualityTests({S,t,section}){
     if(a<0||b<0||S.indexOf(start,a+start.length)>=0||S.indexOf(end,b+end.length)>=0)throw new Error('Anki review-quality extraction anchors missing or ambiguous: '+start);
     return S.slice(a,b);
   };
-  const source=extract('function ankiParseCards(raw','function AnkiStyleBadges');
+  const source=extract('function ankiParseCards(raw','/* ── END ANKI PURE HELPERS ── */');
   const H=new Function('uid',source+';return {ankiStyleWarnings,ankiReviewFilter,ankiSelection,ankiExportText,ankiBatchDiagnostics,ankiSourceSnapshot};')(()=> 'synthetic-note');
   const note=(id,text,changes={})=>({id,text,extra:'',tags:'Tier::1',keep:true,factIds:['fact-1'],pipeCount:2,mappingIssues:[],...changes});
   const codes=card=>H.ankiStyleWarnings(card).map(x=>x.code);

@@ -14,7 +14,7 @@ function inject(src,name,deps){const names=Object.keys(deps);return new Function
 const ABC=(stem,n)=>stem+'\nA. Choice '+n+'a\nB. Choice '+n+'b\nC. Choice '+n+'c';
 
 module.exports=async function run(S,t){
-  const N=new Function(span(S,'const NCLEX_OPTION_GAP=','// Page range picker sub-component')+
+  const N=new Function(span(S,'const NCLEX_OPTION_GAP=','/* ── END NCLEX EXTRACTOR PURE HELPERS ── */')+
     ';return {nclexSplitStemOptions,nclexRepairOptions,nclexMergePairs,nclexPairQA,nclexBatchPairs,nclexPairsToText};')();
 
   /* ── L18: the pairing-window merge never trades a matched row for an unmatched one ── */
@@ -59,7 +59,7 @@ module.exports=async function run(S,t){
     N.nclexRepairOptions(wrong,src7)===wrong&&plain.options_repaired===true&&numbered.options_repaired===true&&headed.options_repaired===true&&/Magnesium/.test(plain.question));
 
   /* ── L23 (and L21 end to end): the two run loops, extracted and run against stubbed replies ── */
-  const runSplitSrc=span(S,'  async function runSplit(file,existingQ,signal,track){','\n  const run=useCallback(async()=>{');
+  const runSplitSrc=span(S,'  async function runSplit(file,existingQ,signal,track){','\n  return runSplit(_file,_existingQ,_signal,_track);');
   const splitRun=async replies=>{
     const logs=[],kept=[];let call=0;
     const runSplit=inject(runSplitSrc,'runSplit',{
@@ -92,7 +92,7 @@ module.exports=async function run(S,t){
     inlineTrack.attempted===3&&inlineTrack.succeeded===1&&inlineTrack.failed.join()==='Chunk 1,Chunk 2');
 
   /* ── L22: both tools abort their run on unmount; the extractor's file × waits for the run ── */
-  const extractor=span(S,'function NCLEXExtractor(){','// ──── TOOL: NCLEX to Anki ────');
+  const extractor=span(S,'function NCLEXExtractor(){','/* ── NCLEX TO ANKI UI ── */');
   const toAnki=span(S,'function NCLEXToAnki(){','// ──── TOOL: NCLEX Question Generator ────');
   const cleanup='useEffect(()=>()=>{abortRef.current?.abort();abortRef.current=null;},[]);';
   t('L22: NCLEX Extractor and NCLEX to Anki abort the active run on unmount, and the extractor disables a file\u2019s \u00d7 mid-run',

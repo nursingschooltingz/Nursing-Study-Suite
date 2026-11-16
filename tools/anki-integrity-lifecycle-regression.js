@@ -18,11 +18,11 @@ function span(start,end,source=html){
 const clone=x=>x===undefined?null:JSON.parse(JSON.stringify(x));
 const platform={Array,Object,String,Number,Boolean,Map,Set,WeakMap,Math,JSON,RegExp,Date,Error,TypeError,Promise,AbortController,DOMException,TextEncoder,TextDecoder,Blob,Uint8Array,parseInt,parseFloat,Infinity,globalThis:{crypto:crypto.webcrypto},setTimeout,clearTimeout};
 function compile(code,names,injected={}){const env={...platform,...injected};return new Function(...Object.keys(env),'"use strict";\n'+code+'\nreturn {'+names.join(',')+'};')(...Object.values(env));}
-const helpersCode=[span('function splitOversizedConditionBlock(', 'function AnkiStyleBadges('),span('function validateLatteKnowledgeBase(', 'function renderKBMarkdown('),span('function kbUsableFactCount(', 'function kbForAnki('),span('function kbForAnki(', '// ── KB source chunking'),span('function extractJSON(', '// PDF text extraction (shared)'),span('const NEIA_TERMINOLOGY_RULES=', '// Deterministic post-generation validation.')].join('\n');
+const helpersCode=[span('function splitOversizedConditionBlock(', '/* ── END ANKI PURE HELPERS ── */'),span('function validateLatteKnowledgeBase(', 'function renderKBMarkdown('),span('function kbUsableFactCount(', 'function kbForAnki('),span('function kbForAnki(', '// ── KB source chunking'),span('function extractJSON(', '// PDF text extraction (shared)'),span('const NEIA_TERMINOLOGY_RULES=', '// Deterministic post-generation validation.')].join('\n');
 if(!helpersCode.includes('function ankiReviewDecisionEvidence(')||!helpersCode.includes('current:latest.get(d.key)===d&&ankiReviewDecisionCurrent'))throw Error('Missing non-vacuous helper tail');
 const helperNames=[...helpersCode.matchAll(/^(?:async )?function (\w+)\(/gm)].map(x=>x[1]);
 const transportCode=span('function geminiRetryDelayMs(', 'function extractJSON(');
-if(!transportCode.includes('return geminiRequest(apiKey,model,body,{signal,retries,onUpdate,onMeta});'))throw Error('Missing transport tail');
+if(!transportCode.includes('return geminiRequest(apiKey,model,body,{signal,retries,onUpdate,onMeta,stream});'))throw Error('Missing transport tail');
 const safetyCode=span('const SAFETY_SETTINGS=[','// Single core for ALL Gemini traffic.');
 // v17.13: geminiRequest validates thinking levels against the shipped THINKING_LEVELS constant.
 const shippedThinkingLevels=new Function(span('const THINKING_LEVELS=','const MODEL_ID_RE=')+';return THINKING_LEVELS;')();

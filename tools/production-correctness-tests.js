@@ -3,8 +3,8 @@ const fs=require('fs');
 function extract(source){
   const span=(a,b)=>{if(source.split(a).length!==2)throw Error('Correctness start anchor must be unique: '+a);const x=source.indexOf(a),y=source.indexOf(b,x+a.length);if(y<0)throw Error('Correctness end anchor missing: '+b);return source.slice(x,y);};
   const C=new Function(span('const CASE_CLINICAL_TOKEN_RE=','// Every distinct fact id referenced anywhere in the case')+';return {caseParseThreshold,caseAuditTextValues,validateCaseStudy};')();
-  const N=new Function(span('function nclexChunkText(','// Split-mode: extract text')+span('const NCLEX_OPTION_GAP=','// Page range picker sub-component')+';return {nclexChunkText,nclexSplitStemOptions,nclexRepairOptions};')();
-  const card=new Function('cardIsImage','cardFileId',span('function createOperationSlot(){','function KnowledgeBaseBuilder(){')+span('function cardKey(','// Compact, inspectable fact rows')+';return {cardCurrentEntries,cardPublishTranscript,cardIdentityConflict,cardKey,cardMergeFaces,cardChunkBlockers};')(()=>true,f=>f.name);
+  const N=new Function(span('function nclexChunkText(','// Split-mode: extract text')+span('const NCLEX_OPTION_GAP=','/* ── END NCLEX EXTRACTOR PURE HELPERS ── */')+';return {nclexChunkText,nclexSplitStemOptions,nclexRepairOptions};')();
+  const card=new Function('cardIsImage','cardFileId',span('function createOperationSlot(){','/* ── END KB SLOT PURE HELPERS ── */')+span('function cardKey(','/* ── END KB & CARD PURE HELPERS ── */')+';return {cardCurrentEntries,cardPublishTranscript,cardIdentityConflict,cardKey,cardMergeFaces,cardChunkBlockers};')(()=>true,f=>f.name);
   return {C,N,card,span};
 }
 async function runTests(source,t){
@@ -61,7 +61,7 @@ async function runTests(source,t){
 
   const file={name:'synthetic-card.png'},old={file:file.name,transcript:{face:'front',title:'Synthetic',category:'Synthetic',cardNumber:'1',sections:[],numerics:[],overallLegibility:'clean'},runs:[{kind:'old successful run'}],agreement:null,comparisonIncomplete:false};
   let transcripts={[file.name]:old},error='',calls=0;
-  const transcribeSource=span('  const transcribeCards=async()=>{','  // v15.14: tag each transcript');
+  const transcribeSource=span('  const transcribeCards=async()=>{','\n  return transcribeCards();');
   const haltsBatch=new Function(span('function geminiHaltsBatch(','\nasync function callGemini(')+';return geminiHaltsBatch;')(); // v17.15 (M3)
   const bind=(impl,cardFiles=[file])=>new Function('files','cardIsImage','cfg','txAbortRef','setTxBusy','setTxErr','setTxReviewed','addLog','txRuns','cardTranscribe','cardFileId','cardCompareRuns','cardKey','setTranscripts','cardPublishTranscript','currentFiles','geminiHaltsBatch',transcribeSource+';return transcribeCards;')(cardFiles,()=>true,{apiKey:'synthetic',forTool:()=>({model:'mock',level:'low'})},{current:null},()=>{},v=>{error=v;},()=>{},()=>{},2,impl,f=>f.name,()=>({runs:2,numericsUnstable:[],bulletsUnstable:[],facesDisagree:false,idsDisagree:false}),card.cardKey,fn=>{transcripts=fn(transcripts);},card.cardPublishTranscript,{current:cardFiles},haltsBatch);
   const fail=bind(async()=>{calls++;throw Error('Synthetic unavailable');});await fail();

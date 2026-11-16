@@ -7,7 +7,7 @@ function runAnkiIntegrityTransformRegression({S,t,section}){
   const span=(a,b)=>{const i=S.indexOf(a),j=S.indexOf(b,i+a.length);if(i<0||j<=i||S.indexOf(a,i+1)>=0)throw Error('Anki integrity extraction moved: '+a);return S.slice(i,j);};
   let sequence=0;
   const names=['ankiParseCards','attachCoverageToCards','ankiSourceSnapshot','ankiDedupeCards','ankiNormalizeConditionTags','lintAnkiCard','ankiSelection','ankiNumericTokens','ankiNumericAudit','ankiPreviewText','ankiExportText','ankiConditionTagDiagnostics','ankiReviewDecisionEvidence'];
-  const H=new Function('uid',span('function ankiParseCards(raw','function AnkiStyleBadges')+';return {'+names.join(',')+'};')(()=> 'integrity-note-'+(++sequence));
+  const H=new Function('uid',span('function ankiParseCards(raw','/* ── END ANKI PURE HELPERS ── */')+';return {'+names.join(',')+'};')(()=> 'integrity-note-'+(++sequence));
   const tags='Nursing::LATTE::Treatments Condition::DiabetesMellitus Tier::1';
   const row=(text,extra='',tag=tags)=>text+'|'+extra+'|'+tag;
   const response=(lines,ledger='fact-1 -> line #1')=>'```text\n'+lines+'\n```\n```text\n'+ledger+'\n```';

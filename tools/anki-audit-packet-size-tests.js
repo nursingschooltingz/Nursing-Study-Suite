@@ -3,7 +3,7 @@
 // The V4 cap measures the serialized model packet, including token addresses.
 function runAnkiAuditPacketSizeTests({S,t,section}){
   if(section)section('Anki V4 wire packet bounds and preserved relationships');
-  const start='function ankiParseCards(raw',end='function AnkiStyleBadges';
+  const start='function ankiParseCards(raw',end='/* ── END ANKI PURE HELPERS ── */';
   const a=S.indexOf(start),b=S.indexOf(end,a+start.length);
   if(a<0||b<=a||S.indexOf(start,a+start.length)>=0)throw Error('Anki V4 packet grouping extraction anchors moved or became ambiguous.');
   const source=S.slice(a,b),H=new Function('uid',source+';return {ankiAuditGroups,ankiAuditPacket,ANKI_SOURCE_AUDIT_GROUP_CHARS};')(()=> 'synthetic');

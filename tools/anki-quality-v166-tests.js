@@ -5,7 +5,7 @@ const path=require('path');
 const fixtures=require('./fixtures/anki-v166-quality-cases.json');
 
 function extractQualityHelpers(S){
-  const start='function ankiParseCards(raw',end='function AnkiStyleBadges',a=S.indexOf(start),b=S.indexOf(end,a+start.length);
+  const start='function ankiParseCards(raw',end='/* ── END ANKI PURE HELPERS ── */',a=S.indexOf(start),b=S.indexOf(end,a+start.length);
   if(a<0||b<0||S.indexOf(start,a+1)>=0||S.indexOf(end,b+1)>=0)throw Error('Anki v16.6 quality extraction anchors missing or ambiguous');
   return new Function('uid',S.slice(a,b)+';return {ankiAuditSourceTokens,ankiAuditSourceRange,ankiContextInventoryIssues,ankiEvidenceReviewIssues,ankiRecallContext,ankiAuditReviewItems,ankiSelection,ankiExportText,ankiAnswerExposure};')(()=> 'synthetic-quality-note');
 }

@@ -18,7 +18,7 @@ module.exports=async function run(S,t){
 
   // ── L6: cardTranscribe shape-checks numerics and title ──
   {
-    const card=load(span('function cardKey(','// Compact, inspectable fact rows'),['cardMergeFaces','cardCompareRuns']);
+    const card=load(span('function cardKey(','/* ── END KB & CARD PURE HELPERS ── */'),['cardMergeFaces','cardCompareRuns']);
     const {cardTranscribe}=load(span('async function cardTranscribe(','// Pairing key.'),['cardTranscribe'],{
       getExt:()=>'jpg',CARD_MIME:{jpg:'image/jpeg'},cardFilePayload:async()=>({mimeType:'image/jpeg',data:''}),
       CARD_TRANSCRIBE_PROMPT:'',extractJSON:JSON.parse,geminiRequest:async(_k,_m,_b,o)=>o.syntheticRaw});
@@ -93,8 +93,8 @@ module.exports=async function run(S,t){
 
   // ── L10: card blockers name changed numbers, changed text and failed comparisons separately ──
   {
-    const card=load(span('function cardKey(','// Compact, inspectable fact rows'),['cardMergeFaces','cardChunkBlockers','cardKey']);
-    const slot=attempt(()=>load(span('function cardCurrentEntries(','function KnowledgeBaseBuilder(){'),['cardRunInstability','cardIdentityConflict'],{cardKey:card.cardKey,cardIsImage:()=>true,cardFileId:f=>f.name}));
+    const card=load(span('function cardKey(','/* ── END KB & CARD PURE HELPERS ── */'),['cardMergeFaces','cardChunkBlockers','cardKey']);
+    const slot=attempt(()=>load(span('function cardCurrentEntries(','/* ── END KB SLOT PURE HELPERS ── */'),['cardRunInstability','cardIdentityConflict'],{cardKey:card.cardKey,cardIsImage:()=>true,cardFileId:f=>f.name}));
     const front={face:'front',category:'Synthetic',cardNumber:'4',title:'Synthetic',sections:[],numerics:[],overallLegibility:'clean'},back={...front,face:'back',title:null};
     const pair=card.cardMergeFaces([front,back])[0];
     const counts=slot&&slot.cardRunInstability?slot.cardRunInstability([

@@ -14,8 +14,8 @@ function span(S, start, end) {
 
 module.exports = function runGizmoImportTests(S, t) {
   const kbPointHelpers = span(S, 'function kbStripPointTags(text){', 'function kbExtractPointAnchors(');
-  const ankiHelpers = span(S, 'function ankiParseCards(raw', 'function AnkiStyleBadges(');
-  const gizmoHelpers = span(S, '// ──── TOOL: Import to Gizmo (AI-driven chunked Anki → Gizmo.ai converter) ────', 'function GizmoImporter(){');
+  const ankiHelpers = span(S, 'function ankiParseCards(raw', '/* ── END ANKI PURE HELPERS ── */');
+  const gizmoHelpers = span(S, '// ──── TOOL: Import to Gizmo (AI-driven chunked Anki → Gizmo.ai converter) ────', '/* ── END GIZMO PURE HELPERS ── */');
   const gizmoComponent = span(S, 'function GizmoImporter(){', '// v16.0: settings use named native controls');
 
   t('Gizmo extraction span retains non-vacuous helper tail',
@@ -277,5 +277,6 @@ module.exports = function runGizmoImportTests(S, t) {
     gizmoComponent.includes("📑 Chunk slideshow ({chunks.length})") &&
     gizmoComponent.includes("📋 Copy all ({result.cards.length})") &&
     gizmoComponent.includes("🔢 Page range (1–{pages.length})") &&
-    gizmoComponent.includes('callGemini(cfg.apiKey,model,[{text:GIZMO_CONVERT_PROMPT'));
+    gizmoComponent.includes('systemInstruction:GIZMO_CONVERT_PROMPT') &&
+    gizmoComponent.includes('responseJsonSchema:GIZMO_RESPONSE_JSON_SCHEMA'));
 };

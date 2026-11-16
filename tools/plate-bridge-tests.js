@@ -32,8 +32,8 @@ module.exports = async function run(S, t) {
     span('function kbSourceText(f){', '\n') + '\n' +
     span('function kbStripPointTags(text){', 'function kbExtractPointAnchors(') + '\n' +
     span('function kbUsableFactCount(', '// ── KB source chunking') + '\n' +
-    span('function ankiParseCards(raw', 'function AnkiStyleBadges(') + '\n' +
-    span('// ──── TOOL: Import to Gizmo (AI-driven chunked Anki → Gizmo.ai converter) ────', 'function GizmoImporter(){') + '\n' +
+    span('function ankiParseCards(raw', '/* ── END ANKI PURE HELPERS ── */') + '\n' +
+    span('// ──── TOOL: Import to Gizmo (AI-driven chunked Anki → Gizmo.ai converter) ────', '/* ── END GIZMO PURE HELPERS ── */') + '\n' +
     ';return {kbForAnki,ankiSourceSnapshot,ankiStampLayerTags,ankiFilterFactView,lintAnkiCard,gizmoLooksLikeTagField,gizmoParseAnkiInput};'
   )(() => 'synthetic', { crypto: require('crypto').webcrypto }, TextEncoder, TextDecoder);
 

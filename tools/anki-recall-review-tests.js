@@ -3,7 +3,7 @@
 // Synthetic offline cases exercise shipped code, never source material or model accuracy.
 function runAnkiRecallReviewTests({S,t,section}){
   if(section)section('Anki advisory recall queue and suggestion checks');
-  const start='function ankiParseCards(raw',end='function AnkiStyleBadges',a=S.indexOf(start),b=S.indexOf(end,a+start.length);
+  const start='function ankiParseCards(raw',end='/* ── END ANKI PURE HELPERS ── */',a=S.indexOf(start),b=S.indexOf(end,a+start.length);
   if(a<0||b<0||S.indexOf(start,a+1)>=0||S.indexOf(end,b+1)>=0)throw Error('Anki recall-review extraction anchors missing or ambiguous');
   const source=S.slice(a,b),H=new Function('uid',source+';return {parseAnkiClozes,ankiAnswerExposure,ankiRecallRangeText,ankiRecallNumbers,ankiRecallIssues,ankiReceiptRecallIssues,ankiSuggestionWarnings,ankiAuditReviewItems,ankiSourceSnapshot,ankiParseSourceAudit,ankiSelection,ankiExportText};')(()=> 'synthetic-note');
   const note=(id,text,changes={})=>({id,text,extra:'',tags:'Tier::1',keep:true,factIds:['fact-1'],pipeCount:2,mappingIssues:[],...changes});

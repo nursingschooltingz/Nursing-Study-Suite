@@ -17,7 +17,7 @@ function runAnkiExtraDefaultTests({ S, t, section }) {
   t('Anki empty Extra retains the explicit two-separator and third-field Tags contract', prompt.includes('Keep the empty Extra field between the same two pipe separators; Tags remain the third field.'));
   t('Anki substantive mechanisms still require recall and supported contrasts remain allowed', phase.includes('also give it a dedicated recall note') && phase.includes('Both sides must be supported by the supplied facts.'));
 
-  const start = 'function ankiParseCards(raw', end = 'function AnkiStyleBadges';
+  const start = 'function ankiParseCards(raw', end = '/* ── END ANKI PURE HELPERS ── */';
   const a = S.indexOf(start), b = S.indexOf(end, a + start.length);
   if (a < 0 || b < 0 || S.indexOf(start, a + start.length) >= 0 || S.indexOf(end, b + end.length) >= 0) throw new Error('Anki Extra helper extraction anchors missing or ambiguous');
   let sequence = 0;

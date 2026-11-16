@@ -1,6 +1,6 @@
 'use strict';
 module.exports=function runTests(S,t,A){
-  const a=S.indexOf('function artifactSourceSnapshot('),b=S.indexOf('function FactTag(',a);
+  const a=S.indexOf('function artifactSourceSnapshot('),b=S.indexOf('/* ── END ARTIFACT SOURCE PURE HELPERS ── */',a);
   if(a<0||b<0)throw Error('Artifact source extraction anchors missing');
   const H=new Function('buildFactIndex',S.slice(a,b)+';return {artifactSourceSnapshot,artifactSourceCurrent,artifactExportNotice,artifactJsonExport};')(kb=>new Map(kb.conditions.flatMap(c=>c.facts.map(f=>[f.id,{condition:c,fact:f}]))));
   const kb={conditions:[{name:'A',facts:[{id:'fact-1',text:'original'}]}]},replacement={conditions:[{name:'B',facts:[{id:'fact-1',text:'different'}]}]};

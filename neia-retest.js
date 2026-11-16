@@ -20,11 +20,10 @@
 const fs = require('fs');
 const path = require('path');
 const { resolveSuiteFile, sha256, parseMeasurementArgs, resolveMeasurementProfile,
-  measurementPlan, createMeasurementPacer, measurementOutputCap } = require('./tools/repo-checks');
+  measurementPlan, createMeasurementPacer, measurementOutputCap,
+  MEASUREMENT_SAFETY_SETTINGS, redactSecrets, cliRetryDelayMs } = require('./tools/repo-checks');
 const parseArgs = argv => parseMeasurementArgs(argv, 'neia');
-const SAFETY = ['HARM_CATEGORY_HARASSMENT', 'HARM_CATEGORY_HATE_SPEECH',
-  'HARM_CATEGORY_SEXUALLY_EXPLICIT', 'HARM_CATEGORY_DANGEROUS_CONTENT']
-  .map(category => ({ category, threshold: 'BLOCK_NONE' }));
+const SAFETY = MEASUREMENT_SAFETY_SETTINGS;
 
 function spanFrom(source, startAnchor, endAnchor) {
   const a = source.indexOf(startAnchor);
@@ -35,8 +34,7 @@ function spanFrom(source, startAnchor, endAnchor) {
 }
 function extractAudit(source) {
   const markdown = spanFrom(source, 'function caseToMarkdown(', "\n  return L.join('\\n');\n}");
-  const audit = spanFrom(source, 'function caseIsGateEligible(', 'function CaseStudyGenerator()')
-    .replace(/function CaseStudyGenerator\(\)$/, '');
+  const audit = spanFrom(source, 'function caseIsGateEligible(', '/* ── END CASE STUDY PURE HELPERS ── */');
   const result = new Function('CASE_QUESTION_RULES', 'caseRenderFactPacket', markdown + audit +
     ';return {caseAuditPayload,itemBuildAuditPrompt,itemParseAuditVerdict,caseIsGateEligible,itemAuditSummary};')('', () => '');
   if (typeof result.itemAuditSummary !== 'function') throw new Error('Audit extraction tail missing: itemAuditSummary');
@@ -69,22 +67,37 @@ function createAuditCaller(config, key, deps = {}) {
   const sleep = deps.sleep || (ms => new Promise(resolve => setTimeout(resolve, ms)));
   const rand = deps.random || Math.random;
   const now = deps.now || Date.now, pace = createMeasurementPacer(config.rpm, { now, sleep });
+  let storeUnsupported = false;
   return async function callOnce(prompt, observation) {
     if (!config.live || config.dryRun) throw new Error('Live audit requires --live and per-run human authorization');
     const body = { contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: measurementOutputCap(config.model), thinkingConfig: { thinkingLevel: config.level } }, safetySettings: SAFETY };
+      generationConfig: { maxOutputTokens: measurementOutputCap(config.model), thinkingConfig: { thinkingLevel: config.level } },
+      safetySettings: SAFETY,
+      ...(storeUnsupported ? {} : { store: false }) };
     const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + config.model + ':generateContent';
     const started = now();
-    let resp;
+    let resp, retriedStore = false;
     for (let attempt = 0; attempt < 4; attempt++) {
       await pace();
       observation.attempts++;
+      const signal = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(900000) : undefined;
       resp = await fetchFn(url, { method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body: JSON.stringify(body) });
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+        body: JSON.stringify(body),
+        ...(signal ? { signal } : {}) });
       if (resp.ok) break;
+      const errBody = typeof resp.json === 'function' ? await resp.json().catch(() => null) : null;
+      const errMsg = String((errBody && errBody.error && errBody.error.message) || '');
+      if (resp.status === 400 && body.store === false && !retriedStore && /\bstore\b/i.test(errMsg)) {
+        storeUnsupported = true;
+        retriedStore = true;
+        delete body.store;
+        attempt--;
+        continue;
+      }
       if ((resp.status !== 429 && resp.status < 500) || attempt === 3) throw new Error('HTTP ' + resp.status);
-      const jitter = config.retryms > 0 ? Math.floor(rand() * Math.min(1000, config.retryms)) : 0;
-      await sleep(config.retryms * Math.pow(2, attempt) + jitter);
+      const baseDelay = config.retryms * Math.pow(2, attempt);
+      await sleep(Math.max(baseDelay, cliRetryDelayMs(errBody, resp.headers, config.retryms, attempt, rand)));
     }
     const response = await resp.json(), candidate = (response.candidates || [])[0] || {};
     observation.finishReason = candidate.finishReason || '';
@@ -280,16 +293,14 @@ async function main(argv = process.argv.slice(2), deps = {}) {
       caveat: fixture.referenceStandardCaveat,
       noPublishedComparison: 'No figure here may be compared to any published ICC or accuracy value. The June 2026 study tested zero Gemini configurations.',
       ...summary };
-    const redact = text => (key && key.trim().length >= 8 ? String(text).split(key).join('[REDACTED]') : String(text));
-    const reportText = redact(JSON.stringify(report, null, 2));
-    writeFile(config.out, reportText, 'utf8');
+    const reportText = redactSecrets(JSON.stringify(report, null, 2), key);
+    writeFile(config.out, reportText, { encoding: 'utf8', mode: 0o600 });
     printSummary(JSON.parse(reportText), log);
     log('Full private report: ' + config.out);
     return summary.exitCode;
   } catch (error) {
     const key = (deps.env || process.env).GEMINI_API_KEY || '';
-    const message = String(error.message || error);
-    errorLog(key && key.trim().length >= 8 ? message.split(key).join('[REDACTED]') : message);
+    errorLog(redactSecrets(error.message || error, key));
     return measuring ? 1 : 2;
   }
 }

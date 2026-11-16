@@ -39,7 +39,7 @@ module.exports = function runV190PointAnchorTests(S, t) {
     'caseContentWords',
     indexSpan + '\n' + pdfLayoutSpan + '\n' + citeSpan + '\n' + pptxSpan + '\n' + jsonSpan + '\n' + mdSpan + '\n' + kbSpan + '\n' + vSpan + '\n' + quoteSpan + '\n' + paSpan + '\n' + ankiSpan + '\n' + accumSpan + '\n' + nclexSpan + '\n' + n2aSpan + '\n' + ngFocusSpan + '\n' + caseShuffleSpan + '\n' +
     'const runAnkiFocus=(outcomes,points,focusContext,K)=>(function(){' + ankiFocusSpan + ';return buildFocusBlock();})();\n' +
-    'return {buildFactIndex,findFactById,getFactUsage,getExt,pdfLayoutText,formatFactCitation,_pptxAssertXml,_pptxRunText,_zipNormalizePath,extractJSON,markdownToPlainText,KB_SOURCE_ANCHOR_RULES,kbBuildFocusBlock,parseAndNumberPoints,formatPointsForPrompt,buildKbFactItemSchema,auditKbFacts,runPointAnchorHarness,kbStripPointTags,kbExtractPointAnchors,normalizeKbEntities,mergeLatteParts,kbNormalizeImported,validateLatteKnowledgeBase,kbFactView,kbSourceText,kbProvenanceText,kbNormForMatch,kbDehyphNormForMatch,kbClassifyQuoteMiss,paParseTiers,paMergeTopics,kbForPriority,kbForAnki,ankiParseCards,ankiSourceSnapshot,ankiDedupeCards,ankiConditionTagCheck,nclexAdmitRecord,nclexAccumulate,nclexDropOptionRuns,nclexSplitStemOptions,nclexRepairOptions,nclexMergePairs,n2aSplitStemOptions,n2aSplitBlocks,n2aStripSources,n2aAnswerLabels,x2aBlocks,x2aParseExport,x2aResolveAnswer,x2aSplitRationale,x2aBuildCard,i2aAnswerLabels,i2aApplyAi,i2aBuildCards,i2aWorksheetMd,i2aConvert,ngAllocateBatch,ngFocusItems,ngFocusIndex,ngFocusMatch,ngFocusPlan,ngFocusSummary,runAnkiFocus,caseShuffleQuestion};'
+    'return {buildFactIndex,findFactById,getFactUsage,getExt,pdfLayoutText,formatFactCitation,_pptxAssertXml,_pptxRunText,_zipNormalizePath,extractJSON,markdownToPlainText,KB_SOURCE_ANCHOR_RULES,kbBuildFocusBlock,parseAndNumberPoints,formatPointsForPrompt,buildKbFactItemSchema,auditKbFacts,kbStripPointTags,kbExtractPointAnchors,normalizeKbEntities,mergeLatteParts,kbNormalizeImported,validateLatteKnowledgeBase,kbFactView,kbSourceText,kbProvenanceText,kbNormForMatch,kbDehyphNormForMatch,kbClassifyQuoteMiss,paParseTiers,paMergeTopics,kbForPriority,kbForAnki,ankiParseCards,ankiSourceSnapshot,ankiDedupeCards,ankiConditionTagCheck,nclexAdmitRecord,nclexAccumulate,nclexDropOptionRuns,nclexSplitStemOptions,nclexRepairOptions,nclexMergePairs,n2aSplitStemOptions,n2aSplitBlocks,n2aStripSources,n2aAnswerLabels,x2aBlocks,x2aParseExport,x2aResolveAnswer,x2aSplitRationale,x2aBuildCard,i2aAnswerLabels,i2aApplyAi,i2aBuildCards,i2aWorksheetMd,i2aConvert,ngAllocateBatch,ngFocusItems,ngFocusIndex,ngFocusMatch,ngFocusPlan,ngFocusSummary,runAnkiFocus,caseShuffleQuestion};'
   )(
     () => 'card-uid-1',
     class { parseFromString(xml) { return { getElementsByTagName: tag => tag === 'parsererror' && xml.includes('<parsererror') ? [{}] : [], getElementsByTagNameNS: () => [] }; } },
@@ -47,10 +47,17 @@ module.exports = function runV190PointAnchorTests(S, t) {
     s => String(s || '').toLowerCase().match(/[a-z]{3,}/g) || []
   );
 
-  // 1. Built-in harness executes and passes all internal assertions
-  const harnessOut = H.runPointAnchorHarness();
-  t('v19.0 built-in runPointAnchorHarness passes all internal assertions',
-    harnessOut === 'ALL HARNESS ASSERTIONS PASSED');
+  // 1. v21.6: runPointAnchorHarness assertions run in test suite without shipping dead harness code in HTML
+  const hParsed = H.parseAndNumberPoints('# Fluid Section\n2.1 Hypokalemia\n12-lead ECG changes');
+  const hAudit = H.auditKbFacts(hParsed, [
+    { fact: 'Duplicate tag test', pointAnchors: ['P1', 'P1'] },
+    { fact: 'Partial invalid tag test', pointAnchors: ['P1', 'P99'] },
+    { fact: 'Explicit NONE test', pointAnchors: ['NONE'] }
+  ]);
+  t('v19.0 point-anchor self-test assertions hold without shipping runPointAnchorHarness in HTML',
+    !S.includes('function runPointAnchorHarness') &&
+    hParsed.length === 2 && hParsed[0].text === 'Hypokalemia' && hParsed[1].text === '12-lead ECG changes' &&
+    hAudit.countsByPoint.P1 === 2 && hAudit.flaggedFacts.some(f => f.flagReason === 'INVALID_ID:P99'));
 
   // 2. parseAndNumberPoints heading filters & dotted number regex
   const parsed = H.parseAndNumberPoints([
@@ -77,14 +84,15 @@ module.exports = function runV190PointAnchorTests(S, t) {
       'P4: Hold digoxin if apical pulse < 60 bpm'
     ].join('\n'));
 
-  // 3. buildKbFactItemSchema dynamic enum with NONE escape hatch
+  // 3. buildKbFactItemSchema dynamic standard JSON Schema enum with NONE escape hatch
   const schema = H.buildKbFactItemSchema(parsed.slice(0, 2));
   t('buildKbFactItemSchema locks pointAnchors enum to exact Point IDs plus NONE',
-    schema.type === 'OBJECT' &&
-    schema.required.join(',') === 'fact,pointAnchors' &&
+    schema.type === 'object' &&
+    schema.required.join(',') === 'text,latteBucket,tier,pointAnchors' &&
     schema.properties.pointAnchors.minItems === 1 &&
     schema.properties.pointAnchors.items.enum.join(',') === 'P1,P2,NONE' &&
-    schema.properties.sourcePage.nullable === true);
+    Array.isArray(schema.properties.sourcePage.type) &&
+    schema.properties.sourcePage.type.join(',') === 'integer,null');
 
   // 4. auditKbFacts even-length median, deduplication, partial invalid array, and >2x median bleed detection
   const auditEven = H.auditKbFacts(parsed, [
@@ -427,7 +435,7 @@ module.exports = function runV190PointAnchorTests(S, t) {
     splitPrefaced[1] instanceof Map && splitPrefaced[1].get('A').includes('wrong') && splitPrefaced[1].get('B').includes('right') &&
     noAiCards.warnings[0].includes('AI returned no answer for it') &&
     noAiWs.md.includes('No answer in the images; AI returned no answer for it.') &&
-    S.includes("if(!window.Babel||!window.React||!window.ReactDOM||!window.marked||!window.DOMPurify||!window.pdfjsLib||!window.JSZip){bootFail('One or more required CDN scripts failed to load.');return;}") &&
+    S.includes("if(!window.Babel||!window.React||!window.ReactDOM||!window.marked||(!window.DOMPurify&&!window.__domPurifyReady)||!window.pdfjsLib||!window.JSZip){bootFail('One or more required CDN scripts failed to load.');return;}") &&
     S.includes("{count!=null&&count!==''&&count!==false&&<span className=\"results-count\">{count}</span>}") &&
     S.includes('txAbortRef.current?.abort();if(busy)abortRef.current?.abort();'));
 
@@ -463,7 +471,7 @@ module.exports = function runV190PointAnchorTests(S, t) {
     H._zipNormalizePath('ppt/presentation.xml', 'slides/bad%ZZ.xml') === 'ppt/slides/bad%ZZ.xml' &&
     unclosedBold === '**unclosed and closed bold' &&
     wordFollowedBold === '**span1**a and span2' &&
-    S.includes('const push=useCallback(entry=>setLogs(p=>cap>0?[...p.slice(-cap),entry].slice(-cap):[]),[cap]);') &&
+    S.includes('const push=useCallback(entry=>setLogs(p=>{if(!(cap>0))return [];if(cap===1)return [entry];if(p.length<cap)return [...p,entry];const next=p.slice(1-cap);next.push(entry);return next;}),[cap]);') &&
     S.includes("{n!=null&&n!==''&&n!==false&&<span className=\"sect-num\" aria-hidden=\"true\">{n}</span>}") &&
     S.includes("<summary>{summary}{note!=null&&note!==''&&note!==false&&<span className=\"disclose-note\">{note}</span>}</summary>") &&
     S.includes('const r=n2aPdfToWorksheetText(n2aPdfBlocks(await n2aReadPdfPages(f,ac.signal)),f.name);') &&

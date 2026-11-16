@@ -23,13 +23,12 @@
 const fs = require('fs');
 const path = require('path');
 const { resolveSuiteFile, extractPromptLiteral, sha256, parseMeasurementArgs,
-  resolveMeasurementProfile, measurementPlan, createMeasurementPacer, measurementOutputCap } = require('./tools/repo-checks');
+  resolveMeasurementProfile, measurementPlan, createMeasurementPacer, measurementOutputCap,
+  MEASUREMENT_SAFETY_SETTINGS, redactSecrets, cliRetryDelayMs } = require('./tools/repo-checks');
 
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
   '.webp': 'image/webp', '.heic': 'image/heic', '.heif': 'image/heif' };
-const SAFETY = ['HARM_CATEGORY_HARASSMENT', 'HARM_CATEGORY_HATE_SPEECH',
-  'HARM_CATEGORY_SEXUALLY_EXPLICIT', 'HARM_CATEGORY_DANGEROUS_CONTENT']
-  .map(category => ({ category, threshold: 'BLOCK_NONE' }));
+const SAFETY = MEASUREMENT_SAFETY_SETTINGS;
 const parseArgs = argv => parseMeasurementArgs(argv, 'davis');
 
 function bulletsOf(t) {
@@ -97,6 +96,7 @@ function createTranscriber(config, prompt, key, deps = {}) {
   const sleep = deps.sleep || (ms => new Promise(resolve => setTimeout(resolve, ms)));
   const rand = deps.random || Math.random;
   const pace = createMeasurementPacer(config.rpm, { now: deps.now || Date.now, sleep });
+  let storeUnsupported = false;
   return async function transcribe(imgPath, observation) {
     if (!config.live || config.dryRun) throw new Error('Live transcription requires --live and per-run human authorization');
     const mimeType = MIME[path.extname(imgPath).toLowerCase()];
@@ -107,19 +107,31 @@ function createTranscriber(config, prompt, key, deps = {}) {
     if (bytes.length > 15 * 1024 * 1024) throw new Error('Image too large for an inline request: ' + (bytes.length / 1048576).toFixed(1) + ' MB');
     const body = { contents: [{ parts: [{ inlineData: { mimeType, data: bytes.toString('base64') } }, { text: prompt }] }],
       generationConfig: { responseMimeType: 'application/json', maxOutputTokens: measurementOutputCap(config.model), thinkingConfig: { thinkingLevel: config.level } },
-      safetySettings: SAFETY };
+      safetySettings: SAFETY,
+      ...(storeUnsupported ? {} : { store: false }) };
     const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + config.model + ':generateContent';
-    let resp;
+    let resp, retriedStore = false;
     for (let attempt = 0; attempt < 4; attempt++) {
       await pace();
       observation.attempts++;
+      const signal = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(900000) : undefined;
       resp = await fetchFn(url, { method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body: JSON.stringify(body) });
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+        body: JSON.stringify(body),
+        ...(signal ? { signal } : {}) });
       if (resp.ok) break;
+      const errBody = typeof resp.json === 'function' ? await resp.json().catch(() => null) : null;
+      const errMsg = String((errBody && errBody.error && errBody.error.message) || '');
+      if (resp.status === 400 && body.store === false && !retriedStore && /\bstore\b/i.test(errMsg)) {
+        storeUnsupported = true;
+        retriedStore = true;
+        delete body.store;
+        attempt--;
+        continue;
+      }
       // Do not copy an upstream error body into a report: it can echo request data.
       if ((resp.status !== 429 && resp.status < 500) || attempt === 3) throw new Error('HTTP ' + resp.status);
-      const jitter = config.retryms > 0 ? Math.floor(rand() * Math.min(1000, config.retryms)) : 0;
-      await sleep(config.retryms * Math.pow(2, attempt) + jitter);
+      await sleep(cliRetryDelayMs(errBody, resp.headers, config.retryms, attempt, rand));
     }
     const response = await resp.json(), candidate = (response.candidates || [])[0] || {};
     observation.finishReason = candidate.finishReason || '';
@@ -190,16 +202,14 @@ async function main(argv = process.argv.slice(2), deps = {}) {
     const report = { at: new Date().toISOString(), model: config.model, level: config.level,
       runs: config.runs, suite: path.basename(suiteFile), plan, ...summary };
     // A locally thrown error may include the key; reports must never retain it.
-    const redact = text => (key && key.trim().length >= 8 ? String(text).split(key).join('[REDACTED]') : String(text));
-    const reportText = redact(JSON.stringify(report, null, 2));
-    writeFile(config.out, reportText, 'utf8');
+    const reportText = redactSecrets(JSON.stringify(report, null, 2), key);
+    writeFile(config.out, reportText, { encoding: 'utf8', mode: 0o600 });
     printSummary(JSON.parse(reportText), log);
     log('Full private report: ' + config.out + '; observed HTTP attempts: ' + summary.observedAttempts);
     return summary.exitCode;
   } catch (error) {
     const key = (deps.env || process.env).GEMINI_API_KEY || '';
-    const message = String(error.message || error);
-    errorLog(key && key.trim().length >= 8 ? message.split(key).join('[REDACTED]') : message);
+    errorLog(redactSecrets(error.message || error, key));
     return measuring ? 1 : 2;
   }
 }

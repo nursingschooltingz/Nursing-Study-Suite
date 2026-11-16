@@ -2,7 +2,7 @@
 
 module.exports=function productionAnkiPerformanceTests(S,t){
   const span=(start,end)=>{const a=S.indexOf(start),b=S.indexOf(end,a+start.length);if(a<0||b<0||S.indexOf(start,a+1)>=0||S.indexOf(end,b+1)>=0)throw Error('Production Anki performance anchors missing or ambiguous: '+start);return S.slice(a,b);};
-  const source=span('function ankiParseCards(raw','function AnkiStyleBadges');
+  const source=span('function ankiParseCards(raw','/* ── END ANKI PURE HELPERS ── */');
   const exports='ankiExactMergeKey,ankiExactDuplicateCount,ankiDedupeCards,ankiCreateStyleCache,ankiStyleWarnings,ankiReviewFilter,ankiRecallContext,ankiAuditReviewItems,ankiSelection,ankiExportText,ankiPageRows,ankiPageForNote,ankiTier';
   const compile=text=>new Function('uid',text+';return {'+exports+'};')(()=> 'synthetic');
   const H=compile(source);

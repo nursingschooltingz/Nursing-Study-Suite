@@ -17,7 +17,7 @@ module.exports=async function run(S,t){
   const {ngFactRow,ngBuildFactPool,ngAllocateBatch}=load(span('function ngFactRow(','// v17.3: this text was duplicated'),['ngFactRow','ngBuildFactPool','ngAllocateBatch'],{kbSourceText:R.kbSourceText});
   const A=load(span('function kbSourceText(f){','\n')+'\n'+span('function ankiConditionTagKey(','function ankiBatchSummary(')+span('function kbForNCLEX(','// ── KB source chunking'),['kbForNCLEX','kbUsableFactCount','kbForAnki'],{ngFactRow});
   const {ankiSourceSnapshot}=load(span('function ankiSourceSnapshot(','function ankiChunkFactIds('),['ankiSourceSnapshot']);
-  const {kbForPriority}=load(span('function kbForPriority(','function PriorityAnalyzer(){'),['kbForPriority'],{kbSourceText:R.kbSourceText,artifactSourceCurrent:()=>true});
+  const {kbForPriority}=load(span('function kbForPriority(','/* ── END PRIORITY PURE HELPERS ── */'),['kbForPriority'],{kbSourceText:R.kbSourceText,artifactSourceCurrent:()=>true});
   const {selectCaseFacts}=load(span('function selectCaseFacts(','// Sufficiency check'),['selectCaseFacts']);
   const {buildFactIndex}=load(span('function buildFactIndex(kb){','function findFactById('),['buildFactIndex'],{kbFactView:V.kbFactView});
   const prompts=load(span('const KB_EXTRACTION_PROMPT=','// Focus context for the Knowledge Base.'),['KB_EXTRACTION_PROMPT','KB_VERIFY_PROMPT']);
@@ -192,7 +192,7 @@ module.exports=async function run(S,t){
 
   // ── Step 3: shipped defaults ──
   {
-    const D=new Function(span('const KB_DEFAULT_CHUNK_CHARS=','\nfunction KnowledgeBaseBuilder(){')+';return {KB_DEFAULT_CHUNK_CHARS,KB_DEFAULT_AUDIT,KB_DEFAULT_OVERLAP};')();
+    const D=new Function(span('const KB_DEFAULT_CHUNK_CHARS=','\n/* ── END KB SLOT PURE HELPERS ── */')+';return {KB_DEFAULT_CHUNK_CHARS,KB_DEFAULT_AUDIT,KB_DEFAULT_OVERLAP};')();
     t('v18.4: the default chunk is 15,000 characters; the audit stays on and the overlap stays 1',D.KB_DEFAULT_CHUNK_CHARS===15000&&D.KB_DEFAULT_AUDIT===true&&D.KB_DEFAULT_OVERLAP===1);
     const builder=span('function KnowledgeBaseBuilder(){','\n// ──── TOOL: Priority Analyzer ────');
     t('v18.4: the builder starts from the constants and no literal 30000 remains in the Knowledge Base tab',

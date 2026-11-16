@@ -841,7 +841,7 @@ module.exports = async function runV202ReviewRemediationTests(S, t) {
       }
     );
     const { N2A_CARD_POLICY } = load(
-      span('const N2A_CARD_POLICY=', 'function NCLEXToAnki()'),
+      span('const N2A_CARD_POLICY=', '/* ── END NCLEX TO ANKI PURE HELPERS ── */'),
       ['N2A_CARD_POLICY']
     );
 

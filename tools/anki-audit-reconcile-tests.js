@@ -2,7 +2,7 @@
 
 function runAnkiAuditReconcileTests({S,t,section}){
   if(section)section('Anki whole-deck candidate reconciliation remains advisory');
-  const start='function ankiParseCards(raw',end='function AnkiStyleBadges',a=S.indexOf(start),b=S.indexOf(end,a+start.length);
+  const start='function ankiParseCards(raw',end='/* ── END ANKI PURE HELPERS ── */',a=S.indexOf(start),b=S.indexOf(end,a+start.length);
   if(a<0||b<0||S.indexOf(start,a+1)>=0||S.indexOf(end,b+1)>=0)throw Error('Anki reconciliation extraction anchors missing or ambiguous');
   const H=new Function('uid',S.slice(a,b)+';return {ankiReconciliationLiteral,ankiAuditReconciliation,ankiBroadTargetIssues,ankiRecallContext,ankiAuditReviewItems,ankiSelection,ankiExportText,ankiMakeReviewDecision,ankiReviewDecisionCurrent};')(()=> 'synthetic');
   const fact=(id,text,condition='Synthetic condition')=>({id,text,condition,tier:1,bucket:'Look',aliases:[]});

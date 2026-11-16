@@ -56,7 +56,7 @@ module.exports = async function productionReviewFollowupTests(S, t) {
 
   // ── 3/4. NCLEX option marks: Fahrenheit prose cannot break or extend a choice run ──
   const N = new Function(span('function nclexKey(', 'const NCLEX_OPTION_GAP=') +
-    span('const NCLEX_OPTION_GAP=', '// Page range picker sub-component') +
+    span('const NCLEX_OPTION_GAP=', '/* ── END NCLEX EXTRACTOR PURE HELPERS ── */') +
     ';return {nclexSplitStemOptions,nclexSplitByQNum,nclexPairQA,nclexAccumulate,nclexConditions,nclexPairsToText};')();
   const labels = text => N.nclexSplitStemOptions(text).options.map(o => o.label).join('');
   const FAHR_FIRST = 'Which value is abnormal?\nA. Temperature 101.2 F. and rising\nB. Heart rate 92\nC. Respirations 16\nD. BP 118/70';
@@ -199,13 +199,13 @@ module.exports = async function productionReviewFollowupTests(S, t) {
   t('cards: a non-array sections field keeps its original message', !(await tryAdmit({ title: 'Synthetic', sections: 'none' })).ok);
 
   const CARD = new Function('cardIsImage', 'cardFileId',
-    span('function createOperationSlot(){', 'function KnowledgeBaseBuilder(){') +
-    span('function cardKey(', '// Compact, inspectable fact rows') +
+    span('function createOperationSlot(){', '/* ── END KB SLOT PURE HELPERS ── */') +
+    span('function cardKey(', '/* ── END KB & CARD PURE HELPERS ── */') +
     ';return {cardMergeFaces,cardChunkBlockers,cardIdentityConflict,cardKey,cardPublishTranscript};')(() => true, f => f.name);
   const file = { name: 'synthetic-card.png' };
   const goodTranscript = { face: 'front', title: 'Synthetic', category: 'Synthetic', cardNumber: '1', sections: [], numerics: [], overallLegibility: 'clean' };
   const previous = { file: file.name, transcript: goodTranscript, runs: [{ kind: 'earlier run' }], agreement: null, comparisonIncomplete: false };
-  const transcribeSource = span('  const transcribeCards=async()=>{', '  // v15.14: tag each transcript');
+  const transcribeSource = span('  const transcribeCards=async()=>{', '\n  return transcribeCards();');
   const runTranscribe = async impl => {
     const state = { transcripts: { [file.name]: previous }, error: '', txAbortRef: { current: null } };
     const fn = new Function('files', 'cardIsImage', 'cfg', 'txAbortRef', 'setTxBusy', 'setTxErr', 'setTxReviewed', 'addLog', 'txRuns',
@@ -245,7 +245,7 @@ module.exports = async function productionReviewFollowupTests(S, t) {
   t('priority: both early returns clear the notices before reporting the error',
     /clearNotices\(\);setError\('Build the P-LATE Knowledge Base first\.'\)/.test(S) &&
     /clearNotices\(\);setError\('The current Knowledge Base filters contain no facts/.test(S));
-  const notice = new Function(span('function paResultNotice(', 'function PriorityAnalyzer(') + ';return paResultNotice;')();
+  const notice = new Function(span('function paResultNotice(', '/* ── END PRIORITY PURE HELPERS ── */') + ';return paResultNotice;')();
   t('priority: a cleared notice renders nothing while a real one still renders',
     notice({ source: null, activeKB: {}, harvest: null, meta: null, error: '', busy: false }) === '' &&
     notice({ source: null, activeKB: {}, harvest: { total: 3, successful: 2, failed: [{ chunk: 3 }], truncated: [] }, meta: null, error: '', busy: false }).includes('Missing source chunks: 3'));

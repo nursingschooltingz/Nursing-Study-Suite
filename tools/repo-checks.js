@@ -296,8 +296,54 @@ function parseCliArgs(argv, { flags = [], options = [] } = {}) {
   return { flags: seenFlags, values };
 }
 
+const MEASUREMENT_SAFETY_SETTINGS = Object.freeze([
+  'HARM_CATEGORY_HARASSMENT',
+  'HARM_CATEGORY_HATE_SPEECH',
+  'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+  'HARM_CATEGORY_DANGEROUS_CONTENT',
+  'HARM_CATEGORY_CIVIC_INTEGRITY',
+].map(category => Object.freeze({ category, threshold: 'BLOCK_NONE' })));
+
+function redactSecrets(text, apiKey) {
+  let out = String(text == null ? '' : text);
+  const k = typeof apiKey === 'string' ? apiKey.trim() : '';
+  if (k.length >= 8) {
+    out = out.split(k).join('[REDACTED]');
+    const enc = encodeURIComponent(k);
+    if (enc !== k) out = out.split(enc).join('[REDACTED]');
+  }
+  return out.replace(/\bAIza[0-9A-Za-z_-]{20,60}\b/g, '[REDACTED_GEMINI_KEY]');
+}
+
+function cliRetryDelayMs(errBody, headers, baseMs, attempt, rand = Math.random) {
+  const jitter = baseMs > 0 ? Math.floor(rand() * Math.min(1000, baseMs)) : 0;
+  const exp = baseMs * Math.pow(2, attempt) + jitter;
+  let serverMs = 0;
+  const details = errBody && errBody.error && Array.isArray(errBody.error.details) ? errBody.error.details : [];
+  for (const d of details) {
+    if (d && typeof d.retryDelay === 'string' && /^\d+(?:\.\d{1,9})?s$/.test(d.retryDelay)) {
+      serverMs = Math.max(serverMs, Math.ceil(Number(d.retryDelay.slice(0, -1)) * 1000));
+    }
+  }
+  try {
+    const raw = headers && typeof headers.get === 'function'
+      ? headers.get('retry-after')
+      : (headers && (headers['retry-after'] ?? headers['Retry-After']));
+    const val = String(raw ?? '').trim();
+    if (/^\d+(?:\.\d+)?$/.test(val)) serverMs = Math.max(serverMs, Math.ceil(Number(val) * 1000));
+    else if (val) {
+      const when = Date.parse(val);
+      if (Number.isFinite(when)) serverMs = Math.max(serverMs, Math.max(0, when - Date.now()));
+    }
+  } catch {}
+  return Math.min(600000, Math.max(exp, Number.isFinite(serverMs) ? serverMs : 0));
+}
+
 module.exports = {
+  MEASUREMENT_SAFETY_SETTINGS,
   measurementOutputCap,
+  redactSecrets,
+  cliRetryDelayMs,
   DOCUMENTED_PROMPTS,
   FROZEN_PROMPTS,
   NAME_CLASH_RE,

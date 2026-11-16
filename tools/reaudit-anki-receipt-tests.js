@@ -11,7 +11,7 @@ function spanFrom(text,start,end){
   const a=text.indexOf(start),b=text.indexOf(end,a+start.length);
   assert(b>a,'ordered extraction boundaries');return text.slice(a,b);
 }
-const code=spanFrom(S,'function ankiParseCards(raw','function AnkiStyleBadges');
+const code=spanFrom(S,'function ankiParseCards(raw','/* ── END ANKI PURE HELPERS ── */');
 const names=['ankiSourceSnapshot','ankiParseCards','attachCoverageToCards','ankiDedupeCards','ankiNormalizeConditionTags','lintAnkiCard','ankiPreviewText','parseAnkiClozes','ankiExportText','ankiAuditGroups','ankiAuditPacket','ankiParseSourceAuditV4','ankiMergeSourceAuditResult','ankiAuditReviewItems','ankiRecallContext','ankiRecallIssues','ankiReceiptRecallIssues','ankiSourceLinkStatus','ankiNumericAudit','ankiMakeReviewDecision','ankiReviewDecisionCurrent','ankiReviewDecisionEvidence','ankiSourceAuditEvidence','ankiSourceAuditCurrent','ankiSourceAuditPending','ankiSelection'];
 function load(text=code){let next=0;return new Function('uid','globalThis','TextEncoder',text+';return {'+names.join(',')+'};')(()=> 'reaudit-note-'+(++next),{crypto:crypto.webcrypto},TextEncoder);}
 const H=load(),copy=x=>JSON.parse(JSON.stringify(x)),results=[],traces=[],mutations=[];

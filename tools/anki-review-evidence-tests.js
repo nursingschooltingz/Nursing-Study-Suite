@@ -5,7 +5,7 @@
 async function runAnkiReviewEvidenceTests({ S, t, section }) {
   if (section) section('Anki source-link edits and review evidence');
   const { createHash, webcrypto } = require('crypto');
-  const start = 'function ankiParseCards(raw', end = 'function AnkiStyleBadges';
+  const start = 'function ankiParseCards(raw', end = '/* ── END ANKI PURE HELPERS ── */';
   const a = S.indexOf(start), b = S.indexOf(end, a + start.length);
   if (a < 0 || b <= a || S.indexOf(start, a + start.length) >= 0) throw new Error('Anki evidence helper extraction anchors moved or became ambiguous');
   const helperSource = S.slice(a, b);
@@ -59,7 +59,7 @@ async function runAnkiReviewEvidenceTests({ S, t, section }) {
   const run = { cards, batch, groups, results, responses, model: 'synthetic-auditor', thinkingLevel: 'medium', tier: 'all', status: 'complete', message: '', preparedAt: '2026-01-01T02:00:00Z', startedAt: '2026-01-01T02:01:00Z', finishedAt: '2026-01-01T02:02:00Z', builderSource: 'function syntheticAuditBuilder(){return "receipt contract";}', apiKey: 'RUN_CREDENTIAL_SENTINEL', ctl: new AbortController() };
   const inputs = { current: true, cards, batch, tier: 'all' }, exportedAt = '2026-01-01T03:00:00Z';
   const evidence = await H.ankiSourceAuditEvidence(run, inputs, exportedAt);
-  t('complete current evidence has an explicit schema, timestamps and truthful completed counts', evidence.metadata.schemaVersion === 4 && evidence.metadata.suiteVersion === '21.5' && evidence.metadata.exportedAt === exportedAt && evidence.metadata.preparedAt === run.preparedAt && evidence.metadata.finishedAt === run.finishedAt && evidence.metadata.checkComplete && evidence.metadata.checkedGroups === groups.length && evidence.metadata.totalGroups === groups.length);
+  t('complete current evidence has an explicit schema, timestamps and truthful completed counts', evidence.metadata.schemaVersion === 4 && evidence.metadata.suiteVersion === '21.6' && evidence.metadata.exportedAt === exportedAt && evidence.metadata.preparedAt === run.preparedAt && evidence.metadata.finishedAt === run.finishedAt && evidence.metadata.checkComplete && evidence.metadata.checkedGroups === groups.length && evidence.metadata.totalGroups === groups.length);
   t('generation and auditor identities and thinking levels remain separate', evidence.metadata.generation.model === 'synthetic-generator' && evidence.metadata.generation.thinkingLevel === 'low' && evidence.metadata.audit.model === 'synthetic-auditor' && evidence.metadata.audit.thinkingLevel === 'medium');
   t('audit builder hash identifies the captured builder bytes', evidence.metadata.audit.builderSha256 === sha(run.builderSource));
   t('evidence retains grouped receipt results, raw replies and explicit user edit history', evidence.results[0].factReviews.length > 0 && evidence.results[0].noteReviews.length === 1 && evidence.responses[0].raw === responses[0].raw && evidence.noteEdits[0].sourceLinkEdits.length === 1 && evidence.noteEdits[0].conditionTagNormalization.originalTags.includes('SyntheticAlias'));

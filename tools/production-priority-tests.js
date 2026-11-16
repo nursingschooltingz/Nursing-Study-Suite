@@ -5,8 +5,8 @@ module.exports=async function productionPriorityTests(S,t){
   const span=(a,b)=>{assert.equal(S.split(a).length,2,'Unique extraction start '+a);const i=S.indexOf(a),j=S.indexOf(b,i+a.length);assert(j>i,'Missing extraction end '+b);return S.slice(i,j);};
   const createOperationSlot=new Function(span('function createOperationSlot(){','function cardCurrentEntries(')+';return createOperationSlot;')();
   const sourceHelpers=new Function('buildFactIndex',span('function artifactSourceSnapshot(','function artifactExportNotice(')+';return {artifactSourceSnapshot,artifactSourceCurrent};')(()=>new Map());
-  const P=new Function('kbSourceText','artifactSourceCurrent',span('function kbForPriority(','function PriorityAnalyzer(){')+';return {kbForPriority,paResultNotice};')(()=>'',sourceHelpers.artifactSourceCurrent);
-  const runSource=span('  async function runAnalysis(){','\n  const resultNotice=');
+  const P=new Function('kbSourceText','artifactSourceCurrent',span('function kbForPriority(','/* ── END PRIORITY PURE HELPERS ── */')+';return {kbForPriority,paResultNotice};')(()=>'',sourceHelpers.artifactSourceCurrent);
+  const runSource=span('  async function runAnalysis(){','\n  return runAnalysis();');
   // v18.4: the harvest reads kbFactView(source.kb); the shipped view is compiled in so entry facts reach the packet.
   const {kbFactView}=new Function(span('const KB_ENTITY_KINDS=','\nfunction kbBucketFacts(')+';return {kbFactView};')();
   const {geminiHaltsBatch}=new Function(span('function geminiHaltsBatch(','\nasync function callGemini(')+';return {geminiHaltsBatch};')(); // v17.4: the harvest catch consults the shared halting rule

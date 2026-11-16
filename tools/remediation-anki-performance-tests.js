@@ -1,7 +1,7 @@
 'use strict';
 module.exports=function ankiPerformanceTests(S,t){
   const span=(a,b)=>{const start=S.indexOf(a),end=S.indexOf(b,start+a.length);if(start<0||end<0)throw Error('Missing Anki performance extraction anchor: '+a);return S.slice(start,end);};
-  const H=new Function('uid',span('function ankiParseCards(raw','function AnkiStyleBadges')+';return {ankiCurrentStatistics,ankiSourceSnapshot,ankiBatchSummary,ankiBatchDiagnostics,ankiNumericAudit};')(()=> 'synthetic');
+  const H=new Function('uid',span('function ankiParseCards(raw','/* ── END ANKI PURE HELPERS ── */')+';return {ankiCurrentStatistics,ankiSourceSnapshot,ankiBatchSummary,ankiBatchDiagnostics,ankiNumericAudit};')(()=> 'synthetic');
   const kb={conditions:[{name:'Synthetic condition',facts:[{id:'fact-1',text:'Marker is present.',sourceQuote:'Marker is present.',tier:1,latteBucket:'Look',sources:[]}]}]};
   const card=(id,text,tags='Tier::1')=>({id,text,extra:'',tags,keep:true,pipeCount:2,factIds:['fact-1']});
   const cards=[card('one','[Synthetic] Marker: {{c1::present}}'),card('two','[Synthetic] Pattern: {{c1::first}} {{c2::second}}','Tier::2')];
@@ -33,5 +33,5 @@ module.exports=function ankiPerformanceTests(S,t){
   t('Anki retains collision references in all three note views',S.split('<AnkiCollisionReferences groups={collisionsByNote.get(c.id)}/>').length===4);
   t('Anki collision UI accepts absent groups',S.includes('function AnkiCollisionWarnings({groups=[],current})')&&S.includes('function AnkiCollisionReferences({groups=[]})'));
   t('Anki original diagnostics memo is independent of card edits',S.includes('const originalDiagnostics=useMemo(()=>ankiBatchDiagnostics(batch?.rawCards||[],batch,current),[batch,current]);'));
-  t('Anki performance extraction reaches live source-pointer helpers',span('function ankiParseCards(raw','function AnkiStyleBadges').includes('function ankiSourcePointers(card,batch,current)'));
+  t('Anki performance extraction reaches live source-pointer helpers',span('function ankiParseCards(raw','/* ── END ANKI PURE HELPERS ── */').includes('function ankiSourcePointers(card,batch,current)'));
 };

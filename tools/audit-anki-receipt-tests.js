@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const {resolveSuiteFile} = require('./repo-checks');
 const suiteFile = resolveSuiteFile();
 const S = fs.readFileSync(suiteFile, 'utf8');
-const start = 'function ankiParseCards(raw', end = 'function AnkiStyleBadges';
+const start = 'function ankiParseCards(raw', end = '/* ── END ANKI PURE HELPERS ── */';
 const a = S.indexOf(start), b = S.indexOf(end, a);
 assert(a >= 0 && b > a && S.indexOf(start, a + 1) < 0 && S.indexOf(end, b + 1) < 0);
 const source = S.slice(a, b);

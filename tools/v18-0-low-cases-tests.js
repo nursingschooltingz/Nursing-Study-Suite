@@ -5,7 +5,7 @@
 module.exports=async function run(S,t){
   const span=(a,b)=>{const x=S.indexOf(a),y=S.indexOf(b,x+a.length);if(x<0||y<0||S.indexOf(a,x+a.length)>=0)throw Error('Missing or ambiguous low-cases anchor '+a);return S.slice(x,y);};
   const W=new Function('neiaTerminologyScan','itemHeuristics',span('function ngSplitParts(','function ngRenumber(')+';return {ngCanonicalOrderingAnswers,ngSplitParts,validateNCLEXWorksheet};')(()=>{},()=>{});
-  const C=new Function(span('const CASE_CLINICAL_TOKEN_RE=','function CaseStudyGenerator()')+';return {caseParseThresholds};')();
+  const C=new Function(span('const CASE_CLINICAL_TOKEN_RE=','/* ── END CASE STUDY PURE HELPERS ── */')+';return {caseParseThresholds};')();
   const selectCaseFacts=new Function(span('function selectCaseFacts(','// Sufficiency check')+';return selectCaseFacts;')();
   const errors=issues=>issues.filter(i=>i.sev==='error').map(i=>i.msg);
   const why=(label,ok)=>'     Why '+label+' is '+(ok?'correct':'wrong')+': reason. (Source: C1)';
@@ -41,8 +41,8 @@ module.exports=async function run(S,t){
     const skip=S.indexOf('if(repairable.length&&auditInterrupted)owned_log(\'Repairs skipped'),repair=S.indexOf("owned_setAuditPhase('repair');");
     t('case repairs are skipped when the audit stopped for quota',skip>0&&repair>skip&&S.slice(skip,repair).includes('else if(repairable.length){'));
   }
-  // v18.0 (review L41): audit error details are redacted before display and export.
-  t('case and worksheet audit error details remove the API key',S.split("detail:cfg.apiKey?auditError.split(cfg.apiKey).join('[redacted]'):auditError,").length===3&&!S.includes("detail:e.message||String(e),warns:[]"));
+  // v18.0 (review L41) + v21.6: audit error details scrub echoed keys and AIza tokens via redactApiSecrets before display and export.
+  t('case and worksheet audit error details remove the API key',S.split("detail:typeof redactApiSecrets==='function'?redactApiSecrets(auditError,cfg.apiKey):(cfg.apiKey?auditError.split(cfg.apiKey).join('[redacted]'):auditError),").length===3&&!S.includes("detail:e.message||String(e),warns:[]"));
   // v18.0 (review L42): the Calculation top-up adds numeric facts that are not already selected (v21.0 Look cap = 12).
   {
     const facts=n=>Array.from({length:n},(_,i)=>({id:'f'+i,tier:1,latteBucket:'Look',text:'Synthetic value '+i+' mg'}));

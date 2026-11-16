@@ -1,6 +1,6 @@
 'use strict';
 async function runTests(S,t){
-  const a=S.indexOf('function createOperationSlot(){'),b=S.indexOf('function KnowledgeBaseBuilder(){',a);
+  const a=S.indexOf('function createOperationSlot(){'),b=S.indexOf('/* ── END KB SLOT PURE HELPERS ── */',a);
   if(a<0||b<0)throw Error('Operation helper anchors missing');
   const id=f=>f.name+':'+f.size+':'+f.lastModified;
   const H=new Function('cardIsImage','cardFileId',S.slice(a,b)+';return {createOperationSlot,cardCurrentEntries,cardPublishTranscript,cardIdentityConflict};')(f=>/\.png$/.test(f.name),id);

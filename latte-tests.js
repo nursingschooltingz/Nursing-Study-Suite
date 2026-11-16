@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 4070;
+const EXPECTED_ASSERTIONS = 4079;
 
 let file;
 try {
@@ -81,8 +81,7 @@ const buildProv = new Function('parsed', 'cited', 'caseId', 'title', provSpan);
 // extracted as its own span rather than folded into clusterA.
 const AUDIT = new Function('CASE_QUESTION_RULES', 'caseRenderFactPacket',
   spanFrom('function caseToMarkdown(', '\n  return L.join(\'\\n\');\n}') +
-  spanFrom('function caseIsGateEligible(', 'function CaseStudyGenerator()')
-    .replace(/function CaseStudyGenerator\(\)$/, '') +
+  spanFrom('function caseIsGateEligible(', '/* ── END CASE STUDY PURE HELPERS ── */') +
   ';return {caseToMarkdown,caseIsGateEligible,caseAuditPayload,itemBuildAuditPrompt,' +
   'itemParseAuditVerdict,itemAuditIsAnswerAccuracy,itemRunPool,caseGateItems,itemAuditSummary,' +
   'caseBuildRepairPrompt};'
@@ -2200,8 +2199,7 @@ section('v15.16 — Anki preview and style checks');
 {
   // Extract through the LAST pure helper; exercise the filter below so a shortened
   // extraction cannot silently omit its implementation.
-  const source=spanFrom('function parseAnkiClozes(value)', 'function AnkiStyleBadges');
-  const helpers=source.slice(0,source.lastIndexOf('function AnkiStyleBadges'));
+  const helpers=spanFrom('function parseAnkiClozes(value)', '/* ── END ANKI PURE HELPERS ── */');
   const A=new Function(helpers+';return {ankiPreviewText,ankiStyleWarnings,ankiReviewFilter,lintAnkiCard};')();
   const note=(text,id='n1',tier=1)=>({id,text,extra:'Source-stated explanation',tags:'Nursing::LATTE::Look Condition::Example Tier::'+tier,pipeCount:2,keep:true,factIds:['fact-1']});
   const codes=c=>A.ankiStyleWarnings(c).map(x=>x.code);
@@ -2283,8 +2281,8 @@ function ankiSyntheticFixture(){
   const ledgers=[{chunk:1,text:'fact-1 -> line #1\nfact-1 -> line #2\nfact-2 -> line #2\nfact-2 -> line #3\nfact-3 -> line #0\nfact-999 -> line #1\nfact-5 -> line #3\nfact-4 -> line #99\nfact-4 -> nowhere'}, {chunk:2,text:'fact-5 -> line #1'}];
   return {kb,cards,chunkIds,ledgers,note};
 }
-const ankiHelperSource=spanFrom('function ankiParseCards(raw','function AnkiStyleBadges');
-const ANKI=new Function('uid',ankiHelperSource.slice(0,ankiHelperSource.lastIndexOf('function AnkiStyleBadges'))+';return {ankiParseCards,parseKBCoverage,ankiSourceSnapshot,ankiChunkFactIds,attachCoverageToCards,ankiDedupeCards,ankiRunIsCurrent,ankiBatchSummary,ankiSelection,ankiReviewFilter,ankiPreviewText,ankiNumericTokens,ankiNumericAudit,ankiCollisionGroups,ankiBatchDiagnostics,ankiSourcePointers,ankiExportText,ankiRunEvidence,lintAnkiCard,ankiStyleWarnings,parseAnkiClozes};')(()=> 'synthetic-'+Math.random());
+const ankiHelperSource=spanFrom('function ankiParseCards(raw','/* ── END ANKI PURE HELPERS ── */');
+const ANKI=new Function('uid',ankiHelperSource+';return {ankiParseCards,parseKBCoverage,ankiSourceSnapshot,ankiChunkFactIds,attachCoverageToCards,ankiDedupeCards,ankiRunIsCurrent,ankiBatchSummary,ankiSelection,ankiReviewFilter,ankiPreviewText,ankiNumericTokens,ankiNumericAudit,ankiCollisionGroups,ankiBatchDiagnostics,ankiSourcePointers,ankiExportText,ankiRunEvidence,lintAnkiCard,ankiStyleWarnings,parseAnkiClozes};')(()=> 'synthetic-'+Math.random());
 section('v15.17 — batch provenance and live counts');
 {
   const F=ankiSyntheticFixture(),snapshot=ANKI.ankiSourceSnapshot(F.kb),original=JSON.stringify(F.kb);
@@ -2484,8 +2482,8 @@ section('generation input pins and bounded pilot');
 /* ── v15.17: shared flat cloze parser and live eligibility ── */
 section('v15.17 — flat cloze structure');
 {
-  const source=spanFrom('function parseAnkiClozes(value)','function AnkiStyleBadges');
-  const A=new Function(source.slice(0,source.lastIndexOf('function AnkiStyleBadges'))+';return {parseAnkiClozes,ankiPreviewText,ankiSelection,lintAnkiCard,ankiReviewFilter};')();
+  const source=spanFrom('function parseAnkiClozes(value)','/* ── END ANKI PURE HELPERS ── */');
+  const A=new Function(source+';return {parseAnkiClozes,ankiPreviewText,ankiSelection,lintAnkiCard,ankiReviewFilter};')();
   const note=text=>({id:'synthetic-1',text,extra:'',tags:'Tier::1',pipeCount:2,keep:true});
   const p=A.parseAnkiClozes('a {{C2::alpha::hint}} + {{c2::beta}}');
   t('flat spans retain offsets, answers, hints and numeric indices',p.spans.length===2&&p.spans[0].start===2&&p.spans[0].end===21&&p.spans[0].answer==='alpha'&&p.spans[0].hint==='hint'&&p.indices.join()==='2');
@@ -2570,7 +2568,7 @@ section('v15.14 — tier 3');
   // v17.3: one useCappedLog hook (definition plus five tools) replaced the six copies.
   // v17.9: the NCLEX to Anki tab's image log is the seventh use of the same hook.
   // v19.2: the Import to Gizmo tab's AI chunk log is the eighth use of the same hook.
-  t('all seven tool logs and the hook definition are capped', S.split('useCappedLog(').length - 1 === 8 && S.split('p.slice(-cap)').length - 1 === 1 && !S.includes('p.slice(-200)'));
+  t('all seven tool logs and the hook definition are capped', S.split('useCappedLog(').length - 1 === 8 && S.split('p.slice(1-cap)').length - 1 === 1 && !S.includes('p.slice(-200)'));
   // T3.13i — ten positional parameters, one of them inert since v15.
   t('callGemini takes an options object', S.includes('async function callGemini(apiKey,model,parts,opts={}){'));
   // v17.9: the NCLEX to Anki image reader adds one options-object call site (13 -> 14).
@@ -2945,6 +2943,9 @@ section('v15.14 — clamps, backoff, storage');
 
   section('v21.3 Textbook PDF Table of Contents (TOC) Inspector & Section Slicer (KnowledgeBaseBuilder + tools/pdf-toc-slice.js)');
   await require('./tools/pdf-toc-slicer-tests')(S,t);
+
+  section('v21.6 Production code-review remediation Steps 1–9 (Security, Privacy, Performance, Sub-500KB JSX Split, & Render Smoke)');
+  await require('./tools/v21-6-review-remediation-tests')(S,t);
 
   console.log('\n════════════════════════════');
   const total = pass + fail;

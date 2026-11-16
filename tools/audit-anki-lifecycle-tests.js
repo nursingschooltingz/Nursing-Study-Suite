@@ -11,7 +11,7 @@ const {validReceipt}=require('./fixtures/anki-audit-response');
 const root=path.resolve(__dirname,'..'),file=resolveSuiteFile({rootDir:root});
 const S=fs.readFileSync(file,'utf8');
 function span(a,b){const i=S.indexOf(a),j=S.indexOf(b,i+a.length);assert(i>=0&&j>i,'live extraction anchors: '+a);assert.equal(S.indexOf(a,i+a.length),-1,'unique start anchor: '+a);return S.slice(i,j);}
-const helperSource=span('function ankiParseCards(raw','function AnkiStyleBadges');
+const helperSource=span('function ankiParseCards(raw','/* ── END ANKI PURE HELPERS ── */');
 const setup=span('const ANKI_MASTER_PROMPT=', 'function splitOversizedConditionBlock')+
   span('function splitOversizedConditionBlock','function ankiParseCards(raw')+
   span('function validateLatteKnowledgeBase(kb){','function kbBucketFacts')+

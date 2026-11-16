@@ -76,7 +76,7 @@ async function run(S,t){
   m=merge([P(1,'Q one')],[P(1,'Q one restated slightly','A')]);
   t('R03: a paraphrase that shares its opening is not a collision',m.collisions===0&&m.filled===1);
   t('R03: empty and malformed inputs are safe',merge([],[]).pairs.length===0&&merge(null,undefined).pairs.length===0&&merge([P(1,'Q')],[null,{number:2,question:'  '}]).pairs.length===1);
-  const split=span(S,'  async function runSplit(file,existingQ,signal,track){','\n  const run=useCallback(async()=>{');
+  const split=span(S,'  async function runSplit(file,existingQ,signal,track){','\n  return runSplit(_file,_existingQ,_signal,_track);');
   t('R03: runSplit merges through nclexMergePairs and no longer replaces the regex pairing',split.includes('const merged=nclexMergePairs(pairs,aiResult);pairs=merged.pairs;')&&!split.includes('better than regex')&&!split.includes('pairs=aiResult;'));
 
   /* ── R04: one halting rule for every batch scheduler ── */
@@ -88,9 +88,9 @@ async function run(S,t){
   t('R04: every batch scheduler uses the one halting rule',count(S,'if(geminiHaltsBatch(e))throw e;')===5&&count(S,'geminiHaltsBatch(err)')===2&&count(S,'if(geminiHaltsBatch(err))throw new Error(\'Synthesis stopped at part ')===1&&count(S,'if(e.isFatal&&e.status)throw e;')===0);
   const kbBuild=span(S,'      const processJob=async(job,laneSignal=controller.signal)=>{','      // v17.3: chunk order, not completion order, decides fact numbering and diagnostics order.');
   t('R04: the Knowledge Base build stops scheduling and reports what was never sent',kbBuild.includes('if(geminiHaltsBatch(e))throw e;')&&kbBuild.includes('try{await kbRunLanes(queue,laneCount,processJob,controller.signal);}')&&kbBuild.includes('chunk(s) were not sent. '));
-  const priority=span(S,'function PriorityAnalyzer(){','// ──── TOOL: Anki Generator ────');
+  const priority=span(S,'function paRunAnalysisWithEnv(','\n  return runAnalysis();\n}')+span(S,'function PriorityAnalyzer(){','// ──── TOOL: Anki Generator ────');
   t('R04: the Priority harvest stops instead of harvesting into a closed quota window',priority.includes('if(geminiHaltsBatch(err)){publishHarvest();throw new Error(`Harvest stopped at chunk ${i+1} of ${total}; the remaining chunks were not sent. `'));
-  t('R04: the NCLEX generator halts on a deferred retry as well as a permanent failure',span(S,'function NCLEXGenerator(){','function CaseStudyGenerator(){').includes('if(geminiHaltsBatch(e))throw e;'));
+  t('R04: the NCLEX generator halts on a deferred retry as well as a permanent failure',span(S,'async function ngRunGeneratorWithEnv(','\n}\n\n// v21.6: lifted pure Gizmo').includes('if(geminiHaltsBatch(e))throw e;'));
 
   /* ── R04/R05/R06 in the shipped inline runner ── */
   const NX=new Function(span(S,'function nclexKey(','const NCLEX_OPTION_GAP=')+';return {nclexKey,nclexAccumulate,nclexAdmitRecord,nclexNewTrack,nclexRunSummary,nclexSummaryLine};')();
@@ -133,7 +133,7 @@ async function run(S,t){
   t('R05: a mixed batch keeps the valid siblings, deduplicates and counts the malformed ones',kept.length===1&&kept[0].question==='Good one'&&track5.malformed===4&&track5.samples[0]==='{"question":{"bad":1}}'&&track5.questions===1);
   t('R05: admitted records always satisfy the disease filter and the card renderer',kept.every(q=>typeof q.question==='string'&&q.question.toLowerCase().length>0&&Array.isArray(q.diseases_conditions)));
   t('R05: accumulation without a tracker keeps its old signature',NX.nclexAccumulate(new Set(),[],[{question:'Same'},{question:'Same'},{question:{bad:true}}]).length===1);
-  const repair=new Function(span(S,'function nclexKey(','const NCLEX_OPTION_GAP=')+span(S,'const NCLEX_OPTION_GAP=','// Page range picker sub-component')+';return nclexRepairOptions;')();
+  const repair=new Function(span(S,'function nclexKey(','const NCLEX_OPTION_GAP=')+span(S,'const NCLEX_OPTION_GAP=','/* ── END NCLEX EXTRACTOR PURE HELPERS ── */')+';return nclexRepairOptions;')();
   t('R05: option repair leaves a non-string question alone instead of throwing',(()=>{const item={question:{bad:1},question_number:1};try{return repair(item,'1. Q\nA. x\nB. y')===item;}catch(e){return false;}})());
 
   /* ── R06: run summary statuses ── */
@@ -146,7 +146,7 @@ async function run(S,t){
   t('R06: a halted run is stopped and only the export line carries the provider reason',(()=>{const s=sum({attempted:2,succeeded:1,failed:[],stopped:'The provider requested a wait of 120 seconds.'});return s.status==='stopped'&&s.exportLine.includes('Reason: The provider requested a wait of 120 seconds.')&&!s.detail.includes('Reason:');})());
   t('R06: malformed records and notes are reported',(()=>{const s=sum({attempted:1,succeeded:1,failed:[],malformed:2,notes:['AI pairing failed: synthetic']});return s.detail.includes('2 malformed records skipped')&&s.detail.includes('AI pairing failed: synthetic');})());
   t('R06: no request at all is "Nothing extracted"',sum(NX.nclexNewTrack()).status==='empty'&&NX.nclexSummaryLine(sum(NX.nclexNewTrack())).startsWith('Extraction status: Nothing extracted')&&NX.nclexSummaryLine(null)==='');
-  const extractor=span(S,'function NCLEXExtractor(){','// ──── TOOL: NCLEX Question Generator ────');
+  const extractor=span(S,'function nclexRunSplitWithEnv(','\n  return runSplit(_file,_existingQ,_signal,_track);\n}')+span(S,'function NCLEXExtractor(){','// ──── TOOL: NCLEX Question Generator ────');
   t('R06: the results view and both export builders carry the run summary',extractor.includes("{runSummary&&runSummary.status!=='complete'&&!isProcessing&&<div")&&count(extractor,'nclexSummaryLine(runSummary)')===2&&extractor.includes("if(e.name==='AbortError'){track.cancelled=true;setRunSummary(nclexRunSummary(track));")&&extractor.includes('track.stopped=e.message;setRunSummary(nclexRunSummary(track));'));
   t('R06: split mode counts batches and notes a pairing failure or an empty page range',extractor.includes('track.failed.push(`Batch ${i+1}`)')&&extractor.includes("track.notes.push('AI pairing failed: '+e.message)")&&extractor.includes("track.notes.push('no numbered questions were detected in the page ranges')"));
 

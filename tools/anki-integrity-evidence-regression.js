@@ -3,7 +3,7 @@
 async function runAnkiIntegrityEvidenceTests({S,t,section}){
   if(section)section('Anki integrity: downloadable provenance and evidence limits');
   const span=(a,b)=>{if(S.split(a).length!==2||S.split(b).length!==2)throw Error('Evidence extraction anchors moved');const i=S.indexOf(a),j=S.indexOf(b,i+a.length);if(j<=i)throw Error('Evidence extraction tail moved');return S.slice(i,j);};
-  const source=span('function ankiParseCards(raw','function AnkiStyleBadges');let seq=0;
+  const source=span('function ankiParseCards(raw','/* ── END ANKI PURE HELPERS ── */');let seq=0;
   const H=new Function('uid','globalThis','TextEncoder',source+';return {ankiSourceSnapshot,ankiParseCards,attachCoverageToCards,ankiNormalizeConditionTags,ankiDedupeCards,ankiNoteProvenance,ankiSourceAuditEvidence,ankiNumericAudit,ankiBatchDiagnostics,ankiExportText,ankiReviewDecisionEvidence};')(()=> 'evidence-'+(++seq),{crypto:require('crypto').webcrypto},TextEncoder);
   const kb={conditions:[{name:'Alpha Group',aliases:['AG'],facts:[{id:'fact-1',text:'Use the blue marker.',latteBucket:'Assess',tier:1,sources:[{filename:'synthetic.pdf',location:'page 1'}]}]}]},snapshot=H.ankiSourceSnapshot(kb);
   const raw='```text\nUse {{c1::blue}}.|Supplied context.|Condition::AG Tier::1\nUse {{c1::blue}}.|Supplied context.|Condition::AlphaGroup Tier::1\n```\n```text\nfact-1 -> line #1\nfact-1 -> line #2\n```';

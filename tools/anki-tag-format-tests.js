@@ -10,7 +10,7 @@ function runAnkiTagFormatTests({S,t,section}){
     return S.slice(a,b);
   };
   let ids=0;
-  const source=extract('function ankiParseCards(raw','function AnkiStyleBadges');
+  const source=extract('function ankiParseCards(raw','/* ── END ANKI PURE HELPERS ── */');
   const H=new Function('uid',source+';return {ankiParseCards,ankiTagFormatIssues,lintAnkiCard,LINT_LABEL,ankiSelection,ankiExportText,ankiDedupeCards,ankiNormalizeConditionTags,ankiConditionTagCheck,ankiSourceSnapshot,ankiStyleWarnings,ankiReviewFilter,ankiAuditGroups,ankiAuditPacket};')(()=> 'synthetic-tag-'+(++ids));
   const tags='Nursing::LATTE::BriefPatho Condition::PanicDisorder Tier::1';
   const row=tagText=>'[Synthetic] Finding: {{c1::answer}}.||'+tagText;

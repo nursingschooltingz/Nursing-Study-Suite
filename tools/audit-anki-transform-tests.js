@@ -11,7 +11,7 @@ const root = path.resolve(__dirname, '..');
 const file = resolveSuiteFile({ rootDir: root });
 const html = fs.readFileSync(file, 'utf8');
 const first = 'function ankiParseCards(raw';
-const last = 'function AnkiStyleBadges';
+const last = '/* ── END ANKI PURE HELPERS ── */';
 assert.equal(countExact(html, first), 1);
 assert.equal(countExact(html, last), 1);
 const extracted = html.slice(html.indexOf(first), html.indexOf(last));

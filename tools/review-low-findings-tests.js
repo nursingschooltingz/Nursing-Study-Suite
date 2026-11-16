@@ -52,7 +52,7 @@ async function run(S,t){
   t('the browser fallback keeps only the newest recovery archives too',localKeys.length===keep&&JSON.parse(local.get(localKeys[keep-1]))[0].kb.n===keep+2);
 
   /* ── Anki numeric tokenizer: hoisted regexes, cached fact tokens, unchanged outcomes ── */
-  const anki=new Function('uid',span(S,'function ankiParseCards(raw','function AnkiStyleBadges(')+';return {ankiNumericTokens,ankiFactTokens,ankiNumericAudit,ANKI_UNUSUAL_RE,ANKI_TOKEN_RE};')(()=>'synthetic-id');
+  const anki=new Function('uid',span(S,'function ankiParseCards(raw','/* ── END ANKI PURE HELPERS ── */')+';return {ankiNumericTokens,ankiFactTokens,ankiNumericAudit,ANKI_UNUSUAL_RE,ANKI_TOKEN_RE};')(()=>'synthetic-id');
   t('numeric token regexes are module-level globals',anki.ANKI_TOKEN_RE instanceof RegExp&&anki.ANKI_UNUSUAL_RE instanceof RegExp&&anki.ANKI_TOKEN_RE.global&&anki.ANKI_UNUSUAL_RE.global);
   t('tokenization is stable across repeated calls with the shared regexes',['5 mg, 10 mg.','60–100 bpm','1/2 mg','5 mg/kg2','−5 to −2 °C','1e3 mg then 4 mg'].every(text=>JSON.stringify(anki.ankiNumericTokens(text))===JSON.stringify(anki.ankiNumericTokens(text))));
   t('known token outcomes are unchanged',anki.ankiNumericTokens('5 mg, 10 mg.').tokens.map(x=>x.key).join(';')==='5 mg;10 mg'&&anki.ankiNumericTokens('5 mg/kg2').unsupported.length>0&&anki.ankiNumericTokens('60–100 bpm').tokens.length===2&&anki.ankiNumericTokens('1/2 mg').unsupported.length===1);

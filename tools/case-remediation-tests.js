@@ -2,7 +2,7 @@
 // Synthetic cases only. Extract the shipped implementation, including its validation tail.
 function load(S,transform=code=>code) {
   const span=(a,b)=>{const x=S.indexOf(a),y=S.indexOf(b,x+a.length);if(x<0||y<0)throw Error('Missing case anchor '+a);return S.slice(x,y);};
-  return new Function(transform(span('const ITEM_LETTER_NOUN=','// v17.12: the worksheet kept each choice')+span('const CASE_CLINICAL_TOKEN_RE=','function CaseStudyGenerator()')+
+  return new Function(transform(span('const ITEM_LETTER_NOUN=','// v17.12: the worksheet kept each choice')+span('const CASE_CLINICAL_TOKEN_RE=','/* ── END CASE STUDY PURE HELPERS ── */')+
     ';return {caseNumericTokens,caseAuditTextValues,validateCaseStudy,validateStageTiming,caseToMarkdown,caseAuditPayload,caseValidationStamp,caseShapeIssues,caseCompletenessIssues,caseAllFactIds,caseGateItems,itemRunPool,itemParseAuditVerdict,itemAuditSummary,itemAuditIsAnswerAccuracy,itemBuildAuditPrompt,AUDIT_POOL_WIDTH,AUDIT_RETRIES,'+
     'repairContract:typeof caseRepairContract==="function"?caseRepairContract:null,shuffle:typeof caseShuffleQuestion==="function"?caseShuffleQuestion:null,rows:typeof caseReviewRows==="function"?caseReviewRows:null,appendix:typeof caseReviewAppendix==="function"?caseReviewAppendix:null,shuffleIssues:typeof caseShuffleIssues==="function"?caseShuffleIssues:null,progress:typeof caseAuditProgress==="function"?caseAuditProgress:null};'))();
 }
@@ -108,7 +108,7 @@ async function run(S,t){
     for(const n of [14,23,19]){const issues=Array.from({length:n},(_,i)=>({sev:'warn',msg:'Synthetic warning '+i}));const md=C.appendix(fixture(),issues,[]);t(n+' warning-only messages retained',issues.every(i=>md.includes(i.msg)));}
     const pendingRows=C.rows(fixture(),{},'running');t('unreviewed MCQ pending',pendingRows[0].status==='PENDING');
     const md=C.appendix(fixture(),[],C.rows(fixture(),{'1:q1':{status:'FAIL',criterion:'Stem clarity',detail:'Synthetic detail',warns:[]}},'complete'));t('item findings map to worksheet numbers',md.includes('Q1.1')&&md.includes('Stem clarity')&&md.includes('Synthetic detail'));
-    const a=S.indexOf('function artifactJsonExport('),b=S.indexOf('function FactTag(',a);const jsonExport=new Function(S.slice(a,b)+';return artifactJsonExport;')();
+    const a=S.indexOf('function artifactJsonExport('),b=S.indexOf('/* ── END ARTIFACT SOURCE PURE HELPERS ── */',a);const jsonExport=new Function(S.slice(a,b)+';return artifactJsonExport;')();
     const rows=C.rows(fixture(),{'1:q1':{status:'FAIL',criterion:'Stem clarity',detail:'Review this wording',warns:[{criterion:'Terminology',detail:'Use client'}],repairAttempt:'no substantive change'}},'complete');
     const json=JSON.parse(jsonExport(fixture(),'Captured notice',[{sev:'warn',msg:'Warning only'}],rows));
     t('JSON includes case item detail warnings and repair attempt',json._suiteReview.itemAudit[0].detail==='Review this wording'&&json._suiteReview.itemAudit[0].warns[0].detail==='Use client'&&json._suiteReview.itemAudit[0].repairAttempt==='no substantive change');

@@ -11,221 +11,51 @@
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
+const { resolveSuiteFile } = require('./repo-checks');
 
-// ── Shared Range, Role, Tree & Topic-Matching Helpers ──
+const MAX_PDF_META_STREAM_BYTES = 32 * 1024 * 1024;
+const MAX_PREDICTOR_COLUMNS = 65536;
+const MAX_PREDICTOR_COLORS = 16;
+const MAX_PREDICTOR_BPC = 16;
+const MAX_PREDICTOR_ROW_BYTES = 1024 * 1024;
+const FALLBACK_SCAN_WINDOW_BYTES = 8 * 1024 * 1024;
+const FALLBACK_SCAN_OVERLAP_BYTES = 64;
 
-function mergePageRanges(ranges, maxPages = Infinity) {
-  const cap = Number.isFinite(maxPages) && maxPages > 0 ? Math.floor(maxPages) : Infinity;
-  const clean = [];
-  for (const r of Array.isArray(ranges) ? ranges : []) {
-    if (!r || typeof r !== 'object') continue;
-    let a = Math.floor(Number(r.start)), b = Math.floor(Number(r.end));
-    if (!Number.isFinite(a) || !Number.isFinite(b) || a < 1 || b < 1) continue;
-    if (a > b) { const tmp = a; a = b; b = tmp; }
-    if (a > cap) continue;
-    b = Math.min(b, cap);
-    clean.push({ start: a, end: b });
-  }
-  clean.sort((x, y) => x.start - y.start || x.end - y.end);
-  const merged = [];
-  for (const r of clean) {
-    const last = merged[merged.length - 1];
-    if (last && r.start <= last.end + 1) last.end = Math.max(last.end, r.end);
-    else merged.push({ start: r.start, end: r.end });
-  }
-  return merged;
+// ── Shared Range, Role, Tree & Topic-Matching Helpers (extracted from canonical HTML) ──
+
+function loadSuiteTocHelpers() {
+  const src = fs.readFileSync(resolveSuiteFile(), 'utf8');
+  const startAnchor = 'function kbMergePageRanges(';
+  const endAnchor = '\nfunction kbFormatTocSlicePlanMd(';
+  const a = src.indexOf(startAnchor);
+  const b = a >= 0 ? src.indexOf(endAnchor, a + startAnchor.length) : -1;
+  if (a < 0 || b <= a) throw new Error('Suite TOC helper extraction anchor missing');
+  return new Function(
+    '"use strict";\n' + src.slice(a, b) + '\nreturn {\n' +
+    '  mergePageRanges: kbMergePageRanges,\n' +
+    '  formatPageRanges: kbFormatPageRanges,\n' +
+    '  countPagesInRanges: kbCountPagesInRanges,\n' +
+    '  parsePageRanges: kbParsePageRanges,\n' +
+    '  suggestTextbookRole: kbSuggestTextbookRole,\n' +
+    '  classifyTocFeature: kbClassifyTocFeature,\n' +
+    '  buildTocTree: kbBuildTocTree,\n' +
+    '  matchTocNodes: kbMatchTocNodes,\n' +
+    '  resolveSelectionRanges: kbResolveTocSelectionRanges,\n' +
+    '};'
+  )();
 }
 
-function formatPageRanges(ranges, maxPages = Infinity) {
-  return mergePageRanges(ranges, maxPages).map(r => r.start === r.end ? String(r.start) : r.start + '-' + r.end).join(', ');
-}
-
-function countPagesInRanges(ranges, maxPages = Infinity) {
-  return mergePageRanges(ranges, maxPages).reduce((n, r) => n + (r.end - r.start + 1), 0);
-}
-
-function parsePageRanges(input, maxPages = Infinity) {
-  const cap = Number.isFinite(maxPages) && maxPages > 0 ? Math.floor(maxPages) : Infinity;
-  if (Array.isArray(input)) {
-    const ranges = mergePageRanges(input, cap);
-    return { ranges, invalid: [], pageCount: countPagesInRanges(ranges, cap), formatted: formatPageRanges(ranges, cap) };
-  }
-  const raw = String(input || '').trim();
-  if (!raw) return { ranges: [], invalid: [], pageCount: 0, formatted: '' };
-  const parts = raw.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
-  const valid = [], invalid = [];
-  for (const tok of parts) {
-    const stripped = tok.replace(/^(?:pdf\s+)?(?:pages?|pp?\.?)\s*/i, '').trim();
-    const m = stripped.match(/^(\d+)\s*(?:[-\u2013\u2014]\s*(\d+))?$/);
-    if (!m) { invalid.push(tok); continue; }
-    const a = Number.parseInt(m[1], 10), b = m[2] != null ? Number.parseInt(m[2], 10) : a;
-    if (!Number.isFinite(a) || !Number.isFinite(b) || a < 1 || b < 1 || a > b || a > cap) { invalid.push(tok); continue; }
-    valid.push({ start: a, end: Math.min(b, cap) });
-  }
-  const ranges = mergePageRanges(valid, cap);
-  return { ranges, invalid, pageCount: countPagesInRanges(ranges, cap), formatted: formatPageRanges(ranges, cap) };
-}
-
-function suggestTextbookRole(filename = '', titles = []) {
-  const probe = (String(filename || '') + ' ' + (Array.isArray(titles) ? titles.slice(0, 12).join(' ') : '')).toLowerCase().replace(/[^a-z0-9]+/g, ' ');
-  if (/\b(?:porths?|mccances?|huethers?|brashers|norris|pathophysiology)\b/.test(probe)) {
-    return { roles: ['patho-bridge'], badge: 'Patho Bridge', reason: 'Pathophysiology text detected (Porth / McCance)' };
-  }
-  if (/\b(?:jarvis|bates|bickleys?|dains|seidels?|health\s+assessment|physical\s+examination)\b/.test(probe)) {
-    return { roles: ['exam-bridge'], badge: 'Exam / Diff Bridge', reason: 'Health Assessment text detected (Jarvis / Bates / Dains)' };
-  }
-  if (/\b(?:lehnes?|burchum|rosenthal|katzung|goodman)\b/.test(probe)) {
-    return { roles: ['pharm-bridge'], badge: 'Pharm / GDMT Bridge', reason: 'Mechanistic Pharmacology text detected (Lehne)' };
-  }
-  if (/\b(?:mccuistions?|lilleys?|karch|adams|pharmacology)\b/.test(probe)) {
-    return { roles: ['rn'], badge: 'RN Core (Pharm)', reason: 'Nursing-Process Pharmacology text detected (McCuistion / Lilley)' };
-  }
-  return { roles: ['rn'], badge: 'RN Core', reason: 'Standard RN Core source' };
-}
-
-function classifyTocFeature(title) {
-  const t = String(title || '');
-  if (/\babnormal\s+findings\b|\btables?\s+of\s+abnormal\b|\bdifferential\s+diagnos/i.test(t)) return 'abnormal-table';
-  if (/\bprototype\s+drug\b|\bsummary\s+drug\b|\bdrug\s+chart\b|\bdrug\s+therapy\s+table/i.test(t)) return 'prototype-drug';
-  if (/\bnursing\s+process\b|\bpatient[-\s]centered\s+collaborative\s+care\b|\bnursing\s+management\b/i.test(t)) return 'nursing-process';
-  if (/\bkey\s+concepts?\b|\bchapter\s+summary\b|\breview\s+of\s+key/i.test(t)) return 'key-concepts';
-  return null;
-}
-
-function buildTocTree(rawNodes, numPages, pageLabels = null) {
-  const totalPages = Math.max(1, Math.floor(Number(numPages)) || 1);
-  const labels = Array.isArray(pageLabels) && pageLabels.length === totalPages ? pageLabels : null;
-  let seq = 0;
-  const flat = [];
-  const firstValidPage = items => {
-    for (const it of Array.isArray(items) ? items : []) {
-      const p = Math.floor(Number(it && it.page));
-      if (Number.isFinite(p) && p >= 1 && p <= totalPages) return p;
-      const childP = firstValidPage(it && it.items);
-      if (childP) return childP;
-    }
-    return null;
-  };
-  const walk = (items, depth, parentId, ancestors, parentTitles) => {
-    const ids = [];
-    for (const raw of Array.isArray(items) ? items : []) {
-      const title = String((raw && raw.title) || '').replace(/\s+/g, ' ').trim();
-      const ownPage = Math.floor(Number(raw && raw.page));
-      const page = Number.isFinite(ownPage) && ownPage >= 1 && ownPage <= totalPages ? ownPage : firstValidPage(raw && raw.items);
-      if (!title || !page) continue;
-      const id = 'toc-' + (++seq);
-      const node = {
-        id, title, depth, page, startPage: page, endPage: page, pageCount: 1,
-        parentId: parentId || null, ancestorIds: [...ancestors], parentPath: parentTitles.join(' › '),
-        feature: classifyTocFeature(title), childIds: [],
-        bookStart: null, bookEnd: null, bookLabelDiffers: false,
-      };
-      flat.push(node);
-      ids.push(id);
-      if (Array.isArray(raw && raw.items) && raw.items.length) {
-        node.childIds = walk(raw.items, depth + 1, id, [...ancestors, id], [...parentTitles, title]);
-      }
-    }
-    return ids;
-  };
-  const roots = walk(rawNodes, 0, null, [], []);
-  for (let i = 0; i < flat.length; i++) {
-    const cur = flat[i];
-    let nextPeerPage = null;
-    for (let j = i + 1; j < flat.length; j++) {
-      if (flat[j].depth <= cur.depth && flat[j].page >= cur.page) { nextPeerPage = flat[j].page; break; }
-    }
-    cur.endPage = nextPeerPage === null ? totalPages : (nextPeerPage > cur.page ? nextPeerPage - 1 : cur.page);
-  }
-  const byId = new Map(flat.map(n => [n.id, n]));
-  for (let i = flat.length - 1; i >= 0; i--) {
-    const n = flat[i];
-    for (const cid of n.childIds) {
-      const ch = byId.get(cid);
-      if (ch && ch.endPage > n.endPage) n.endPage = Math.min(totalPages, ch.endPage);
-    }
-    n.pageCount = Math.max(1, n.endPage - n.startPage + 1);
-    if (labels) {
-      const bs = String(labels[n.startPage - 1] ?? '').trim();
-      const be = String(labels[n.endPage - 1] ?? '').trim();
-      if (bs) {
-        n.bookStart = bs;
-        n.bookEnd = be || bs;
-        n.bookLabelDiffers = bs !== String(n.startPage) || Boolean(be && be !== String(n.endPage));
-      }
-    }
-  }
-  const hasBookLabels = flat.some(n => n.bookLabelDiffers);
-  return { flat, roots, numPages: totalPages, hasBookLabels };
-}
-
-function stemToken(w) {
-  const s = String(w || '').toLowerCase();
-  if (s.length >= 6 && s.endsWith('ies')) return s.slice(0, -3) + 'y';
-  if (s.length >= 5 && s.endsWith('es') && !/(?:ses|xes|zes|ches|shes)$/.test(s)) return s.slice(0, -1);
-  if (s.length >= 5 && s.endsWith('s') && !s.endsWith('ss') && !s.endsWith('is') && !s.endsWith('us')) return s.slice(0, -1);
-  return s;
-}
-
-function normSearchTokens(str) {
-  const STOP = new Set(['the', 'and', 'for', 'with', 'from', 'into', 'across', 'under', 'over', 'care', 'client', 'patient', 'patients', 'nursing', 'chapter', 'unit', 'part', 'section', 'disorder', 'disorders']);
-  return String(str || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter(w => w.length >= 2 && !STOP.has(w)).map(stemToken);
-}
-
-function matchTocNodes(flatNodes, queryText) {
-  const rawTerms = String(queryText || '').split(/[\n,;]+/).map(s => s.replace(/^\s*(?:[-*•]|\d+[.)]|P\d+[:.)]?)\s*/i, '').trim()).filter(s => s.length >= 2);
-  const matchedIds = new Set(), recommendedIds = new Set(), matchedTermsById = new Map();
-  if (!rawTerms.length || !Array.isArray(flatNodes) || !flatNodes.length) {
-    return { terms: [], matchedIds, recommendedIds, matchedTermsById };
-  }
-  const nodeMeta = flatNodes.map(n => {
-    const normTitle = n.title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-    const normFull = (n.parentPath + ' ' + n.title).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-    const titleToks = new Set(normSearchTokens(n.title));
-    const fullToks = new Set(normSearchTokens(n.parentPath + ' ' + n.title));
-    return { node: n, normTitle, normFull, titleToks, fullToks };
-  });
-  for (const term of rawTerms) {
-    const normTerm = term.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-    if (!normTerm) continue;
-    const qToks = normSearchTokens(term);
-    const directHits = [], contextHits = [];
-    for (const m of nodeMeta) {
-      const exactSub = normTerm.length >= 3 && new RegExp('(?:^|\\s)' + normTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:s|es)?(?:\\s|$)').test(m.normTitle);
-      const tokHit = qToks.length > 0 && qToks.every(qt => m.titleToks.has(qt) || [...m.titleToks].some(tt => tt.length >= 4 && qt.length >= 4 && (tt.startsWith(qt) || qt.startsWith(tt))));
-      if (exactSub || tokHit) {
-        directHits.push(m.node);
-        continue;
-      }
-      if (qToks.length >= 2 && qToks.every(qt => m.fullToks.has(qt)) && qToks.some(qt => m.titleToks.has(qt))) {
-        contextHits.push(m.node);
-      }
-    }
-    const candidates = directHits.length ? directHits : contextHits;
-    if (!candidates.length) continue;
-    for (const c of candidates) {
-      matchedIds.add(c.id);
-      if (!matchedTermsById.has(c.id)) matchedTermsById.set(c.id, []);
-      if (!matchedTermsById.get(c.id).includes(term)) matchedTermsById.get(c.id).push(term);
-    }
-    const candIds = new Set(candidates.map(c => c.id));
-    let specific = candidates.filter(c => !candidates.some(other => other.id !== c.id && Array.isArray(other.ancestorIds) && other.ancestorIds.includes(c.id)));
-    const nonMega = specific.filter(c => !(c.depth === 0 && c.pageCount > 65 && /^(?:part|unit|section)\b/i.test(c.title)));
-    if (nonMega.length) specific = nonMega;
-    for (const s of specific) if (candIds.has(s.id)) recommendedIds.add(s.id);
-  }
-  return { terms: rawTerms, matchedIds, recommendedIds, matchedTermsById };
-}
-
-function resolveSelectionRanges(flatNodes, selectedIds, { padEnd = 0, numPages = Infinity } = {}) {
-  const selSet = selectedIds instanceof Set ? selectedIds : new Set(Array.isArray(selectedIds) ? selectedIds : []);
-  const pad = Math.max(0, Math.min(5, Math.floor(Number(padEnd)) || 0));
-  const cap = Number.isFinite(numPages) && numPages > 0 ? Math.floor(numPages) : Infinity;
-  const selectedNodes = (Array.isArray(flatNodes) ? flatNodes : []).filter(n => selSet.has(n.id));
-  const rawRanges = selectedNodes.map(n => ({ start: n.startPage, end: Math.min(cap, n.endPage + pad) }));
-  const ranges = mergePageRanges(rawRanges, cap);
-  return { ranges, formatted: formatPageRanges(ranges, cap), pageCount: countPagesInRanges(ranges, cap), selectedNodes };
-}
+const {
+  mergePageRanges,
+  formatPageRanges,
+  countPagesInRanges,
+  parsePageRanges,
+  suggestTextbookRole,
+  classifyTocFeature,
+  buildTocTree,
+  matchTocNodes,
+  resolveSelectionRanges,
+} = loadSuiteTocHelpers();
 
 // ── Pure-Node PDF 1.4–1.7 Outline / Page-Tree / PageLabel Reader ──
 
@@ -457,11 +287,26 @@ function paethPredictor(a, b, c) {
 function applyPdfPredictor(data, parms) {
   const predictor = Number(parms && parms.Predictor) || 1;
   if (predictor <= 1) return data;
-  const colors = Math.max(1, Number(parms && parms.Colors) || 1);
-  const bpc = Math.max(1, Number(parms && parms.BitsPerComponent) || 8);
-  const columns = Math.max(1, Number(parms && parms.Columns) || 1);
+  if (parms && parms.Colors != null) {
+    const rc = Number(parms.Colors);
+    if (!Number.isFinite(rc) || rc < 1 || rc > MAX_PREDICTOR_COLORS) throw new Error('Invalid PDF predictor Colors parameter');
+  }
+  if (parms && parms.BitsPerComponent != null) {
+    const rb = Number(parms.BitsPerComponent);
+    if (!Number.isFinite(rb) || rb < 1 || rb > MAX_PREDICTOR_BPC) throw new Error('Invalid PDF predictor BitsPerComponent parameter');
+  }
+  if (parms && parms.Columns != null) {
+    const rcol = Number(parms.Columns);
+    if (!Number.isFinite(rcol) || rcol < 1 || rcol > MAX_PREDICTOR_COLUMNS) throw new Error('Invalid PDF predictor Columns parameter');
+  }
+  const colors = Math.max(1, Math.floor(Number(parms && parms.Colors) || 1));
+  const bpc = Math.max(1, Math.floor(Number(parms && parms.BitsPerComponent) || 8));
+  const columns = Math.max(1, Math.floor(Number(parms && parms.Columns) || 1));
   const bpp = Math.max(1, Math.ceil((colors * bpc) / 8));
   const rowBytes = Math.ceil((columns * colors * bpc) / 8);
+  if (rowBytes < 1 || rowBytes > MAX_PREDICTOR_ROW_BYTES || rowBytes > data.length) {
+    throw new Error('PDF predictor row width exceeds stream bounds');
+  }
   if (predictor === 2) {
     const out = Buffer.from(data);
     for (let r = 0; r + rowBytes <= out.length; r += rowBytes) {
@@ -472,11 +317,14 @@ function applyPdfPredictor(data, parms) {
   if (predictor >= 10 && predictor <= 15) {
     const stride = rowBytes + 1;
     const rows = Math.floor(data.length / stride);
+    if (rows * rowBytes > MAX_PDF_META_STREAM_BYTES) {
+      throw new Error('PDF predictor output exceeds safety ceiling');
+    }
     const out = Buffer.alloc(rows * rowBytes);
     let prevRow = Buffer.alloc(rowBytes);
+    let curRow = Buffer.alloc(rowBytes);
     for (let r = 0; r < rows; r++) {
       const filter = data[r * stride];
-      const curRow = Buffer.alloc(rowBytes);
       for (let i = 0; i < rowBytes; i++) {
         const raw = data[r * stride + 1 + i];
         const left = i >= bpp ? curRow[i - bpp] : 0;
@@ -490,7 +338,9 @@ function applyPdfPredictor(data, parms) {
         else curRow[i] = raw;
       }
       curRow.copy(out, r * rowBytes);
+      const tmp = prevRow;
       prevRow = curRow;
+      curRow = tmp;
     }
     return out;
   }
@@ -519,8 +369,21 @@ class PdfReader {
       const fName = filters[i] && filters[i].kind === 'name' ? filters[i].value : '';
       const p = (parms[i] && parms[i].kind === 'dict') ? parms[i].dict : null;
       if (fName === 'FlateDecode' || fName === 'Fl') {
-        try { data = zlib.inflateSync(data); }
-        catch (_) { data = zlib.inflateRawSync(data); }
+        try {
+          data = zlib.inflateSync(data, { maxOutputLength: MAX_PDF_META_STREAM_BYTES });
+        } catch (err) {
+          if (err && err.code === 'ERR_BUFFER_TOO_LARGE') {
+            throw new Error('PDF metadata stream exceeds 32 MB decompression limit');
+          }
+          try {
+            data = zlib.inflateRawSync(data, { maxOutputLength: MAX_PDF_META_STREAM_BYTES });
+          } catch (rawErr) {
+            if (rawErr && rawErr.code === 'ERR_BUFFER_TOO_LARGE') {
+              throw new Error('PDF metadata stream exceeds 32 MB decompression limit');
+            }
+            throw rawErr;
+          }
+        }
         if (p) data = applyPdfPredictor(data, p);
       }
     }
@@ -627,13 +490,20 @@ class PdfReader {
   }
 
   fallbackScanObjects() {
-    const text = this.buf.toString('latin1');
+    const win = FALLBACK_SCAN_WINDOW_BYTES;
+    const overlap = FALLBACK_SCAN_OVERLAP_BYTES;
     const re = /(?:^|[\r\n])\s*(\d+)\s+(\d+)\s+obj\b/g;
-    let m;
-    while ((m = re.exec(text)) !== null) {
-      const objNum = Number(m[1]);
-      const localOff = m.index + m[0].indexOf(m[1]);
-      this.xref.set(objNum, { type: 1, offset: localOff, gen: Number(m[2]) });
+    for (let base = 0; base < this.buf.length; base += win - overlap) {
+      const end = Math.min(this.buf.length, base + win);
+      const text = this.buf.subarray(base, end).toString('latin1');
+      re.lastIndex = 0;
+      let m;
+      while ((m = re.exec(text)) !== null) {
+        const objNum = Number(m[1]);
+        const localOff = base + m.index + m[0].indexOf(m[1]);
+        this.xref.set(objNum, { type: 1, offset: localOff, gen: Number(m[2]) });
+      }
+      if (end >= this.buf.length) break;
     }
     if (!this.rootRef) {
       for (const [objNum] of this.xref) {
@@ -1124,6 +994,9 @@ if (require.main === module) {
 }
 
 module.exports = {
+  MAX_PDF_META_STREAM_BYTES,
+  applyPdfPredictor,
+  PdfReader,
   mergePageRanges,
   formatPageRanges,
   countPagesInRanges,

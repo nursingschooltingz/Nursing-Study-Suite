@@ -15,11 +15,11 @@ module.exports = async function run(S, t) {
   // 1. Live extraction from shipped HTML with non-vacuous tail verification
   const BUNDLE = new Function(
     span('const NCLEX_TEST_PLAN_VERSION=', 'const CASE_QUESTION_RULES=') + '\n' +
-    span('function artifactSourceCurrent(', 'function FactTag(') + '\n' +
+    span('function artifactSourceCurrent(', '/* ── END ARTIFACT SOURCE PURE HELPERS ── */') + '\n' +
     span('function kbScopeHasSelection(', '// v17.4: facts with text') + '\n' +
     span('function selectCaseFacts(', 'function caseRenderFactPacket(') + '\n' +
     span('const ITEM_LETTER_NOUN=', '// v17.12: the worksheet kept each choice') + '\n' +
-    span('const CASE_CLINICAL_TOKEN_RE=', 'function CaseStudyGenerator()') + '\n' +
+    span('const CASE_CLINICAL_TOKEN_RE=', '/* ── END CASE STUDY PURE HELPERS ── */') + '\n' +
     ';return {MAX_CASE_BATCH,caseSplitMarkdown,casePacketToMarkdown,casePacketJsonExport,caseBuildBatchTargets,caseRunBatchQueue,kbResolveScopeGroups,artifactSourceCurrent,artifactExportNotice,artifactJsonExport,caseToMarkdown,caseReviewRows};'
   )();
 

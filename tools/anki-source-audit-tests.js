@@ -4,7 +4,7 @@
 function runAnkiSourceAuditTests({S,t,section}){
   if(section)section('Anki optional source audit');
   const {validReceipt}=require('./fixtures/anki-audit-response');
-  const start=S.indexOf('function ankiParseCards(raw'),end=S.indexOf('function AnkiStyleBadges',start);
+  const start=S.indexOf('function ankiParseCards(raw'),end=S.indexOf('/* ── END ANKI PURE HELPERS ── */',start);
   if(start<0||end<0)throw new Error('Anki source-audit extraction anchors moved.');
   const source=S.slice(start,end);
   const H=new Function('uid',source+';return {ankiAuditGroups,ankiBuildSourceAuditPrompt,ankiParseSourceAudit,ANKI_SOURCE_AUDIT_GROUP_CHARS};')(()=> 'synthetic');

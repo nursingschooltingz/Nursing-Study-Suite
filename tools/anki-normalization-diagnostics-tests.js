@@ -3,7 +3,7 @@
 // Synthetic, offline checks of generation history versus later read-only tag decisions.
 async function runAnkiNormalizationDiagnosticsTests({S,t,section}){
   if(section)section('Anki per-note normalization diagnostics');
-  const start=S.indexOf('function ankiParseCards(raw'),end=S.indexOf('function AnkiStyleBadges',start);
+  const start=S.indexOf('function ankiParseCards(raw'),end=S.indexOf('/* ── END ANKI PURE HELPERS ── */',start);
   if(start<0||end<=start)throw Error('Anki normalization evidence extraction anchors moved.');
   const {webcrypto}=require('crypto');
   const H=new Function('uid','globalThis','TextEncoder',S.slice(start,end)+';return {ankiNormalizeConditionTags,ankiConditionTagDiagnostic,ankiConditionTagDiagnostics,ankiSourceAuditEvidence,ankiNoteProvenance};')(()=> 'synthetic',{crypto:webcrypto},TextEncoder);

@@ -20,7 +20,7 @@ function spanFrom(start, end) {
   extraction.push({start, end, startLine: source.slice(0, a).split('\n').length, endLine: source.slice(0, b).split('\n').length});
   return source.slice(a, b);
 }
-const helperSource = spanFrom('function ankiParseCards(raw', 'function AnkiStyleBadges');
+const helperSource = spanFrom('function ankiParseCards(raw', '/* ── END ANKI PURE HELPERS ── */');
 const scannerSource = spanFrom('const NEIA_TERMINOLOGY_RULES=[', '// Deterministic post-generation validation.');
 const editSource = spanFrom('  const updateField=useCallback((id,f,v)', '\n  const exportTxt=useCallback(()=>');
 const exportedNames = ['ankiParseCards','parseKBCoverage','ankiSourceSnapshot','attachCoverageToCards','ankiDedupeCards','ankiNormalizeConditionTags','ankiBatchSummary','parseAnkiClozes','clozeNums','ankiTier','lintAnkiCard','ankiSelection','ankiNumericTokens','ankiNumericAudit','ankiPreviewText','ankiExportText','ankiCollisionGroups','ankiReviewDecisionEvidence','ankiStyleWarnings'];

@@ -3,7 +3,7 @@
 // The root harness passes the shipped HTML; no duplicated implementation or API calls.
 function runAnkiLocalChecksTests({S,t,section}){
   if(section)section('Anki local review checks');
-  const start='function ankiParseCards(raw',end='function AnkiStyleBadges';
+  const start='function ankiParseCards(raw',end='/* ── END ANKI PURE HELPERS ── */';
   const a=S.indexOf(start),b=S.indexOf(end,a+start.length);
   if(a<0||b<0||S.indexOf(start,a+start.length)>=0||S.indexOf(end,b+end.length)>=0)throw Error('Anki local-check extraction anchors missing or ambiguous');
   const source=S.slice(a,b);

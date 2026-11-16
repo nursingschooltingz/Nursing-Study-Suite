@@ -11,7 +11,7 @@ async function runAnkiSourceUiTests({ S, t, section }) {
     if (a < 0 || b < 0 || S.indexOf(start, a + start.length) >= 0) throw new Error('Anki UI extraction anchor moved or became ambiguous: ' + start);
     return S.slice(a, includeEnd ? b + end.length : b);
   };
-  const helpers = span('function ankiParseCards(raw', 'function AnkiStyleBadges');
+  const helpers = span('function ankiParseCards(raw', '/* ── END ANKI PURE HELPERS ── */');
   const H = new Function('uid', helpers + ';return {ankiSourceAuditCurrent,ankiSourceAuditPending,ankiSourceAuditState,ankiAuditGroups,ankiBuildSourceAuditPrompt,ankiBuildSourceAuditPromptV4,ankiAuditPacket,ankiAuditSourceTokens,ankiParseSourceAudit,ankiParseSourceAuditV4,ankiMergeSourceAuditResult};')(() => 'synthetic-id');
   const callbacks = span('  const prepareSourceAudit=()=>{', '  const openNote=');
   const invalidation = span('  useEffect(()=>{\n    const run=auditRun.current;', '  },[cards,batch,tierFilter,current]);', true);

@@ -211,7 +211,7 @@ module.exports=async function run(S,t){
     const screen=doc.slice(doc.indexOf('@media screen{'),doc.indexOf('@media print{'));
     return {
       [SEC[0]]:style.join(' ')==="'unsafe-inline' https://fonts.googleapis.com"&&font.join(' ')==='https://fonts.gstatic.com'&&
-        !policy.has('default-src')&&!policy.has('script-src')&&(policy.get('object-src')||[]).join()==="'none'",
+        !policy.has('default-src')&&(policy.get('script-src')||[]).join(' ')==="'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:"&&(policy.get('object-src')||[]).join()==="'none'",
       [SEC[1]]:sheets.length===1&&sheets.every(o=>style.includes(o))&&!/@font-face/.test(S)&&!/@import/.test(S)&&style.includes("'unsafe-inline'"),
       [SEC[2]]:/a\{text-decoration:underline;\}/.test(screen)&&doc.includes('a{color:#14161f;text-decoration:none;}')&&doc.includes('synthetic link'),
     };

@@ -2,7 +2,7 @@
 
 async function runAnkiReviewQueueTests({S,t,section}){
   section('Anki advisory review decisions and v16.4 evidence');
-  const a=S.indexOf('function ankiParseCards(raw'),b=S.indexOf('function AnkiStyleBadges',a);
+  const a=S.indexOf('function ankiParseCards(raw'),b=S.indexOf('/* ── END ANKI PURE HELPERS ── */',a);
   if(a<0||b<=a||S.indexOf('function ankiParseCards(raw',a+1)>=0)throw Error('Review queue extraction anchors moved');
   const H=new Function('uid','globalThis','TextEncoder',S.slice(a,b)+';return {ankiMakeReviewDecision,ankiReviewDecisionCurrent,ankiReviewDecisionEvidence,ankiSourceAuditEvidence,ankiSourceAuditLabel,suiteVersion};')(()=> 'synthetic',{crypto:require('crypto').webcrypto},TextEncoder);
   const cards=[{id:'n1',text:'[Container] Color: {{c1::blue}}.',extra:'',tags:'Tier::1',pipeCount:2,keep:true,factIds:['f1']},{id:'n2',text:'[Container] Shade: {{c1::blue}}.',extra:'',tags:'Tier::2',pipeCount:2,keep:true,factIds:['f2']}];
@@ -53,7 +53,7 @@ async function runAnkiReviewQueueTests({S,t,section}){
   const replaced=await H.ankiSourceAuditEvidence(run,()=>({...exportInputs,reviewRun:laterRun,reviewDecisions:[laterDecision]}));
   t('a later prepared audit cannot lend current decisions to an earlier exported run',replaced.metadata.preparedAt===run.preparedAt&&!replaced.reviewDecisions[0].current);
   t('partial status label is distinct from completion',H.ankiSourceAuditLabel(run).startsWith('Partial —')&&H.ankiSourceAuditLabel(run).includes('1/2 groups'));
-  t('visible footer and reports share the canonical release version',H.suiteVersion()==='21.5'&&S.includes('<span className="rail-stat">Version {suiteVersion()} · <a className="rail-license"')&&S.includes('Built for your next step.')&&evidence.metadata.suiteVersion==='21.5');
+  t('visible footer and reports share the canonical release version',H.suiteVersion()==='21.6'&&S.includes('<span className="rail-stat">Version {suiteVersion()} · <a className="rail-license"')&&S.includes('Built for your next step.')&&evidence.metadata.suiteVersion==='21.6');
   const normalized=await H.ankiSourceAuditEvidence({...run,results:[{...run.results[0],referenceRecoveries:[{method:'mixed-context-status',before:{status:'extra-only'},after:{status:'visible-only'}}]}]},inputs);
   t('reference normalization metadata survives partial evidence export independently of citations',normalized.status==='partial'&&normalized.metadata.referenceNormalizations===1&&normalized.metadata.recoveredCitations===1&&normalized.results[0].referenceRecoveries[0].before.status==='extra-only');
   t('receipt UI exposes normalization history and mixed Text Extra locations',S.includes('data-anki-reference-recoveries')&&S.includes("?' · Text and Extra':''"));

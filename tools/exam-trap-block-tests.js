@@ -30,7 +30,7 @@ module.exports = async function run(S, t) {
     'uid',
     span('function kbSourceText(f){', '\n') + '\n' +
     span('function kbUsableFactCount(', '// ── KB source chunking') + '\n' +
-    span('function ankiParseCards(raw', 'function AnkiStyleBadges(') + '\n' +
+    span('function ankiParseCards(raw', '/* ── END ANKI PURE HELPERS ── */') + '\n' +
     ';return {kbForAnki,ankiSourceSnapshot,ankiConditionTagCheck,ankiNormalizeConditionTags,ANKI_TRAP_TAG_MAP,ankiCardTraps,ankiStampConceptTags,ankiStampTrapTags,ankiFilterFactView,lintAnkiCard,ankiNumericAudit,ankiTrapAuditIndex,ankiCardTrapAudit,ankiExportText};'
   )(() => 'syn-trap-id');
 
