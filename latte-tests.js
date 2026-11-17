@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 4079;
+const EXPECTED_ASSERTIONS = 4086;
 
 let file;
 try {
@@ -2946,6 +2946,9 @@ section('v15.14 — clamps, backoff, storage');
 
   section('v21.6 Production code-review remediation Steps 1–9 (Security, Privacy, Performance, Sub-500KB JSX Split, & Render Smoke)');
   await require('./tools/v21-6-review-remediation-tests')(S,t);
+
+  section('v21.7 Next Generation NCLEX (NGN) Case Study Question Types (Bowtie, Matrix, Cloze, Trend)');
+  await require('./tools/case-ngn-types-tests')(S,t);
 
   console.log('\n════════════════════════════');
   const total = pass + fail;

@@ -12,7 +12,26 @@
      policy and uses only its own inline style block and system fonts. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com">
 <title>P-LATE Study Suite</title>
-<!-- v21.6 (2026-11-16): Production Code-Review Remediation (Steps 1–9) — PDF CLI DoS Hardening, Default store:false Privacy,
+<!-- v21.7 (2026-11-17): Next Generation NCLEX (NGN) Case Study Question Types — Bowtie, Matrix / Grid, Cloze (Drop-Down),
+     and Serial Trend in 06 · Clinical Case Study Generator. All 13 frozen prompt constants in prompt-baseline.json unchanged.
+     (1) NGN AUTHORING & GROUNDING CONTRACT (CASE_NGN_TYPE_RULES, caseBuildPrompt, caseFactSufficiency): Adds non-frozen
+     CASE_NGN_TYPE_RULES and four toggleable NGN question types (Bowtie, Matrix, Cloze, Trend) to CaseStudyGenerator while
+     preserving 100% byte-identical prompt output when the four NGN flags are disabled, maintaining PRIORITY_ORDER_RULES,
+     CASE_QUESTION_RULES (4-Pillar distractor traps, anchor grounding, completeness), CASE_SLOPE_SYNC_RULES, RN/NP Bridge
+     firewall boundaries, and caseSplitSystemPrompt prefix caching.
+     (2) DETERMINISTIC NGN VALIDATION, TIMING, & SHUFFLING (caseShapeIssues, caseValidateNgnQuestion, validateCaseStudy,
+     validateStageTiming, caseAllFactIds, caseDifficultySignals, caseShuffleQuestion): Validates Bowtie 3-pool token counts
+     (4-5 actions [2 keys], 4 conditions [1 key], 4-5 parameters [2 keys]), Matrix 2-4 col x 3-6 row grids (single/multiple
+     cell keys + per-row rationales + warn-tier affirmative row numeric audit without false-flagging Contraindicated traps),
+     Cloze 2-4 contiguous {{D1}}..{{D4}} blanks (3-5 options/blank, 1 key/blank), and Trend 3-5 timepoint x 2-5 parameter
+     flowsheets (direct/combined/inference/instantiated threshold checks + presentedValues + stage-timing + Fact Inspector
+     provenance); Fisher-Yates shuffles Bowtie pools, Cloze blanks, Matrix rows, and Trend choices once at publication; and
+     keeps NEIA itemAudit scoped strictly to single-best-answer MCQ (marking NGN items honest N/A).
+     (3) INTERACTIVE NGN RENDERING & PRINT/PACKET EXPORTS (CaseStudyGenerator, CaseRenderer, caseFormatAnswerSummary,
+     caseToMarkdown): Renders interactive 3-column Bowtie chips, accessible Matrix radio/checkbox tables, inline Cloze
+     <select> menus, and Trend EHR flowsheet tables inside CaseRenderer while keeping the JSX Babel script well under
+     500,000 chars, and formats clean GFM student worksheets + Answer Keys across .md, PDF, Booklet, and Paired Case Packets.
+     v21.6 (2026-11-16): Production Code-Review Remediation (Steps 1–9) — PDF CLI DoS Hardening, Default store:false Privacy,
      HEIC/AVIF Image Bomb Probing, Sub-500KB JSX Split, Gemini JSON Schema & SSE Idle Guardrails, CSP script-src & DOM Sanitizer
      Fallback, IndexedDB Fast-Path CAS, WeakMap Allocation Caches, and Component Render Smoke Gate.
      All 13 frozen prompt constants in prompt-baseline.json unchanged.
@@ -7771,7 +7790,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '21.6';}
+function suiteVersion(){return '21.7';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -11703,7 +11722,7 @@ function selectCaseFactsMulti(selectedEntries,{includeTier2=true,includeTier3=fa
 // impossible request. Two facts per question is deliberately laxer than the NCLEX
 // generator's three, because a case reuses its data across stages.
 const CASE_FACTS_PER_QUESTION=2;
-function caseFactSufficiency(facts,totalQuestions){
+function caseFactSufficiency(facts,totalQuestions,includeTypes=null){
   const byBucket={};for(const f of facts){const raw=f.latteBucket||'Other';const b=raw==='BriefPatho'?'Patho':(raw==='Assess'||raw==='Tests')?'Analyze':raw==='Treatments'?'Treat':raw;byBucket[b]=(byBucket[b]||0)+1;}
   const warnings=[];
   const want=Number(totalQuestions)||0;
@@ -11722,6 +11741,13 @@ function caseFactSufficiency(facts,totalQuestions){
   if(!(byBucket.Treat>0))warnings.push('No source-grounded treatments — intervention-stage questions will be limited.');
   if(!(byBucket.Look>0))warnings.push('No presenting findings — the initial-presentation stage will be thin.');
   if(facts.length<8)warnings.push(`Only ${facts.length} facts available for this condition. Consider including Tier 2/3 or picking a richer condition.`);
+  // v21.7: advisory NGN format readiness check when optional includeTypes is passed from CaseStudyGenerator.
+  if(includeTypes&&typeof includeTypes==='object'){
+    if(includeTypes.bowtie&&(!(byBucket.Treat>0)||!((byBucket.Look||0)+(byBucket.Analyze||0)>0)||!((byBucket.Educate||0)+(byBucket.Analyze||0)>0)||facts.length<6))
+      warnings.push('Bow-tie items require grounded cues, nursing actions (Treat), and monitoring parameters — the generator will fall back to other enabled types if pools cannot be filled without invention.');
+    if(includeTypes.trend&&!((byBucket.Analyze||0)+(byBucket.Look||0)+(byBucket.Educate||0)>=2))
+      warnings.push('Trend items require serial clinical cues or evaluation parameters — the generator will fall back to other enabled types if trajectory data are absent.');
+  }
   return{byBucket,warnings};
 }
 
@@ -11803,6 +11829,38 @@ Before emitting JSON, construct a synchronized stage-by-stage physiological time
 3. STRICT FACT-ID GROUNDING & 4-PILLAR DISTRACTORS:
    - Every stage "data" entry, correct option, and distractor rationale must cite exact supplied factIds from CASE SOURCE PACKET, and every distractor rationale should name its clinical trap category ([Priority / First-Action Trap], [Twin-Diagnosis Trap], [Pharm / Lab Hold Trap], or [Further-Teaching / Context Trap]) without repeating unsupported distractor quantities as sourced facts.`;
 
+// v21.7: non-frozen Next Generation NCLEX (NGN) item-format rules for Bowtie, Matrix, Cloze, and Trend inside
+// CaseStudyGenerator. Injected only when at least one NGN checkbox is enabled so legacy prompts stay byte-identical.
+const CASE_NGN_TYPE_RULES=`═══ NEXT GENERATION NCLEX (NGN) ITEM FORMAT CONTRACTS (checked in code) ═══
+When using Bowtie, Matrix, Cloze, or Trend among the allowed question types, obey EVERY shared SOURCE BOUNDARY, ANCHOR RULE, 4-PILLAR DISTRACTOR RULE, PRIORITY ORDER, and NUMERIC DISTRACTOR RATIONALE rule above, plus the exact structural JSON contract below. Never force an NGN type when CASE SOURCE PACKET lacks enough distinct facts to ground every pool, row, blank, or timepoint — use another allowed question type instead and note any format fallback in debrief.notes.
+
+1. "type": "Bowtie" — NGN Clinical Judgment Bow-Tie:
+   - Populate "options" with 12 to 14 objects carrying { "label": "string", "group": "actions"|"condition"|"parameters", "text": "string" }:
+     * "actions" group: 4-5 nursing action choices labeled "A1".."A5" (select 2 correct; follow PRIORITY ORDER rules 1-8, LOC vs. AIRWAY, and tiebreakers; distractors use [Priority / First-Action Trap] or [Pharm / Lab Hold Trap]).
+     * "condition" group: 4 potential condition/complication choices labeled "C1".."C4" (select 1 correct; distractors MUST trace to supplied look-alike/sibling exemplars, [Twin-Diagnosis Trap] facts, or grounded complications — never invent unstated diagnoses).
+     * "parameters" group: 4-5 monitoring parameter choices labeled "P1".."P5" (select 2 correct dynamic efficacy/safety monitors from Analyze or Educate / evaluate; distractors use mismatched or static cues grounded in the packet).
+   - "correctAnswers": array of EXACTLY 5 labels — 2 from "actions", 1 from "condition", and 2 from "parameters" (e.g. ["A1","A3","C2","P2","P4"]).
+   - "rationales": one cited rationale object for EVERY option token across all three groups (12-14 entries total).
+
+2. "type": "Matrix" — NGN Matrix / Grid (Single Choice or Multiple Response):
+   - Set "options": [] and include "matrix": { "mode": "single"|"multiple", "columns": [ { "id": "C1", "label": "string" } ], "rows": [ { "id": "R1", "text": "string" } ] }:
+     * "columns": 2-4 unique columns ("C1".."C4"), e.g. Indicated / Nonessential / Contraindicated, Effective / Ineffective / Unrelated, or supplied twin exemplar names.
+     * "rows": 3-6 clinical findings, prescriptions, or client statements ("R1".."R6") grounded in supplied facts.
+   - "correctAnswers": array of "<rowId>:<colId>" pairs (e.g. ["R1:C1","R2:C3","R3:C1"]). For mode "single", include EXACTLY 1 pair per row; for mode "multiple", include AT LEAST 1 pair per row without selecting every cell in the grid.
+   - "rationales": one cited rationale object for EVERY row ("option": "R1".."R6"), explaining both why the keyed column(s) apply and why unkeyed column(s) are wrong (naming the 4-Pillar trap; when a Contraindicated/wrong row contains an unsafe rate or dose, refer to "this row's dose/rate" rather than repeating an ungrounded quantity as sourced fact).
+
+3. "type": "Cloze" — NGN Drop-Down Cloze (Dyad / Triad / Quad Completion):
+   - Write "stem" as 1-3 clinical sentences containing 2 to 4 inline placeholders {{D1}}, {{D2}} (up to {{D4}}) in contiguous ascending order starting at {{D1}} (e.g. "The client is at highest risk for {{D1}} evidenced by {{D2}}, so the nurse should {{D3}}.").
+   - Populate "options" with 3-5 grammatically parallel choices per blank, each carrying { "label": "D1A", "group": "D1", "text": "string" } ("D1A".."D1E", "D2A".."D2E", etc.).
+   - "correctAnswers": array of EXACTLY 1 correct option label per blank in D1..Dk order (e.g. ["D1B","D2A","D3C"]).
+   - "rationales": one cited rationale object for EVERY option across all blanks, naming the 4-Pillar trap on every distractor.
+
+4. "type": "Trend" — NGN Multi-Timepoint Serial Trend:
+   - Include "trendTable": { "timepoints": ["0800","1000","1200"], "rows": [ { "label": "e.g. Heart rate", "values": ["88/min","106/min","124/min"], "supportType": "direct|combined|inference|instantiated", "factIds": ["fact-104"] } ] }:
+     * "timepoints": 3-5 unique chronological labels.
+     * "rows": 2-5 clinical parameters; each row's "values" array MUST match "timepoints" length and carry non-empty packet "factIds" plus an honest "supportType". Use "instantiated" ONLY when a cited factId states a parseable numeric bound/range in that exact unit; when a cited fact states only a qualitative shift (e.g. diminishing wheezes progressing to silent chest), record qualitative values with "direct" or "combined" — NEVER invent ungrounded numbers.
+   - Populate "options" and "correctAnswers" as either single-best-answer (4 options A-D, 1 correct) OR multiple-response (start "stem" with "(Select all that apply)", 5-6 options A-F, 2-4 correct) testing T0 -> T1 -> T2 trajectory velocity, pseudo-improvement, therapy overshoot, or priority response, with one cited rationale per option.`;
+
 // ── Strict case-generation prompt ──
 // Uses JSON output (deterministically validatable) + the shared NCLEX quality rules +
 // a hard SOURCE BOUNDARY that lists exactly what may and may not be invented, plus the
@@ -11812,13 +11870,18 @@ Before emitting JSON, construct a synchronized stage-by-stage physiological time
 // v17.1: rejected option quantities were repeated as sourced facts or assigned invented clinical contexts.
 // v18.1: the case prompt also carries PRIORITY_ORDER_RULES, so prioritization keys follow the Priority Analyzer's order.
 function caseBuildPrompt({conditionName,facts,difficulty,stages,questionsPerStage,includeTypes,mixMode,scopeEntries}){
-  const typeList=[];
-  if(includeTypes.mcq)typeList.push('MCQ (single best answer, 4 options A-D)');
-  if(includeTypes.sata)typeList.push('SATA — "(Select all that apply)" at the start of the stem, 5-6 options, 2-4 correct');
-  if(includeTypes.prioritization)typeList.push('Prioritization (which action/finding comes first)');
-  if(includeTypes.ordering)typeList.push('Ordered response — randomized steps to sequence (never list in correct order)');
-  if(includeTypes.calculation)typeList.push('Calculation — only when the supplied facts contain the needed numbers; show the required unit');
-  if(includeTypes.education)typeList.push('Client education (which teaching point is correct / indicates understanding)');
+  const typeList=[],_it=includeTypes||{};
+  const _hasNgn=!!(_it.bowtie||_it.matrix||_it.cloze||_it.trend);
+  if(_it.mcq)typeList.push('MCQ (single best answer, 4 options A-D)');
+  if(_it.sata)typeList.push('SATA — "(Select all that apply)" at the start of the stem, 5-6 options, 2-4 correct');
+  if(_it.prioritization)typeList.push('Prioritization (which action/finding comes first)');
+  if(_it.ordering)typeList.push('Ordered response — randomized steps to sequence (never list in correct order)');
+  if(_it.calculation)typeList.push('Calculation — only when the supplied facts contain the needed numbers; show the required unit');
+  if(_it.education)typeList.push('Client education (which teaching point is correct / indicates understanding)');
+  if(_it.bowtie)typeList.push('Bowtie — NGN Bow-Tie (3 option groups: 4-5 "actions" [2 correct], 4 "condition" [1 correct], 4-5 "parameters" [2 correct])');
+  if(_it.matrix)typeList.push('Matrix — NGN Matrix / Grid (2-4 columns × 3-6 rows; single or multiple column selections per row)');
+  if(_it.cloze)typeList.push('Cloze — NGN Drop-Down Cloze (2-4 inline {{D1}}..{{D4}} blanks in the stem, 3-5 options per blank, 1 correct per blank)');
+  if(_it.trend)typeList.push('Trend — NGN Serial Trend (3-5 timepoint grounded trendTable across 2-5 parameters + MCQ or SATA response)');
   // v19.2: optional multi-condition / concept-mix framing when 2+ KB entries are selected; empty on single-entry runs so
   // single-condition prompts stay byte-identical. Uses plain string concatenation so standalone prompt-builder extractors keep working.
   const _entries=Array.isArray(scopeEntries)?scopeEntries.filter(Boolean):[];
@@ -11938,7 +12001,7 @@ Prioritize Hypotheses · Generate Solutions · Take Action · Evaluate Outcomes.
 ${CASE_QUESTION_RULES}
 
 ${PRIORITY_ORDER_RULES}
-${typeof CASE_SLOPE_SYNC_RULES==='string'?'\n'+CASE_SLOPE_SYNC_RULES+'\n':''}
+${typeof CASE_SLOPE_SYNC_RULES==='string'?'\n'+CASE_SLOPE_SYNC_RULES+'\n':''}${_hasNgn&&typeof CASE_NGN_TYPE_RULES==='string'?'\n'+CASE_NGN_TYPE_RULES+'\n':''}
 ═══ JSON SHAPE (return EXACTLY this structure) ═══
 {
   "title": "string",
@@ -11957,7 +12020,7 @@ ${typeof CASE_SLOPE_SYNC_RULES==='string'?'\n'+CASE_SLOPE_SYNC_RULES+'\n':''}
       "questions": [
         {
           "id": "s1q1",
-          "type": "MCQ|SATA|Prioritization|Ordering|Calculation|Education",
+          "type": "${_hasNgn?'MCQ|SATA|Prioritization|Ordering|Calculation|Education|Bowtie|Matrix|Cloze|Trend':'MCQ|SATA|Prioritization|Ordering|Calculation|Education'}",
           "stem": "string",
           "options": [ { "label": "A", "text": "string" } ],
           "correctAnswers": ["B"],
@@ -12434,6 +12497,11 @@ function caseDifficultySignals(caseStudy,factIndex){
         if(!firstRevealed.has(k)||n<firstRevealed.get(k))firstRevealed.set(k,n);
       }
     }
+    // v21.7: Trend flowsheet rows disclose patient data at their stage just like stage.data.
+    for(const q of st.questions||[])for(const tr of (q.trendTable&&q.trendTable.rows)||[])for(const id of tr.factIds||[]){
+      const k=String(id).toLowerCase();
+      if(!firstRevealed.has(k)||n<firstRevealed.get(k))firstRevealed.set(k,n);
+    }
   }
   const miss=m=>issues.push({sev:'warn',msg:`Requested difficulty "${caseStudy.difficulty}" but ${m}`});
   if(level==='exam'){
@@ -12512,7 +12580,17 @@ function caseShapeIssues(cs){
     arr(s.data,p+'.data').forEach((d,j)=>{const dp=p+'.data['+j+']';if(!obj(d,dp))return;for(const k of ['label','value','supportType','availability'])str(d[k],dp+'.'+k);ids(d.factIds,dp+'.factIds');});
     arr(s.questions,p+'.questions').forEach((q,j)=>{const qp=p+'.questions['+j+']';if(!obj(q,qp))return;for(const k of ['id','type','stem','cjmmSkill'])str(q[k],qp+'.'+k);
       ids(q.correctAnswers,qp+'.correctAnswers');
-      arr(q.options,qp+'.options').forEach((o,k)=>{if(obj(o,qp+'.options['+k+']')){str(o.label,qp+'.option.label');str(o.text,qp+'.option.text');}});
+      arr(q.options,qp+'.options').forEach((o,k)=>{if(obj(o,qp+'.options['+k+']')){str(o.label,qp+'.option.label');str(o.text,qp+'.option.text');str(o.group,qp+'.option.group');}});
+      // v21.7: validate optional NGN Matrix and Trend containers before any downstream validator or renderer traverses them.
+      if(q.matrix!==undefined&&obj(q.matrix,qp+'.matrix')){
+        str(q.matrix.mode,qp+'.matrix.mode');
+        arr(q.matrix.columns,qp+'.matrix.columns',false).forEach((col,k)=>{if(obj(col,qp+'.matrix.columns['+k+']')){str(col.id,qp+'.matrix.column.id');str(col.label,qp+'.matrix.column.label');}});
+        arr(q.matrix.rows,qp+'.matrix.rows',false).forEach((row,k)=>{if(obj(row,qp+'.matrix.rows['+k+']')){str(row.id,qp+'.matrix.row.id');str(row.text,qp+'.matrix.row.text');}});
+      }
+      if(q.trendTable!==undefined&&obj(q.trendTable,qp+'.trendTable')){
+        ids(q.trendTable.timepoints,qp+'.trendTable.timepoints');
+        arr(q.trendTable.rows,qp+'.trendTable.rows',false).forEach((tr,k)=>{const rp=qp+'.trendTable.rows['+k+']';if(obj(tr,rp)){str(tr.label,rp+'.label');str(tr.supportType,rp+'.supportType');ids(tr.values,rp+'.values');ids(tr.factIds,rp+'.factIds');}});
+      }
       arr(q.rationales,qp+'.rationales').forEach((r,k)=>{if(obj(r,qp+'.rationales['+k+']')){for(const key of ['option','text','supportType'])str(r[key],qp+'.rationale.'+key);ids(r.factIds,qp+'.rationale.factIds');}});
     });
   });
@@ -12530,6 +12608,132 @@ function caseCompletenessIssues(cs,contract){
 }
 const CASE_SUPPORT_TYPES=new Set(['direct','combined','inference','instantiated','neutral-framing']);
 const CASE_AVAILABILITY=new Set(['background','revealed']);
+const CASE_QUESTION_TYPES=['MCQ','SATA','Prioritization','Ordering','Calculation','Education','Bowtie','Matrix','Cloze','Trend'];
+// v21.7: deterministic structural, terminology, and numeric-grounding checks for NGN Bowtie, Matrix, Cloze, and Trend items.
+function caseValidateNgnQuestion(q,qn,factIndex,checkIds,questionIds,explanationValues,neutralValues,issues){
+  const opts=q.options||[],answers=(q.correctAnswers||[]).map(x=>String(x||'').trim());
+  if(q.type==='Bowtie'){
+    const groups={actions:[],condition:[],parameters:[]},byLabel=new Map();
+    for(const o of opts){
+      const g=String(o.group||'').trim();
+      if(!Object.prototype.hasOwnProperty.call(groups,g))issues.push({sev:'error',msg:qn+': Bowtie option "'+(o.label||'?')+'" has invalid or missing group "'+g+'" (expected actions, condition, or parameters)'});
+      else{groups[g].push(o);byLabel.set(String(o.label||'').trim(),g);}
+    }
+    if(groups.actions.length<4||groups.actions.length>5)issues.push({sev:'error',msg:qn+': Bowtie requires 4–5 "actions" options (got '+groups.actions.length+')'});
+    if(groups.condition.length!==4)issues.push({sev:'error',msg:qn+': Bowtie requires exactly 4 "condition" options (got '+groups.condition.length+')'});
+    if(groups.parameters.length<4||groups.parameters.length>5)issues.push({sev:'error',msg:qn+': Bowtie requires 4–5 "parameters" options (got '+groups.parameters.length+')'});
+    let aCnt=0,cCnt=0,pCnt=0;
+    for(const ca of answers){const g=byLabel.get(ca);if(g==='actions')aCnt++;else if(g==='condition')cCnt++;else if(g==='parameters')pCnt++;}
+    if(answers.length!==5||aCnt!==2||cCnt!==1||pCnt!==2)
+      issues.push({sev:'error',msg:qn+': Bowtie requires 2 actions, 1 condition, and 2 parameters in correctAnswers (got actions:'+aCnt+', condition:'+cCnt+', parameters:'+pCnt+')'});
+    return;
+  }
+  if(q.type==='Matrix'){
+    const mx=q.matrix;
+    if(!mx||typeof mx!=='object'||Array.isArray(mx)){issues.push({sev:'error',msg:qn+': Matrix question is missing its "matrix" object'});return;}
+    const mode=String(mx.mode||'').trim();
+    if(mode!=='single'&&mode!=='multiple')issues.push({sev:'error',msg:qn+': Matrix mode must be "single" or "multiple" (got "'+mode+'")'});
+    const cols=mx.columns||[],rows=mx.rows||[];
+    if(cols.length<2||cols.length>4)issues.push({sev:'error',msg:qn+': Matrix requires 2–4 columns (got '+cols.length+')'});
+    if(rows.length<3||rows.length>6)issues.push({sev:'error',msg:qn+': Matrix requires 3–6 rows (got '+rows.length+')'});
+    const colById=new Map(),rowHits=new Map();
+    for(const c of cols){
+      const cid=String(c?.id||'').trim(),clbl=String(c?.label||'').trim();
+      if(!cid||colById.has(cid))issues.push({sev:'error',msg:qn+': Matrix column IDs must be nonempty and unique'});
+      else colById.set(cid,clbl);
+      if(!clbl)issues.push({sev:'error',msg:qn+': Matrix column "'+(cid||'?')+'" label is empty'});
+      neiaTerminologyScan(clbl,qn+' matrix column '+(cid||'?'),issues);
+    }
+    for(const r of rows){
+      const rid=String(r?.id||'').trim(),rtxt=String(r?.text||'').trim();
+      if(!rid||rowHits.has(rid))issues.push({sev:'error',msg:qn+': Matrix row IDs must be nonempty and unique'});
+      else rowHits.set(rid,[]);
+      if(!rtxt)issues.push({sev:'error',msg:qn+': Matrix row "'+(rid||'?')+'" text is empty'});
+      neiaTerminologyScan(rtxt,qn+' matrix row '+(rid||'?'),issues);
+    }
+    for(const ca of answers){
+      const m=ca.match(/^([^:]+):([^:]+)$/);
+      if(!m||!rowHits.has(m[1])||!colById.has(m[2]))issues.push({sev:'error',msg:qn+': Matrix correct answer "'+ca+'" is not a valid "<rowId>:<colId>" cell'});
+      else rowHits.get(m[1]).push(m[2]);
+    }
+    for(const [rid,cids] of rowHits){
+      if(mode==='single'&&cids.length!==1)issues.push({sev:'error',msg:qn+': Matrix single-choice row '+rid+' must select exactly 1 column (got '+cids.length+')'});
+      if(mode==='multiple'&&cids.length<1)issues.push({sev:'error',msg:qn+': Matrix multiple-response row '+rid+' must select at least 1 column'});
+    }
+    if(mode==='multiple'&&rows.length&&cols.length&&answers.length>=rows.length*cols.length)
+      issues.push({sev:'error',msg:qn+': Matrix multiple-response marks every cell in the grid correct'});
+    const ratLabels=new Set((q.rationales||[]).map(r=>String(r.option||'').trim()));
+    for(const rid of rowHits.keys())if(!ratLabels.has(rid))issues.push({sev:'error',msg:qn+': Matrix row '+rid+' has no rationale'});
+    for(const r of q.rationales||[]){const ro=String(r.option||'').trim();if(rowHits.size&&!rowHits.has(ro))issues.push({sev:'error',msg:qn+': Matrix rationale label "'+ro+'" is not among matrix row IDs'});}
+    // Warn-tier numeric check on Matrix rows keyed to affirmative columns (Contraindicated/Nonessential/Ineffective trap rows stay exempt).
+    const NEG_COL=/\b(?:contraindicat\w*|nonessential|unnecessary|unrelated|ineffective|inappropriate|wrong|avoid\w*|harmful|not\s+indicated)\b/i;
+    for(const row of rows){
+      const rid=String(row?.id||'').trim(),cids=rowHits.get(rid)||[];
+      if(!cids.length||!cids.some(cid=>!NEG_COL.test(colById.get(cid)||'')))continue;
+      const r=(q.rationales||[]).find(x=>String(x.option||'').trim()===rid),ids=r&&(r.factIds||[]).length?r.factIds:(questionIds.length?questionIds:['']),found=[];
+      caseAuditTextValues(row.text,ids,factIndex,qn+' Matrix row '+rid,found,r&&r.supportType==='instantiated'?'instantiated':'direct',explanationValues,neutralValues);
+      for(const i of found)issues.push({sev:'warn',msg:i.msg+' (this Matrix row is keyed to an affirmative column; check it against the source)'});
+    }
+    return;
+  }
+  if(q.type==='Cloze'){
+    const rawBlanks=[...String(q.stem||'').matchAll(/\{\{(D\d+)\}\}/g)].map(m=>m[1]);
+    const validBlanks=rawBlanks.length>=2&&rawBlanks.length<=4&&new Set(rawBlanks).size===rawBlanks.length&&rawBlanks.every((b,idx)=>b==='D'+(idx+1));
+    if(!validBlanks)issues.push({sev:'error',msg:qn+': Cloze stem must contain 2–4 unique contiguous placeholders {{D1}}..{{D4}} in order'});
+    const blankSet=new Set(rawBlanks);
+    for(const o of opts){
+      const g=String(o.group||'').trim();
+      if(!blankSet.has(g))issues.push({sev:'error',msg:qn+': Cloze option "'+(o.label||'?')+'" has invalid or missing group "'+g+'"'});
+    }
+    for(const bid of new Set(rawBlanks)){
+      const bOpts=opts.filter(o=>String(o.group||'').trim()===bid);
+      if(bOpts.length<3||bOpts.length>5)issues.push({sev:'error',msg:qn+': Cloze blank '+bid+' requires 3–5 options (got '+bOpts.length+')'});
+      const bLabels=new Set(bOpts.map(o=>String(o.label||'').trim()));
+      const bKeys=answers.filter(ca=>bLabels.has(ca));
+      if(bKeys.length!==1)issues.push({sev:'error',msg:qn+': Cloze blank '+bid+' requires exactly 1 correct answer (got '+bKeys.length+')'});
+    }
+    if(validBlanks&&answers.length!==rawBlanks.length)
+      issues.push({sev:'error',msg:qn+': Cloze correctAnswers count ('+answers.length+') must match blank count ('+rawBlanks.length+')'});
+    return;
+  }
+  if(q.type==='Trend'){
+    const tt=q.trendTable;
+    if(!tt||typeof tt!=='object'||Array.isArray(tt))issues.push({sev:'error',msg:qn+': Trend question is missing its "trendTable" object'});
+    else{
+      const tps=tt.timepoints||[],tRows=tt.rows||[];
+      if(tps.length<3||tps.length>5||tps.some(tp=>!String(tp||'').trim())||new Set(tps.map(tp=>String(tp||'').trim().toLowerCase())).size!==tps.length)
+        issues.push({sev:'error',msg:qn+': Trend trendTable requires 3–5 nonempty unique timepoints (got '+tps.length+')'});
+      for(const tp of tps)neiaTerminologyScan(tp,qn+' trendTable timepoint',issues);
+      if(tRows.length<2||tRows.length>5)issues.push({sev:'error',msg:qn+': Trend trendTable requires 2–5 parameter rows (got '+tRows.length+')'});
+      tRows.forEach((tr,ri)=>{
+        const rWhere=qn+' trendTable "'+(tr.label||('row '+(ri+1)))+'"',vals=tr.values||[];
+        if(!String(tr.label||'').trim())issues.push({sev:'error',msg:rWhere+': parameter label is empty'});
+        if(tps.length&&vals.length!==tps.length)issues.push({sev:'error',msg:rWhere+': values count ('+vals.length+') does not match timepoints count ('+tps.length+')'});
+        if(vals.some(v=>!String(v||'').trim()))issues.push({sev:'error',msg:rWhere+': contains an empty timepoint value'});
+        if(!tr.supportType)issues.push({sev:'warn',msg:rWhere+' is missing supportType (treated as non-neutral)'});
+        else if(!CASE_SUPPORT_TYPES.has(tr.supportType)||tr.supportType==='neutral-framing')issues.push({sev:'error',msg:rWhere+': invalid supportType "'+tr.supportType+'" (trend parameters must cite grounded facts)'});
+        if(!(tr.factIds||[]).length)issues.push({sev:'error',msg:rWhere+': lacks fact IDs'});
+        checkIds(tr.factIds,qn+' trendTable');
+        neiaTerminologyScan(tr.label,rWhere,issues);
+        vals.forEach((val,vi)=>{
+          const at=tps[vi]||('T'+(vi+1));
+          caseAuditDatumValues({label:tr.label,value:val,supportType:tr.supportType,factIds:tr.factIds},factIndex,qn+' trendTable @ '+at,issues,neutralValues);
+          neiaTerminologyScan(val,rWhere+' @ '+at,issues);
+        });
+      });
+    }
+    const isSata=/select all that apply/i.test(String(q.stem||'')),_cc=answers.length,_oc=opts.length;
+    if(isSata){
+      if(_cc<2)issues.push({sev:'error',msg:qn+': Trend SATA needs at least 2 correct answers (got '+_cc+')'});
+      else if(_oc&&_cc>=_oc)issues.push({sev:'error',msg:qn+': Trend SATA marks every option correct ('+_cc+'/'+_oc+')'});
+      else if(_cc>4)issues.push({sev:'error',msg:qn+': Trend SATA with '+_cc+' correct answers breaks the 2–4 contract'});
+      if(_oc<5||_oc>6)issues.push({sev:'warn',msg:qn+': Trend SATA has '+_oc+' options; 5–6 expected'});
+    }else{
+      if(_cc!==1)issues.push({sev:'error',msg:qn+': Trend single-best-answer must have exactly 1 correct answer (got '+_cc+')'});
+      if(_oc<3)issues.push({sev:'error',msg:qn+': Trend requires at least 3 options (got '+_oc+')'});
+    }
+  }
+}
 function validateCaseStudy(caseStudy,factIndex,allowedFactIds,expectedCondition,allowedConditionNames){
   const shape=caseShapeIssues(caseStudy);if(shape.length)return shape;
   const issues=[];if(!caseStudy.stages.length)issues.push({sev:'error',msg:'Case has no stages'});
@@ -12572,7 +12776,7 @@ function validateCaseStudy(caseStudy,factIndex,allowedFactIds,expectedCondition,
   // launder invented rationale values, which is exactly what the entailment check exists to
   // stop. Stage ordering is still enforced separately by validateStageTiming.
   const presentedValues=new Set(),neutralValues=caseNeutralCalculationValues(caseStudy,factIndex,allowedFactIds);
-  for(const stage of caseStudy.stages||[])
+  for(const stage of caseStudy.stages||[]){
     for(const d of stage.data||[]){
       const probe=[];
       caseAuditDatumValues(d,factIndex,'probe',probe,neutralValues);
@@ -12581,6 +12785,16 @@ function validateCaseStudy(caseStudy,factIndex,allowedFactIds,expectedCondition,
       if(probe.some(x=>x.sev==='error')||(d.supportType&&!CASE_SUPPORT_TYPES.has(d.supportType))||(!validIds&&d.supportType!=='neutral-framing'))continue;
       for(const v of caseNumericTokens((d.label||'')+' '+(d.value||'')).tokens)presentedValues.add(v.key);
     }
+    // v21.7: Trend flowsheet rows that pass their own grounding audit contribute to presentedValues just like stage.data.
+    for(const q of stage.questions||[])for(const tr of (q.trendTable&&q.trendTable.rows)||[]){
+      const ids=tr.factIds||[],vals=tr.values||[],validIds=ids.length&&ids.every(id=>factIndex.has(String(id).toLowerCase())&&(!inPacket||allowedFactIds.has(String(id).toLowerCase())));
+      if(!validIds||!vals.length||(tr.supportType&&(!CASE_SUPPORT_TYPES.has(tr.supportType)||tr.supportType==='neutral-framing')))continue;
+      const probe=[];
+      for(const val of vals)caseAuditDatumValues({label:tr.label,value:val,supportType:tr.supportType,factIds:ids},factIndex,'probe',probe,neutralValues);
+      if(probe.some(x=>x.sev==='error'))continue;
+      for(const val of vals)for(const v of caseNumericTokens((tr.label||'')+' '+(val||'')).tokens)presentedValues.add(v.key);
+    }
+  }
   const seenQIds=new Set(),seenStageNums=new Set();
   for(const stage of caseStudy.stages||[]){
     const sn='Stage '+(stage.stageNumber||'?');
@@ -12622,8 +12836,8 @@ function validateCaseStudy(caseStudy,factIndex,allowedFactIds,expectedCondition,
       // v15.17: present-but-empty/duplicated question fields were accepted as usable items.
       if(!String(q.stem||'').trim())issues.push({sev:'error',msg:qn+': question stem is empty'});
       const labels=(q.options||[]).map(o=>String(o.label||'').trim()),answers=q.correctAnswers||[];
-      if(!['MCQ','SATA','Prioritization','Ordering','Calculation','Education'].includes(q.type))issues.push({sev:'error',msg:qn+': unsupported question type'});
-      if(q.type!=='Calculation'&&!labels.length)issues.push({sev:'error',msg:qn+': question has no usable options'});
+      if(!CASE_QUESTION_TYPES.includes(q.type))issues.push({sev:'error',msg:qn+': unsupported question type'});
+      if(q.type!=='Calculation'&&q.type!=='Matrix'&&!labels.length)issues.push({sev:'error',msg:qn+': question has no usable options'});
       if(labels.some(l=>!l)||new Set(labels).size!==labels.length)issues.push({sev:'error',msg:qn+': option labels must be nonempty and unique'});
       if((q.options||[]).some(o=>!String(o.text||'').trim()))issues.push({sev:'error',msg:qn+': option text is empty'});
       if(new Set(answers).size!==answers.length)issues.push({sev:'error',msg:qn+': correct answers contain duplicates'});
@@ -12631,11 +12845,12 @@ function validateCaseStudy(caseStudy,factIndex,allowedFactIds,expectedCondition,
       if(!(q.rationales||[]).length)issues.push({sev:'error',msg:qn+': question has no rationales'});
       const rationaleLabels=(q.rationales||[]).map(r=>r.option);
       if(new Set(rationaleLabels).size!==rationaleLabels.length)issues.push({sev:'error',msg:qn+': duplicate rationale labels'});
-      for(const r of q.rationales||[]){if(!String(r.text||'').trim())issues.push({sev:'error',msg:qn+': rationale text is empty'});if(labels.length&&!labels.includes(r.option))issues.push({sev:'error',msg:qn+': rationale label is not among the options'});}
+      for(const r of q.rationales||[]){if(!String(r.text||'').trim())issues.push({sev:'error',msg:qn+': rationale text is empty'});if(q.type!=='Matrix'&&labels.length&&!labels.includes(r.option))issues.push({sev:'error',msg:qn+': rationale label is not among the options'});}
       // v17.1: stems use only supplied rationale facts and independently validated case data.
       // A nonempty sentinel avoids changing the helper's legacy missing-citation behavior.
       const questionIds=[...new Set((q.rationales||[]).flatMap(r=>r.factIds||[]))].filter(id=>factIndex.has(String(id).toLowerCase())&&(!inPacket||allowedFactIds.has(String(id).toLowerCase())));
-      caseAuditTextValues(q.stem,questionIds.length?questionIds:[''],factIndex,qn+' stem',issues,'direct',presentedValues,neutralValues);
+      const stemForAudit=q.type==='Cloze'?String(q.stem||'').replace(/\{\{D\d+\}\}/g,'___'):q.stem;
+      caseAuditTextValues(stemForAudit,questionIds.length?questionIds:[''],factIndex,qn+' stem',issues,'direct',presentedValues,neutralValues);
       const derived=q.type==='Calculation'?caseCalculationEvidence(q,factIndex,questionIds,presentedValues):new Set();
       const explanationValues=derived.size?new Set([...presentedValues,...derived]):presentedValues;
       if(q.type==='Calculation'&&derived.size){
@@ -12654,13 +12869,13 @@ function validateCaseStudy(caseStudy,factIndex,allowedFactIds,expectedCondition,
         // warning that reaches every export, never promoted to an error.
         issues.push({sev:'warn',msg:qn+': calculation answer was not independently verified: no supported equation was found in the rationale. Check the working against the cited source.'});
       }
-      neiaTerminologyScan(q.stem,`${qn} stem`,issues);
+      neiaTerminologyScan(stemForAudit,`${qn} stem`,issues);
       for(const o of q.options||[])neiaTerminologyScan(o.text,`${qn} option ${o.label||'?'}`,issues);
       // v17.15 (review H7): stems and rationales were compared with their cited facts, but option text never was, so a
       // dose or rate written only into the KEYED answer passed with no finding. Keyed options are now checked against
       // their own rationale's citations; distractors stay exempt (their values are meant to be wrong). Findings are
       // warnings, not errors: a new error tier is an owner decision (DECISIONS.md, warn-tier validators).
-      if(q.type!=='Calculation'){const keyed=new Set((q.correctAnswers||[]).map(String));for(const o of q.options||[]){
+      if(q.type!=='Calculation'&&q.type!=='Matrix'){const keyed=new Set((q.correctAnswers||[]).map(String));for(const o of q.options||[]){
         if(!keyed.has(String(o.label)))continue;
         const r=(q.rationales||[]).find(x=>String(x.option)===String(o.label)),ids=r&&(r.factIds||[]).length?r.factIds:(questionIds.length?questionIds:['']),found=[];
         caseAuditTextValues(o.text,ids,factIndex,qn+' keyed option '+(o.label||'?'),found,r&&r.supportType==='instantiated'?'instantiated':'direct',explanationValues,neutralValues);
@@ -12678,11 +12893,12 @@ function validateCaseStudy(caseStudy,factIndex,allowedFactIds,expectedCondition,
         else if(_oc&&_cc>=_oc)issues.push({sev:'error',msg:`${qn}: SATA marks every option correct (${_cc}/${_oc})`});
         else if(_cc>4)issues.push({sev:'error',msg:`${qn}: SATA with ${_cc} correct answers breaks the prompt's 2–4 contract`});
       }
+      if(['Bowtie','Matrix','Cloze','Trend'].includes(q.type))caseValidateNgnQuestion(q,qn,factIndex,checkIds,questionIds,explanationValues,neutralValues,issues);
       const optLabels=new Set((q.options||[]).map(o=>String(o.label)));
       // v15.8: Calculation is exempt alongside Ordering. A calculation answer is the computed
       // VALUE ("7000"), not an option label, so a real Parkland item whose options carried a
       // single "Answer" placeholder was errored for a correct answer.
-      for(const ca of q.correctAnswers||[])if(optLabels.size&&!optLabels.has(String(ca))&&q.type!=='Ordering'&&q.type!=='Calculation')
+      for(const ca of q.correctAnswers||[])if(optLabels.size&&!optLabels.has(String(ca))&&q.type!=='Ordering'&&q.type!=='Calculation'&&q.type!=='Matrix')
         issues.push({sev:'error',msg:`${qn}: correct answer ${ca} is not among the options`});
       // v15.2: Ordering answers are deterministic — the prompt defines correctAnswers as
       // "the step labels in correct sequence", i.e. a permutation of the option labels.
@@ -12693,7 +12909,7 @@ function validateCaseStudy(caseStudy,factIndex,allowedFactIds,expectedCondition,
       }
       // The prompt promises a rationale for EVERY option, correct and incorrect alike.
       const ratLabels=new Set((q.rationales||[]).map(r=>String(r.option)));
-      for(const lbl of optLabels)if(!ratLabels.has(lbl))issues.push({sev:'error',msg:`${qn}: option ${lbl} has no rationale`});
+      if(q.type!=='Matrix')for(const lbl of optLabels)if(!ratLabels.has(lbl))issues.push({sev:'error',msg:`${qn}: option ${lbl} has no rationale`});
       for(const r of q.rationales||[]){
         // v15.3: rationales get the same enum guard as data. A case-drifted value like
         // "Neutral-framing" fails the exact-match neutral check below, which turns a
@@ -12733,7 +12949,7 @@ function validateStageTiming(caseStudy){
   const stages=caseStudy.stages||[];
   const available=new Set(),presented=new Set(),issues=[];
   // Pre-pass: background facts are available everywhere, regardless of the stage declaring them.
-  for(const stage of stages)
+  for(const stage of stages){
     for(const d of stage.data||[]){
       const bg=(d.availability||'revealed')==='background';
       for(const id of d.factIds||[]){
@@ -12742,10 +12958,13 @@ function validateStageTiming(caseStudy){
         if(bg)available.add(lid);
       }
     }
+    for(const q of stage.questions||[])for(const tr of (q.trendTable&&q.trendTable.rows)||[])for(const id of tr.factIds||[])presented.add(String(id).toLowerCase());
+  }
   for(const stage of stages){
     for(const d of stage.data||[])
       if((d.availability||'revealed')!=='background')
         for(const id of d.factIds||[])available.add(String(id).toLowerCase());
+    for(const q of stage.questions||[])for(const tr of (q.trendTable&&q.trendTable.rows)||[])for(const id of tr.factIds||[])available.add(String(id).toLowerCase());
     for(const q of stage.questions||[]){
       // v15.8: one finding per question+fact, not one per citation. A question whose
       // options all cite the same unrevealed fact produced an identical warning for every
@@ -12773,7 +12992,10 @@ function caseAllFactIds(caseStudy){
   const add=ids=>{for(const id of ids||[])s.add(String(id).toLowerCase());};
   for(const stage of caseStudy.stages||[]){
     for(const d of stage.data||[])add(d.factIds);
-    for(const q of stage.questions||[])for(const r of q.rationales||[])add(r.factIds);
+    for(const q of stage.questions||[]){
+      for(const tr of (q.trendTable&&q.trendTable.rows)||[])add(tr.factIds);
+      for(const r of q.rationales||[])add(r.factIds);
+    }
   }
   add((caseStudy.debrief||{}).factIds);
   return[...s];
@@ -12783,7 +13005,25 @@ function caseAllFactIds(caseStudy){
 // fact tag is a clickable audit affordance; on paper it is noise a student cannot act on. The
 // answer key always keeps them, since that is the half being spot-checked against the source.
 function caseToMarkdown(cs,{worksheetFactIds=true,hardBreaks=true}={}){
-  const L=[];
+  const L=[],esc=s=>String(s||'').replace(/\|/g,'\\|').replace(/\r?\n/g,' ').trim();
+  const fmtKey=q=>{
+    const ans=q.correctAnswers||[];
+    if(!ans.length)return '—';
+    if(q.type==='Bowtie'){
+      const byLbl=new Map((q.options||[]).map(o=>[String(o.label||'').trim(),String(o.group||'').trim()]));
+      const a=ans.filter(x=>byLbl.get(String(x))==='actions'),c=ans.filter(x=>byLbl.get(String(x))==='condition'),pm=ans.filter(x=>byLbl.get(String(x))==='parameters');
+      return (a.length||c.length||pm.length)?('Actions: '+(a.join(', ')||'—')+' · Condition: '+(c.join(', ')||'—')+' · Parameters: '+(pm.join(', ')||'—')):ans.join(', ');
+    }
+    if(q.type==='Matrix'&&q.matrix){
+      const cols=new Map((q.matrix.columns||[]).map(c=>[String(c.id||'').trim(),String(c.label||'').trim()]));
+      return ans.map(ca=>{const m=String(ca).match(/^([^:]+):([^:]+)$/);return m?m[1]+' → '+(cols.get(m[2])||m[2])+' ('+ca+')':String(ca);}).join('; ');
+    }
+    if(q.type==='Cloze'){
+      const byLbl=new Map((q.options||[]).map(o=>[String(o.label||'').trim(),o]));
+      return ans.map(ca=>{const o=byLbl.get(String(ca));return o?(o.group?o.group+': ':'')+ca+' ('+o.text+')':String(ca);}).join(' · ');
+    }
+    return ans.join(', ');
+  };
   L.push('# '+(cs.title||'Clinical Case Study'));
   const p=cs.patient||{};
   L.push('**Condition:** '+(cs.condition||'—')+'  |  **Difficulty:** '+(cs.difficulty||'—'));
@@ -12802,7 +13042,48 @@ function caseToMarkdown(cs,{worksheetFactIds=true,hardBreaks=true}={}){
       // them together on one line. Two trailing spaces end each line with a hard break. The auditor's payload passes
       // hardBreaks:false, so the text the item auditor reads is unchanged.
       const opts=[...(q.options||[])],br=hardBreaks?'  ':'';
-      L.push('**Q'+stage.stageNumber+'.'+(i+1)+' ('+(q.type||'MCQ')+')** '+(q.stem||'')+(opts.length?br:''));
+      const stemText=q.type==='Cloze'?String(q.stem||'').replace(/\{\{(D\d+)\}\}/g,'[ ___ ($1) ___ ]'):(q.stem||'');
+      if(q.type==='Bowtie'){
+        L.push('**Q'+stage.stageNumber+'.'+(i+1)+' (Bowtie)** '+stemText);
+        for(const [gk,glbl,mk] of [['actions','Actions to Take (select 2)','[ ]'],['condition','Potential Condition (select 1)','( )'],['parameters','Parameters to Monitor (select 2)','[ ]']]){
+          L.push('   - **'+glbl+':**');
+          for(const o of opts.filter(x=>x.group===gk))L.push('     - '+mk+' '+(o.label||'')+'. '+(o.text||''));
+        }
+        L.push('');return;
+      }
+      if(q.type==='Matrix'&&q.matrix){
+        const cols=q.matrix.columns||[],rows=q.matrix.rows||[],cell=q.matrix.mode==='multiple'?'[ ]':'( )';
+        L.push('**Q'+stage.stageNumber+'.'+(i+1)+' (Matrix — '+(q.matrix.mode==='multiple'?'multiple response':'single choice per row')+')** '+stemText);
+        L.push('');
+        L.push('| Finding / Action | '+cols.map(c=>esc(c.label||c.id)).join(' | ')+' |');
+        L.push('| --- | '+cols.map(()=>':---:').join(' | ')+' |');
+        for(const r of rows)L.push('| '+esc((r.id?r.id+'. ':'')+(r.text||''))+' | '+cols.map(()=>cell).join(' | ')+' |');
+        L.push('');return;
+      }
+      if(q.type==='Cloze'){
+        L.push('**Q'+stage.stageNumber+'.'+(i+1)+' (Cloze)** '+stemText);
+        const blanks=[...new Set([...String(q.stem||'').matchAll(/\{\{(D\d+)\}\}/g)].map(m=>m[1]))];
+        for(const bid of (blanks.length?blanks:[...new Set(opts.map(o=>o.group).filter(Boolean))])){
+          L.push('   - **Blank '+bid+' (select 1):**');
+          for(const o of opts.filter(x=>x.group===bid))L.push('     - '+(o.label||'')+'. '+(o.text||''));
+        }
+        L.push('');return;
+      }
+      if(q.type==='Trend'&&q.trendTable){
+        const tps=q.trendTable.timepoints||[],tRows=q.trendTable.rows||[];
+        L.push('**Q'+stage.stageNumber+'.'+(i+1)+' (Trend)** '+stemText);
+        L.push('');
+        L.push('| Parameter | '+tps.map(esc).join(' | ')+' |');
+        L.push('| --- | '+tps.map(()=>'---').join(' | ')+' |');
+        for(const tr of tRows){
+          const cite=worksheetFactIds&&tr.factIds&&tr.factIds.length?' ['+tr.factIds.join(', ')+']':'';
+          L.push('| '+esc((tr.label||'')+cite)+' | '+tps.map((_,ti)=>esc((tr.values||[])[ti]||'—')).join(' | ')+' |');
+        }
+        L.push('');
+        opts.forEach((o,k)=>L.push('   '+(o.label||'')+'. '+(o.text||'')+(k<opts.length-1?br:'')));
+        L.push('');return;
+      }
+      L.push('**Q'+stage.stageNumber+'.'+(i+1)+' ('+(q.type||'MCQ')+')** '+stemText+(opts.length?br:''));
       opts.forEach((o,k)=>L.push('   '+(o.label||'')+'. '+(o.text||'')+(k<opts.length-1?br:'')));
       L.push('');
     });
@@ -12811,7 +13092,7 @@ function caseToMarkdown(cs,{worksheetFactIds=true,hardBreaks=true}={}){
   L.push('\n<div class="pagebreak"></div>\n\n## Answer Key\n');
   for(const stage of cs.stages||[]){
     (stage.questions||[]).forEach((q,i)=>{
-      L.push('**Q'+stage.stageNumber+'.'+(i+1)+'** — Answer: '+((q.correctAnswers||[]).join(', ')||'—')+(q.cjmmSkill?'  ·  '+q.cjmmSkill:''));
+      L.push('**Q'+stage.stageNumber+'.'+(i+1)+'** — Answer: '+fmtKey(q)+(q.cjmmSkill?'  ·  '+q.cjmmSkill:''));
       for(const r of q.rationales||[])L.push('   - '+(r.option||'')+': '+(r.text||'')+(r.factIds&&r.factIds.length?'  ['+r.factIds.join(', ')+']':''));
       L.push('');
     });
@@ -12884,10 +13165,74 @@ function caseRepairContract(original,fixed){
 }
 // v17.1: one immutable Fisher–Yates transformation at publication, never at render/export.
 function caseShuffleQuestion(q,random=Math.random){
-  if(!['MCQ','SATA','Prioritization','Education'].includes(q.type))return q;
+  const fyShuffle=arr=>{
+    const out=arr.map(x=>({...x}));
+    for(let i=out.length-1;i>0;i--){const value=random();if(!Number.isFinite(value)||value<0||value>=1)throw Error('Invalid shuffle random value');const j=Math.floor(value*(i+1));[out[i],out[j]]=[out[j],out[i]];}
+    return out;
+  };
+  const notice='Answer options retained in original order: label/order-dependent wording requires review.';
+  // v21.7: NGN Bowtie shuffles within each of its 3 pools independently; Cloze shuffles within each blank; Matrix shuffles rows while keeping clinical column order; Trend shuffles A..F choices while keeping chronological timepoints.
+  if(q.type==='Bowtie'){
+    const opts=q.options||[],rats=q.rationales||[],answers=q.correctAnswers||[],labels=opts.map(o=>o?.label);
+    if(!opts.length||labels.some(l=>!l)||new Set(labels).size!==labels.length||answers.length!==5||new Set(answers).size!==5||answers.some(a=>!labels.includes(a))||rats.length!==opts.length||new Set(rats.map(r=>r.option)).size!==opts.length||rats.some(r=>!labels.includes(r.option)||!r.text)||opts.some(o=>!o.text||!['actions','condition','parameters'].includes(o.group)))return q;
+    const gMap={actions:opts.filter(o=>o.group==='actions'),condition:opts.filter(o=>o.group==='condition'),parameters:opts.filter(o=>o.group==='parameters')};
+    if(gMap.actions.length<4||gMap.actions.length>5||gMap.condition.length!==4||gMap.parameters.length<4||gMap.parameters.length>5)return q;
+    const byLbl=new Map(opts.map(o=>[o.label,o.group]));
+    if(answers.filter(a=>byLbl.get(a)==='actions').length!==2||answers.filter(a=>byLbl.get(a)==='condition').length!==1||answers.filter(a=>byLbl.get(a)==='parameters').length!==2)return q;
+    const prose=[q.stem,...opts.map(o=>o.text),...rats.map(r=>r.text)].map(String);
+    if(prose.some(t=>/\b(?:[ACP][1-9]|(?:first|second|third|fourth|fifth|last|former|latter|above|below)[ \t]+(?:option|choice|action|condition|parameter|token)s?)\b/i.test(t)))return {...q,shuffleNotice:notice};
+    const mapping=new Map(),nextOpts=[];
+    for(const [gk,pfx] of [['actions','A'],['condition','C'],['parameters','P']]){
+      const sh=fyShuffle(gMap[gk]);
+      sh.forEach((o,i)=>{const nl=pfx+(i+1);mapping.set(o.label,nl);nextOpts.push({...o,label:nl});});
+    }
+    const res={...q,options:nextOpts,correctAnswers:answers.map(a=>mapping.get(a)).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})),rationales:rats.map(r=>({...r,option:mapping.get(r.option),factIds:[...(r.factIds||[])]})).sort((a,b)=>a.option.localeCompare(b.option,undefined,{numeric:true}))};
+    delete res.shuffleNotice;return res;
+  }
+  if(q.type==='Cloze'){
+    const opts=q.options||[],rats=q.rationales||[],answers=q.correctAnswers||[],labels=opts.map(o=>o?.label);
+    const blanks=[...String(q.stem||'').matchAll(/\{\{(D\d+)\}\}/g)].map(m=>m[1]);
+    if(blanks.length<2||blanks.length>4||new Set(blanks).size!==blanks.length||blanks.some((b,i)=>b!=='D'+(i+1)))return q;
+    if(!opts.length||labels.some(l=>!l)||new Set(labels).size!==labels.length||answers.length!==blanks.length||new Set(answers).size!==answers.length||answers.some(a=>!labels.includes(a))||rats.length!==opts.length||new Set(rats.map(r=>r.option)).size!==opts.length||rats.some(r=>!labels.includes(r.option)||!r.text)||opts.some(o=>!o.text||!blanks.includes(o.group)))return q;
+    for(const bid of blanks){
+      const bo=opts.filter(o=>o.group===bid),bl=new Set(bo.map(o=>o.label));
+      if(bo.length<3||bo.length>5||answers.filter(a=>bl.has(a)).length!==1)return q;
+    }
+    const cleanStem=String(q.stem||'').replace(/\{\{D\d+\}\}/g,'___');
+    const prose=[cleanStem,...opts.map(o=>o.text),...rats.map(r=>r.text)].map(String);
+    if(prose.some(t=>/\bD[1-4][A-Z]\b|\b(?:first|second|third|fourth|fifth|last|former|latter|above|below)[ \t]+(?:option|choice)s?\b/i.test(t)))return {...q,shuffleNotice:notice};
+    const mapping=new Map(),nextOpts=[];
+    for(const bid of blanks){
+      const sh=fyShuffle(opts.filter(o=>o.group===bid));
+      sh.forEach((o,i)=>{const nl=bid+String.fromCharCode(65+i);mapping.set(o.label,nl);nextOpts.push({...o,label:nl});});
+    }
+    const nextAns=blanks.map(bid=>{const hit=answers.find(a=>opts.find(o=>o.label===a)?.group===bid);return mapping.get(hit);});
+    const res={...q,options:nextOpts,correctAnswers:nextAns,rationales:rats.map(r=>({...r,option:mapping.get(r.option),factIds:[...(r.factIds||[])]})).sort((a,b)=>a.option.localeCompare(b.option,undefined,{numeric:true}))};
+    delete res.shuffleNotice;return res;
+  }
+  if(q.type==='Matrix'){
+    const mx=q.matrix,rats=q.rationales||[],answers=(q.correctAnswers||[]).map(String);
+    if(!mx||!['single','multiple'].includes(mx.mode)||!Array.isArray(mx.columns)||!Array.isArray(mx.rows))return q;
+    const cols=mx.columns,rows=mx.rows,rIds=rows.map(r=>r?.id),cIds=cols.map(c=>c?.id);
+    if(cols.length<2||cols.length>4||rows.length<3||rows.length>6||rIds.some(x=>!x)||new Set(rIds).size!==rIds.length||cIds.some(x=>!x)||new Set(cIds).size!==cIds.length||rows.some(r=>!r.text)||cols.some(c=>!c.label))return q;
+    if(!answers.length||new Set(answers).size!==answers.length||rats.length!==rows.length||new Set(rats.map(r=>r.option)).size!==rows.length||rats.some(r=>!rIds.includes(r.option)||!r.text))return q;
+    const parsedAns=answers.map(ca=>{const m=ca.match(/^([^:]+):([^:]+)$/);return m&&rIds.includes(m[1])&&cIds.includes(m[2])?[m[1],m[2]]:null;});
+    if(parsedAns.some(x=>!x))return q;
+    for(const rid of rIds){const k=parsedAns.filter(p=>p[0]===rid).length;if(mx.mode==='single'?k!==1:k<1)return q;}
+    if(mx.mode==='multiple'&&answers.length>=rows.length*cols.length)return q;
+    const prose=[q.stem,...rows.map(r=>r.text),...rats.map(r=>r.text)].map(String);
+    if(prose.some(t=>/\b(?:R[1-9]|row[ \t]*\d+|(?:first|second|third|fourth|fifth|sixth|last|top|bottom|above|below)[ \t]+row)\b/i.test(t)))return {...q,shuffleNotice:notice};
+    const shRows=fyShuffle(rows),rMap=new Map(shRows.map((r,i)=>[r.id,'R'+(i+1)]));
+    const colRank=new Map(cIds.map((id,i)=>[id,i]));
+    const nextAns=parsedAns.map(([rid,cid])=>[rMap.get(rid),cid]).sort((a,b)=>a[0].localeCompare(b[0],undefined,{numeric:true})||(colRank.get(a[1])-colRank.get(b[1]))).map(([nr,cid])=>nr+':'+cid);
+    const res={...q,matrix:{...mx,columns:cols.map(c=>({...c})),rows:shRows.map(r=>({...r,id:rMap.get(r.id)}))},correctAnswers:nextAns,rationales:rats.map(r=>({...r,option:rMap.get(r.option),factIds:[...(r.factIds||[])]})).sort((a,b)=>a.option.localeCompare(b.option,undefined,{numeric:true}))};
+    delete res.shuffleNotice;return res;
+  }
+  if(!['MCQ','SATA','Prioritization','Education','Trend'].includes(q.type))return q;
   const opts=q.options||[],rats=q.rationales||[],answers=q.correctAnswers||[],labels=opts.map(o=>o?.label);
+  const isMulti=q.type==='SATA'||(q.type==='Trend'&&/select all that apply/i.test(String(q.stem||'')));
   if(opts.length<2||opts.length>26||labels.some(l=>!/^\w$/.test(l))||new Set(labels).size!==labels.length||!answers.length||answers.some(a=>!labels.includes(a))||new Set(answers).size!==answers.length||rats.length!==opts.length||new Set(rats.map(r=>r.option)).size!==opts.length||rats.some(r=>!labels.includes(r.option)||!r.text)||opts.some(o=>!o.text))return q;
-  if(q.type==='SATA'?(answers.length<2||answers.length>4||answers.length>=opts.length):answers.length!==1)return q;
+  if(isMulti?(answers.length<2||answers.length>4||answers.length>=opts.length):answers.length!==1)return q;
   // v17.1: numeric/lowercase labels have ambiguous prose references; preserve them explicitly.
   if(labels.some(l=>!/^[A-Z]$/.test(l)))return {...q,shuffleNotice:'Answer options retained in original order: nonstandard labels require review.'};
   const strings=[q.stem,...opts.map(o=>o.text),...rats.map(r=>r.text)].map(String);
@@ -12896,15 +13241,32 @@ function caseShuffleQuestion(q,random=Math.random){
   // v19.0: match horizontal whitespace only (never newlines) and preserve exact separator spacing, matching ngShuffleWorksheetOptions.
   const ref=/\b([Oo]ption|[Cc]hoice|[Aa]nswer)([ \t]+)([A-Z])\b/g;
   const unsafe=strings.some(text=>itemRefersByLetter(text,labels));
-  if(unsafe)return {...q,shuffleNotice:'Answer options retained in original order: label/order-dependent wording requires review.'};
-  const shuffled=opts.map(o=>({...o}));
-  for(let i=shuffled.length-1;i>0;i--){const value=random();if(!Number.isFinite(value)||value<0||value>=1)throw Error('Invalid shuffle random value');const j=Math.floor(value*(i+1));[shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]];}
+  if(unsafe)return {...q,shuffleNotice:notice};
+  const shuffled=fyShuffle(opts);
   const mapping=new Map(shuffled.map((o,i)=>[o.label,String.fromCharCode(65+i)]));
   const remap=text=>String(text).replace(ref,(whole,kind,sep,label)=>mapping.has(label)?kind+sep+mapping.get(label):whole);
   const result={...q,stem:remap(q.stem),options:shuffled.map(o=>({...o,label:mapping.get(o.label),text:remap(o.text)})),correctAnswers:answers.map(a=>mapping.get(a)).sort(),rationales:rats.map(r=>({...r,option:mapping.get(r.option),text:remap(r.text),factIds:[...(r.factIds||[])]})).sort((a,b)=>a.option.localeCompare(b.option))};
   delete result.shuffleNotice;return result;
 }
 function caseShuffleIssues(cs){return (cs.stages||[]).flatMap(s=>(s.questions||[]).filter(q=>q.shuffleNotice).map(q=>({sev:'warn',msg:'Stage '+s.stageNumber+' '+q.id+': '+q.shuffleNotice})));}
+function caseFormatAnswerSummary(q){
+  const ans=(q&&q.correctAnswers)||[];
+  if(!ans.length)return '—';
+  if(q.type==='Bowtie'){
+    const byLbl=new Map((q.options||[]).map(o=>[String(o.label||'').trim(),String(o.group||'').trim()]));
+    const a=ans.filter(x=>byLbl.get(String(x))==='actions'),c=ans.filter(x=>byLbl.get(String(x))==='condition'),pm=ans.filter(x=>byLbl.get(String(x))==='parameters');
+    return 'Actions: '+(a.join(', ')||'—')+' · Condition: '+(c.join(', ')||'—')+' · Parameters: '+(pm.join(', ')||'—');
+  }
+  if(q.type==='Matrix'&&q.matrix){
+    const cols=new Map((q.matrix.columns||[]).map(c=>[String(c.id||'').trim(),String(c.label||'').trim()]));
+    return ans.map(ca=>{const m=String(ca).match(/^([^:]+):([^:]+)$/);return m?m[1]+' → '+(cols.get(m[2])||m[2]):String(ca);}).join(' · ');
+  }
+  if(q.type==='Cloze'){
+    const byLbl=new Map((q.options||[]).map(o=>[String(o.label||'').trim(),o]));
+    return ans.map(ca=>{const o=byLbl.get(String(ca));return o?(o.group?o.group+': ':'')+ca+' ('+o.text+')':String(ca);}).join(' · ');
+  }
+  return ans.join(', ');
+}
 function caseReviewRows(cs,audit,state){
   if(state==='disabled')return [];
   return caseGateItems(cs).map(it=>{
@@ -13253,7 +13615,7 @@ function casePacketJsonExport(entries,activeKB=null){
   });
   return JSON.stringify({packetVersion:1,caseCount:cases.length,cases},null,2);
 }
-function caseBuildBatchTargets({conditions=[],resolvedConditions=[],concepts=[],mixConceptExemplars=true,includeRelated=false,mixMode='comorbid',batchUnit='conditions',factOpts={},stages=4,questionsPerStage=3,maxBatch=MAX_CASE_BATCH}={}){
+function caseBuildBatchTargets({conditions=[],resolvedConditions=[],concepts=[],mixConceptExemplars=true,includeRelated=false,mixMode='comorbid',batchUnit='conditions',factOpts={},includeTypes=null,stages=4,questionsPerStage=3,maxBatch=MAX_CASE_BATCH}={}){
   const candidates=[];
   if(batchUnit==='concepts'&&concepts.length>0){
     const coveredIds=new Set();
@@ -13275,7 +13637,7 @@ function caseBuildBatchTargets({conditions=[],resolvedConditions=[],concepts=[],
   for(const cond of candidates){
     const facts=cond.isMixed?selectCaseFactsMulti(cond.conditions,fOpts):selectCaseFacts(cond,fOpts);
     if(!facts.length){skipped.push({condition:cond,reason:'no facts at selected tiers'});continue;}
-    eligible.push({condition:cond,facts,sufficiency:caseFactSufficiency(facts,stages*questionsPerStage)});
+    eligible.push({condition:cond,facts,sufficiency:caseFactSufficiency(facts,stages*questionsPerStage,includeTypes)});
   }
   const targets=eligible.slice(0,Math.max(1,maxBatch));
   return{targets,skipped,overflowCount:Math.max(0,eligible.length-targets.length),totalEligible:eligible.length};
@@ -18040,7 +18402,7 @@ function CaseStudyGenerator(){
   const [includeTier2,setIncludeTier2]=useState(true);
   const [includeTier3,setIncludeTier3]=useState(false);
   const [caseIncludeBridge,setCaseIncludeBridge]=useState(false);
-  const [types,setTypes]=useState({mcq:true,sata:true,prioritization:true,ordering:true,calculation:true,education:true});
+  const [types,setTypes]=useState({mcq:true,sata:true,prioritization:true,ordering:true,calculation:true,education:true,bowtie:true,matrix:true,cloze:true,trend:true});
   const [busy,setBusy]=useState(false);
   const [logs,pushLog,setLogs]=useCappedLog();
   const [liveKB,setLiveKB]=useState(0);
@@ -18087,7 +18449,7 @@ function CaseStudyGenerator(){
   const selectedFacts=useMemo(()=>activeCondition?(activeCondition.isMixed?selectCaseFactsMulti(activeCondition.conditions,{includeTier2,includeTier3,includeCalculation:types.calculation,includeEducation:types.education,includeBridge:caseIncludeBridge,allConditions:conditions}):selectCaseFacts(activeCondition,{includeTier2,includeTier3,includeCalculation:types.calculation,includeEducation:types.education,includeBridge:caseIncludeBridge,allConditions:conditions})):[],[activeCondition,conditions,includeTier2,includeTier3,types.calculation,types.education,caseIncludeBridge]);
   // v15.8: the requested shape drives the sufficiency check, so the warning updates live as
   // stages/questions change rather than only describing the fact pool.
-  const sufficiency=useMemo(()=>caseFactSufficiency(selectedFacts,stages*questionsPerStage),[selectedFacts,stages,questionsPerStage]);
+  const sufficiency=useMemo(()=>caseFactSufficiency(selectedFacts,stages*questionsPerStage,types),[selectedFacts,stages,questionsPerStage,types]);
   const toggleType=k=>setTypes(p=>({...p,[k]:!p[k]}));
 
   // v15.17: retain old artifacts, but abort old-source work and disable its current links.
@@ -18345,6 +18707,7 @@ function CaseStudyGenerator(){
           for(const q of stage.questions||[]){
             qi++;
             const ids=new Set();
+            for(const tr of (q.trendTable&&q.trendTable.rows)||[])for(const id of tr.factIds||[])ids.add(String(id).toLowerCase());
             for(const r of q.rationales||[])for(const id of r.factIds||[])ids.add(String(id).toLowerCase());
             ids.forEach(id=>claimed.add(id));
             if(ids.size)entries.push({id:caseId+':'+stage.stageNumber+':'+(q.id||('q'+qi)),caseId,
@@ -18434,7 +18797,7 @@ function CaseStudyGenerator(){
     setAudit(null);setAuditState('disabled');setProvenance(null);setArtifactSource(null);setInvalidCaseRaw('');
   },[K]);
   const isBatchMode=hasCustomCaseScope&&resolvedCaseConditions.length>1&&caseRunMode==='batch';
-  const batchPlan=useMemo(()=>isBatchMode?caseBuildBatchTargets({conditions,resolvedConditions:resolvedCaseConditions,concepts:validCaseConcepts,mixConceptExemplars:caseMixExemplars,includeRelated:caseIncludeRelated,mixMode:caseMixMode,batchUnit:(validCaseConcepts.length>0&&caseMixExemplars)?caseBatchUnit:'conditions',factOpts:{includeTier2,includeTier3,includeCalculation:types.calculation,includeEducation:types.education,includeBridge:caseIncludeBridge},stages,questionsPerStage,maxBatch:MAX_CASE_BATCH}):{targets:[],skipped:[],overflowCount:0,totalEligible:0},[isBatchMode,conditions,resolvedCaseConditions,validCaseConcepts,caseMixExemplars,caseIncludeRelated,caseMixMode,caseBatchUnit,includeTier2,includeTier3,types.calculation,types.education,caseIncludeBridge,stages,questionsPerStage]);
+  const batchPlan=useMemo(()=>isBatchMode?caseBuildBatchTargets({conditions,resolvedConditions:resolvedCaseConditions,concepts:validCaseConcepts,mixConceptExemplars:caseMixExemplars,includeRelated:caseIncludeRelated,mixMode:caseMixMode,batchUnit:(validCaseConcepts.length>0&&caseMixExemplars)?caseBatchUnit:'conditions',factOpts:{includeTier2,includeTier3,includeCalculation:types.calculation,includeEducation:types.education,includeBridge:caseIncludeBridge},includeTypes:types,stages,questionsPerStage,maxBatch:MAX_CASE_BATCH}):{targets:[],skipped:[],overflowCount:0,totalEligible:0},[isBatchMode,conditions,resolvedCaseConditions,validCaseConcepts,caseMixExemplars,caseIncludeRelated,caseMixMode,caseBatchUnit,includeTier2,includeTier3,types,caseIncludeBridge,stages,questionsPerStage]);
   const runBatch=useCallback(async()=>{
     if(!cfg.apiKey){log('Enter your API key in the config sidebar.','err');return;}
     if(!batchPlan.targets.length){log('No queued entries have facts at the selected tiers. Include Tier 2/3 or adjust your selection.','err');return;}
@@ -18622,7 +18985,7 @@ function CaseStudyGenerator(){
         </div>
         <div style={{fontSize:12,fontWeight:600,textTransform:'uppercase',letterSpacing:1,color:'var(--text-dim)',marginBottom:8}}>Question types to include</div>
         <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
-          {[['mcq','Multiple choice'],['sata','SATA'],['prioritization','Prioritization'],['ordering','Ordered response'],['calculation','Calculation (when sourced)'],['education','Patient education']].map(([k,lbl])=>
+          {[['mcq','Multiple choice'],['sata','SATA'],['prioritization','Prioritization'],['ordering','Ordered response'],['calculation','Calculation (when sourced)'],['education','Patient education'],['bowtie','Bow-tie (NGN)'],['matrix','Matrix / grid (NGN)'],['cloze','Cloze drop-down (NGN)'],['trend','Trend (NGN)']].map(([k,lbl])=>
             <label key={k} style={{display:'flex',alignItems:'center',gap:5,fontSize:12,color:types[k]?'var(--text)':'var(--text-dim)',cursor:'pointer',userSelect:'none'}}>
               <input type="checkbox" checked={types[k]} onChange={()=>toggleType(k)} style={{accentColor:'var(--accent)'}}/>{lbl}
             </label>)}
@@ -18753,7 +19116,11 @@ function CaseStudyGenerator(){
 // clinical claim traces back through the Fact Inspector to its original source.
 function CaseRenderer({caseStudy:cs}){
   // v16.0: named controls, visible selection states, and reflowing groups replace inaccessible fixed layouts.
-  const [showKey,setShowKey]=useState({});
+  // v21.7: interactive student selection state for Bowtie, Matrix, Cloze, and Trend items; resets per case via key={activePacketId||'single'}.
+  const [showKey,setShowKey]=useState({}),[picks,setPicks]=useState({});
+  const togglePick=(qk,val,single)=>setPicks(prev=>{const cur=prev[qk]||[];return{...prev,[qk]:single?(cur[0]===val?[]:[val]):(cur.includes(val)?cur.filter(x=>x!==val):[...cur,val])};});
+  const setClozePick=(qk,bid,val)=>setPicks(prev=>({...prev,[qk]:{...(prev[qk]||{}),[bid]:val}}));
+  const setMatrixPick=(qk,rid,cid,multi)=>setPicks(prev=>{const cur=[...(prev[qk]||[])],tok=rid+':'+cid;return{...prev,[qk]:multi?(cur.includes(tok)?cur.filter(x=>x!==tok):[...cur,tok]):[...cur.filter(x=>!x.startsWith(rid+':')),...(cur.includes(tok)?[]:[tok])]};});
   const p=cs.patient||{};
   return <div style={{fontSize:14,lineHeight:1.6}}>
     <div style={{fontSize:14,color:'var(--text-dim)',marginBottom:4}}>{cs.condition} · {cs.difficulty}{(p.age||p.sex)?' · '+[p.age&&p.age+' y/o',p.sex].filter(Boolean).join(' '):''}</div>
@@ -18771,17 +19138,61 @@ function CaseRenderer({caseStudy:cs}){
         </div>)}
       </div>}
       {(stage.questions||[]).map((q,qi)=>{
-        const kOpen=showKey[stage.stageNumber+'-'+qi];
+        const qk=stage.stageNumber+'-'+qi,kOpen=showKey[qk],keySet=new Set((q.correctAnswers||[]).map(String)),opts=q.options||[],sel=picks[qk];
         return <div key={qi} style={{marginBottom:12,border:'1px solid var(--border)',borderRadius:8,overflow:'hidden'}}>
           <div style={{padding:'10px 12px'}}>
-            <div style={{fontSize:14,marginBottom:8}}><span style={{fontFamily:'JetBrains Mono',fontSize:12,color:'var(--accent)',marginRight:6}}>{q.type}</span>{q.stem}</div>
-            {(q.options||[]).map((o,oi)=><div key={oi} style={{fontSize:14,padding:'2px 0 2px 8px',color:(kOpen&&(q.correctAnswers||[]).map(String).includes(String(o.label)))?'var(--accent-green)':'var(--text)'}}>
-              <b>{o.label}.</b> {o.text}{kOpen&&(q.correctAnswers||[]).map(String).includes(String(o.label))?' ✓':''}
+            {q.type==='Cloze'?<div style={{fontSize:14,marginBottom:8,lineHeight:1.85}}>
+              <span style={{fontFamily:'JetBrains Mono',fontSize:12,color:'var(--accent)',marginRight:6}}>{q.type}</span>
+              {String(q.stem||'').split(/(\{\{D\d+\}\})/g).map((seg, idx)=>{
+                const m=seg.match(/^\{\{(D\d+)\}\}$/);
+                if(!m)return <React.Fragment key={idx}>{seg}</React.Fragment>;
+                const bid=m[1],bOpts=opts.filter(o=>o.group===bid),picked=(sel&&sel[bid])||'',keyed=(bOpts.find(o=>keySet.has(String(o.label)))||{}).label||'';
+                const border=kOpen?(picked===keyed?'var(--accent-green)':picked?'var(--accent-red)':'var(--accent)'):'var(--border)';
+                return <select key={idx} aria-label={'Blank '+bid} value={picked} onChange={e=>setClozePick(qk,bid,e.target.value)} style={{display:'inline-block',width:'auto',minWidth:150,margin:'2px 4px',padding:'3px 8px',fontSize:13,borderColor:border,color:kOpen&&picked===keyed?'var(--accent-green)':undefined}}>
+                  <option value="">— {bid} —</option>
+                  {bOpts.map(o=><option key={o.label} value={o.label}>{o.label}. {o.text}{kOpen&&keySet.has(String(o.label))?' ✓':''}</option>)}
+                </select>;
+              })}
+            </div>:<div style={{fontSize:14,marginBottom:8}}><span style={{fontFamily:'JetBrains Mono',fontSize:12,color:'var(--accent)',marginRight:6}}>{q.type}</span>{q.stem}</div>}
+            {q.type==='Trend'&&q.trendTable&&<div style={{overflowX:'auto',marginBottom:10,border:'1px solid var(--border)',borderRadius:6,background:'var(--bg-input)'}}>
+              <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+                <thead><tr><th style={{textAlign:'left',padding:'6px 8px',borderBottom:'1px solid var(--border)',color:'var(--text-dim)'}}>Parameter</th>{(q.trendTable.timepoints||[]).map((tp,ti)=><th key={ti} style={{textAlign:'left',padding:'6px 8px',borderBottom:'1px solid var(--border)',color:'var(--accent)',fontFamily:'JetBrains Mono',fontSize:12}}>{tp}</th>)}</tr></thead>
+                <tbody>{(q.trendTable.rows||[]).map((tr,ri)=><tr key={ri} style={{borderBottom:ri<(q.trendTable.rows.length-1)?'1px solid var(--border)':'none'}}>
+                  <td style={{padding:'6px 8px',fontWeight:600,color:'var(--text-bright)'}}>{tr.label} {(tr.factIds||[]).map(id=><FactTag key={id} factId={id}/>)}</td>
+                  {(q.trendTable.timepoints||[]).map((_,ti)=><td key={ti} style={{padding:'6px 8px',fontFamily:'JetBrains Mono',fontSize:12.5}}>{(tr.values||[])[ti]||'—'}</td>)}
+                </tr>)}</tbody>
+              </table>
+            </div>}
+            {q.type==='Bowtie'?<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(185px,1fr))',gap:8,marginBottom:4}}>
+              {[['actions','Actions to Take (pick 2)',false],['condition','Potential Condition (pick 1)',true],['parameters','Parameters to Monitor (pick 2)',false]].map(([gk,glbl,single])=><div key={gk} style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:6,padding:8}}>
+                <div style={{fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:.6,color:'var(--text-dim)',marginBottom:6}}>{glbl}</div>
+                {opts.filter(o=>o.group===gk).map(o=>{
+                  const lbl=String(o.label),on=Array.isArray(sel)&&sel.includes(lbl),isK=keySet.has(lbl);
+                  const col=kOpen?(isK?'var(--accent-green)':on?'var(--accent-red)':'var(--text)'):(on?'var(--accent)':'var(--text)');
+                  return <button key={lbl} type="button" className="btn-secondary" aria-pressed={on} onClick={()=>togglePick(qk,lbl,single)} style={{display:'block',width:'100%',textAlign:'left',marginBottom:4,padding:'5px 8px',fontSize:12.5,color:col,borderColor:kOpen&&isK?'var(--accent-green)':on?'var(--accent)':undefined}}><b>{lbl}.</b> {o.text}{kOpen?(isK?' ✓':on?' ✕':''):''}</button>;
+                })}
+              </div>)}
+            </div>:q.type==='Matrix'&&q.matrix?<div style={{overflowX:'auto',marginBottom:4,border:'1px solid var(--border)',borderRadius:6}}>
+              <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+                <thead><tr style={{background:'var(--bg-input)'}}><th style={{textAlign:'left',padding:'6px 8px',borderBottom:'1px solid var(--border)',color:'var(--text-dim)'}}>Finding / Nursing Action</th>{(q.matrix.columns||[]).map(c=><th key={c.id} style={{textAlign:'center',padding:'6px 8px',borderBottom:'1px solid var(--border)',color:'var(--text-bright)'}}>{c.label}</th>)}</tr></thead>
+                <tbody>{(q.matrix.rows||[]).map((row,ri)=><tr key={row.id||ri} style={{borderBottom:ri<(q.matrix.rows.length-1)?'1px solid var(--border)':'none'}}>
+                  <td style={{padding:'6px 8px'}}><b>{row.id}.</b> {row.text}</td>
+                  {(q.matrix.columns||[]).map(c=>{
+                    const tok=row.id+':'+c.id,on=Array.isArray(sel)&&sel.includes(tok),isK=keySet.has(tok),multi=q.matrix.mode==='multiple';
+                    return <td key={c.id} style={{textAlign:'center',padding:'6px 8px',background:kOpen&&isK?'rgba(72,187,120,.12)':kOpen&&on&&!isK?'rgba(245,101,101,.12)':undefined}}>
+                      <input type={multi?'checkbox':'radio'} name={multi?undefined:'mx-'+qk+'-'+row.id} aria-label={row.text+' — '+c.label} checked={on} onChange={()=>setMatrixPick(qk,row.id,c.id,multi)} style={{accentColor:'var(--accent)',cursor:'pointer'}}/>
+                      {kOpen&&<span style={{marginLeft:4,fontSize:12,color:isK?'var(--accent-green)':'var(--accent-red)'}}>{isK?'✓':on?'✕':''}</span>}
+                    </td>;
+                  })}
+                </tr>)}</tbody>
+              </table>
+            </div>:q.type==='Cloze'?null:opts.map((o,oi)=><div key={oi} style={{fontSize:14,padding:'2px 0 2px 8px',color:(kOpen&&keySet.has(String(o.label)))?'var(--accent-green)':'var(--text)'}}>
+              <b>{o.label}.</b> {o.text}{kOpen&&keySet.has(String(o.label))?' ✓':''}
             </div>)}
-            <button className="btn-secondary" style={{padding:'3px 10px',fontSize:12,marginTop:8}} aria-expanded={!!kOpen} onClick={()=>setShowKey(p=>({...p,[stage.stageNumber+'-'+qi]:!p[stage.stageNumber+'-'+qi]}))}>{kOpen?'Hide':'Show'} answer & rationale</button>
+            <button className="btn-secondary" style={{padding:'3px 10px',fontSize:12,marginTop:8}} aria-expanded={!!kOpen} onClick={()=>setShowKey(p=>({...p,[qk]:!p[qk]}))}>{kOpen?'Hide':'Show'} answer & rationale</button>
           </div>
           {kOpen&&<div style={{padding:'10px 12px',background:'var(--bg-input)',borderTop:'1px solid var(--border)'}}>
-            <div style={{fontSize:12,marginBottom:6}}><b style={{color:'var(--accent-green)'}}>Answer:</b> {(q.correctAnswers||[]).join(', ')||'—'}{q.cjmmSkill?<span style={{color:'var(--text-dim)'}}>  ·  {q.cjmmSkill}</span>:''}</div>
+            <div style={{fontSize:12,marginBottom:6}}><b style={{color:'var(--accent-green)'}}>Answer:</b> {typeof caseFormatAnswerSummary==='function'?caseFormatAnswerSummary(q):((q.correctAnswers||[]).join(', ')||'—')}{q.cjmmSkill?<span style={{color:'var(--text-dim)'}}>  ·  {q.cjmmSkill}</span>:''}</div>
             {(q.rationales||[]).map((r,ri)=><div key={ri} style={{fontSize:12,marginBottom:5,lineHeight:1.5,display:'flex',flexWrap:'wrap',gap:5,alignItems:'baseline'}}>
               <span><b>{r.option}:</b> {r.text}</span>
               {(r.factIds||[]).map(id=><FactTag key={id} factId={id}/>)}

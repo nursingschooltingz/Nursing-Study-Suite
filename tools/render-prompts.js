@@ -29,6 +29,7 @@ const APPENDIX_PROMPTS = [
   'KB_PLATE_BRIDGE_RULES',
   'NCLEX_PLATE_TRAP_RULES',
   'CASE_SLOPE_SYNC_RULES',
+  'CASE_NGN_TYPE_RULES',
   'GIZMO_DEFAULT_IMPORT_PROMPT',
   'GIZMO_CONVERT_PROMPT',
 ];
@@ -63,7 +64,9 @@ function buildGeneratedAppendix(source) {
                   ? 'tunable; v21.0 P-LATE 4-Pillar distractor & Slope Red Flag runtime directive for NCLEXGenerator'
                   : name === 'CASE_SLOPE_SYNC_RULES'
                     ? 'tunable; v21.0 Unfolding EHR State-Machine & Cross-Stage Synchronization directive for CaseStudyGenerator'
-                    : 'byte-frozen';
+                    : name === 'CASE_NGN_TYPE_RULES'
+                      ? 'tunable; v21.7 Next Generation NCLEX (Bowtie, Matrix, Cloze, Trend) format contract for CaseStudyGenerator'
+                      : 'byte-frozen';
     return promptBlock(extractPromptLiteral(source, name), status);
   });
   return [

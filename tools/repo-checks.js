@@ -42,6 +42,8 @@ const DOCUMENTED_PROMPTS = Object.freeze([
   // v21.0: the P-LATE 4-Pillar distractor & Slope Red Flag runtime directives for NCLEX and Case Studies (not frozen).
   'NCLEX_PLATE_TRAP_RULES',
   'CASE_SLOPE_SYNC_RULES',
+  // v21.7: the NGN item-format rules (Bowtie, Matrix, Cloze, Trend) injected by caseBuildPrompt when NGN types are enabled (not frozen).
+  'CASE_NGN_TYPE_RULES',
 ]);
 
 function listSuiteFiles(rootDir = process.cwd()) {

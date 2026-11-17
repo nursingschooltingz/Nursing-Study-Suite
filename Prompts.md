@@ -1,8 +1,8 @@
 # Nursing Study Suite — Prompt Library
 
-The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, the item-quality auditor, the NCLEX to Anki image reader, and the Import to Gizmo chunk formatter, **extracted verbatim from the shipped v21.6 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
+The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, the item-quality auditor, the NCLEX to Anki image reader, and the Import to Gizmo chunk formatter, **extracted verbatim from the shipped v21.7 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
 
-> **Coverage.** All 23 named prompt constants are represented from live HTML bytes. Thirteen are byte-frozen (with user-approved v21.0 updates to five constants recorded in `docs/history/PLATE-v21.0-frozen-prompts.diff` and user-approved v21.3 promotion of `GIZMO_DEFAULT_IMPORT_PROMPT` and `GIZMO_CONVERT_PROMPT` into `prompt-baseline.json`); `CARD_TRANSCRIBE_PROMPT` is deliberately tunable but requires two transcription runs per card after an edit. `I2A_TRANSCRIBE_PROMPT` and `I2A_ANSWER_PROMPT` (NCLEX to Anki, v17.9) are copied from img2anki.py and are not frozen. `PRIORITY_ORDER_RULES` (v18.1), `KB_SOURCE_ANCHOR_RULES` (v19.0), `KB_CONCEPT_CURRICULUM_RULES` (v19.2), `KB_EXAM_TRAP_RULES` (v19.2), `KB_PLATE_BRIDGE_RULES` (v21.0), `NCLEX_PLATE_TRAP_RULES` (v21.0), and `CASE_SLOPE_SYNC_RULES` (v21.0) are not frozen; harness assertions keep them in step with their workflows. The generated appendix is maintained by `node tools/render-prompts.js --write` and checked by `node verify-repo.js`.
+> **Coverage.** All 24 named prompt constants are represented from live HTML bytes. Thirteen are byte-frozen (with user-approved v21.0 updates to five constants recorded in `docs/history/PLATE-v21.0-frozen-prompts.diff`, user-approved v21.3 promotion of `GIZMO_DEFAULT_IMPORT_PROMPT` and `GIZMO_CONVERT_PROMPT` into `prompt-baseline.json`, and user-approved v21.5 `Look vs. Analyze` clarification in `docs/history/PLATE-v21.5-look-analyze-scales.diff`); `CARD_TRANSCRIBE_PROMPT` is deliberately tunable but requires two transcription runs per card after an edit. `I2A_TRANSCRIBE_PROMPT` and `I2A_ANSWER_PROMPT` (NCLEX to Anki, v17.9) are copied from img2anki.py and are not frozen. `PRIORITY_ORDER_RULES` (v18.1), `KB_SOURCE_ANCHOR_RULES` (v19.0), `KB_CONCEPT_CURRICULUM_RULES` (v19.2), `KB_EXAM_TRAP_RULES` (v19.2), `KB_PLATE_BRIDGE_RULES` (v21.0), `NCLEX_PLATE_TRAP_RULES` (v21.0), `CASE_SLOPE_SYNC_RULES` (v21.0), and `CASE_NGN_TYPE_RULES` (v21.7) are not frozen; harness assertions keep them in step with their workflows. The generated appendix is maintained by `node tools/render-prompts.js --write` and checked by `node verify-repo.js`.
 
 How to read them: text inside `${...}` is filled in at runtime by the app (your settings, your Knowledge Base, the current chunk). The Priority, Case, and audit prompts are shown as their complete builder functions because the assembly logic is part of the design.
 
@@ -2182,6 +2182,42 @@ Before emitting JSON, construct a synchronized stage-by-stage physiological time
 
 3. STRICT FACT-ID GROUNDING & 4-PILLAR DISTRACTORS:
    - Every stage "data" entry, correct option, and distractor rationale must cite exact supplied factIds from CASE SOURCE PACKET, and every distractor rationale should name its clinical trap category ([Priority / First-Action Trap], [Twin-Diagnosis Trap], [Pharm / Lab Hold Trap], or [Further-Teaching / Context Trap]) without repeating unsupported distractor quantities as sourced facts.`;
+````
+
+### `CASE_NGN_TYPE_RULES` (4,770 source chars; tunable; v21.7 Next Generation NCLEX (Bowtie, Matrix, Cloze, Trend) format contract for CaseStudyGenerator)
+
+SHA-256 of the raw template-literal body: `03961fda77b756260cde8d0e0d30f43f5162d072643d94b82cf57f6e0094dd4a`
+
+````js
+const CASE_NGN_TYPE_RULES=`═══ NEXT GENERATION NCLEX (NGN) ITEM FORMAT CONTRACTS (checked in code) ═══
+When using Bowtie, Matrix, Cloze, or Trend among the allowed question types, obey EVERY shared SOURCE BOUNDARY, ANCHOR RULE, 4-PILLAR DISTRACTOR RULE, PRIORITY ORDER, and NUMERIC DISTRACTOR RATIONALE rule above, plus the exact structural JSON contract below. Never force an NGN type when CASE SOURCE PACKET lacks enough distinct facts to ground every pool, row, blank, or timepoint — use another allowed question type instead and note any format fallback in debrief.notes.
+
+1. "type": "Bowtie" — NGN Clinical Judgment Bow-Tie:
+   - Populate "options" with 12 to 14 objects carrying { "label": "string", "group": "actions"|"condition"|"parameters", "text": "string" }:
+     * "actions" group: 4-5 nursing action choices labeled "A1".."A5" (select 2 correct; follow PRIORITY ORDER rules 1-8, LOC vs. AIRWAY, and tiebreakers; distractors use [Priority / First-Action Trap] or [Pharm / Lab Hold Trap]).
+     * "condition" group: 4 potential condition/complication choices labeled "C1".."C4" (select 1 correct; distractors MUST trace to supplied look-alike/sibling exemplars, [Twin-Diagnosis Trap] facts, or grounded complications — never invent unstated diagnoses).
+     * "parameters" group: 4-5 monitoring parameter choices labeled "P1".."P5" (select 2 correct dynamic efficacy/safety monitors from Analyze or Educate / evaluate; distractors use mismatched or static cues grounded in the packet).
+   - "correctAnswers": array of EXACTLY 5 labels — 2 from "actions", 1 from "condition", and 2 from "parameters" (e.g. ["A1","A3","C2","P2","P4"]).
+   - "rationales": one cited rationale object for EVERY option token across all three groups (12-14 entries total).
+
+2. "type": "Matrix" — NGN Matrix / Grid (Single Choice or Multiple Response):
+   - Set "options": [] and include "matrix": { "mode": "single"|"multiple", "columns": [ { "id": "C1", "label": "string" } ], "rows": [ { "id": "R1", "text": "string" } ] }:
+     * "columns": 2-4 unique columns ("C1".."C4"), e.g. Indicated / Nonessential / Contraindicated, Effective / Ineffective / Unrelated, or supplied twin exemplar names.
+     * "rows": 3-6 clinical findings, prescriptions, or client statements ("R1".."R6") grounded in supplied facts.
+   - "correctAnswers": array of "<rowId>:<colId>" pairs (e.g. ["R1:C1","R2:C3","R3:C1"]). For mode "single", include EXACTLY 1 pair per row; for mode "multiple", include AT LEAST 1 pair per row without selecting every cell in the grid.
+   - "rationales": one cited rationale object for EVERY row ("option": "R1".."R6"), explaining both why the keyed column(s) apply and why unkeyed column(s) are wrong (naming the 4-Pillar trap; when a Contraindicated/wrong row contains an unsafe rate or dose, refer to "this row's dose/rate" rather than repeating an ungrounded quantity as sourced fact).
+
+3. "type": "Cloze" — NGN Drop-Down Cloze (Dyad / Triad / Quad Completion):
+   - Write "stem" as 1-3 clinical sentences containing 2 to 4 inline placeholders {{D1}}, {{D2}} (up to {{D4}}) in contiguous ascending order starting at {{D1}} (e.g. "The client is at highest risk for {{D1}} evidenced by {{D2}}, so the nurse should {{D3}}.").
+   - Populate "options" with 3-5 grammatically parallel choices per blank, each carrying { "label": "D1A", "group": "D1", "text": "string" } ("D1A".."D1E", "D2A".."D2E", etc.).
+   - "correctAnswers": array of EXACTLY 1 correct option label per blank in D1..Dk order (e.g. ["D1B","D2A","D3C"]).
+   - "rationales": one cited rationale object for EVERY option across all blanks, naming the 4-Pillar trap on every distractor.
+
+4. "type": "Trend" — NGN Multi-Timepoint Serial Trend:
+   - Include "trendTable": { "timepoints": ["0800","1000","1200"], "rows": [ { "label": "e.g. Heart rate", "values": ["88/min","106/min","124/min"], "supportType": "direct|combined|inference|instantiated", "factIds": ["fact-104"] } ] }:
+     * "timepoints": 3-5 unique chronological labels.
+     * "rows": 2-5 clinical parameters; each row's "values" array MUST match "timepoints" length and carry non-empty packet "factIds" plus an honest "supportType". Use "instantiated" ONLY when a cited factId states a parseable numeric bound/range in that exact unit; when a cited fact states only a qualitative shift (e.g. diminishing wheezes progressing to silent chest), record qualitative values with "direct" or "combined" — NEVER invent ungrounded numbers.
+   - Populate "options" and "correctAnswers" as either single-best-answer (4 options A-D, 1 correct) OR multiple-response (start "stem" with "(Select all that apply)", 5-6 options A-F, 2-4 correct) testing T0 -> T1 -> T2 trajectory velocity, pseudo-improvement, therapy overshoot, or priority response, with one cited rationale per option.`;
 ````
 
 ### `GIZMO_DEFAULT_IMPORT_PROMPT` (631 source chars; byte-frozen)

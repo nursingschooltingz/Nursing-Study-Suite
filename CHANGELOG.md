@@ -9,6 +9,24 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [21.7] — 2026-11-17
+
+Adds four **Next Generation NCLEX (NGN)** clinical judgment item formats—**Bow-tie** (`Bowtie`), **Matrix / grid** (`Matrix`), **Cloze drop-down** (`Cloze`), and **Serial Trend** (`Trend`)—to **06 · Clinical Case Study Generator**, with full deterministic grounding/shape validation, per-pool/per-row/per-blank Fisher–Yates shuffling, Contraindicated-row numeric trap exemptions, interactive `CaseRenderer` practice widgets, and GFM worksheet/Answer-Key exports across single cases and Booklet/Paired Case Packets while staying strictly under the 500 KB `<script type="text/babel">` ceiling. All 13 frozen prompt constants in `prompt-baseline.json` are unchanged.
+
+### Added
+
+- **NGN Question Types in `CaseStudyGenerator` (`CASE_NGN_TYPE_RULES`, `caseBuildPrompt`, `caseFactSufficiency`, `CaseStudyGenerator`, `CaseRenderer`).** Adds toggleable **Bow-tie (NGN)**, **Matrix / grid (NGN)**, **Cloze drop-down (NGN)**, and **Trend (NGN)** checkboxes in Step 02 (`Question types to include`). Injects non-frozen `CASE_NGN_TYPE_RULES` only when at least one NGN checkbox is enabled (keeping legacy `caseBuildPrompt` calls 100% byte-identical and preserving `caseSplitSystemPrompt` prefix caching), enforces `PRIORITY_ORDER_RULES`, `CASE_QUESTION_RULES` (4-Pillar distractor traps, anchor grounding, completeness), `CASE_SLOPE_SYNC_RULES`, and RN/NP Bridge firewall rules, advises on thin NGN pools in `caseFactSufficiency`, and renders interactive 3-column Bow-tie chips, accessible Matrix radio/checkbox tables, inline Cloze `<select>` menus, and serial Trend EHR flowsheets inside `CaseRenderer`.
+- **Deterministic NGN Validation, Stage Timing, Provenance, & Shuffling (`caseShapeIssues`, `caseValidateNgnQuestion`, `validateCaseStudy`, `validateStageTiming`, `caseAllFactIds`, `caseDifficultySignals`, `caseShuffleQuestion`, `caseFormatAnswerSummary`, `caseToMarkdown`).** Validates `Bowtie` (`4–5` actions [`2` keys] + `4` condition [`1` key] + `4–5` parameters [`2` keys] + per-token cited rationales), `Matrix` (`2–4` columns × `3–6` rows in `single` or `multiple` mode + per-row cited rationales + warn-tier affirmative row numeric audit while keeping `Contraindicated`/`Nonessential` trap doses exempt), `Cloze` (`2–4` contiguous `{{D1}}..{{D4}}` blanks, `3–5` options/blank, `1` key/blank), and `Trend` (`3–5` timepoints × `2–5` parameters audited via `direct`/`combined`/`inference`/`instantiated` bounds into `presentedValues`, `validateStageTiming`, and Fact Inspector provenance, paired with MCQ or SATA choices). Fisher–Yates shuffles Bow-tie pools, Cloze blanks, Matrix rows (keeping clinical column order), and Trend options (keeping chronological timepoints) once at publication, keeps NEIA `itemAudit` scoped strictly to single-best-answer `MCQ` (`N/A` on NGN formats), and formats clean GFM tables/keys in `caseToMarkdown`, PDF prints, and Booklet/Paired Case Packets.
+
+### Verification
+
+- **7 new end-to-end assertions (4,086 total)** in `tools/case-ngn-types-tests.js` covering NGN prompt byte-identity, `Bowtie` / `Matrix` / `Cloze` / `Trend` validation and negative contracts, Contraindicated trap numeric safety, per-pool/per-row shuffling, `Trend` threshold instantiation + stage-timing + Fact Inspector provenance, NEIA `N/A` gating + blind audit hygiene, Booklet/PDF Markdown exports, `< 500,000` Babel char ceiling, and `CaseRenderer` VDOM widget smoke.
+- **Prompt bytes.** All 13 frozen hashes in `prompt-baseline.json` pass `tools/check-prompts.js` unchanged. `Prompts.md` regenerated and verified across all 24 documented prompt constants.
+
+See the [release verification record](docs/reviews/v21.7-release.md).
+
+---
+
 ## [21.6] — 2026-11-16
 
 Production **code-review remediation across Steps 1–9** (`ISSUE-01` through `ISSUE-17`): hardens `tools/pdf-toc-slice.js` against FlateDecode zip bombs and >512 MB V8 string crashes, defaults Gemini requests to `store: false` (with automatic HTTP 400 fallback), probes ISO-BMFF (`HEIC`/`HEIF`/`AVIF`) image dimensions across a 512 KB header slice, moves ~966 KB of pure ES2020 logic out of `<script type="text/babel">` below Babel's 500 KB deoptimization ceiling, adds `HARM_CATEGORY_CIVIC_INTEGRITY`, `responseJsonSchema`, `systemInstruction` splits, and a 180s SSE inter-frame idle timeout, enforces CSP `script-src` and DOM-based DOMPurify fallback without `document.write`, optimizes IndexedDB CAS saves and `WeakMap` allocation caches, and upgrades `verify-repo.js` `bootSmoke` to render-smoke `App` and all 8 tool components. All 13 frozen prompt constants in `prompt-baseline.json` are unchanged.
