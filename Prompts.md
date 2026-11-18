@@ -1,6 +1,6 @@
 # Nursing Study Suite — Prompt Library
 
-The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, the item-quality auditor, the NCLEX to Anki image reader, and the Import to Gizmo chunk formatter, **extracted verbatim from the shipped v21.7 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
+The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, the item-quality auditor, the NCLEX to Anki image reader, and the Import to Gizmo chunk formatter, **extracted verbatim from the shipped v21.8 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
 
 > **Coverage.** All 24 named prompt constants are represented from live HTML bytes. Thirteen are byte-frozen (with user-approved v21.0 updates to five constants recorded in `docs/history/PLATE-v21.0-frozen-prompts.diff`, user-approved v21.3 promotion of `GIZMO_DEFAULT_IMPORT_PROMPT` and `GIZMO_CONVERT_PROMPT` into `prompt-baseline.json`, and user-approved v21.5 `Look vs. Analyze` clarification in `docs/history/PLATE-v21.5-look-analyze-scales.diff`); `CARD_TRANSCRIBE_PROMPT` is deliberately tunable but requires two transcription runs per card after an edit. `I2A_TRANSCRIBE_PROMPT` and `I2A_ANSWER_PROMPT` (NCLEX to Anki, v17.9) are copied from img2anki.py and are not frozen. `PRIORITY_ORDER_RULES` (v18.1), `KB_SOURCE_ANCHOR_RULES` (v19.0), `KB_CONCEPT_CURRICULUM_RULES` (v19.2), `KB_EXAM_TRAP_RULES` (v19.2), `KB_PLATE_BRIDGE_RULES` (v21.0), `NCLEX_PLATE_TRAP_RULES` (v21.0), `CASE_SLOPE_SYNC_RULES` (v21.0), and `CASE_NGN_TYPE_RULES` (v21.7) are not frozen; harness assertions keep them in step with their workflows. The generated appendix is maintained by `node tools/render-prompts.js --write` and checked by `node verify-repo.js`.
 
@@ -2110,9 +2110,9 @@ const KB_EXAM_TRAP_RULES=`EXAM TRAP MAPPING RULES (HESI / ATI / NGN):
 6. Strict Source Grounding (Zero Invented Numbers or Traps): Omit "trapRole", "contrastWith", and "contrastPartners" on ordinary facts and conditions that do not carry a source-supported trap role. Never invent patient vignette serial numbers, numeric cutoffs, medication hold thresholds, sequences, or twin comparisons from outside NCLEX/HESI knowledge; during a second-pass omission audit, recover any source-stated percentage/velocity drop, pseudo-improvement warning, hold parameter, rescue sequence, dynamic safety monitor, or contraindication/misconception missed on Pass 1 with its "trapRole" and verbatim "sourceQuote".`;
 ````
 
-### `KB_PLATE_BRIDGE_RULES` (1,919 source chars; tunable; v21.0 P-LATE RN vs. NP Mechanism Bridge tagging rules appended by kbBuildFocusBlock)
+### `KB_PLATE_BRIDGE_RULES` (2,139 source chars; tunable; v21.0 P-LATE RN vs. NP Mechanism Bridge tagging rules appended by kbBuildFocusBlock)
 
-SHA-256 of the raw template-literal body: `633346d5a55610f728f1dbc940f493b54aec41f9cd16c4f64936d9fc1de9c8db`
+SHA-256 of the raw template-literal body: `e98f4b405eaebca3faac0ad9733dca89a73bccaba0064c8119d6d3ca217d7918`
 
 ````js
 const KB_PLATE_BRIDGE_RULES=`P-LATE MULTI-SOURCE & NP MECHANISM BRIDGE RULES (ZERO HALLUCINATION):
@@ -2121,9 +2121,9 @@ const KB_PLATE_BRIDGE_RULES=`P-LATE MULTI-SOURCE & NP MECHANISM BRIDGE RULES (ZE
    - Pathophysiology / Mechanism Bridge (under "Patho"): cellular, neurohormonal, hemodynamic, or receptor-level mechanisms explaining the disease driver when coming from a bridge textbook (e.g., Porth) or advanced patho sidebar.
    - Physical Exam & Differential Nuance (under "Look"): inspection/auscultation/palpation subtleties (e.g., S3 vs. S4 gallop mechanisms, Forrester warm/cold vs. wet/dry exam correlates) with "plateSlot": "exam-nuance" or "diff-tiebreaker".
    - Diagnostic & Differential Nuance (under "Analyze"): gold-standard test hierarchies ("plateSlot": "gold-standard"), look-alike differential tie-breakers ("plateSlot": "diff-tiebreaker"), or false-positive/false-negative confounders (e.g., obesity lowering BNP, renal dysfunction raising BNP).
-   - Receptor & GDMT Pharmacologic Bridge (under "Treat"): receptor-level pharmacology or goal-directed medical therapy sequences ("plateSlot": "gdmt-bridge") explicitly stated in the chunk.
+   - Receptor & GDMT Pharmacologic Bridge (under "Treat"): receptor-level pharmacology, goal-directed medical therapy sequences, or APRN-only prescribing mechanics (prescriptive authority rules, outpatient initial dose-selection/step-up algorithms, and 2nd/3rd-line specialist add-on rationale) ("plateSlot": "gdmt-bridge") explicitly stated in the chunk.
    - Outcome Evaluation (under "Educate"): when explicitly stated as a bridge/prognostic nuance, set "subtype": "evaluate" and optionally "plateSlot": "evaluate".
-3. RN Safety Stays in RN Core: Do NOT demote acute RN stabilization priorities, airway/hemodynamic red flags, boxed warnings, antidotes, or medication hold parameters to the bridge layer — omit "clinicalLayer" (or set "clinicalLayer": "rn") for essential RN bedside safety facts.`;
+3. RN Safety Stays in RN Core: Do NOT demote acute RN stabilization priorities, airway/hemodynamic red flags, boxed warnings, antidotes, required baseline/dynamic safety labs, teratogenicity, or medication hold parameters to the bridge layer — omit "clinicalLayer" (or set "clinicalLayer": "rn") for essential RN bedside safety facts.`;
 ````
 
 ### `NCLEX_PLATE_TRAP_RULES` (4,326 source chars; tunable; v21.0 P-LATE 4-Pillar distractor & Slope Red Flag runtime directive for NCLEXGenerator)

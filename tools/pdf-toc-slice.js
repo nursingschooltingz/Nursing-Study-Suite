@@ -36,7 +36,10 @@ function loadSuiteTocHelpers() {
     '  formatPageRanges: kbFormatPageRanges,\n' +
     '  countPagesInRanges: kbCountPagesInRanges,\n' +
     '  parsePageRanges: kbParsePageRanges,\n' +
+    '  detectConceptSortQBank: kbDetectConceptSortQBank,\n' +
     '  suggestTextbookRole: kbSuggestTextbookRole,\n' +
+    '  mergeConceptInput: kbMergeConceptInput,\n' +
+    '  inferUploadDropMeta: kbInferUploadDropMeta,\n' +
     '  classifyTocFeature: kbClassifyTocFeature,\n' +
     '  buildTocTree: kbBuildTocTree,\n' +
     '  matchTocNodes: kbMatchTocNodes,\n' +
@@ -50,7 +53,10 @@ const {
   formatPageRanges,
   countPagesInRanges,
   parsePageRanges,
+  detectConceptSortQBank,
   suggestTextbookRole,
+  mergeConceptInput,
+  inferUploadDropMeta,
   classifyTocFeature,
   buildTocTree,
   matchTocNodes,
@@ -791,7 +797,7 @@ function inspectPdfTocBuffer(buf, fileName = 'textbook.pdf') {
     }
   }
   const tree = buildTocTree(rawOutline, numPages, pageLabels);
-  const topTitles = tree.flat.filter(n => n.depth <= 1).slice(0, 15).map(n => n.title);
+  const topTitles = tree.flat.filter(n => n.depth <= 2).slice(0, 25).map(n => n.title);
   const suggestedRole = suggestTextbookRole(fileName, topTitles);
   return {
     fileName: path.basename(fileName),
@@ -1001,7 +1007,10 @@ module.exports = {
   formatPageRanges,
   countPagesInRanges,
   parsePageRanges,
+  detectConceptSortQBank,
   suggestTextbookRole,
+  mergeConceptInput,
+  inferUploadDropMeta,
   classifyTocFeature,
   buildTocTree,
   matchTocNodes,

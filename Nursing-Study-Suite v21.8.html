@@ -12,7 +12,31 @@
      policy and uses only its own inline style block and system fonts. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com">
 <title>P-LATE Study Suite</title>
-<!-- v21.7 (2026-11-17): Next Generation NCLEX (NGN) Case Study Question Types — Bowtie, Matrix / Grid, Cloze (Drop-Down),
+<!-- v21.8 (2026-11-18): Digital Library (concept sort) 15-Resource Integration — Textbook Role Precedence Fix, Zero-Click
+     Step 01 Bridge Role / Overarching Giddens Concept / Q-Bank Advisory Drop Inference, 04 · NCLEX Extractor Split Q&A Bookmark
+     Auto-Fill, Lehne TOC Callout Classification, and APRN-to-RN Prescribing Firewall Guardrails.
+     All 13 frozen prompt constants in prompt-baseline.json unchanged.
+     (1) 15-RESOURCE CONCEPT SORT CATALOG & ROLE PRECEDENCE (kbDetectConceptSortQBank, kbSuggestTextbookRole, KB_SOURCE_ROLE_GUIDE,
+     tools/pdf-toc-slice.js): Maps all 15 Digital Library (concept sort) resources and authors — 7 core reading resources (Giddens,
+     Porth/Norris, Jarvis & Eckhardt, McCuistion et al., Lehne/Rosenthal & Burchum, Saunders/Silvestri, Mark Klimek) and 8 Q&A
+     practice banks (Davis Fundamentals/Nugent & Vitale, Davis Med-Surg/Colgrove, Davis Pharm/Colgrove & Doherty, Davis Psych/Curtis &
+     Fegley, Davis Maternal/De Sevo, Davis Peds/Richardson, Saunders Q&A 9e/Silvestri et al., LaCharity PDA/LaCharity, Hosler &
+     Kumagai) — evaluating explicit filename/author tokens before generic TOC "pathophysiology" hits so Lehne's Pharmacotherapeutics
+     resolves deterministically to pharm-bridge instead of patho-bridge while keeping non-Q&A Appendices/Guidelines as reading sources.
+     (2) ZERO-CLICK CONCEPT SORT DROP & Q-BANK GUARDRAIL (kbInferUploadDropMeta, kbMergeConceptInput, KnowledgeBaseBuilder,
+     nclexMatchSplitTocSpans, nclexInspectPdfSplitLayout, NCLEXExtractor): Auto-assigns per-file Bridge roles on Step 01 drop ONLY for
+     unambiguous bridge textbook filenames (Lehne -> pharm-bridge, Porth -> patho-bridge, Jarvis -> exam-bridge; keeping Giddens,
+     Saunders, McCuistion, Klimek, and course slides on default RN Core), deduplicate-merges overarching Giddens concepts into
+     #kb-concepts, badges 04 - Practice Questions Q-bank drops in Step 01 with a 1-click removal action, and auto-populates Split Q&A
+     Question + Answer/Rationale page ranges from embedded PDF bookmarks when dropped into 04 · NCLEX Extractor.
+     (3) LEHNE HIGH-YIELD CALLOUT CLASSIFICATION (kbClassifyTocFeature): Recognizes plural Prototype Drugs, Black Box Warnings,
+     and Drugs to Avoid under prototype-drug, Key Prescribing Considerations, Patient-Centered Care Across the Life Span, and
+     Evaluating Treatment under nursing-process, and Key Points under key-concepts in Step 01 TOC Slicer and pdf-toc-slice.js.
+     (4) APRN-TO-RN PRESCRIBING FIREWALL (KB_PLATE_BRIDGE_RULES, KB_SOURCE_ROLE_GUIDE): Routes APRN-only prescribing mechanics
+     (prescriptive authority, outpatient initial dose-selection/step-up algorithms, 2nd/3rd-line add-on rationale) to
+     clinicalLayer:"bridge" (plateSlot:"gdmt-bridge") while protecting Black Box Warnings, antidotes, hold parameters,
+     required baseline/dynamic safety labs, and teratogenicity in RN Core.
+     v21.7 (2026-11-17): Next Generation NCLEX (NGN) Case Study Question Types — Bowtie, Matrix / Grid, Cloze (Drop-Down),
      and Serial Trend in 06 · Clinical Case Study Generator. All 13 frozen prompt constants in prompt-baseline.json unchanged.
      (1) NGN AUTHORING & GROUNDING CONTRACT (CASE_NGN_TYPE_RULES, caseBuildPrompt, caseFactSufficiency): Adds non-frozen
      CASE_NGN_TYPE_RULES and four toggleable NGN question types (Bowtie, Matrix, Cloze, Trend) to CaseStudyGenerator while
@@ -1835,20 +1859,138 @@ function kbParsePageRanges(input,maxPages=Infinity){
   const ranges=kbMergePageRanges(valid,cap);
   return{ranges,invalid,pageCount:kbCountPagesInRanges(ranges,cap),formatted:kbFormatPageRanges(ranges,cap)};
 }
+// v21.8: check explicit author/textbook tokens on filename BEFORE generic TOC section words ("Pathophysiology"), and map all 15
+// Digital Library (concept sort) textbook/lecture/Q-bank prefixes and authors (7 core reading resources + 8 Q&A practice banks).
+const KB_CONCEPT_SORT_QBANKS=[
+  ['saunders-qa',/\bsaunders\s+q\s*(?:and\s*)?a\b/,'Saunders Q&A Review (Silvestri)'],
+  ['lacharity-pda',/\b(?:lacharity|hosler|kumagai|pda)\b/,'LaCharity PDA (LaCharity, Hosler & Kumagai)'],
+  ['davis-fundamentals',/\b(?:davis\s+fundamentals|fundamentals\s+success|nugent|vitale)\b/,'Davis Fundamentals Success (Nugent & Vitale)'],
+  ['davis-med-surg',/\b(?:davis\s+med\s+surg|med\s+surg\s+success)\b/,'Davis Med-Surg Success (Colgrove)'],
+  ['davis-pharm',/\b(?:davis\s+pharm|pharmacology\s+success|doherty)\b/,'Davis Pharmacology Success (Colgrove & Doherty)'],
+  ['davis-psych',/\b(?:davis\s+psych|psychiatric\s+mental\s+health\s+nursing\s+success|curtis|fegley)\b/,'Davis Psych Success (Curtis & Fegley)'],
+  ['davis-maternal',/\b(?:davis\s+maternal|maternal\s+and\s+newborn\s+success|de\s+sevo)\b/,'Davis Maternal & Newborn Success (De Sevo)'],
+  ['davis-peds',/\b(?:davis\s+peds|pediatric\s+success|richardson)\b/,'Davis Pediatric Success (Richardson)'],
+  ['davis-qa',/\bcolgrove\b/,'Davis Success Q&A (Colgrove)']
+];
+function kbDetectConceptSortQBank(filename=''){
+  const raw=String(filename||'');
+  const fn=raw.toLowerCase().replace(/&/g,' and ').replace(/[^a-z0-9]+/g,' ').trim();
+  for(const [id,re,label] of KB_CONCEPT_SORT_QBANKS){
+    if(re.test(fn)){
+      const isGuide=/\b(?:appendices|appendix\s+a\s+drug\s+charts|drug\s+cards|race\s+model|test\s+taking\s+strateg|nclex\s+rn\s+test\s+plan|guidelines|graduate\s+s\s+perspective|self\s+efficacy)\b/.test(fn)||(/\bsaunders\s+q\s+and\s+a\b/.test(fn)&&/\bchapter\s+0?(?:1|2|3|4|5|10)\b/.test(fn));
+      return{id,label,isQBank:!isGuide||/\bq\s*(?:and\s*)?a\s+pdf$/.test(fn)};
+    }
+  }
+  if(/\bq\s*&\s*a\s*\.\s*pdf$/i.test(raw)||/\b(?:comprehensive\s+(?:final\s+)?exam|practice\s+questions?)\s+q\s*&\s*a\b/i.test(raw)){
+    return{id:'generic-qa',label:'Practice Q&A PDF',isQBank:true};
+  }
+  return null;
+}
 function kbSuggestTextbookRole(filename='',titles=[]){
-  const probe=(String(filename||'')+' '+(Array.isArray(titles)?titles.slice(0,12).join(' '):'')).toLowerCase().replace(/[^a-z0-9]+/g,' ');
-  if(/\b(?:porths?|mccances?|huethers?|brashers|norris|pathophysiology)\b/.test(probe))return{roles:['patho-bridge'],badge:'Patho Bridge',reason:'Pathophysiology text detected (Porth / McCance)'};
-  if(/\b(?:jarvis|bates|bickleys?|dains|seidels?|health\s+assessment|physical\s+examination)\b/.test(probe))return{roles:['exam-bridge'],badge:'Exam / Diff Bridge',reason:'Health Assessment text detected (Jarvis / Bates / Dains)'};
-  if(/\b(?:lehnes?|burchum|rosenthal|katzung|goodman)\b/.test(probe))return{roles:['pharm-bridge'],badge:'Pharm / GDMT Bridge',reason:'Mechanistic Pharmacology text detected (Lehne)'};
-  if(/\b(?:mccuistions?|lilleys?|karch|adams|pharmacology)\b/.test(probe))return{roles:['rn'],badge:'RN Core (Pharm)',reason:'Nursing-Process Pharmacology text detected (McCuistion / Lilley)'};
+  const rawFn=String(filename||'');
+  const fn=rawFn.toLowerCase().replace(/&/g,' and ').replace(/[^a-z0-9]+/g,' ');
+  const toc=(Array.isArray(titles)?titles.slice(0,25).join(' '):'').toLowerCase().replace(/&/g,' and ').replace(/[^a-z0-9]+/g,' ');
+  const probe=(fn+' '+toc).trim();
+  const qbank=kbDetectConceptSortQBank(rawFn);
+  if(qbank&&qbank.isQBank)return{roles:['rn'],badge:'Practice Q-Bank → 04 · NCLEX Extract',reason:qbank.label+' — split Q&A practice bank (use 04 · NCLEX Extract → Split Q&A)',isQBank:true,sourceLabel:qbank.label};
+  if(/\b(?:lehnes?|burchum|rosenthal|katzung|goodman|pharmacotherapeutics)\b/.test(fn))return{roles:['pharm-bridge'],badge:'Pharm / GDMT Bridge',reason:'Mechanistic Pharmacology text detected (Lehne — Rosenthal & Burchum)'};
+  if(/\b(?:porths?|mccances?|huethers?|brashers|norris)\b/.test(fn))return{roles:['patho-bridge'],badge:'Patho Bridge',reason:'Pathophysiology text detected (Porth — Norris / McCance)'};
+  if(/\b(?:jarvis|eckhardt|bates|bickleys?|dains|seidels?)\b/.test(fn))return{roles:['exam-bridge'],badge:'Exam / Diff Bridge',reason:'Health Assessment text detected (Jarvis & Eckhardt / Bates)'};
+  if(/\b(?:mccuistions?|dimaggio|winton|yeager|lilleys?|karch|adams)\b/.test(fn))return{roles:['rn'],badge:'RN Core (Pharm)',reason:'Nursing-Process Pharmacology text detected (McCuistion et al. / Lilley)'};
+  if(/\bklimek\b/.test(fn))return{roles:['rn'],badge:'RN Core (NCLEX Lecture)',reason:'NCLEX Lecture Guide detected (Mark Klimek Lectures 1–12)'};
+  if(/\bgiddens\b/.test(fn))return{roles:['rn'],badge:'RN Core (Concept)',reason:'Concept Curriculum text detected (Giddens)'};
+  if(/\b(?:saunders|silvestri|ignatavicius|hesi|ati)\b/.test(fn)||(qbank&&!qbank.isQBank))return{roles:['rn'],badge:'RN Core',reason:qbank?qbank.label+' reference chapter':'Standard RN Core source (Saunders — Silvestri)'};
+  if(/\b(?:lehnes?|burchum|rosenthal|katzung|goodman|pharmacotherapeutics|prescribing\s+considerations|prescriptive\s+authority)\b/.test(probe))return{roles:['pharm-bridge'],badge:'Pharm / GDMT Bridge',reason:'Mechanistic Pharmacology text detected (Lehne — Rosenthal & Burchum)'};
+  const fnLooksPharm=/\b(?:drugs?\s+for|pharmacology|antivirals?|antibacterials?|antimicrobials?|analgesics?|antihypertensives?|diuretics?|antidepressants?|antipsychotics?)\b/.test(fn);
+  if(/\b(?:porths?|mccances?|huethers?|brashers|norris)\b/.test(probe)||(!fnLooksPharm&&/\bpathophysiology\b/.test(probe)))return{roles:['patho-bridge'],badge:'Patho Bridge',reason:'Pathophysiology text detected (Porth — Norris / McCance)'};
+  if(/\b(?:jarvis|eckhardt|bates|bickleys?|dains|seidels?|health\s+assessment|physical\s+examination)\b/.test(probe))return{roles:['exam-bridge'],badge:'Exam / Diff Bridge',reason:'Health Assessment text detected (Jarvis & Eckhardt / Bates)'};
+  if(/\b(?:mccuistions?|dimaggio|winton|yeager|lilleys?|karch|adams|pharmacology)\b/.test(probe))return{roles:['rn'],badge:'RN Core (Pharm)',reason:'Nursing-Process Pharmacology text detected (McCuistion et al. / Lilley)'};
   return{roles:['rn'],badge:'RN Core',reason:'Standard RN Core source'};
+}
+// v21.8: conservative Step 01 drop inference — auto-tags per-file Bridge roles ONLY for unambiguous bridge textbook prefixes/titles
+// (keeping course lecture slides, Giddens, Saunders, McCuistion, and Klimek on default RN Core), extracts Giddens overarching concepts,
+// and flags 04 - Practice Questions Q-bank PDFs (Davis Success x6, Saunders Q&A 9e, LaCharity PDA) with a 04 · NCLEX Extract advisory.
+function kbMergeConceptInput(existing='',additions=[]){
+  const cur=String(existing||'').split(/[,;\n]+/).map(s=>s.trim()).filter(Boolean);
+  const seen=new Set(cur.map(s=>s.toLowerCase().replace(/[–—]/g,'-').replace(/\s+/g,' ')));
+  for(const raw of Array.isArray(additions)?additions:[additions]){
+    const clean=String(raw||'').replace(/\s+/g,' ').trim();
+    if(!clean||/^(?:front\s+matter|table\s+of\s+contents|index|nclex\s+prep|pharm\s+foundations)/i.test(clean))continue;
+    const key=clean.toLowerCase().replace(/[–—]/g,'-');
+    if(!seen.has(key)){seen.add(key);cur.push(clean);}
+  }
+  return cur.join(', ');
+}
+function kbIsPracticeQBankFile(f){
+  if(!f)return false;
+  const qb=kbDetectConceptSortQBank(f.name||'');
+  if(qb&&qb.isQBank)return true;
+  return /(?:^|[\\/])04\s*-\s*practice\s+questions(?:[\\/]|$)/i.test(String(f.webkitRelativePath||''));
+}
+function kbRemoveFileSubset({targetFiles,cardFileId,destroyPdfDoc,currentFiles,setSourceRoles,setSourcePageRanges,setFiles}){
+  const dropSet=new Set((targetFiles||[]).map(cardFileId));
+  (targetFiles||[]).forEach(destroyPdfDoc);
+  currentFiles.current=currentFiles.current.filter(x=>!dropSet.has(cardFileId(x)));
+  setSourceRoles(p=>{const n={...p};for(const id of dropSet)delete n[id];return n;});
+  setSourcePageRanges(p=>{const n={...p};for(const id of dropSet)delete n[id];return n;});
+  setFiles(currentFiles.current);
+}
+function kbProjectTocView(tocReport,tocSelectedIds,tocExpandedIds,tocFilterMatched,tocMatchInfo,tocSelection){
+  const selSet=new Set(tocSelectedIds),expSet=new Set(tocExpandedIds);
+  const hasAbnormal=tocReport.flat.some(n=>n.feature==='abnormal-table');
+  const hasPharmBoxes=tocReport.flat.some(n=>n.feature==='prototype-drug'||n.feature==='nursing-process');
+  const hasKeySummaries=tocReport.flat.some(n=>n.feature==='key-concepts');
+  const matchAncestors=new Set(),matchDescendants=new Set();
+  if(tocFilterMatched&&tocMatchInfo.matchedIds.size>0){
+    for(const n of tocReport.flat){
+      if(tocMatchInfo.matchedIds.has(n.id))for(const aid of n.ancestorIds)matchAncestors.add(aid);
+      else if(n.ancestorIds.some(aid=>tocMatchInfo.matchedIds.has(aid)))matchDescendants.add(n.id);
+    }
+  }
+  const visibleNodes=tocReport.flat.filter(n=>{
+    if(tocFilterMatched&&tocMatchInfo.matchedIds.size>0)return tocMatchInfo.matchedIds.has(n.id)||matchAncestors.has(n.id)||matchDescendants.has(n.id);
+    return n.depth===0||n.ancestorIds.every(aid=>expSet.has(aid));
+  });
+  const savedPct=tocReport.numPages>0&&tocSelection.pageCount>0?Math.max(0,Math.round((1-tocSelection.pageCount/tocReport.numPages)*100)):0;
+  const featBadge=f=>f==='abnormal-table'?'⚡ Abnormal Findings':f==='prototype-drug'?'💊 Prototype / Drug Table':f==='nursing-process'?'🩺 Nursing Process':f==='key-concepts'?'📌 Key Concepts':null;
+  return{selSet,expSet,hasAbnormal,hasPharmBoxes,hasKeySummaries,visibleNodes,savedPct,featBadge};
+}
+function kbInferUploadDropMeta(files=[],fileIdFn=null){
+  const idOf=typeof fileIdFn==='function'?fileIdFn:f=>String(f?.name||'')+':'+Number(f?.size||0)+':'+Number(f?.lastModified||0);
+  const rolesById=Object.create(null),qbankById=Object.create(null),concepts=[],qbankFiles=[];
+  for(const f of Array.isArray(files)?files:[]){
+    if(!f||!f.name)continue;
+    const rawName=String(f.name||'');
+    const fn=rawName.toLowerCase().replace(/&/g,' and ').replace(/[^a-z0-9]+/g,' ');
+    const rel=String(f.webkitRelativePath||'');
+    const fid=idOf(f);
+    const qb=kbDetectConceptSortQBank(rawName);
+    const inPracticeDir=/(?:^|[\\/])04\s*-\s*practice\s+questions(?:[\\/]|$)/i.test(rel);
+    if((qb&&qb.isQBank)||inPracticeDir){
+      const label=qb?qb.label:'Practice Questions Q-Bank';
+      qbankById[fid]=label;
+      qbankFiles.push({name:rawName,label});
+    }else if(/\b(?:lehnes?|burchum|rosenthal|katzung|goodman|pharmacotherapeutics)\b/.test(fn))rolesById[fid]=['pharm-bridge'];
+    else if(/\b(?:porths?|mccances?|huethers?|brashers|norris)\b/.test(fn))rolesById[fid]=['patho-bridge'];
+    else if(/\b(?:jarvis|eckhardt|bates|bickleys?|dains|seidels?)\b/.test(fn))rolesById[fid]=['exam-bridge'];
+    const cm=rawName.match(/^(?:giddens\s*[-–—:]\s*)?concept\s+\d+\s*[-–—:]\s*(.+?)\.(?:pdf|pptx)$/i)
+      ||rawName.match(/^saunders\s+q&a\s+\d+e\s*[-–—:]\s*(?!00[ab]\b)\d{2}\s*[-–—:]\s*(.+?)(?:\s*\([^)]+\))?\s+q&a\.pdf$/i);
+    if(cm&&cm[1])concepts.push(cm[1].trim());
+    if(rel){
+      for(const seg of rel.split(/[\\/]+/)){
+        const fm=seg.match(/^(?!00[ab]\b)\d{2}\s*-\s*([A-Za-z][A-Za-z0-9\s,–—-]+)$/);
+        if(fm&&fm[1]&&!/^(?:foundations|core\s+patho|lifespan|practice\s+questions)/i.test(fm[1].trim()))concepts.push(fm[1].trim());
+      }
+    }
+  }
+  return{rolesById,qbankById,qbankFiles,concepts:kbMergeConceptInput('',concepts).split(',').map(s=>s.trim()).filter(Boolean)};
 }
 function kbClassifyTocFeature(title){
   const t=String(title||'');
   if(/\babnormal\s+findings\b|\btables?\s+of\s+abnormal\b|\bdifferential\s+diagnos/i.test(t))return'abnormal-table';
-  if(/\bprototype\s+drug\b|\bsummary\s+drug\b|\bdrug\s+chart\b|\bdrug\s+therapy\s+table/i.test(t))return'prototype-drug';
-  if(/\bnursing\s+process\b|\bpatient[-\s]centered\s+collaborative\s+care\b|\bnursing\s+management\b/i.test(t))return'nursing-process';
-  if(/\bkey\s+concepts?\b|\bchapter\s+summary\b|\breview\s+of\s+key/i.test(t))return'key-concepts';
+  if(/\bprototype\s+drugs?\b|\bsummary\s+drug\b|\bdrug\s+chart\b|\bdrug\s+therapy\s+table|\bblack\s+box\s+warnings?\b|\bdrugs\s+to\s+avoid\b/i.test(t))return'prototype-drug';
+  if(/\bnursing\s+process\b|\bpatient[-\s]centered\s+(?:collaborative\s+)?care\b|\bnursing\s+(?:management|implications)\b|\b(?:key\s+)?prescribing\s+considerations\b|\bevaluating\s+(?:treatment|therapeutic)\b/i.test(t))return'nursing-process';
+  if(/\bkey\s+(?:concepts?|points?)\b|\bchapter\s+summary\b|\breview\s+of\s+key/i.test(t))return'key-concepts';
   return null;
 }
 function kbBuildTocTree(rawNodes,numPages,pageLabels=null){
@@ -2103,7 +2245,7 @@ async function kbInspectPdfToc(file,{signal}={}){
         source='none';
       }
     }
-    const topTitles=tree.flat.filter(n=>n.depth<=1).slice(0,15).map(n=>n.title);
+    const topTitles=tree.flat.filter(n=>n.depth<=2).slice(0,25).map(n=>n.title);
     const suggestedRole=kbSuggestTextbookRole(file.name,topTitles);
     return{
       fileName:file.name||'textbook.pdf',
@@ -2819,10 +2961,10 @@ const KB_SOURCE_ROLES=[
 ];
 // v21.2: inline Step 01 reference descriptions + canonical multi-select role normalizer/toggler.
 const KB_SOURCE_ROLE_GUIDE={
-  rn:'Lecture slides, med-surg chapters (Saunders, Ignatavicius, HESI/ATI), drug cards — testable by default across RN generators (wins on shared facts).',
-  'patho-bridge':'Pathophysiology references (Porth, McCance) — cellular, neurohormonal & hemodynamic cascades (P), filed under collapsible NP Bridge.',
-  'exam-bridge':'Physical assessment & differential references (Jarvis, Bates) — bedside exam nuances (S3/S4) & look-alike tie-breakers (L/A), filed under NP Bridge.',
-  'pharm-bridge':'Advanced pharmacology / GDMT references (Lehne, guidelines) — receptor targets, GDMT sequencing & dynamic monitors (T), filed under NP Bridge.'
+  rn:'Lecture slides, RN textbooks & NCLEX guides (Giddens, Saunders/Silvestri, McCuistion, Mark Klimek, Ignatavicius, HESI/ATI), drug cards — testable by default across RN generators (wins on shared facts). (For Q&A banks — Davis Success, Saunders Q&A 9e, LaCharity PDA — use 04 · NCLEX Extract.)',
+  'patho-bridge':'Pathophysiology references (Porth/Norris, McCance) — cellular, neurohormonal & hemodynamic cascades (P), filed under collapsible NP Bridge.',
+  'exam-bridge':'Physical assessment & differential references (Jarvis & Eckhardt, Bates) — Abnormal Findings, bedside exam nuances (S3/S4) & look-alike tie-breakers (L/A), filed under NP Bridge.',
+  'pharm-bridge':'Advanced pharmacology / GDMT references (Lehne/Rosenthal & Burchum, guidelines) — receptor targets, GDMT sequencing & dynamic monitors (T), filed under NP Bridge.'
 };
 function kbNormalizeSourceRoles(raw){
   const valid=new Set(KB_SOURCE_ROLES.map(r=>r[0]));
@@ -2842,9 +2984,9 @@ const KB_PLATE_BRIDGE_RULES=`P-LATE MULTI-SOURCE & NP MECHANISM BRIDGE RULES (ZE
    - Pathophysiology / Mechanism Bridge (under "Patho"): cellular, neurohormonal, hemodynamic, or receptor-level mechanisms explaining the disease driver when coming from a bridge textbook (e.g., Porth) or advanced patho sidebar.
    - Physical Exam & Differential Nuance (under "Look"): inspection/auscultation/palpation subtleties (e.g., S3 vs. S4 gallop mechanisms, Forrester warm/cold vs. wet/dry exam correlates) with "plateSlot": "exam-nuance" or "diff-tiebreaker".
    - Diagnostic & Differential Nuance (under "Analyze"): gold-standard test hierarchies ("plateSlot": "gold-standard"), look-alike differential tie-breakers ("plateSlot": "diff-tiebreaker"), or false-positive/false-negative confounders (e.g., obesity lowering BNP, renal dysfunction raising BNP).
-   - Receptor & GDMT Pharmacologic Bridge (under "Treat"): receptor-level pharmacology or goal-directed medical therapy sequences ("plateSlot": "gdmt-bridge") explicitly stated in the chunk.
+   - Receptor & GDMT Pharmacologic Bridge (under "Treat"): receptor-level pharmacology, goal-directed medical therapy sequences, or APRN-only prescribing mechanics (prescriptive authority rules, outpatient initial dose-selection/step-up algorithms, and 2nd/3rd-line specialist add-on rationale) ("plateSlot": "gdmt-bridge") explicitly stated in the chunk.
    - Outcome Evaluation (under "Educate"): when explicitly stated as a bridge/prognostic nuance, set "subtype": "evaluate" and optionally "plateSlot": "evaluate".
-3. RN Safety Stays in RN Core: Do NOT demote acute RN stabilization priorities, airway/hemodynamic red flags, boxed warnings, antidotes, or medication hold parameters to the bridge layer — omit "clinicalLayer" (or set "clinicalLayer": "rn") for essential RN bedside safety facts.`;
+3. RN Safety Stays in RN Core: Do NOT demote acute RN stabilization priorities, airway/hemodynamic red flags, boxed warnings, antidotes, required baseline/dynamic safety labs, teratogenicity, or medication hold parameters to the bridge layer — omit "clinicalLayer" (or set "clinicalLayer": "rn") for essential RN bedside safety facts.`;
 function kbCoercePlateFields(f,{sourceRole='rn',capBridgeTier=false}={}){
   const warnings=[];
   // v21.2: when RN Core is selected alongside Bridge role(s), untagged facts remain RN Core; only pure-Bridge chunks default untagged facts to 'bridge'.
@@ -7790,7 +7932,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '21.7';}
+function suiteVersion(){return '21.8';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -8462,6 +8604,59 @@ function nclexBatchPairs(pairs,batchSize=8){
   const batches=[];for(let i=0;i<pairs.length;i+=n)batches.push(pairs.slice(i,i+n));return batches;
 }
 function nclexPairsToText(pairs){return pairs.map(p=>{let s=`── Question #${p.number} ──\n${p.question}\n`;if(p.answer)s+=`\n── Answer #${p.number} ──\n${p.answer}\n`;return s;}).join('\n\n');}
+// v21.8: inspect PDF outline bookmarks on Digital Library (concept sort) Q-bank slices (Davis Success x6, Saunders Q&A 9e, LaCharity PDA)
+// so 04 · NCLEX Extractor automatically switches to Split Q&A mode and populates exact Question vs. Answer/Rationale page spans on drop.
+function nclexMatchSplitTocSpans(flatNodes,numPages){
+  const total=Math.max(1,Math.floor(Number(numPages))||1);
+  if(!Array.isArray(flatNodes)||flatNodes.length<2)return null;
+  const top=flatNodes.filter(n=>n&&n.depth===0);
+  const pool=top.length>=2?top:flatNodes;
+  const qNode=pool.find(n=>/\b(?:questions?|case\s+study\s*(?:&|and)\s*questions?)\b/i.test(n.title||'')&&!/\b(?:answers?|rationales?)\b/i.test(n.title||''));
+  const aNode=pool.find(n=>/\b(?:answers?|rationales?)\b/i.test(n.title||''));
+  if(!qNode||!aNode||aNode.startPage<=qNode.startPage)return null;
+  const qEnd=Math.max(qNode.startPage,Math.min(qNode.endPage||aNode.startPage-1,aNode.startPage-1));
+  const aEnd=Math.max(aNode.startPage,Math.min(total,aNode.endPage||total));
+  return{qRanges:[{start:qNode.startPage,end:qEnd}],aRanges:[{start:aNode.startPage,end:aEnd}],qTitle:qNode.title,aTitle:aNode.title};
+}
+async function nclexInspectPdfSplitLayout(file){
+  const pdf=await getPdfDoc(file);
+  const numPages=pdf.numPages;
+  let split=null;
+  try{
+    const outline=await pdf.getOutline();
+    if(Array.isArray(outline)&&outline.length>=2){
+      const resolved=[];
+      for(const it of outline.slice(0,20)){
+        const page=await kbResolvePdfDestPage(pdf,it?.dest);
+        resolved.push({title:it?.title||'',page,items:[]});
+      }
+      const tree=kbBuildTocTree(resolved,numPages,null);
+      split=nclexMatchSplitTocSpans(tree.flat,numPages);
+    }
+  }catch(e){}
+  const qbank=typeof kbDetectConceptSortQBank==='function'?kbDetectConceptSortQBank(file?.name||''):null;
+  return{numPages,split,qbank};
+}
+function nclexSeedPdfRanges(file,{isStale,firstFileRef,id,setPageCount,setIRanges,setMode,setQRanges,setARanges,setSplitAutoNote}){
+  nclexInspectPdfSplitLayout(file).then(info=>{
+    if(isStale())return;
+    const n=info.numPages;
+    setPageCount(n);
+    if(firstFileRef.current!==id){
+      firstFileRef.current=id;
+      setIRanges([{start:1,end:n}]);
+      if(info.split){
+        setMode('split');setQRanges(info.split.qRanges);setARanges(info.split.aRanges);
+        const qR=info.split.qRanges[0],aR=info.split.aRanges[0];
+        setSplitAutoNote((info.qbank?.label?info.qbank.label+' · ':'')+'Auto-filled from PDF bookmarks: Questions pp. '+qR.start+'–'+qR.end+' · Answers pp. '+aR.start+'–'+aR.end);
+      }else{
+        const mid=Math.ceil(n/2);setQRanges([{start:1,end:mid}]);setARanges([{start:mid+1,end:n}]);
+        if(info.qbank?.isQBank){setMode('split');setSplitAutoNote(info.qbank.label+' detected — verify Question vs. Answer page ranges below.');}
+        else setSplitAutoNote('');
+      }
+    }
+  }).catch(()=>{if(!isStale()){setPageCount(null);setSplitAutoNote('');}});
+}
 /* ── END NCLEX EXTRACTOR PURE HELPERS ── */
 
 
@@ -14935,6 +15130,22 @@ ${typeof NCLEX_PLATE_TRAP_RULES==='string'?NCLEX_PLATE_TRAP_RULES+'\n\n':''}`+ng
 }
 
 // v21.6: lifted pure Gizmo input builder and chunk runner out of GizmoImporter to keep JSX compilation under 500 KB.
+function gizmoReadUploadFiles(fl,{fileKey,setNote,setFileEntries,setFiles}){
+  (async()=>{
+    const picked=Array.from(fl||[]);if(!picked.length)return;
+    setNote('');
+    const ok=picked.filter(f=>/\.(txt|tsv|csv)$/i.test(f.name||'')),bad=picked.filter(f=>!ok.includes(f));
+    if(bad.length)setNote(bad.map(f=>f.name).join(', ')+': choose an exported .txt, .tsv, or .csv Anki deck — skipped.');
+    const readNew=[];
+    for(const f of ok){
+      if(f.size>50*1024*1024){setNote(f.name+': larger than 50 MB — skipped.');continue;}
+      try{readNew.push({key:fileKey(f),file:f,name:f.name,size:f.size,text:gizmoDecodeFileBytes(await f.arrayBuffer())});}
+      catch(e){setNote(f.name+': '+(e.message||String(e)));}
+    }
+    if(!readNew.length)return;
+    setFileEntries(prev=>{const seen=new Set(prev.map(x=>x.key)),merged=[...prev,...readNew.filter(x=>!seen.has(x.key))];setFiles(merged.map(x=>x.file));return merged;});
+  })();
+}
 function gizmoPrepareInputWithEnv({sourceMode,liveDeck,liveTier,liveIncludeSources,fileEntries,pasted}){
     if(sourceMode==='live'){
       const r=gizmoCardsFromLiveAnki(liveDeck,{tier:liveTier,includeSources:liveIncludeSources});
@@ -15588,7 +15799,8 @@ function KnowledgeBaseBuilder(){
   // path — transcription first, then the same extractor — so they are filtered apart below
   // rather than handed to kbBuildSourceChunks, which would throw on them.
   // v16.7: input reset and drop completion invalidate their FileList before deferred React updates; capture the selected files during the event.
-  const addFiles=fl=>{const selected=Array.from(fl);setFiles(p=>[...p,...selected.filter(f=>/\.(pdf|pptx|jpe?g|png|webp|heic|heif)$/i.test(f.name)).filter(f=>!p.some(x=>x.name===f.name&&x.size===f.size&&x.lastModified===f.lastModified))]);};
+  // v21.8: auto-assign unambiguous textbook Bridge roles (Lehne/Porth/Jarvis) and Giddens concepts on Step 01 file drop; typeof guard keeps isolated FileList-lifetime tests pure.
+  const addFiles=fl=>{const selected=Array.from(fl).filter(f=>/\.(pdf|pptx|jpe?g|png|webp|heic|heif)$/i.test(f.name));if(typeof kbInferUploadDropMeta==='function'&&selected.length){const meta=kbInferUploadDropMeta(selected,cardFileId);const rIds=Object.keys(meta.rolesById);if(rIds.length)setSourceRoles(p=>{const n={...p};for(const k of rIds)if(!n[k])n[k]=meta.rolesById[k];return n;});if(meta.concepts.length)setKbConcepts(prev=>kbMergeConceptInput(prev,meta.concepts));}setFiles(p=>[...p,...selected.filter(f=>!p.some(x=>x.name===f.name&&x.size===f.size&&x.lastModified===f.lastModified))]);};
   const importJSON=async file=>{
     if(!kbConfirmReplace('Importing this file'))return;
     // v19.0: do not bind abortRef to importJSON so removing an unrelated source file chip in Step 01 cannot abort an active JSON import.
@@ -16064,13 +16276,14 @@ function KnowledgeBaseBuilder(){
     setup={<>
       <Step n="01" title="Sources" note={files.length?files.length+(files.length===1?' file':' files'):'none yet'} lede="PDFs and PPTX decks are read as text. Flashcard photos have no text layer, so they are transcribed first and reviewed before they become facts.">
     <div role="button" tabIndex={0} aria-label="Add PDF, PPTX, or flashcard image source files" onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fileRef.current?.click();}}} className="upload-zone" onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();addFiles(e.dataTransfer.files)}}><h3>Drop PDF, PPTX, or flashcard photos</h3><p>Large sources are processed in page or slide chunks; successful chunks are retained even if another chunk fails. Flashcard photos are transcribed first, and you review the transcript before it becomes facts.</p><input aria-label="Source files" ref={fileRef} type="file" multiple accept=".pdf,.pptx,.jpg,.jpeg,.png,.webp,.heic,.heif" style={{display:'none'}} onChange={e=>{addFiles(e.target.files);e.target.value=''}}/></div>
-    {files.length>0&&<div style={{marginTop:8}}>{files.map((f,i)=>{const fid=cardFileId(f),fRoles=kbNormalizeSourceRoles(sourceRoles[fid]||normDefRoles),isPdf=/\.pdf$/i.test(f.name||'')||f.type==='application/pdf',rawSlice=isPdf?(sourcePageRanges[fid]||''):'',parsedSlice=rawSlice?kbParsePageRanges(rawSlice):null;return <div className="file-chip" key={cardFileId(f)} style={{flexWrap:'wrap'}}><div className={'f-icon '+getExt(f.name)}>{getExt(f.name)}</div><span className="f-name">{f.name}</span><span className="f-size">{formatSize(f.size)}</span>{isPdf&&<button type="button" className="btn-ghost" style={{fontSize:11,padding:'1px 7px',minHeight:22}} title="Inspect PDF Table of Contents and choose exact sections to slice (0 API calls)" onClick={()=>inspectPdfForSlice(f)}>✂ Slice / TOC</button>}<button className="f-rm" aria-label={'Remove source '+f.name} onClick={()=>{destroyPdfDoc(f);currentFiles.current=currentFiles.current.filter(x=>cardFileId(x)!==fid);txAbortRef.current?.abort();if(busy)abortRef.current?.abort();setTranscripts(p=>{const n={...p};delete n[cardFileId(f)];return n;});setTxReviewed(false);setSourceRoles(p=>{const n={...p};delete n[fid];return n;});setSourcePageRanges(p=>{const n={...p};delete n[fid];return n;});setFiles(currentFiles.current);}}>×</button><div role="group" aria-label={'Source roles for '+f.name} style={{width:'100%',display:'flex',flexWrap:'wrap',gap:'4px 6px',paddingTop:5,marginTop:2,borderTop:'1px solid var(--border)'}}>{KB_SOURCE_ROLES.map(([rv,rl])=>{const checked=fRoles.includes(rv);return <label key={rv} title={KB_SOURCE_ROLE_GUIDE[rv]} style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:11,padding:'1px 6px',borderRadius:4,border:'1px solid '+(checked?'var(--blue-line)':'var(--border)'),background:checked?'var(--blue-tint)':'var(--bg-deep)',color:checked?'var(--blue-deep)':'var(--text-dim)',cursor:'pointer',fontWeight:checked?600:400}}><input type="checkbox" aria-label={rl+' role for '+f.name} checked={checked} onChange={()=>setSourceRoles(p=>({...p,[fid]:kbToggleSourceRole(p[fid]||normDefRoles,rv)}))} style={{accentColor:'var(--accent)',margin:0}}/><span>{rl}</span></label>;})}</div>{isPdf&&<div style={{width:'100%',display:'flex',alignItems:'center',gap:6,flexWrap:'wrap',paddingTop:5,marginTop:3,borderTop:'1px dashed var(--border)'}}><span style={{fontSize:11,color:'var(--text-dim)',fontWeight:600}}>Page slice:</span><input type="text" aria-label={'Page slice for '+f.name} value={rawSlice} onChange={e=>setSourcePageRanges(p=>({...p,[fid]:e.target.value}))} placeholder="All pages (or e.g. 512-520, 531-536)" style={{flex:1,minWidth:170,fontSize:11.5,padding:'2px 7px',height:24,fontFamily:'JetBrains Mono'}}/>{parsedSlice&&(parsedSlice.invalid.length>0||!parsedSlice.ranges.length?<span style={{fontSize:11,color:'var(--accent-red)',fontWeight:600}}>Invalid range</span>:<span style={{fontSize:11,color:'var(--accent-green)',fontFamily:'JetBrains Mono'}}>{parsedSlice.pageCount} pp. ({parsedSlice.formatted})</span>)}{rawSlice&&<button type="button" className="btn-ghost" style={{fontSize:11,padding:'1px 6px',minHeight:22}} onClick={()=>setSourcePageRanges(p=>{const n={...p};delete n[fid];return n;})}>All pages</button>}</div>}</div>;})}</div>}
+    {files.length>0&&<div style={{marginTop:8}}>{files.map((f,i)=>{const fid=cardFileId(f),fRoles=kbNormalizeSourceRoles(sourceRoles[fid]||normDefRoles),isPdf=/\.pdf$/i.test(f.name||'')||f.type==='application/pdf',rawSlice=isPdf?(sourcePageRanges[fid]||''):'',parsedSlice=rawSlice?kbParsePageRanges(rawSlice):null,isQb=kbIsPracticeQBankFile(f);return <div className="file-chip" key={cardFileId(f)} style={{flexWrap:'wrap'}}><div className={'f-icon '+getExt(f.name)}>{getExt(f.name)}</div><span className="f-name">{f.name}</span>{isQb&&<span style={{fontSize:10.5,padding:'1px 6px',borderRadius:4,border:'1px solid var(--warning-border)',background:'var(--warning-bg)',color:'var(--accent-warm)',fontWeight:600}} title="Practice Q-Bank — questions & rationales belong in 04 · NCLEX Extract (Split Q&A)">Q-Bank → 04 · NCLEX Extract</span>}<span className="f-size">{formatSize(f.size)}</span>{isPdf&&<button type="button" className="btn-ghost" style={{fontSize:11,padding:'1px 7px',minHeight:22}} title="Inspect PDF Table of Contents and choose exact sections to slice (0 API calls)" onClick={()=>inspectPdfForSlice(f)}>✂ Slice / TOC</button>}<button className="f-rm" aria-label={'Remove source '+f.name} onClick={()=>{destroyPdfDoc(f);currentFiles.current=currentFiles.current.filter(x=>cardFileId(x)!==fid);txAbortRef.current?.abort();if(busy)abortRef.current?.abort();setTranscripts(p=>{const n={...p};delete n[cardFileId(f)];return n;});setTxReviewed(false);setSourceRoles(p=>{const n={...p};delete n[fid];return n;});setSourcePageRanges(p=>{const n={...p};delete n[fid];return n;});setFiles(currentFiles.current);}}>×</button><div role="group" aria-label={'Source roles for '+f.name} style={{width:'100%',display:'flex',flexWrap:'wrap',gap:'4px 6px',paddingTop:5,marginTop:2,borderTop:'1px solid var(--border)'}}>{KB_SOURCE_ROLES.map(([rv,rl])=>{const checked=fRoles.includes(rv);return <label key={rv} title={KB_SOURCE_ROLE_GUIDE[rv]} style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:11,padding:'1px 6px',borderRadius:4,border:'1px solid '+(checked?'var(--blue-line)':'var(--border)'),background:checked?'var(--blue-tint)':'var(--bg-deep)',color:checked?'var(--blue-deep)':'var(--text-dim)',cursor:'pointer',fontWeight:checked?600:400}}><input type="checkbox" aria-label={rl+' role for '+f.name} checked={checked} onChange={()=>setSourceRoles(p=>({...p,[fid]:kbToggleSourceRole(p[fid]||normDefRoles,rv)}))} style={{accentColor:'var(--accent)',margin:0}}/><span>{rl}</span></label>;})}</div>{isPdf&&<div style={{width:'100%',display:'flex',alignItems:'center',gap:6,flexWrap:'wrap',paddingTop:5,marginTop:3,borderTop:'1px dashed var(--border)'}}><span style={{fontSize:11,color:'var(--text-dim)',fontWeight:600}}>Page slice:</span><input type="text" aria-label={'Page slice for '+f.name} value={rawSlice} onChange={e=>setSourcePageRanges(p=>({...p,[fid]:e.target.value}))} placeholder="All pages (or e.g. 512-520, 531-536)" style={{flex:1,minWidth:170,fontSize:11.5,padding:'2px 7px',height:24,fontFamily:'JetBrains Mono'}}/>{parsedSlice&&(parsedSlice.invalid.length>0||!parsedSlice.ranges.length?<span style={{fontSize:11,color:'var(--accent-red)',fontWeight:600}}>Invalid range</span>:<span style={{fontSize:11,color:'var(--accent-green)',fontFamily:'JetBrains Mono'}}>{parsedSlice.pageCount} pp. ({parsedSlice.formatted})</span>)}{rawSlice&&<button type="button" className="btn-ghost" style={{fontSize:11,padding:'1px 6px',minHeight:22}} onClick={()=>setSourcePageRanges(p=>{const n={...p};delete n[fid];return n;})}>All pages</button>}</div>}</div>;})}</div>}
+    {files.some(kbIsPracticeQBankFile)&&(()=>{const qbList=files.filter(kbIsPracticeQBankFile);return <div className="tip-banner" style={{marginTop:8,fontSize:11.5,lineHeight:1.45,display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap'}}><span>ⓘ <b>{qbList.length} Practice Q-Bank PDF{qbList.length!==1?'s':''}</b> detected (<i>Davis</i>, <i>Saunders Q&amp;A</i>, <i>LaCharity PDA</i>) — use <b>04 · NCLEX Extract</b> for question extraction.</span><button type="button" className="btn-ghost" style={{fontSize:11,padding:'2px 8px',minHeight:22}} onClick={()=>kbRemoveFileSubset({targetFiles:qbList,cardFileId,destroyPdfDoc,currentFiles,setSourceRoles,setSourcePageRanges,setFiles})}>Remove Q-banks ({qbList.length})</button></div>;})()}
     <div className="field-block" style={{marginTop:10,padding:'9px 11px',borderRadius:'var(--radius)',border:'1px solid var(--border)',background:'var(--bg-deep)'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6,flexWrap:'wrap',marginBottom:5}}>
         <span style={{fontSize:12,fontWeight:600,color:'var(--text-bright)'}}>Source roles <span className="badge-opt">select one or more</span></span>
         {hasCustomPerFileRoles&&<button type="button" className="btn-ghost" style={{fontSize:11,padding:'2px 7px',minHeight:24}} onClick={()=>setSourceRoles({})}>Apply to all {files.length} files</button>}
       </div>
-      <div style={{fontSize:11.5,color:'var(--text-dim)',marginBottom:7,lineHeight:1.45}}>Check one or more lenses for combined packets/chapters, or customize individual files above (e.g., Saunders = RN Core, Porth = Patho Bridge, Jarvis = Exam / Diff Bridge).</div>
+      <div style={{fontSize:11.5,color:'var(--text-dim)',marginBottom:7,lineHeight:1.45}}>Check one or more lenses for combined packets/chapters, or customize individual files above (dropping from your <code>concept sort</code> library auto-tags <b>Lehne</b> = Pharm Bridge, <b>Porth</b> = Patho Bridge, <b>Jarvis</b> = Exam Bridge, and keeps <b>Giddens</b>, <b>Saunders</b>, <b>McCuistion</b> &amp; <b>Klimek</b> on RN Core).</div>
       {KB_SOURCE_ROLES.map(([rv,rl],idx)=>{const checked=normDefRoles.includes(rv);return <label key={rv} style={{display:'flex',alignItems:'flex-start',gap:8,fontSize:12,color:'var(--text)',cursor:'pointer',marginTop:idx?7:0}}>
         <input type="checkbox" aria-label={'Default source role: '+rl} checked={checked} onChange={()=>setDefaultSourceRoles(p=>kbToggleSourceRole(p,rv))} style={{accentColor:'var(--accent)',marginTop:2}}/>
         <span style={{lineHeight:1.45}}><b style={{color:checked?'var(--blue-deep)':'var(--text-bright)'}}>{rl}</b> — <span style={{color:'var(--text-dim)'}}>{KB_SOURCE_ROLE_GUIDE[rv]}</span></span>
@@ -16121,7 +16334,7 @@ function KnowledgeBaseBuilder(){
       {txErr&&<div className="error-banner" style={{marginTop:10}}>⚠ {txErr}</div>}
       </Step>}
       <Disclose summary="Textbook TOC & section slicer" open={tocOpen} note={tocBusy?'scanning…':tocReport?(tocSelection.pageCount?tocSelection.pageCount+' pp. selected':tocReport.flat.length+' headings'):'local · 0 API calls'}>
-        <p className="sect-lede">Inspect a 1,500-page textbook PDF locally (Porth, McCuistion, Jarvis, Lehne, Saunders) with zero API calls. Match your exam topics to exact start-to-finish sections, copy the <code>Ctrl + P</code> Custom Pages range, or send the sliced PDF straight to Step 01 so Build reads only those pages.</p>
+        <p className="sect-lede">Inspect any master or chapter PDF locally (Giddens, Porth/Norris, Jarvis &amp; Eckhardt, McCuistion, Lehne/Rosenthal &amp; Burchum, Saunders/Silvestri, Mark Klimek) with zero API calls. Match your exam topics to exact start-to-finish sections, copy the <code>Ctrl + P</code> Custom Pages range, or send the sliced PDF straight to Step 01 so Build reads only those pages.</p>
         <div role="button" tabIndex={0} aria-label="Choose a textbook PDF to inspect its Table of Contents" onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();tocFileRef.current?.click();}}} className="upload-zone" style={{padding:'12px 14px',marginBottom:8}} onClick={()=>tocFileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();const f=Array.from(e.dataTransfer.files||[]).find(x=>/\.pdf$/i.test(x.name||'')||x.type==='application/pdf');if(f)inspectPdfForSlice(f);}}>
           <h3 style={{fontSize:13,marginBottom:3}}>{tocFile?'📄 '+tocFile.name:'Drop or choose a textbook PDF to inspect'}</h3>
           <p style={{fontSize:11.5,margin:0}}>{tocReport?`${tocReport.numPages} PDF pages · ${tocReport.flat.length} TOC entries · Suggested lens: ${tocReport.suggestedRole?.badge||'RN Core'}`:'Reads embedded PDF bookmarks (or front-matter Contents pages) right in your browser — nothing is uploaded.'}</p>
@@ -16233,24 +16446,7 @@ function KnowledgeBaseBuilder(){
       {tocBusy&&<RunStatus label="Inspecting PDF Table of Contents" value={100} caption="Local · 0 API calls" detail={'Reading bookmarks and page boundaries from '+(tocFile?.name||'PDF')+'…'}/>}
       {tocErr&&<div className="error-banner" style={{marginBottom:tocReport?10:0}}>⚠ {tocErr}</div>}
       {tocReport&&(()=>{
-        const selSet=new Set(tocSelectedIds);
-        const expSet=new Set(tocExpandedIds);
-        const hasAbnormal=tocReport.flat.some(n=>n.feature==='abnormal-table');
-        const hasPharmBoxes=tocReport.flat.some(n=>n.feature==='prototype-drug'||n.feature==='nursing-process');
-        const hasKeySummaries=tocReport.flat.some(n=>n.feature==='key-concepts');
-        const matchAncestors=new Set(),matchDescendants=new Set();
-        if(tocFilterMatched&&tocMatchInfo.matchedIds.size>0){
-          for(const n of tocReport.flat){
-            if(tocMatchInfo.matchedIds.has(n.id))for(const aid of n.ancestorIds)matchAncestors.add(aid);
-            else if(n.ancestorIds.some(aid=>tocMatchInfo.matchedIds.has(aid)))matchDescendants.add(n.id);
-          }
-        }
-        const visibleNodes=tocReport.flat.filter(n=>{
-          if(tocFilterMatched&&tocMatchInfo.matchedIds.size>0)return tocMatchInfo.matchedIds.has(n.id)||matchAncestors.has(n.id)||matchDescendants.has(n.id);
-          return n.depth===0||n.ancestorIds.every(aid=>expSet.has(aid));
-        });
-        const savedPct=tocReport.numPages>0&&tocSelection.pageCount>0?Math.max(0,Math.round((1-tocSelection.pageCount/tocReport.numPages)*100)):0;
-        const featBadge=f=>f==='abnormal-table'?'⚡ Abnormal Findings':f==='prototype-drug'?'💊 Prototype / Drug Table':f==='nursing-process'?'🩺 Nursing Process':f==='key-concepts'?'📌 Key Concepts':null;
+        const {selSet,expSet,hasAbnormal,hasPharmBoxes,hasKeySummaries,visibleNodes,savedPct,featBadge}=kbProjectTocView(tocReport,tocSelectedIds,tocExpandedIds,tocFilterMatched,tocMatchInfo,tocSelection);
         return <>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap',marginBottom:9,fontSize:12}}>
             <div>
@@ -17552,23 +17748,14 @@ function NCLEXExtractor(){
     .filter(f=>!p.some(x=>x.name===f.name&&x.size===f.size&&x.lastModified===f.lastModified))]);};
 
   // Auto-detect page count when files change
+  const [splitAutoNote,setSplitAutoNote]=useState('');
   const firstFileRef=useRef('');
   useEffect(()=>{
     const f=files[0];
-    if(!f){setPageCount(null);firstFileRef.current='';return;}
-    // v15.14: stale-guard the resolve, and only seed the ranges when the file in slot 0 has
-    // actually CHANGED identity. cardFileId is the same name+size+lastModified key the rest
-    // of the suite uses for "is this the same file".
-    let stale=false;
-    const id=cardFileId(f);
-    getPdfPageCount(f).then(n=>{
-      if(stale)return;
-      setPageCount(n);
-      if(firstFileRef.current!==id){
-        firstFileRef.current=id;
-        const mid=Math.ceil(n/2);setQRanges([{start:1,end:mid}]);setARanges([{start:mid+1,end:n}]);setIRanges([{start:1,end:n}]);
-      }
-    }).catch(()=>{if(!stale)setPageCount(null);});
+    if(!f){setPageCount(null);setSplitAutoNote('');firstFileRef.current='';return;}
+    let stale=false;const id=cardFileId(f);
+    if(firstFileRef.current!==id){nclexSeedPdfRanges(f,{isStale:()=>stale,firstFileRef,id,setPageCount,setIRanges,setMode,setQRanges,setARanges,setSplitAutoNote});}
+    else{getPdfPageCount(f).then(n=>{if(!stale)setPageCount(n);}).catch(()=>{if(!stale)setPageCount(null);});}
     return()=>{stale=true;};
   },[files]);
 
@@ -17735,9 +17922,9 @@ function NCLEXExtractor(){
     setupLabel="Question extraction sources and settings"
     resultsLabel="Extracted practice questions"
     setup={<>
-      <Step n="01" title="Book layout" lede="Inline books print a question and its answer together. Split books, like Davis Test Success, keep answers in a separate section.">
+      <Step n="01" title="Book layout" lede="Inline books print a question and its answer together. Split books (Davis Test Success, Saunders Q&A 9e, LaCharity PDA) keep Questions first and Answers & Rationales at the end — dropping a concept-sort Q&A PDF auto-switches and reads its bookmark spans.">
       <div className="segmented-control" role="group" aria-label="Question extraction mode" style={{marginBottom:14}}>
-        {[{id:'inline',icon:'📄',title:'Inline Mode',desc:'Q & A together on same pages'},{id:'split',icon:'📑',title:'Split Q&A Mode',desc:'Questions & answers on separate pages (Davis-style)'}].map(m=>
+        {[{id:'inline',icon:'📄',title:'Inline Mode',desc:'Q & A together on same pages'},{id:'split',icon:'📑',title:'Split Q&A Mode',desc:'Questions & answers on separate pages (Davis / Saunders Q&A / LaCharity)'}].map(m=>
           <button key={m.id} aria-pressed={mode===m.id} onClick={()=>setMode(m.id)} >
             <div style={{fontSize:13,fontWeight:600,color:mode===m.id?'var(--text-bright)':'var(--text-dim)'}}>{m.icon} {m.title}</div>
             <div style={{fontSize:12,color:'var(--text-dim)',marginTop:2}}>{m.desc}</div>
@@ -17752,6 +17939,7 @@ function NCLEXExtractor(){
           <p style={{fontSize:12,color:'var(--text)'}}>Drop PDFs or <strong style={{color:'var(--accent)'}}>click to browse</strong></p>
         </div>
         {files.map((f,i)=><div className="file-chip" key={f.name+f.size+f.lastModified}><div className="f-icon pdf">PDF</div><span className="f-name">{f.name}</span><span className="f-size">{formatSize(f.size)}</span>{/* v18.0 (review L22): removing a file mid-run destroyed the PDF the run was still reading; × waits for the run. */}<button className="f-rm" aria-label={'Remove PDF '+f.name} disabled={isProcessing} onClick={()=>{destroyPdfDoc(f);setFiles(p=>p.filter((_,j)=>j!==i));}}>×</button></div>)}
+        {splitAutoNote&&<div style={{fontSize:11.5,color:'var(--accent-green)',marginTop:6,fontWeight:600}}>✓ {splitAutoNote}</div>}
       </Step>
       {mode==='inline'&&<Disclose summary="Inline settings" note={Math.round(chunkSize/1000)+'k'+(iRangeOn?' · page range':'')}>
 <div className="form-grid" style={{marginBottom:10}}>
@@ -17775,7 +17963,7 @@ function NCLEXExtractor(){
       </Disclose>}
       {mode==='split'&&<Disclose summary="Split Q&A settings" note={qRanges.length+'Q / '+aRanges.length+'A range(s)'} open={true}>
           <div style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:8,padding:12,marginBottom:10}}>
-            <div style={{fontSize:12,color:'var(--accent-warm)',fontWeight:600,marginBottom:6}}>📑 For PDFs like Davis Test Success where questions and answers are in separate sections.</div>
+            <div style={{fontSize:12,color:'var(--accent-warm)',fontWeight:600,marginBottom:6}}>📑 For PDFs like Davis Test Success, Saunders Q&amp;A 9e, and LaCharity PDA where questions and answers sit in separate sections.</div>
             <div style={{fontSize:12,color:'var(--text-dim)',lineHeight:1.5,marginBottom:8}}>Specify which pages contain <strong style={{color:'var(--text)'}}>questions</strong> and which contain <strong style={{color:'var(--text)'}}>answers/rationales</strong>. The tool pairs them by question number before sending to Gemini.</div>
             {pageCount&&<div style={{fontSize:12,color:'var(--accent)',marginBottom:8}}>📖 This PDF has <b>{pageCount}</b> pages</div>}
             <div className="form-grid">
@@ -19260,27 +19448,7 @@ function GizmoImporter(){
   };
 
   const fileKey=f=>f.name+'|'+f.size+'|'+f.lastModified;
-  const addFiles=async fl=>{
-    const picked=Array.from(fl||[]);if(!picked.length)return;
-    setNote('');
-    const ok=picked.filter(f=>/\.(txt|tsv|csv)$/i.test(f.name||'')),bad=picked.filter(f=>!ok.includes(f));
-    if(bad.length)setNote(bad.map(f=>f.name).join(', ')+': choose an exported .txt, .tsv, or .csv Anki deck — skipped.');
-    const readNew=[];
-    for(const f of ok){
-      if(f.size>50*1024*1024){setNote(f.name+': larger than 50 MB — skipped.');continue;}
-      try{
-        const text=gizmoDecodeFileBytes(await f.arrayBuffer());
-        readNew.push({key:fileKey(f),file:f,name:f.name,size:f.size,text});
-      }catch(e){setNote(f.name+': '+(e.message||String(e)));}
-    }
-    if(!readNew.length)return;
-    setFileEntries(prev=>{
-      const seen=new Set(prev.map(x=>x.key));
-      const merged=[...prev,...readNew.filter(x=>!seen.has(x.key))];
-      setFiles(merged.map(x=>x.file));
-      return merged;
-    });
-  };
+  const addFiles=function(fl){gizmoReadUploadFiles(fl,{fileKey,setNote,setFileEntries,setFiles});};
   const removeFile=idx=>{
     if(busy)return;
     setFileEntries(prev=>{const next=prev.filter((_,i)=>i!==idx);setFiles(next.map(x=>x.file));return next;});

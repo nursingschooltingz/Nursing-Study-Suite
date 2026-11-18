@@ -506,5 +506,18 @@ module.exports = async function run(S, t) {
       ankiGenSpan.includes('Full Coverage — RN Core only (exclude NP Bridge)') &&
       ankiGenSpan.includes('Partial Cram — Exam Traps only (skips non-trap topics)') &&
       ankiGenSpan.includes('Partial scope excludes ${dropC} of ${totC} entries'));
+
+    const focusRnPlain = KB.kbBuildFocusBlock('', '', '', 'prioritize', 'Perfusion', false, true, false, ['rn']);
+    const focusLehneBridge = KB.kbBuildFocusBlock('', '', '', 'prioritize', 'Perfusion', false, true, false, ['pharm-bridge']);
+    t('plate-bridge (v21.8 Lehne APRN prescribing firewall & RN Core safety preservation): routes APRN-only prescribing mechanics to gdmt-bridge while keeping baseline/dynamic safety labs and teratogenicity in RN Core and leaving RN-only focus blocks free of bridge rules',
+      KB.KB_SOURCE_ROLE_GUIDE.rn.includes('Giddens, Saunders/Silvestri, McCuistion, Mark Klimek') &&
+      KB.KB_SOURCE_ROLE_GUIDE['patho-bridge'].includes('Porth/Norris') &&
+      KB.KB_SOURCE_ROLE_GUIDE['exam-bridge'].includes('Jarvis & Eckhardt') &&
+      KB.KB_SOURCE_ROLE_GUIDE['pharm-bridge'].includes('Lehne/Rosenthal & Burchum') &&
+      KB.KB_PLATE_BRIDGE_RULES.includes('APRN-only prescribing mechanics (prescriptive authority rules, outpatient initial dose-selection/step-up algorithms, and 2nd/3rd-line specialist add-on rationale)') &&
+      KB.KB_PLATE_BRIDGE_RULES.includes('required baseline/dynamic safety labs, teratogenicity, or medication hold parameters') &&
+      !focusRnPlain.includes('APRN-only prescribing mechanics') &&
+      focusLehneBridge.includes('Pharmacology / GDMT Bridge source') &&
+      focusLehneBridge.includes('APRN-only prescribing mechanics'));
   }
 };

@@ -185,7 +185,7 @@ module.exports = async function pdfTocSlicerTests(S, t) {
     };
     return new Function(
       'getPdfDoc', 'destroyPdfDoc', 'pdfWalkPages', 'kbTextQuality', 'extractPptxText', 'kbPageComposition', 'kbCompositionSummary',
-      `${tocHelpersSpan}\n${chunkHelpersSpan}\nreturn { kbMergePageRanges, kbFormatPageRanges, kbCountPagesInRanges, kbParsePageRanges, kbSuggestTextbookRole, kbClassifyTocFeature, kbBuildTocTree, kbMatchTocNodes, kbResolveTocSelectionRanges, kbFormatTocSlicePlanMd, kbInspectPdfToc, kbSourceUnits, kbGroupUnits, kbBuildSourceChunks };`
+      `${tocHelpersSpan}\n${chunkHelpersSpan}\nreturn { kbMergePageRanges, kbFormatPageRanges, kbCountPagesInRanges, kbParsePageRanges, kbDetectConceptSortQBank, kbSuggestTextbookRole, kbMergeConceptInput, kbInferUploadDropMeta, kbClassifyTocFeature, kbBuildTocTree, kbMatchTocNodes, kbResolveTocSelectionRanges, kbFormatTocSlicePlanMd, kbResolvePdfDestPage, kbInspectPdfToc, kbSourceUnits, kbGroupUnits, kbBuildSourceChunks };`
     )(getPdfDoc, destroyPdfDoc, pdfWalkPages, kbTextQuality, async () => '', async () => ({}), () => null);
   }
 
@@ -445,5 +445,158 @@ module.exports = async function pdfTocSlicerTests(S, t) {
       sel15.formatted === '12-15' &&
       cliHelp.status === 0 &&
       cliHelp.stdout.includes('Local PDF TOC Inspector & Section Slicer'));
+  }
+
+  // 9. v21.8 Lehne Pharmacotherapeutics role precedence, callout feature classification, and Step 01 Giddens concept-sort drop inference
+  {
+    const lehneMasterRole = H.kbSuggestTextbookRole(
+      "Lehne's Pharmacotherapeutics for Advanced Practice Nurses - 2nd Ed.pdf",
+      ['Title Page', 'Preface', 'Reviewing Physiology and Pathophysiology', 'Teaching Through Prototypes']
+    );
+    const lehneCh81Unprefixed = H.kbSuggestTextbookRole(
+      'Chapter 81 - Antiviral Agents II (HIV and Antiretrovirals).pdf',
+      ['Pathophysiology of Human Immunodeficiency Virus Infection', 'Antiretroviral Drugs', 'Summary of Key Prescribing Considerations: Drugs for HIV Infection']
+    );
+    const genericPathoRole = H.kbSuggestTextbookRole(
+      'Essentials-of-Pathophysiology-Unbranded.pdf',
+      ['Cellular Adaptation and Pathophysiology of Shock']
+    );
+    const giddensConceptRole = H.kbSuggestTextbookRole('Giddens - Concept 18 - Perfusion.pdf', ['Concept Overview']);
+
+    t('v21.8 TOC Slicer (Lehne role precedence over Preface/sub-section Pathophysiology): resolves Lehne Pharmacotherapeutics and unprefixed Key Prescribing Considerations chapters to pharm-bridge while keeping unbranded Pathophysiology on patho-bridge and Giddens on rn',
+      lehneMasterRole.roles[0] === 'pharm-bridge' &&
+      lehneCh81Unprefixed.roles[0] === 'pharm-bridge' &&
+      genericPathoRole.roles[0] === 'patho-bridge' &&
+      giddensConceptRole.roles[0] === 'rn');
+
+    t('v21.8 TOC Slicer (Lehne high-yield callout classification): maps plural Prototype Drugs, Black Box Warnings, and Drugs to Avoid -> prototype-drug; Key Prescribing Considerations, Across the Life Span, and Evaluating Treatment -> nursing-process; Key Points -> key-concepts',
+      H.kbClassifyTocFeature('Prototype Drugs: Drugs for HIV Infection') === 'prototype-drug' &&
+      H.kbClassifyTocFeature('Black Box Warning: Pramlintide') === 'prototype-drug' &&
+      H.kbClassifyTocFeature('Drugs to Avoid') === 'prototype-drug' &&
+      H.kbClassifyTocFeature('Summary of Key Prescribing Considerations: GLP-1 Receptor Agonists') === 'nursing-process' &&
+      H.kbClassifyTocFeature('Patient-Centered Care Across the Life Span: Protease Inhibitors') === 'nursing-process' &&
+      H.kbClassifyTocFeature('Evaluating Treatment') === 'nursing-process' &&
+      H.kbClassifyTocFeature('Key Points') === 'key-concepts');
+
+    // Execute live extracted KnowledgeBaseBuilder.addFiles against a mixed Giddens concept-sort folder packet
+    const addFilesSpan = span('  const addFiles=fl=>', '  const importJSON=');
+    let filesState = [];
+    let rolesState = { 'Porth - Chapter 27 - Heart Failure.pdf:200:2': ['rn', 'patho-bridge'] }; // manual override must survive
+    let conceptsState = 'Gas Exchange';
+    const cardFileId = f => f.name + ':' + f.size + ':' + f.lastModified;
+    const runAddFiles = new Function(
+      'setFiles', 'setSourceRoles', 'setKbConcepts', 'cardFileId', 'kbInferUploadDropMeta', 'kbMergeConceptInput',
+      addFilesSpan + '\n;return addFiles;'
+    )(
+      fn => { filesState = fn(filesState); },
+      fn => { rolesState = fn(rolesState); },
+      fn => { conceptsState = fn(conceptsState); },
+      cardFileId,
+      H.kbInferUploadDropMeta,
+      H.kbMergeConceptInput
+    );
+
+    const dropPacket = [
+      { name: 'Giddens - Concept 18 - Perfusion.pdf', size: 100, lastModified: 1, webkitRelativePath: '16 - Perfusion/01 - Foundations & AP/Giddens - Concept 18 - Perfusion.pdf' },
+      { name: 'Porth - Chapter 27 - Heart Failure.pdf', size: 200, lastModified: 2 },
+      { name: 'Porth - Chapter 28 - Dysrhythmias.pdf', size: 210, lastModified: 3 },
+      { name: 'Lehne - Chapter 42 - Drugs for Heart Failure.pdf', size: 300, lastModified: 4 },
+      { name: 'Jarvis - Ch 20 - Heart and Neck Vessels.pdf', size: 400, lastModified: 5 },
+      { name: 'McCuistion - Chapter 42 - Antihypertensives.pdf', size: 500, lastModified: 6 },
+      { name: 'Saunders - Chapter 53 - Cardiovascular Problems.pdf', size: 600, lastModified: 7 },
+      { name: 'NUR221_Pathophysiology_Lecture_Slides.pptx', size: 700, lastModified: 8 },
+    ];
+    runAddFiles(dropPacket);
+
+    t('v21.8 Step 01 Giddens Concept Sort Drop (addFiles + kbInferUploadDropMeta): auto-assigns pharm-bridge/patho-bridge/exam-bridge to Lehne/Porth/Jarvis, leaves Giddens/McCuistion/Saunders/lecture slides on default RN Core, preserves prior manual role overrides, and deduplicate-merges overarching Giddens concepts',
+      filesState.length === 8 &&
+      JSON.stringify(rolesState['Lehne - Chapter 42 - Drugs for Heart Failure.pdf:300:4']) === '["pharm-bridge"]' &&
+      JSON.stringify(rolesState['Porth - Chapter 28 - Dysrhythmias.pdf:210:3']) === '["patho-bridge"]' &&
+      JSON.stringify(rolesState['Jarvis - Ch 20 - Heart and Neck Vessels.pdf:400:5']) === '["exam-bridge"]' &&
+      JSON.stringify(rolesState['Porth - Chapter 27 - Heart Failure.pdf:200:2']) === '["rn","patho-bridge"]' &&
+      rolesState['McCuistion - Chapter 42 - Antihypertensives.pdf:500:6'] === undefined &&
+      rolesState['Saunders - Chapter 53 - Cardiovascular Problems.pdf:600:7'] === undefined &&
+      rolesState['Giddens - Concept 18 - Perfusion.pdf:100:1'] === undefined &&
+      rolesState['NUR221_Pathophysiology_Lecture_Slides.pptx:700:8'] === undefined &&
+      conceptsState === 'Gas Exchange, Perfusion');
+
+    // 10. All 15 Digital Library (concept sort) resources + 04 · NCLEX Extractor Split Q&A bookmark auto-detection
+    const klimekRole = H.kbSuggestTextbookRole('Klimek - Lecture 05 - Diabetes Mellitus, Insulins, DI, SIADH, DKA, and HHNS.pdf');
+    const norrisRole = H.kbSuggestTextbookRole("Norris - Porth's Essentials of Pathophysiology 5e.pdf");
+    const eckhardtRole = H.kbSuggestTextbookRole('Eckhardt - Physical Examination Abnormal Findings.pdf');
+    const rosenthalRole = H.kbSuggestTextbookRole('Rosenthal & Burchum - Drug Therapy in Heart Failure.pdf');
+    const silvestriRole = H.kbSuggestTextbookRole('Silvestri - Comprehensive NCLEX-RN Review.pdf');
+
+    const qbankFilesSample = [
+      'Davis Fundamentals - Ch 02 - Slice - Theory-Based Nursing Care Q&A.pdf',
+      'Davis Med-Surg - Ch 03 - Slice - Congestive Heart Failure Q&A.pdf',
+      'Davis Pharm - Ch 03 - Slice - Congestive Heart Failure Q&A.pdf',
+      'Davis Psych - Chapter 07 - Depressive Disorders and the Suicidal Client Q&A.pdf',
+      'Davis Maternal - Ch 02 - Slice - Genetics Q&A.pdf',
+      'Davis Peds - Chapter 03 - Growth and Development Q&A.pdf',
+      'Saunders Q&A 9e - 16 - Perfusion (Adult & Complex Care) Q&A.pdf',
+      'LaCharity PDA - Case Study 15 - Heart Failure Q&A.pdf',
+    ];
+    const allQBanksDetected = qbankFilesSample.every(fn => {
+      const det = H.kbDetectConceptSortQBank(fn);
+      const role = H.kbSuggestTextbookRole(fn);
+      return det && det.isQBank === true && role.isQBank === true && role.roles[0] === 'rn';
+    });
+    const nonQBankGuides = [
+      'Davis Med-Surg - Appendices A-B - Normal Lab Values and Nursing Concept Care Map.pdf',
+      'Davis Pharm - Appendix A - Drug Charts Reference.pdf',
+      'LaCharity PDA - Part 1 - Prioritization, Delegation, and Assignment Guidelines.pdf',
+      'Saunders Q&A 9e - Chapter 01 - Clinical Judgment and the NCLEX-RN Examination.pdf',
+    ];
+    const guidesStayReading = nonQBankGuides.every(fn => {
+      const det = H.kbDetectConceptSortQBank(fn);
+      return det && det.isQBank === false && !H.kbSuggestTextbookRole(fn).isQBank;
+    });
+    const qbankDropMeta = H.kbInferUploadDropMeta([
+      { name: 'Saunders Q&A 9e - 18 - Gas Exchange (Pharmacology) Q&A.pdf', size: 120, lastModified: 10, webkitRelativePath: '18 - Gas Exchange/04 - Practice Questions/Saunders Q&A 9e - 18 - Gas Exchange (Pharmacology) Q&A.pdf' },
+      { name: 'LaCharity PDA - Chapter 07 - Cardiovascular Problems Q&A.pdf', size: 130, lastModified: 11 },
+    ], cardFileId);
+
+    const nclexSplitSpan = span('function nclexMatchSplitTocSpans(', '/* ── END NCLEX EXTRACTOR PURE HELPERS ── */');
+    const runInspectSplit = async fakeOutline => {
+      const fakePdf = {
+        numPages: 90,
+        getOutline: async () => fakeOutline,
+        getPageIndex: async refObj => refObj.p - 1,
+        getDestination: async () => null,
+      };
+      const fn = new Function(
+        'getPdfDoc', 'kbResolvePdfDestPage', 'kbBuildTocTree', 'kbDetectConceptSortQBank',
+        nclexSplitSpan + '\n;return { nclexMatchSplitTocSpans, nclexInspectPdfSplitLayout };'
+      )(async () => fakePdf, H.kbResolvePdfDestPage, H.kbBuildTocTree, H.kbDetectConceptSortQBank);
+      return fn.nclexInspectPdfSplitLayout({ name: 'Saunders Q&A 9e - 16 - Perfusion (Adult & Complex Care) Q&A.pdf' });
+    };
+    const splitSaunders = await runInspectSplit([
+      { title: 'Questions (1-67)', dest: [{ p: 1 }, { name: 'Fit' }], items: [] },
+      { title: 'Answers & Rationales (1-67)', dest: [{ p: 24 }, { name: 'Fit' }], items: [] },
+    ]);
+    const splitLaCharityCase = await runInspectSplit([
+      { title: 'Case Study & Questions', dest: [{ p: 1 }, { name: 'Fit' }], items: [] },
+      { title: 'Answers & Rationales', dest: [{ p: 9 }, { name: 'Fit' }], items: [] },
+    ]);
+
+    t('v21.8 Digital Library (concept sort) 15-resource & author catalog + 04 · NCLEX Extractor Split Q&A bookmark auto-detection: maps all 7 core texts/authors and all 8 Q-banks (keeping Appendices/Guidelines non-Q-bank) and extracts exact Question/Answer page spans from PDF bookmarks',
+      klimekRole.roles[0] === 'rn' && klimekRole.badge.includes('NCLEX Lecture') &&
+      norrisRole.roles[0] === 'patho-bridge' &&
+      eckhardtRole.roles[0] === 'exam-bridge' &&
+      rosenthalRole.roles[0] === 'pharm-bridge' &&
+      silvestriRole.roles[0] === 'rn' &&
+      allQBanksDetected &&
+      guidesStayReading &&
+      qbankDropMeta.qbankFiles.length === 2 &&
+      qbankDropMeta.concepts.join(',') === 'Gas Exchange' &&
+      kbBuilderSpan.includes('Q-Bank → 04 · NCLEX Extract') &&
+      splitSaunders.split &&
+      JSON.stringify(splitSaunders.split.qRanges) === '[{"start":1,"end":23}]' &&
+      JSON.stringify(splitSaunders.split.aRanges) === '[{"start":24,"end":90}]' &&
+      splitSaunders.qbank.id === 'saunders-qa' &&
+      splitLaCharityCase.split &&
+      JSON.stringify(splitLaCharityCase.split.qRanges) === '[{"start":1,"end":8}]' &&
+      JSON.stringify(splitLaCharityCase.split.aRanges) === '[{"start":9,"end":90}]');
   }
 };
