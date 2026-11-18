@@ -56,7 +56,7 @@ function loadDrawer(S,React,document){
 
 function run(S,t){
   const drawer=span(S,'function ConfigSidebar({onClose,activeTool}){','\n  );\n}\n');
-  t('settings drawer: extracted component reaches its closing aside',drawer.includes('</aside>')&&drawer.includes('suite-argon-model'));
+  t('settings drawer: extracted component reaches its closing aside',drawer.includes('</aside>')&&drawer.includes('suite-neon-model'));
   t('settings drawer: entry focus is requested once, inside a mount-only effect',
     count(drawer,"getElementById('suite-api-key')?.focus()")===1&&
     drawer.includes("document.getElementById('suite-api-key')?.focus();\n    return()=>document.removeEventListener('keydown',onKey);\n  },[]);"));
@@ -69,7 +69,7 @@ function run(S,t){
     app.includes("const closeSettings=useCallback(()=>{setShowConfig(false);settingsTrigger.current?.focus();},[]);")&&!app.includes('const closeSettings=()=>'));
 
   const cfg={apiKey:'',setApiKey(){},autoProfile:false,setAutoProfile(){},thinkingMode:false,setThinkingMode(){},thinkingLevel:'low',setThinkingLevel(){},
-    activeModel:'synthetic-hydrogen',hydrogenModel:'synthetic-hydrogen',setHydrogenModel(){},argonModel:'synthetic-argon',setArgonModel(){},profiles:{},setProfile(){},resetProfiles(){},
+    activeModel:'synthetic-hydrogen',hydrogenModel:'synthetic-hydrogen',setHydrogenModel(){},neonModel:'synthetic-neon',setNeonModel(){},profiles:{},setProfile(){},resetProfiles(){},
     forTool(){return {model:'synthetic-hydrogen',level:'low',family:'hydrogen',auto:false};},activeTool:'knowledge'};
   const focus=[],listeners=new Map(),removed=[];
   const document={

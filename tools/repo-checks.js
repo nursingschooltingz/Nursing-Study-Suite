@@ -166,9 +166,10 @@ function extractAnchoredRegex(source, anchor, startMarker, endMarker, flags = ''
 // app's geminiOutputCap.
 // v18.2: Argon's cap is 65,536 like every other model's; the 32,768 limit v17.13 assumed was refuted by a live call.
 // The per-model branch stays so a model with a lower limit is a one-number change, as in the app.
-const MEASUREMENT_OUTPUT_CAP = 65536, MEASUREMENT_ARGON_CAP = 65536;
+const MEASUREMENT_OUTPUT_CAP = 65536, MEASUREMENT_NEON_CAP = 65536, MEASUREMENT_ARGON_CAP = 65536;
 function measurementOutputCap(model) {
-  return /argon/i.test(String(model || '')) ? MEASUREMENT_ARGON_CAP : MEASUREMENT_OUTPUT_CAP;
+  const m = String(model || '');
+  return /neon/i.test(m) ? MEASUREMENT_NEON_CAP : /argon/i.test(m) ? MEASUREMENT_ARGON_CAP : MEASUREMENT_OUTPUT_CAP;
 }
 
 // Manual measurement tools share strict parsing; importing this module does no I/O.
@@ -176,7 +177,7 @@ function measurementOutputCap(model) {
 function parseMeasurementArgs(argv, kind) {
   if (!['davis', 'neia'].includes(kind)) throw new Error('Unknown measurement tool: ' + kind);
   const davis = kind === 'davis';
-  const config = { runs: davis ? 2 : 3, model: davis ? 'gemini-4-hydrogen' : 'gemini-4-argon',
+  const config = { runs: davis ? 2 : 3, model: davis ? 'gemini-4-hydrogen' : 'gemini-4-neon',
     level: davis ? 'low' : 'high', width: davis ? 1 : 3, retryms: 20000, rpm: davis ? 15 : 0,
     out: davis ? 'davis-transcribe-report.json' : 'neia-retest-report.json',
     suite: '', only: [], images: [], dryRun: false, live: false, appProfile: false, help: false };
@@ -218,7 +219,7 @@ function parseMeasurementArgs(argv, kind) {
   if (!['low', 'medium', 'high', 'xhigh'].includes(config.level)) throw new Error('--level must be low, medium, high, or xhigh');
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(config.model)) throw new Error('Invalid model ID');
   if (config.level === 'xhigh' && /argon/i.test(config.model)) throw new Error('Argon does not accept --level xhigh; use low, medium, or high');
-  if (config.level === 'xhigh' && !/hydrogen/i.test(config.model)) config.level = 'high';
+  if (config.level === 'xhigh' && !/(?:hydrogen|neon)/i.test(config.model)) config.level = 'high';
   if (config.dryRun && config.live) throw new Error('Choose --dry-run or --live, not both');
   if (config.appProfile && (seen.has('--model') || seen.has('--level'))) throw new Error('--app-profile cannot be combined with --model or --level');
   if (davis && !config.images.length && !config.help) throw new Error('Pass at least one image path');
@@ -241,7 +242,7 @@ function resolveMeasurementProfile(config, source, tool) {
   if (!['cardTranscribe', 'itemAudit'].includes(tool)) throw new Error('Unknown app profile: ' + tool);
   const profiles = source.match(/const TOOL_PROFILE_DEFAULTS=\{([\s\S]*?)\n\};/);
   if (!profiles) throw new Error('App profile registry anchor missing');
-  const row = profiles[1].match(new RegExp('\\b' + tool + ":\\{m:'(hydrogen|argon)',lv:'([^']+)'\\}"));
+  const row = profiles[1].match(new RegExp('\\b' + tool + ":\\{m:'(hydrogen|neon|argon)',lv:'([^']+)'\\}"));
   if (!row) throw new Error('App profile row missing: ' + tool);
   const family = row[1];
   // v17.3: the shipped defaults live in MODEL_SETTINGS_DEFAULTS; the App hydrates its state from saved settings.

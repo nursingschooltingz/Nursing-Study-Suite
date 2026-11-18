@@ -21,20 +21,21 @@ module.exports = async function runV202ReviewRemediationTests(S, t) {
   const load = (code, names, env = {}) =>
     new Function(...Object.keys(env), code + '\n;return {' + names.join(',') + '};')(...Object.values(env));
 
-  // ── Phase 1: Model settings schema v2 & non-Hydrogen xhigh guard ──
+  // ── Phase 1: Model settings schema v3 (v21.10 Neon) & xhigh guard ──
   const MODEL = load(
     span('const MODEL_SETTINGS_KEY=', 'const ConfigCtx=createContext();'),
     ['MODEL_SETTINGS_KEY', 'MODEL_SETTINGS_SCHEMA_VERSION', 'MODEL_SETTINGS_DEFAULTS', 'THINKING_LEVELS', 'loadModelSettings', 'saveModelSettings']
   );
   const TRANSPORT = load(
     span('const GEMINI_OUTPUT_CAP=', 'async function geminiRequest('),
-    ['geminiIsArgon', 'geminiIsHydrogen', 'geminiOutputCap', 'geminiGenerationConfig'],
+    ['geminiIsNeon', 'geminiIsArgon', 'geminiIsHydrogen', 'geminiOutputCap', 'geminiGenerationConfig'],
     { THINKING_LEVELS: MODEL.THINKING_LEVELS }
   );
 
   t('v20.2 (Extraction tail): Phase 1–10 live spans compile and expose expected entrypoints',
-    MODEL.MODEL_SETTINGS_SCHEMA_VERSION === 2 &&
+    MODEL.MODEL_SETTINGS_SCHEMA_VERSION === 3 &&
     typeof MODEL.saveModelSettings === 'function' &&
+    typeof TRANSPORT.geminiIsNeon === 'function' &&
     typeof TRANSPORT.geminiGenerationConfig === 'function');
 
   {
@@ -45,44 +46,49 @@ module.exports = async function runV202ReviewRemediationTests(S, t) {
     };
     MODEL.saveModelSettings(storage, {
       hydrogenModel: 'gemini-4.5-hydrogen-exp',
-      argonModel: 'gemini-4.5-argon-exp',
+      neonModel: 'gemini-4.5-neon-exp',
       thinkingMode: true,
       hydrogenLevel: 'xhigh',
-      argonLevel: 'medium'
+      neonLevel: 'xhigh'
     });
     const persisted = JSON.parse(rawStore.get(MODEL.MODEL_SETTINGS_KEY));
     const reloaded = MODEL.loadModelSettings(storage);
-    t('v20.2 (Phase 1 — saveModelSettings schemaVersion 2): stamps schemaVersion 2 and preserves explicit custom model selections across reloads',
-      persisted.schemaVersion === 2 &&
+    t('v20.2 + v21.10 (Phase 1 — saveModelSettings schemaVersion 3): stamps schemaVersion 3 and preserves explicit custom model selections including Neon xhigh across reloads',
+      persisted.schemaVersion === 3 &&
       reloaded.hydrogenModel === 'gemini-4.5-hydrogen-exp' &&
-      reloaded.argonModel === 'gemini-4.5-argon-exp' &&
+      reloaded.neonModel === 'gemini-4.5-neon-exp' &&
       reloaded.thinkingMode === true &&
       reloaded.hydrogenLevel === 'xhigh' &&
-      reloaded.argonLevel === 'medium');
+      reloaded.neonLevel === 'xhigh');
 
-    // A schemaVersion 2 payload never re-runs the pre-v17.13 proLevel migration shim.
+    // A schemaVersion >= 2 payload never re-runs the pre-v17.13 proLevel migration shim, and schemaVersion >= 3 ignores stale argonLevel.
     rawStore.set(MODEL.MODEL_SETTINGS_KEY, JSON.stringify({ schemaVersion: 2, proLevel: 'low' }));
-    const v2NoLegacy = MODEL.loadModelSettings(storage);
+    const v2NoLegacyPro = MODEL.loadModelSettings(storage);
+    rawStore.set(MODEL.MODEL_SETTINGS_KEY, JSON.stringify({ schemaVersion: 3, argonLevel: 'low', argonModel: 'gemini-custom-old' }));
+    const v3NoLegacyArgon = MODEL.loadModelSettings(storage);
     rawStore.set(MODEL.MODEL_SETTINGS_KEY, JSON.stringify({ proLevel: 'low' }));
     const v0Legacy = MODEL.loadModelSettings(storage);
-    t('v20.2 (Phase 1 — gated legacy migration): schemaVersion < 2 migrates proLevel while schemaVersion >= 2 ignores stale proLevel',
-      v2NoLegacy.argonLevel === 'high' && v0Legacy.argonLevel === 'low');
+    t('v20.2 + v21.10 (Phase 1 — gated legacy migration): schemaVersion < 2 migrates proLevel, schemaVersion >= 2 ignores stale proLevel, and schemaVersion >= 3 ignores stale argon keys',
+      v2NoLegacyPro.neonLevel === 'high' && v3NoLegacyArgon.neonLevel === 'high' && v3NoLegacyArgon.neonModel === 'gemini-4-neon' && v0Legacy.neonLevel === 'low');
 
     const hydOut = TRANSPORT.geminiGenerationConfig('gemini-4-hydrogen', { thinkingConfig: { thinkingLevel: 'xhigh' } });
+    const neonOut = TRANSPORT.geminiGenerationConfig('gemini-4-neon', { thinkingConfig: { thinkingLevel: 'xhigh' } });
     const customOut = TRANSPORT.geminiGenerationConfig('custom-reasoning-v1', { thinkingConfig: { thinkingLevel: 'xhigh' } });
     let argonErr = null;
     try { TRANSPORT.geminiGenerationConfig('gemini-4-argon', { thinkingConfig: { thinkingLevel: 'xhigh' } }); } catch (e) { argonErr = e; }
-    t('v20.2 (Phase 1 — geminiGenerationConfig xhigh guard): preserves xhigh on Hydrogen, clamps non-Hydrogen custom models to high, and refuses Argon xhigh',
+    t('v20.2 + v21.10 (Phase 1 — geminiGenerationConfig xhigh guard): preserves xhigh on Hydrogen and Neon, clamps unknown custom models to high, and refuses Argon xhigh',
       hydOut.thinkingConfig.thinkingLevel === 'xhigh' &&
+      neonOut.thinkingConfig.thinkingLevel === 'xhigh' &&
       customOut.thinkingConfig.thinkingLevel === 'high' &&
       Boolean(argonErr && argonErr.isFatal === true && argonErr.status === 400));
 
     const cliCustom = parseMeasurementArgs(['--model', 'custom-reasoning-v1', '--level', 'xhigh', '--dry-run'], 'neia');
     const cliHyd = parseMeasurementArgs(['--model', 'gemini-4-hydrogen', '--level', 'xhigh', '--dry-run'], 'neia');
+    const cliNeon = parseMeasurementArgs(['--model', 'gemini-4-neon', '--level', 'xhigh', '--dry-run'], 'neia');
     let cliArgonErr = '';
     try { parseMeasurementArgs(['--model', 'gemini-4-argon', '--level', 'xhigh', '--dry-run'], 'neia'); } catch (e) { cliArgonErr = e.message; }
-    t('v20.2 (Phase 1 — CLI parseMeasurementArgs xhigh guard): clamps custom non-Hydrogen xhigh to high, keeps Hydrogen xhigh, and rejects Argon xhigh',
-      cliCustom.level === 'high' && cliHyd.level === 'xhigh' && /Argon does not accept/.test(cliArgonErr));
+    t('v20.2 + v21.10 (Phase 1 — CLI parseMeasurementArgs xhigh guard): clamps unknown custom xhigh to high, keeps Hydrogen and Neon xhigh, and rejects Argon xhigh',
+      cliCustom.level === 'high' && cliHyd.level === 'xhigh' && cliNeon.level === 'xhigh' && /Argon does not accept/.test(cliArgonErr));
   }
 
   // ── Phase 2: IndexedDB open watchdog / blocked / versionchange, archive quota recovery, & cross-tab storage sync ──
@@ -184,7 +190,7 @@ module.exports = async function runV202ReviewRemediationTests(S, t) {
     // 5) Cross-tab storage listener in App
     const defaultsTable = load(span('const TOOL_PROFILE_DEFAULTS=', 'const PROFILE_ROWS='), ['TOOL_PROFILE_DEFAULTS']).TOOL_PROFILE_DEFAULTS;
     const listenerBlock = span('    const onStorage=ev=>{', '    window.addEventListener(\'storage\',onStorage);', 'function App()');
-    const syncState = { hydrogenModel: 'gemini-4-hydrogen', argonModel: 'gemini-4-argon', thinkingMode: false, hydrogenLevel: 'low', argonLevel: 'high', autoProfile: true, profiles: defaultsTable };
+    const syncState = { hydrogenModel: 'gemini-4-hydrogen', neonModel: 'gemini-4-neon', thinkingMode: false, hydrogenLevel: 'low', neonLevel: 'high', autoProfile: true, profiles: defaultsTable };
     const tabStore = new Map();
     const fakeLocal = { getItem: k => tabStore.get(k) ?? null, setItem: (k, v) => tabStore.set(k, String(v)) };
     const { onStorage } = load(listenerBlock, ['onStorage'], {
@@ -193,27 +199,29 @@ module.exports = async function runV202ReviewRemediationTests(S, t) {
       loadModelSettings: s => MODEL.loadModelSettings(s),
       TOOL_PROFILE_DEFAULTS: defaultsTable,
       setHydrogenModel: v => { syncState.hydrogenModel = v; },
-      setArgonModel: v => { syncState.argonModel = v; },
+      setNeonModel: v => { syncState.neonModel = v; },
       setThinkingMode: v => { syncState.thinkingMode = v; },
       setHydrogenLevel: v => { syncState.hydrogenLevel = v; },
-      setArgonLevel: v => { syncState.argonLevel = v; },
+      setNeonLevel: v => { syncState.neonLevel = v; },
       setAutoProfile: v => { syncState.autoProfile = v; },
       setProfiles: v => { syncState.profiles = v; }
     });
-    MODEL.saveModelSettings(fakeLocal, { hydrogenModel: 'gemini-4-hydrogen-next', argonModel: 'gemini-4-argon-next', thinkingMode: true, hydrogenLevel: 'xhigh', argonLevel: 'low' });
+    MODEL.saveModelSettings(fakeLocal, { hydrogenModel: 'gemini-4-hydrogen-next', neonModel: 'gemini-4-neon-next', thinkingMode: true, hydrogenLevel: 'xhigh', neonLevel: 'low' });
     onStorage({ key: MODEL.MODEL_SETTINGS_KEY, storageArea: fakeLocal });
     onStorage({ key: 'latte_auto_profile_v1', newValue: '0', storageArea: fakeLocal });
     onStorage({ key: 'latte_tool_profiles_v1', newValue: JSON.stringify({ anki: { m: 'hydrogen', lv: 'xhigh' }, cases: { m: 'argon', lv: 'xhigh' } }), storageArea: fakeLocal });
     onStorage({ key: 'latte_auto_profile_v1', newValue: '1', storageArea: {} }); // ignored: non-localStorage area
 
-    t('v20.2 (Phase 2 — cross-tab storage sync): syncs model settings, auto-profile toggle, and clamped tool profiles across tabs while ignoring other storage areas',
+    t('v20.2 + v21.10 (Phase 2 — cross-tab storage sync): syncs model settings, auto-profile toggle, and Neon/Hydrogen xhigh tool profiles across tabs while ignoring other storage areas',
       syncState.hydrogenModel === 'gemini-4-hydrogen-next' &&
+      syncState.neonModel === 'gemini-4-neon-next' &&
       syncState.hydrogenLevel === 'xhigh' &&
-      syncState.argonLevel === 'low' &&
+      syncState.neonLevel === 'low' &&
       syncState.thinkingMode === true &&
       syncState.autoProfile === false &&
       syncState.profiles.anki.lv === 'xhigh' &&
-      syncState.profiles.cases.lv === 'high');
+      syncState.profiles.cases.m === 'neon' &&
+      syncState.profiles.cases.lv === 'xhigh');
   }
 
   // ── Phase 3: Entity latteBucket validation & multi-chunk / import entity deduplication ──

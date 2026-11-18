@@ -130,7 +130,7 @@ module.exports = async function runV216ReviewRemediationTests(S, t) {
       'MODEL_SETTINGS_DEFAULTS', 'THINKING_LEVELS', 'fetch', 'setTimeout', 'clearTimeout',
       transportSrc + '\nreturn { SAFETY_SETTINGS, redactApiSecrets, geminiRequest, callGemini, extractJSON };'
     )(
-      { hydrogenModel: 'gemini-4-hydrogen', argonModel: 'gemini-4-argon' },
+      { hydrogenModel: 'gemini-4-hydrogen', neonModel: 'gemini-4-neon' },
       ['minimal', 'low', 'medium', 'high', 'xhigh'],
       fetchImpl,
       setTimeoutImpl || setTimeout,

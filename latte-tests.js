@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 4103;
+const EXPECTED_ASSERTIONS = 4108;
 
 let file;
 try {
@@ -1577,11 +1577,11 @@ section('v15.6 — case audit pass');
 
   // ── Wiring ──
   // v15.7: first slot, not Pro — a free-tier cost decision (a free key exhausted 3.1 Pro at ~26 calls).
-  // v17.14: Argon at high is the shipped default; the only measured audit configuration was 3.1 Pro/high.
-  t('itemAudit profile defaults to argon + high', /itemAudit:\{m:'argon',lv:'high'\}/.test(S));
+  // v17.14 -> v21.10: Neon at high is the shipped default (upgraded from Argon at high); the only measured audit configuration was 3.1 Pro/high.
+  t('itemAudit profile defaults to neon + high', /itemAudit:\{m:'neon',lv:'high'\}/.test(S));
   t('the audit still uses high reasoning', /itemAudit:\{m:'\w+',lv:'high'\}/.test(S));
-  t('the Argon default documents why the old free-tier cost decision no longer applies',
-    S.includes('That was a COST decision, not a quality one') && S.includes('the shipped default is now Argon at high. The cost reason assumed a free-tier key;'));
+  t('the Neon default documents why the old free-tier cost decision no longer applies',
+    S.includes('That was a COST decision, not a quality one') && S.includes('the shipped default is now Neon at high (upgraded from Argon at high). The cost reason assumed a free-tier key;'));
   t('itemAudit has a profile row', S.includes("{id:'itemAudit',label:'Item quality · audit'}"));
   t('there is exactly ONE audit profile row, not one per source tool',
     (S.match(/label:'[^']*·\s*audit'/g) || []).filter(x => /Item quality/.test(x)).length === 1 && !S.includes("id:'nclexgenAudit'"));

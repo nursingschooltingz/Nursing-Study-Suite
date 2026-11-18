@@ -1,6 +1,6 @@
 # P-LATE (Triple-E), Tagging System & Exam Study Guide
 
-> **Nursing Study Suite (v21.9) Reference Guide**
+> **Nursing Study Suite (v21.10) Reference Guide**
 > This guide covers the **5-bucket P-LATE (Triple-E)** clinical framework, the **7-dimension hierarchical tagging architecture**, the **Step 01 Textbook TOC & Section Slicer**, the **course-by-course textbook & Giddens concept blueprint**, and the **phased exam-prep sorting workflow** across Knowledge Base, Priority Analyzer, Anki, NCLEX Generator, and Case Studies.
 
 ---

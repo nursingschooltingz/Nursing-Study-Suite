@@ -16,8 +16,8 @@ module.exports = async function runCourseAnalyzerTests(S, t) {
   const buildHelpers = (stubs = {}) => new Function(
     'getExt', 'cardFileId', 'kbSourceUnits', 'destroyPdfDoc', 'geminiRequest', 'extractJSON', 'redactApiSecrets',
     pointsCode + '\n' + helperCode + '\n' +
-    'return {COURSE_ANALYZER_PROMPT,COURSE_ANALYZER_JSON_SCHEMA,COURSE_ANALYZER_SAFETY_BULLET,COURSE_ANALYZER_RETENTION_FOOTER,COURSE_ANALYZER_FILE_ROLES,' +
-    'caInferFileRole,caDefaultCarryToKb,caNormalizeAnalysis,caMergeAnalysisParts,caFormatCoverageMarkdown,caFormatAllMarkdown,caBuildKbHandoff,caReadSourceFile,caSegmentMaterials,caRunAnalysisWithEnv,parseAndNumberPoints};'
+    'return {COURSE_ANALYZER_PROMPT,COURSE_ANALYZER_JSON_SCHEMA,COURSE_ANALYZER_SAFETY_BULLET,COURSE_ANALYZER_RETENTION_FOOTER,COURSE_ANALYZER_FILE_ROLES,COURSE_ANALYZER_EXAM_PRESETS,' +
+    'caSplitExamTargets,caHasExamPreset,caToggleExamPreset,caBuildExamTailoringHint,caInferFileRole,caDefaultCarryToKb,caNormalizeAnalysis,caMergeAnalysisParts,caFormatCoverageMarkdown,caFormatAllMarkdown,caBuildKbHandoff,caReadSourceFile,caSegmentMaterials,caRunAnalysisWithEnv,parseAndNumberPoints};'
   )(
     stubs.getExt || (n => String(n || '').split('.').pop().toLowerCase()),
     stubs.cardFileId || (f => `${f.name}|${f.size || 0}|${f.lastModified || 0}`),
@@ -225,4 +225,57 @@ module.exports = async function runCourseAnalyzerTests(S, t) {
   });
   t('v21.9: caRunAnalysisWithEnv redacts API key secrets from surfaced error messages',
     redErr.includes('[redacted]') && !redErr.includes('AIzaSecretLeak123456'));
+
+  // 9. v21.10: Quick-select exam presets (single, multi-toggle combine, toggle-off) & automatic unit/comprehensive tailoring lens
+  const toggled1 = H.caToggleExamPreset('', 'Exam 2');
+  const toggled2 = H.caToggleExamPreset(toggled1, 'HESI Comprehensive');
+  const toggled3 = H.caToggleExamPreset(toggled2, 'Exam 2');
+  t('v21.10: COURSE_ANALYZER_EXAM_PRESETS, caSplitExamTargets, caHasExamPreset, and caToggleExamPreset support single, combined, and toggle-off targets synced with #ca-exam',
+    H.COURSE_ANALYZER_EXAM_PRESETS.includes('Exam 1') &&
+    H.COURSE_ANALYZER_EXAM_PRESETS.includes('Exam 4') &&
+    H.COURSE_ANALYZER_EXAM_PRESETS.includes('HESI Comprehensive') &&
+    H.COURSE_ANALYZER_EXAM_PRESETS.includes('ATI / NCLEX Review') &&
+    toggled1 === 'Exam 2' &&
+    toggled2 === 'Exam 2 + HESI Comprehensive' &&
+    H.caHasExamPreset('exam 2, HESI Comprehensive', 'Exam 2') === true &&
+    H.caHasExamPreset('exam 2, HESI Comprehensive', 'HESI Comprehensive') === true &&
+    H.caHasExamPreset('exam 2, HESI Comprehensive', 'Exam 3') === false &&
+    toggled3 === 'HESI Comprehensive' &&
+    S.includes('aria-label="Quick-select exam targets"') &&
+    S.includes('caToggleExamPreset(v,p)'));
+
+  const unitLens = H.caBuildExamTailoringHint('Exam 2');
+  const compLens = H.caBuildExamTailoringHint('HESI Comprehensive');
+  const comboLens = H.caBuildExamTailoringHint('Exam 2 + HESI Comprehensive');
+  const neutralLens = H.caBuildExamTailoringHint('Cardiovascular Lab Checkoff');
+  const compReqs = [];
+  const C = buildHelpers({
+    kbSourceUnits: async () => [{ kind: 'slide', n: 1, text: '[Slide 1] Perfusion cues.' }],
+    geminiRequest: async (_key, _model, body) => {
+      compReqs.push(body);
+      return JSON.stringify({
+        course: 'NUR221', exam: 'Exam 2 + HESI Comprehensive',
+        overarchingConcepts: ['Perfusion'], outcomes: ['Prioritize safety'],
+        pointGroups: [{ concept: 'Perfusion', points: ['HF cues'] }],
+        additionalContext: ['Cross-concept HESI traps'],
+        coverageReport: { materialsAnalyzed: ['Slides.pptx'], majorConceptsCovered: ['Perfusion'], missingOrUnreadable: [], uncertainOrDiscrepancies: [], sourceVerification: ['Slide 1'] }
+      });
+    }
+  });
+  await C.caRunAnalysisWithEnv({
+    cfg: { apiKey: 'AIzaSyntheticKeyForTesting9999', autoProfile: true, forTool: () => ({ model: 'gemini-4-hydrogen', level: 'medium' }) },
+    course: 'NUR221', exam: 'Exam 2 + HESI Comprehensive', notes: '',
+    files: [{ name: 'Slides.pptx', size: 100, lastModified: 1 }],
+    fileRoles: {}, abortRef: { current: null },
+    setBusy: () => {}, setError: () => {}, setProg: () => {}, setLogs: () => {}, pushLog: () => {},
+    setResult: () => {}, setEditConcepts: () => {}, setEditOutcomes: () => {}, setEditPoints: () => {}, setEditExtra: () => {}
+  });
+  const sentComboPrompt = compReqs[0]?.contents?.[0]?.parts?.[0]?.text || '';
+  t('v21.10: caBuildExamTailoringHint selects unit, comprehensive, combined, or empty lens and caRunAnalysisWithEnv injects it into the request prompt',
+    unitLens.includes('EXAM TAILORING LENS (UNIT EXAM)') &&
+    compLens.includes('EXAM TAILORING LENS (COMPREHENSIVE / STANDARDIZED EXAM)') &&
+    comboLens.includes('EXAM TAILORING LENS (COMBINED UNIT + STANDARDIZED/COMPREHENSIVE)') &&
+    neutralLens === '' &&
+    sentComboPrompt.includes('EXAM TAILORING LENS (COMBINED UNIT + STANDARDIZED/COMPREHENSIVE)') &&
+    reqs[0].body.contents[0].parts[0].text.includes('EXAM TAILORING LENS (UNIT EXAM)'));
 };

@@ -9,6 +9,24 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [21.10] — 2026-11-18
+
+Upgrades the Suite's default second model slot from **Argon (`gemini-4-argon`)** to **Gemini 4 Neon (`gemini-4-neon`)** with full `low / medium / high / xhigh` thinking-level support (`high` default across Priority synthesis, NCLEX Generate, Case Studies, and Item Quality Audit), and adds **1-click multi-toggle exam presets** (`Exam 1`–`4`, `Final Exam`, `HESI Specialty`, `HESI Comprehensive`, `ATI / NCLEX Review`) + automatic **exam-type tailoring** to **01 · Course Analyzer**. All 13 frozen prompt constants in `prompt-baseline.json` are unchanged.
+
+### Added & Changed
+
+- **Gemini 4 Neon Default Model & Thinking-Level Support (`MODEL_SETTINGS_SCHEMA_VERSION = 3`, `MODEL_SETTINGS_DEFAULTS`, `loadModelSettings`, `TOOL_PROFILE_DEFAULTS`, `geminiIsNeon`, `geminiGenerationConfig`, `ConfigSidebar`, `AnkiGenerator`, `App`, `tools/repo-checks.js`, `neia-retest.js`).** Migrates the second model slot from `gemini-4-argon` to `gemini-4-neon` (65,536-token synchronous output cap, native `high` default, supporting `low`, `medium`, `high`, and `xhigh`), unlocks the `xhigh` pill on Neon per-tool profile rows, manual Neon mode, and Anki Source Checker (still disabling/refusing `xhigh` only when a user explicitly types an `argon` model ID), upgrades **Priority · synthesis** from `Argon · medium` to **`Neon · high`** alongside **NCLEX · generate**, **Case studies**, and **Item quality · audit** (all **`Neon · high`**), and auto-migrates `schemaVersion < 3` browser saves (upgrading untouched `gemini-4-argon` to `gemini-4-neon` and legacy `argon`/`pro` profile rows to `neon` while preserving explicit custom model IDs and thinking levels).
+- **`01 · Course Analyzer` Quick-Select Exam Presets & Tailoring Lens (`COURSE_ANALYZER_EXAM_PRESETS`, `caSplitExamTargets`, `caHasExamPreset`, `caToggleExamPreset`, `caBuildExamTailoringHint`, `caRunAnalysisWithEnv`, `CourseAnalyzer`).** Pairs the freeform `#ca-exam` textbox with 1-click multi-toggle preset pills (`Exam 1`, `Exam 2`, `Exam 3`, `Exam 4`, `Final Exam`, `HESI Specialty`, `HESI Comprehensive`, `ATI / NCLEX Review`) so you can select a single unit exam, `HESI Comprehensive`, or a combined target (e.g., `Exam 2 + HESI Comprehensive`), automatically injecting a matching unit-vs-comprehensive tailoring lens into the Course Analyzer prompt.
+
+### Verification
+
+- **5 new end-to-end assertions (4,108 total) & full Neon suite updates** across `tools/course-analyzer-tests.js`, `tools/settings-persistence-tests.js`, `tools/v20-2-review-remediation-tests.js`, `tools/v18-0-low-transport-tests.js`, `tools/transport-regression-tests.js`, and CLI/browser fixtures covering Neon `xhigh` support, Neon missing-level refusal, `schemaVersion` 2 → 3 migration, Argon manual-ID `xhigh` refusal, and Course Analyzer exam presets + unit/comprehensive/combined tailoring lenses.
+- **Prompt bytes.** All 13 frozen hashes in `prompt-baseline.json` pass `tools/check-prompts.js` unchanged. `Prompts.md` verified across all 25 documented prompt constants.
+
+See the [release verification record](docs/reviews/v21.10-release.md).
+
+---
+
 ## [21.9] — 2026-11-18
 
 Adds the new **01 · Course Analyzer** tab (`CourseAnalyzer`, placed under **Source** ahead of **02 · Knowledge Base**, while keeping **Knowledge Base** as the default opening tab) so you can upload your syllabus, optional exam blueprint, and lecture PowerPoints/PDFs once, generate conservative-retention KB Focus blocks (`Overarching Concepts`, `Outcomes`, atomic concept-grouped `Points` with the safety catch-all bullet, additive `Additional Context` with contrasting pairs & exam traps, plus a `Source Coverage Report`), and sync everything—including checked lecture decks—into **02 · Knowledge Base** in one click. Also hardens Knowledge Base extraction with two conservative retention safeguards: a default-ON **Tier-1 safety floor** in `Prioritize` mode (`kbBuildFocusBlock`, `#kb-keep-safety-t1`) and expanded heading/divider detection in `parseAndNumberPoints`. All 13 frozen prompt constants in `prompt-baseline.json` are unchanged.

@@ -7,7 +7,7 @@
  * --html <suite.html>, --app-profile, --only <id,id>, --out <report.json>,
  * --retryms 0..600000, --rpm 0..60000 (0 = unthrottled; fractional rates allowed).
  *
- * CLI baseline is Argon/high (v17.13; reports before v17.13 were measured on 3.1 Pro/high). --app-profile resolves the shipped
+ * CLI baseline is Neon/high (v21.10; v17.13–v21.9 used Argon/high and earlier reports used 3.1 Pro/high). --app-profile resolves the shipped
  * itemAudit model/level, not saved browser overrides. No profile is changed in the app.
  * --dry-run needs no key, sends nothing, and writes no report.
  * --live prevents accidents; per-run human authorization is still required.

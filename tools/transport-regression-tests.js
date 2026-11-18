@@ -90,33 +90,37 @@ module.exports=async function transportRegressionTests(S,t){
   t('known provider blocking reasons retain partial diagnostics without retries',e?.isFatal===true&&e.finishReason==='RECITATION'&&e.partialText==='partial'&&h.calls()===1);
   t('the worksheet pacing uses abortable sleep',S.includes('await _sleep(900,ctl.signal)'));
   t('the worksheet stops on a permanent HTTP failure or a deferred retry through the shared rule',S.includes('if(geminiHaltsBatch(e))throw e;')&&!S.includes('if(e.isFatal&&e.status)throw e;')); // v17.4: geminiHaltsBatch
-  // v17.13: geminiRequest owns the output ceiling and the thinking rules.
-  const argon='gemini-4-argon',json={responseMimeType:'application/json'};
+  // v17.13 + v21.10: geminiRequest owns the output ceiling and the thinking rules (Hydrogen, Neon, and legacy Argon).
+  const neon='gemini-4-neon',argon='gemini-4-argon',json={responseMimeType:'application/json'};
   h=make([response([ev('ok','STOP')])]);
-  // v18.2: Argon's ceiling is 65,536 (a live non-streaming call accepted it on 2026-10-14); it was 32,768.
-  t('the output ceiling follows the model ID: 65,536 for Argon and every other model',h.cap(argon)===65536&&h.cap('gemini-4-argon-preview')===65536&&h.cap('gemini-4-hydrogen')===65536&&h.cap('')===65536&&S.includes('const GEMINI_OUTPUT_CAP=65536,ARGON_OUTPUT_CAP=65536;'));
-  let asked={contents:[],generationConfig:{maxOutputTokens:65536,thinkingConfig:{thinkingLevel:'high'}}};await h.call({},{model:argon,body:asked});
-  t('an Argon request asking for 65,536 is sent with 65,536, no longer clamped to 32,768',h.bodies[0].generationConfig.maxOutputTokens===65536&&h.bodies[0].generationConfig.thinkingConfig.thinkingLevel==='high'&&h.metas.at(-1).maxOutputTokens===65536);
-  {const over=make([response([ev('ok','STOP')])]);await over.call({},{model:argon,body:{contents:[],generationConfig:{maxOutputTokens:131072,thinkingConfig:{thinkingLevel:'high'}}}});
-  t('v18.2: an Argon request asking for more than 65,536 is still clamped to 65,536',over.bodies[0].generationConfig.maxOutputTokens===65536&&over.metas.at(-1).maxOutputTokens===65536);}
+  // v18.2 + v21.10: Neon, Argon, and Hydrogen all share the 65,536 synchronous output ceiling.
+  t('the output ceiling follows the model ID: 65,536 for Neon, Argon and every other model',h.cap(neon)===65536&&h.cap('gemini-4-neon-preview')===65536&&h.cap(argon)===65536&&h.cap('gemini-4-argon-preview')===65536&&h.cap('gemini-4-hydrogen')===65536&&h.cap('')===65536&&S.includes('const GEMINI_OUTPUT_CAP=65536,NEON_OUTPUT_CAP=65536,ARGON_OUTPUT_CAP=65536;'));
+  let asked={contents:[],generationConfig:{maxOutputTokens:65536,thinkingConfig:{thinkingLevel:'high'}}};await h.call({},{model:neon,body:asked});
+  t('a Neon request asking for 65,536 is sent with 65,536 and high thinking',h.bodies[0].generationConfig.maxOutputTokens===65536&&h.bodies[0].generationConfig.thinkingConfig.thinkingLevel==='high'&&h.metas.at(-1).maxOutputTokens===65536);
+  {const over=make([response([ev('ok','STOP')])]);await over.call({},{model:neon,body:{contents:[],generationConfig:{maxOutputTokens:131072,thinkingConfig:{thinkingLevel:'high'}}}});
+  t('v18.2 + v21.10: a Neon request asking for more than 65,536 is still clamped to 65,536',over.bodies[0].generationConfig.maxOutputTokens===65536&&over.metas.at(-1).maxOutputTokens===65536);}
   t('the caller body is not mutated by the ceiling or the thinking copy',asked.generationConfig.maxOutputTokens===65536&&!('safetySettings' in asked));
   h=make([response([ev('ok','STOP')])]);asked={contents:[],generationConfig:{thinkingConfig:{thinkingLevel:'low'}}};await h.call({},{model:'gemini-4-hydrogen',body:asked});
   t('a Hydrogen request with no ceiling is sent with 65,536 and the caller keeps none',h.bodies[0].generationConfig.maxOutputTokens===65536&&h.metas.at(-1).maxOutputTokens===65536&&!('maxOutputTokens' in asked.generationConfig));
   h=make([response([ev('{"facts":[{"a":','MAX_TOKENS')])]);e=await rejected(h.call({retries:2},{body:{contents:[],generationConfig:{...json,thinkingConfig:{thinkingLevel:'medium'}}}}));
   t('JSON cut off at the ceiling is a fatal truncated failure, never returned or retried',e?.truncated===true&&e.isFatal===true&&e.finishReason==='MAX_TOKENS'&&e.partialText==='{"facts":[{"a":'&&h.calls()===1&&/65,536-token ceiling/.test(e.message)&&h.metas.at(-1).truncated===true);
   t('a truncated JSON failure stops only its own chunk, not the batch',!h.halts(e));
-  h=make([response([ev('{"a":','MAX_TOKENS')])]);e=await rejected(h.call({},{model:argon,body:{contents:[],generationConfig:{...json,thinkingConfig:{thinkingLevel:'high'}}}}));
-  t('an Argon truncation names the 65,536 ceiling',e?.truncated===true&&/65,536-token ceiling/.test(e.message));
+  h=make([response([ev('{"a":','MAX_TOKENS')])]);e=await rejected(h.call({},{model:neon,body:{contents:[],generationConfig:{...json,thinkingConfig:{thinkingLevel:'high'}}}}));
+  t('a Neon truncation names the 65,536 ceiling',e?.truncated===true&&/65,536-token ceiling/.test(e.message));
   h=make([]);e=await rejected(h.call({},{body:{contents:[],generationConfig:{thinkingConfig:{thinkingLevel:'low',thinkingBudget:1024}}}}));
   t('a thinkingBudget is refused before any request is sent',e?.status===400&&e.isFatal===true&&h.calls()===0&&/thinkingBudget/.test(e.message));
-  h=make([]);e=await rejected(h.call({},{model:argon,body:{contents:[],generationConfig:{thinkingConfig:{thinkingLevel:'minimal'}}}}));
+  h=make([]);e=await rejected(h.call({},{model:neon,body:{contents:[],generationConfig:{thinkingConfig:{thinkingLevel:'minimal'}}}}));
   t('a level outside low, medium, high and xhigh is refused before any request is sent',e?.status===400&&h.calls()===0&&/low, medium, high or xhigh/.test(e.message));
   h=make([response([ev('ok','STOP')])]);await h.call({},{model:'gemini-4-hydrogen',body:{contents:[],generationConfig:{thinkingConfig:{thinkingLevel:'xhigh'}}}});
   t('a Hydrogen request with xhigh thinking sends xhigh and 65,536 maxOutputTokens',h.bodies[0].generationConfig.thinkingConfig.thinkingLevel==='xhigh'&&h.bodies[0].generationConfig.maxOutputTokens===65536);
+  h=make([response([ev('ok','STOP')])]);await h.call({},{model:neon,body:{contents:[],generationConfig:{thinkingConfig:{thinkingLevel:'xhigh'}}}});
+  t('v21.10: a Neon request with xhigh thinking sends xhigh and 65,536 maxOutputTokens',h.bodies[0].generationConfig.thinkingConfig.thinkingLevel==='xhigh'&&h.bodies[0].generationConfig.maxOutputTokens===65536);
   h=make([]);e=await rejected(h.call({},{model:argon,body:{contents:[],generationConfig:{thinkingConfig:{thinkingLevel:'xhigh'}}}}));
   t('an Argon request with xhigh is refused before any request is sent',e?.status===400&&e.isFatal===true&&h.calls()===0&&/Argon does not support thinking level xhigh/.test(e.message));
   h=make([]);e=await rejected(h.call({},{model:'gemini-4-hydrogen',body:{contents:[]}}));
   t('a Hydrogen request without a thinking level is refused instead of falling back to high',e?.status===400&&h.calls()===0&&/Hydrogen/.test(e.message)&&h.halts(e));
+  h=make([]);e=await rejected(h.call({},{model:neon,body:{contents:[]}}));
+  t('v21.10: a Neon request without a thinking level is refused instead of falling back to high',e?.status===400&&h.calls()===0&&/Neon/.test(e.message)&&h.halts(e));
   h=make([]);e=await rejected(h.call({},{model:argon,body:{contents:[]}}));
   t('an Argon request without a thinking level is refused instead of falling back to medium',e?.status===400&&h.calls()===0&&/Argon/.test(e.message)&&h.halts(e));
   t('no call site sets its own ceiling; geminiRequest is the only place it is chosen',!S.includes('maxOutputTokens:65536')&&S.includes('body.generationConfig=geminiGenerationConfig(model,body.generationConfig||{});'));

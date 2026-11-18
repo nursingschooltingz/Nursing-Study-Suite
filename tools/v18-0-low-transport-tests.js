@@ -120,7 +120,7 @@ module.exports=async function run(S,t){
     'L5: an invalid model ID is not used; the field keeps it, marked invalid, and names the ID still running',
     'L4: the auto badge for NCLEX to Anki names the Hydrogen model and the level set in that tab; other tabs unchanged',
     'L4: the drawer counts nine tools and the manual hint names the NCLEX to Anki exception',
-    'v20.2: xhigh pill is enabled on Hydrogen rows, disabled on Argon rows, and Reset defaults restores gemini-4-hydrogen/argon'];
+    'v20.2 + v21.10: xhigh pill is enabled on Hydrogen and Neon rows (disabled only for manual Argon IDs), and Reset defaults restores gemini-4-hydrogen/neon'];
   await section(t,SET,()=>{
     const Babel=loadBabel();
     const constants=span(S,'const TOOL_PROFILE_DEFAULTS={','\n};')+'\n};\n'+span(S,'const PROFILE_ROWS=[','\n];')+'\n];\n'+span(S,'const MODEL_ID_RE=','\n')+'\n';
@@ -129,44 +129,45 @@ module.exports=async function run(S,t){
     const compiled=Babel.transform(prelude+constants+component+'\nreturn ConfigSidebar;',{presets:['react'],parserOpts:{allowReturnOutsideFunction:true}}).code;
     const document={addEventListener(){},removeEventListener(){},getElementById(){return null;}};
     const mount=cfg=>{const rt=createRuntime(cfg);const C=new Function('React','document',compiled)(rt.React,document);return props=>rt.render(C,{onClose(){},...props});};
-    const sets={hydrogen:[],argon:[]};
-    const profileFor=id=>id==='cases'?{model:'synthetic-argon',level:'high',family:'argon',auto:true}:{model:'synthetic-hydrogen',level:'low',family:'hydrogen',auto:true};
+    const sets={hydrogen:[],neon:[]};
+    const profileFor=id=>id==='cases'?{model:'synthetic-neon',level:'high',family:'neon',auto:true}:{model:'synthetic-hydrogen',level:'low',family:'hydrogen',auto:true};
     const base={apiKey:'',setApiKey(){},setAutoProfile(){},thinkingMode:false,setThinkingMode(){},thinkingLevel:'low',setThinkingLevel(){},
-      activeModel:'synthetic-hydrogen',hydrogenModel:'synthetic-hydrogen',setHydrogenModel(v){sets.hydrogen.push(v);},argonModel:'synthetic-argon',setArgonModel(v){sets.argon.push(v);},
+      activeModel:'synthetic-hydrogen',hydrogenModel:'synthetic-hydrogen',setHydrogenModel(v){sets.hydrogen.push(v);},neonModel:'synthetic-neon',setNeonModel(v){sets.neon.push(v);},
       profiles:{},setProfile(){},resetProfiles(){},forTool:profileFor};
     const out={};
     let render=mount({...base,autoProfile:false}),tree=render({activeTool:'knowledge'});
     const field=(tr,id)=>find(tr,n=>n.type==='input'&&n.props.id===id);
     field(tree,'suite-hydrogen-model').props.onChange({target:{value:'  gemini-next-hydrogen  '}});
-    field(tree,'suite-argon-model').props.onChange({target:{value:'\tgemini-next-argon\n'}});
-    out[SET[0]]=sets.hydrogen.join('|')==='gemini-next-hydrogen'&&sets.argon.join('|')==='gemini-next-argon';
+    field(tree,'suite-neon-model').props.onChange({target:{value:'\tgemini-next-neon\n'}});
+    out[SET[0]]=sets.hydrogen.join('|')==='gemini-next-hydrogen'&&sets.neon.join('|')==='gemini-next-neon';
     tree=render({activeTool:'knowledge'});
     field(tree,'suite-hydrogen-model').props.onChange({target:{value:'bad id/x'}});
     tree=render({activeTool:'knowledge'});
-    const bad=field(tree,'suite-hydrogen-model'),argon=field(tree,'suite-argon-model');
+    const bad=field(tree,'suite-hydrogen-model'),neon=field(tree,'suite-neon-model');
     const hint=bad&&find(tree,n=>n.props&&n.props.id===bad.props['aria-describedby']);
     out[SET[1]]=sets.hydrogen.length===1&&bad.props.value==='bad id/x'&&bad.props['aria-invalid']===true&&!!hint&&/Still using synthetic-hydrogen/.test(textOf(hint))&&
-      argon.props['aria-invalid']===false&&argon.props.value==='\tgemini-next-argon\n';
+      neon.props['aria-invalid']===false&&neon.props.value==='\tgemini-next-neon\n';
     const badge=tr=>find(tr,n=>n.props&&n.props.className==='model-badge');
     const auto=mount({...base,autoProfile:true});
     const n2a=textOf(badge(auto({activeTool:'nclex2anki'}))),cases=textOf(badge(auto({activeTool:'cases'})));
-    out[SET[2]]=n2a.includes('synthetic-hydrogen')&&n2a.includes('level set in tab')&&!/low$/.test(n2a)&&cases==='synthetic-argonhigh';
+    out[SET[2]]=n2a.includes('synthetic-hydrogen')&&n2a.includes('level set in tab')&&!/low$/.test(n2a)&&cases==='synthetic-neonhigh';
     const manualText=textOf(mount({...base,autoProfile:false})({activeTool:'knowledge'}));
     out[SET[3]]=manualText.includes('Shared across all nine tools')&&!manualText.includes('six tools')&&!manualText.includes('seven tools')&&!manualText.includes('eight tools')&&manualText.includes('except NCLEX to Anki, which always uses the Hydrogen model');
-    const profPatches=[],resets={hydrogen:null,argon:null};
-    const autoDrawer=mount({...base,autoProfile:true,profiles:{knowledge:{m:'hydrogen',lv:'xhigh'},cases:{m:'argon',lv:'high'}},setProfile:(id,p)=>profPatches.push([id,p]),setHydrogenModel:v=>{resets.hydrogen=v;},setArgonModel:v=>{resets.argon=v;}});
+    const profPatches=[],resets={hydrogen:null,neon:null};
+    const autoDrawer=mount({...base,autoProfile:true,profiles:{knowledge:{m:'hydrogen',lv:'xhigh'},cases:{m:'neon',lv:'high'}},setProfile:(id,p)=>profPatches.push([id,p]),setHydrogenModel:v=>{resets.hydrogen=v;},setNeonModel:v=>{resets.neon=v;}});
     let pTree=autoDrawer({activeTool:'knowledge'});
     find(pTree,n=>n.type==='button'&&n.props['aria-controls']==='suite-profiles').props.onClick();
     pTree=autoDrawer({activeTool:'knowledge'});
     const hXhigh=find(pTree,n=>n.type==='button'&&n.props['aria-label']==='Knowledge · extract: xhigh thinking');
-    const aXhigh=find(pTree,n=>n.type==='button'&&n.props['aria-label']==='Case studies: xhigh thinking');
-    const switchToArgon=find(pTree,n=>n.type==='button'&&n.props['aria-label']==='Knowledge · extract: use Argon');
-    switchToArgon.props.onClick();
+    const nXhigh=find(pTree,n=>n.type==='button'&&n.props['aria-label']==='Case studies: xhigh thinking');
+    const switchToNeon=find(pTree,n=>n.type==='button'&&n.props['aria-label']==='Knowledge · extract: use Neon');
+    switchToNeon.props.onClick();
     const resetModelsBtn=find(pTree,n=>n.type==='button'&&textOf(n)==='Reset defaults');
     resetModelsBtn.props.onClick();
-    const manualArgonXhigh=find(mount({...base,autoProfile:false,thinkingMode:true})({activeTool:'knowledge'}),n=>n.type==='button'&&n.props['aria-label']==='xhigh thinking level');
-    out[SET[4]]=!!hXhigh&&hXhigh.props.disabled===false&&hXhigh.props['aria-pressed']===true&&!!aXhigh&&aXhigh.props.disabled===true&&!!manualArgonXhigh&&manualArgonXhigh.props.disabled===true&&
-      JSON.stringify(profPatches)==='[["knowledge",{"m":"argon","lv":"high"}]]'&&resets.hydrogen==='gemini-4-hydrogen'&&resets.argon==='gemini-4-argon';
+    const manualNeonXhigh=find(mount({...base,autoProfile:false,thinkingMode:true})({activeTool:'knowledge'}),n=>n.type==='button'&&n.props['aria-label']==='xhigh thinking level');
+    const manualArgonXhigh=find(mount({...base,autoProfile:false,thinkingMode:true,neonModel:'gemini-4-argon'})({activeTool:'knowledge'}),n=>n.type==='button'&&n.props['aria-label']==='xhigh thinking level');
+    out[SET[4]]=!!hXhigh&&hXhigh.props.disabled===false&&hXhigh.props['aria-pressed']===true&&!!nXhigh&&nXhigh.props.disabled===false&&!!manualNeonXhigh&&manualNeonXhigh.props.disabled===false&&!!manualArgonXhigh&&manualArgonXhigh.props.disabled===true&&
+      JSON.stringify(profPatches)==='[["knowledge",{"m":"neon"}]]'&&resets.hydrogen==='gemini-4-hydrogen'&&resets.neon==='gemini-4-neon';
     return out;
   });
 

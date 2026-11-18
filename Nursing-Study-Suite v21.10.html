@@ -12,6 +12,22 @@
      policy and uses only its own inline style block and system fonts. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com">
 <title>P-LATE Study Suite</title>
+<!-- v21.10 (2026-11-18): Gemini 4 Neon Default Model Migration (gemini-4-neon with low/medium/high/xhigh Thinking Support)
+     + 01 · Course Analyzer Quick-Select Exam Presets & Automatic Exam-Type Tailoring Lens.
+     All 13 frozen prompt constants in prompt-baseline.json unchanged.
+     (1) GEMINI 4 NEON DEFAULT SLOT & THINKING LEVELS (MODEL_SETTINGS_SCHEMA_VERSION=3, MODEL_SETTINGS_DEFAULTS, loadModelSettings,
+     TOOL_PROFILE_DEFAULTS, geminiIsNeon, geminiGenerationConfig, ConfigSidebar, AnkiGenerator, App, tools/repo-checks.js, neia-retest.js):
+     Upgrades the second model slot from Argon (gemini-4-argon) to Gemini 4 Neon (gemini-4-neon, native default high, 65,536-token
+     synchronous output cap, supporting low/medium/high/xhigh). Unlocks the xhigh thinking pill across Neon profile rows, manual
+     Neon mode, and Anki source checker (still refusing/disabling xhigh only if a user manually types an argon model ID), upgrades
+     Priority synthesis from Argon medium to Neon high alongside NCLEX Generate, Case Studies, and Item Quality Audit (all Neon high),
+     and auto-migrates schemaVersion < 3 localStorage saves (upgrading untouched gemini-4-argon to gemini-4-neon and legacy argon/pro
+     profile rows to neon while preserving explicit custom model IDs).
+     (2) 01 · COURSE ANALYZER EXAM PRESET PILLS & TAILORING LENS (COURSE_ANALYZER_EXAM_PRESETS, caHasExamPreset, caToggleExamPreset,
+     caBuildExamTailoringHint, caRunAnalysisWithEnv, CourseAnalyzer): Adds 1-click multi-toggle preset pills (Exam 1–4, Final Exam,
+     HESI Specialty, HESI Comprehensive, ATI / NCLEX Review) synchronized with the freeform #ca-exam textbox so students can target
+     a single exam, HESI Comprehensive, or a combined target (e.g., "Exam 2 + HESI Comprehensive"), automatically injecting a matching
+     unit-vs-comprehensive tailoring lens into the Course Analyzer prompt. -->
 <!-- v21.9 (2026-11-18): 01 · Course Analyzer Tab (Syllabus & Lecture PPTX -> Knowledge Base 1-Click Sync) + Conservative
      KB Retention Safeguards (Prioritize-Mode Tier-1 Safety Floor & Hardened Points Heading Parser).
      All 13 frozen prompt constants in prompt-baseline.json unchanged.
@@ -609,7 +625,7 @@ input[aria-invalid="true"],textarea[aria-invalid="true"],select[aria-invalid="tr
 .model-badge{margin-top:var(--space-2);padding:6px 10px;background:var(--blue-tint);border:1px solid var(--blue-line);border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:var(--t-micro);color:var(--blue-deep);display:flex;align-items:center;gap:6px;overflow-wrap:anywhere;}
 .model-badge>span{min-width:0;}
 .model-dot{width:6px;height:6px;border-radius:50%;background:var(--ok);flex-shrink:0;}
-.model-dot.argon{background:var(--orange);}
+.model-dot.neon,.model-dot.argon{background:var(--orange);}
 
 /* ── Source intake ──────────────────────────────────────────────────────── */
 .upload-zone{border:1.5px dashed var(--blue-line);border-radius:var(--radius-lg);padding:var(--space-5) var(--space-4);text-align:center;background:var(--blue-tint);transition:border-color var(--transition),background var(--transition);}
@@ -889,7 +905,7 @@ const {useState,useRef,useCallback,useEffect,useMemo,createContext,useContext}=R
 
 // ── Recommended per-tool profiles (Auto mode) ──
 // Starting points synthesized from the model-routing discussion, NOT measured results.
-// 'hydrogen'/'argon' resolve against whatever is typed in the Hydrogen/Argon model fields, so
+// 'hydrogen'/'neon' resolve against whatever is typed in the Hydrogen/Neon model fields, so
 // these stay correct when model names change. Every value is user-editable.
 const TOOL_PROFILE_DEFAULTS={
   // v21.9: Syllabus + lecture slide inventory & exam-trap brief for 01 · Course Analyzer (grounded, non-pruning sweep).
@@ -901,36 +917,22 @@ const TOOL_PROFILE_DEFAULTS={
   // improve. Raise it only if measured output drifts between identical runs.
   cardTranscribe:{m:'hydrogen',lv:'low'},    // flashcard photo -> verbatim transcript
   priorityHarvest:{m:'hydrogen',lv:'low'},   // stage-1 inventory — same default v14 hardcoded
-  // v17.14: the R1–R9 cascade is the reasoning-heavy half of Priority, so it moved to Argon; its parts are already half
-  // size there (paSynthPartChars). Medium, not high: the v17.7 run spent 62,914 tokens thinking in one request, and
-  // Argon's whole budget is 32,768. The harvest above stays on Hydrogen: it is a bulk sweep over many chunks.
-  // v18.2: Argon's ceiling is now 65,536 and its parts are full size, as on Hydrogen. Medium stays until measured.
-  priority:{m:'argon',lv:'medium'},          // stage-2 R1–R9 cascade, needs rule evaluation
+  // v21.10: migrated second slot from Argon medium to Gemini 4 Neon high (Neon's native default, 65,536-token sync cap, full low/medium/high/xhigh support).
+  priority:{m:'neon',lv:'high'},             // stage-2 R1–R9 cascade, needs rule evaluation
   // v16.2: paired exports showed fewer shared-index gap bundles with Medium; saved overrides still win.
   anki:{m:'hydrogen',lv:'medium'},           // recommended Anki Auto profile
   nclex:{m:'hydrogen',lv:'medium'},          // parsing existing Q&A out of messy PDF text
-  // v19.2: upgraded from high fast-slot to Argon · high on paid keys — SATA/Ordering/Calculation skip the MCQ-only NEIA audit,
-  // and MCQ answer-accuracy FAILs are never auto-repaired, so multi-cue stem and distractor synthesis belongs on Argon.
-  nclexgen:{m:'argon',lv:'high'},            // distractor plausibility + multi-cue synthesis
-  // v17.14: one request per case, the most reasoning-heavy task, and bounded output (at most 5 stages x 4 questions),
-  // so it is the safest place for Argon at high within its 32,768-token ceiling.
-  // v18.2: that ceiling is now 65,536 (geminiOutputCap), so a high-thinking case has twice the room.
-  cases:{m:'argon',lv:'high'},               // unfolding clinical reasoning + strict grounding
-  // v15.6: applying a rubric to a rendered artifact is a JUDGMENT task, not a grounded
-  // extraction task, so high reasoning is appropriate here and specifically NOT in the
-  // ingestion stages — this does not contradict the earlier finding that high thinking
-  // degrades grounded summarization. Both top-performing raters in the June study were
-  // reasoning-enhanced configurations.
+  // v21.10: upgraded second slot from Argon high to Gemini 4 Neon high for multi-cue stem/distractor synthesis.
+  nclexgen:{m:'neon',lv:'high'},             // distractor plausibility + multi-cue synthesis
+  // v21.10: upgraded second slot from Argon high to Gemini 4 Neon high (65,536-token sync cap + xhigh optional).
+  cases:{m:'neon',lv:'high'},                // unfolding clinical reasoning + strict grounding
   // v15.7: originally defaulted to the first slot (now Hydrogen), not the second slot (then 3.1 Pro).
   // That was a COST decision, not a quality one: the audit runs once per MCQ, and a real
   // free-tier key exhausted its 3.1 Pro allowance after ~26 calls.
-  // v17.14: the shipped default is now Argon at high. The cost reason assumed a free-tier key;
+  // v17.14 -> v21.10: the shipped default is now Neon at high (upgraded from Argon at high). The cost reason assumed a free-tier key;
   // on a paid key the quality choice applies, and the only measured audit configuration
-  // (2026-08-20: ten fixture items, three runs, zero verdict flips) was 3.1 Pro at high, which
-  // Argon replaced. Each call judges one rendered item, so output stays far below Argon's
-  // 32,768-token ceiling (65,536 since v18.2). Not yet measured on Argon. On a free-tier key, switch this row back
-  // to Hydrogen in the per-tool profiles; nothing else needs to change.
-  itemAudit:{m:'argon',lv:'high'},           // NEIA item-quality review of a rendered item
+  // (2026-08-20: ten fixture items, three runs, zero verdict flips) was 3.1 Pro at high, which Neon replaces.
+  itemAudit:{m:'neon',lv:'high'},            // NEIA item-quality review of a rendered item
   // v19.2: Anki-to-Gizmo chunk formatting is strict verbatim cleaning (no clinical synthesis), so Hydrogen · low avoids over-thinking rewrites and minimizes cost across multi-chunk decks.
   gizmo:{m:'hydrogen',lv:'low'},             // Anki -> Gizmo verbatim tab-separated chunk formatter
 };
@@ -960,26 +962,30 @@ const PROFILE_ROWS=[
 // field by field and fall back to these defaults. The measurement tools read the shipped defaults
 // from this object (tools/repo-checks.js).
 const MODEL_SETTINGS_KEY='latte_model_settings_v1';
-// v17.13: the second slot is Argon, not Pro. Argon's own default thinking level is medium; the suite keeps sending
-// high explicitly, as it did for Pro, so switching models does not silently reduce reasoning.
 // v20.2: the first slot ships on Gemini 4 Hydrogen (hydrogenModel / hydrogenLevel), and THINKING_LEVELS adds xhigh.
-const MODEL_SETTINGS_SCHEMA_VERSION=2;
-const MODEL_SETTINGS_DEFAULTS=Object.freeze({hydrogenModel:'gemini-4-hydrogen',argonModel:'gemini-4-argon',thinkingMode:false,hydrogenLevel:'low',argonLevel:'high'});
+// v21.10: the second slot upgrades from Argon (gemini-4-argon) to Gemini 4 Neon (neonModel / neonLevel, default high, supports low/medium/high/xhigh).
+// Schema v3 migrates untouched v2 default 'gemini-4-argon' -> 'gemini-4-neon' while preserving custom user-typed model IDs and explicit thinking levels.
+const MODEL_SETTINGS_SCHEMA_VERSION=3;
+const MODEL_SETTINGS_DEFAULTS=Object.freeze({hydrogenModel:'gemini-4-hydrogen',neonModel:'gemini-4-neon',thinkingMode:false,hydrogenLevel:'low',neonLevel:'high'});
 const THINKING_LEVELS=Object.freeze(['low','medium','high','xhigh']);
 const MODEL_ID_RE=/^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 function loadModelSettings(storage,defaults=MODEL_SETTINGS_DEFAULTS){
   const out={...defaults};let saved=null;
   try{saved=JSON.parse(storage.getItem(MODEL_SETTINGS_KEY)||'null');}catch(e){saved=null;}
   if(!saved||typeof saved!=='object'||Array.isArray(saved))return out;
-  // v20.2: gate legacy slot shims behind MODEL_SETTINGS_SCHEMA_VERSION so explicit user model overrides survive reloads untouched.
-  const needsMigration=(Number(saved.schemaVersion)||0)<MODEL_SETTINGS_SCHEMA_VERSION;
-  // v20.2: hydrogenModel and hydrogenLevel own the first slot; earlier saves without those keys fall back to defaults.
-  for(const key of ['hydrogenModel','argonModel'])if(typeof saved[key]==='string'&&MODEL_ID_RE.test(saved[key]))out[key]=saved[key];
-  // v17.13: a pre-v17.13 save has proModel/proLevel. The saved Pro model ID names a Pro model, so it is not carried into
-  // the Argon slot; the saved Pro thinking level was the user's explicit choice for that slot, so it is. Keep this shim.
-  if(needsMigration&&!THINKING_LEVELS.includes(saved.argonLevel)&&THINKING_LEVELS.includes(saved.proLevel))out.argonLevel=saved.proLevel;
-  for(const key of ['hydrogenLevel','argonLevel'])if(THINKING_LEVELS.includes(saved[key]))out[key]=saved[key];
-  if(out.argonLevel==='xhigh')out.argonLevel='high'; // v20.2: Argon supports low/medium/high only
+  const ver=Number(saved.schemaVersion)||0;
+  const needsV3Migration=ver<MODEL_SETTINGS_SCHEMA_VERSION;
+  for(const key of ['hydrogenModel','neonModel'])if(typeof saved[key]==='string'&&MODEL_ID_RE.test(saved[key]))out[key]=saved[key];
+  // v21.10: migrate pre-v21.10 second-slot saves (argonModel -> neonModel); upgrade untouched default 'gemini-4-argon' to 'gemini-4-neon' while preserving custom user IDs.
+  if(needsV3Migration&&!(typeof saved.neonModel==='string'&&MODEL_ID_RE.test(saved.neonModel))&&typeof saved.argonModel==='string'&&MODEL_ID_RE.test(saved.argonModel)&&saved.argonModel!=='gemini-4-argon')out.neonModel=saved.argonModel;
+  // v17.13 + v20.2 + v21.10: carry explicit second-slot thinking level from argonLevel (schemaVersion < 3) or proLevel (schemaVersion < 2) when migrating.
+  if(needsV3Migration&&!THINKING_LEVELS.includes(saved.neonLevel)){
+    if(THINKING_LEVELS.includes(saved.argonLevel))out.neonLevel=saved.argonLevel;
+    else if(ver<2&&THINKING_LEVELS.includes(saved.proLevel))out.neonLevel=saved.proLevel;
+  }
+  for(const key of ['hydrogenLevel','neonLevel'])if(THINKING_LEVELS.includes(saved[key]))out[key]=saved[key];
+  // v21.10: Neon supports low/medium/high/xhigh; clamp xhigh -> high ONLY when the user explicitly typed an Argon model ID into the second slot.
+  if(/argon/i.test(out.neonModel)&&out.neonLevel==='xhigh')out.neonLevel='high';
   if(typeof saved.thinkingMode==='boolean')out.thinkingMode=saved.thinkingMode;
   return out;
 }
@@ -1411,16 +1417,15 @@ function geminiSSEParser(onEvent){
 // returned HTTP 200. The lower cap stopped reasoning-heavy Argon work (Priority synthesis has thought for 62,914
 // tokens in one request) at half the allowed budget. Both caps are now 65,536; the per-model split stays so a model
 // with a lower limit is a one-number change.
-const GEMINI_OUTPUT_CAP=65536,ARGON_OUTPUT_CAP=65536;
+const GEMINI_OUTPUT_CAP=65536,NEON_OUTPUT_CAP=65536,ARGON_OUTPUT_CAP=65536;
+function geminiIsNeon(model){return /neon/i.test(String(model||''));}
 function geminiIsArgon(model){return /argon/i.test(String(model||''));}
 function geminiIsHydrogen(model){return /hydrogen/i.test(String(model||''));}
-function geminiOutputCap(model){return geminiIsArgon(model)?ARGON_OUTPUT_CAP:GEMINI_OUTPUT_CAP;}
-// v17.13: Argon answers a thinkingBudget or a MINIMAL level with HTTP 400, and with no level it falls back to medium,
-// less reasoning than the high the old Pro slot ran at, with no error. All three are refused here before anything is
-// sent, as the same permanent HTTP 400 the API would return, so a batch stops instead of failing every chunk in turn.
-// v20.2: Gemini 4 Hydrogen supports low/medium/high/xhigh and defaults to high when thinkingLevel is omitted; Argon
-// supports low/medium/high only. Require an explicit level on both Hydrogen and Argon, refuse xhigh on Argon, and raise
-// the default client watchdog timeout to 900s (15 min) per the Gemini 4 migration checklist.
+function geminiOutputCap(model){return geminiIsNeon(model)?NEON_OUTPUT_CAP:geminiIsArgon(model)?ARGON_OUTPUT_CAP:GEMINI_OUTPUT_CAP;}
+// v17.13: Argon answers a thinkingBudget or a MINIMAL level with HTTP 400, and with no level it falls back to medium.
+// v20.2: Gemini 4 Hydrogen supports low/medium/high/xhigh and defaults to high when thinkingLevel is omitted.
+// v21.10: Gemini 4 Neon (gemini-4-neon) also supports low/medium/high/xhigh and defaults to high when thinkingLevel is omitted;
+// require an explicit level on Hydrogen, Neon, and Argon, allow xhigh on Hydrogen and Neon, refuse xhigh on Argon, and clamp xhigh -> high on unknown custom models.
 function geminiGenerationConfig(model,gc){
   const out=Object.assign({},gc),cap=geminiOutputCap(model),tc=out.thinkingConfig;
   const refuse=msg=>Object.assign(new Error(msg),{status:400,isFatal:true,retryable:false});
@@ -1430,9 +1435,10 @@ function geminiGenerationConfig(model,gc){
     if('thinkingBudget' in tc)throw refuse('thinkingBudget is never sent; set a thinking level of low, medium, high or xhigh instead.');
     if(!THINKING_LEVELS.includes(tc.thinkingLevel))throw refuse('Thinking level must be low, medium, high or xhigh (got '+String(tc.thinkingLevel)+').');
     if(geminiIsArgon(model)&&tc.thinkingLevel==='xhigh')throw refuse('Argon does not support thinking level xhigh; choose low, medium or high.');
-    // v20.2: only Gemini 4 Hydrogen accepts xhigh; clamp xhigh to high on custom non-Hydrogen models while preserving Argon's explicit preflight refusal.
-    out.thinkingConfig=!geminiIsHydrogen(model)&&tc.thinkingLevel==='xhigh'?{...tc,thinkingLevel:'high'}:{...tc};
-  }else if(geminiIsArgon(model))throw refuse('Argon requests must name a thinking level; without one Argon falls back to medium.');
+    // v21.10: Gemini 4 Hydrogen and Gemini 4 Neon accept xhigh natively; clamp xhigh to high on unknown custom models while preserving Argon's explicit refusal.
+    out.thinkingConfig=!(geminiIsHydrogen(model)||geminiIsNeon(model))&&tc.thinkingLevel==='xhigh'?{...tc,thinkingLevel:'high'}:{...tc};
+  }else if(geminiIsNeon(model))throw refuse('Neon requests must name a thinking level; without one Neon falls back to high.');
+  else if(geminiIsArgon(model))throw refuse('Argon requests must name a thinking level; without one Argon falls back to medium.');
   else if(geminiIsHydrogen(model))throw refuse('Hydrogen requests must name a thinking level; without one Hydrogen falls back to high.');
   return out;
 }
@@ -15474,6 +15480,32 @@ const COURSE_ANALYZER_FILE_ROLES=[
   ['lecture','Lecture Slides'],
   ['blueprint','Blueprint / Guide'],
 ];
+// v21.10: 1-click multi-toggle exam presets synchronized with #ca-exam plus automatic unit-vs-comprehensive tailoring lens.
+const COURSE_ANALYZER_EXAM_PRESETS=['Exam 1','Exam 2','Exam 3','Exam 4','Final Exam','HESI Specialty','HESI Comprehensive','ATI / NCLEX Review'];
+function caSplitExamTargets(raw){
+  return String(raw||'').split(/\s*(?:\+|,|;|\band\b)\s*/i).map(s=>s.replace(/\s+/g,' ').trim()).filter(Boolean);
+}
+function caHasExamPreset(raw,preset){
+  const k=String(preset||'').replace(/\s+/g,' ').trim().toLowerCase();
+  return k?caSplitExamTargets(raw).some(t=>t.toLowerCase()===k):false;
+}
+function caToggleExamPreset(raw,preset){
+  const p=String(preset||'').replace(/\s+/g,' ').trim();
+  if(!p)return String(raw||'').trim();
+  const k=p.toLowerCase(),cur=caSplitExamTargets(raw);
+  const next=cur.some(t=>t.toLowerCase()===k)?cur.filter(t=>t.toLowerCase()!==k):[...cur,p];
+  return next.join(' + ');
+}
+function caBuildExamTailoringHint(examText){
+  const s=String(examText||'').trim();
+  if(!s)return'';
+  const hasUnit=/\b(?:exam\s*\d+|unit\s*\d+|module\s*\d+|quiz\s*\d*|midterm)\b/i.test(s);
+  const hasComp=/\b(?:hesi|comprehensive|exit|final|ati|nclex|proctored|predictor)\b/i.test(s);
+  if(hasUnit&&hasComp)return'EXAM TAILORING LENS (COMBINED UNIT + STANDARDIZED/COMPREHENSIVE): Keep topic boundaries strictly aligned to the specified unit exam syllabus dates and lecture decks, AND inside Additional Context explicitly elevate HESI/standardized-exam cross-concept synthesis, ABC/Maslow/safety priority rules, delegation/scope boundaries, and twin-diagnosis or medication hold-triangle traps.';
+  if(hasComp)return'EXAM TAILORING LENS (COMPREHENSIVE / STANDARDIZED EXAM): Synthesize across all uploaded units/decks to emphasize high-yield cross-concept connections, ABC/Maslow/safety priority rules, RN delegation/scope, never-click contraindications, and HESI/ATI-style twin-diagnosis and medication hold-triangle traps without dropping unit-specific cutoffs or pathophysiology bridges.';
+  if(hasUnit)return'EXAM TAILORING LENS (UNIT EXAM): Scope strictly to the target unit exam syllabus boundaries, SLOs, and professor-emphasized slide decks without bleeding into later exams, while preserving all secondary slide meds, labs, scales, and pathophysiology bridges for this unit.';
+  return'';
+}
 // v21.9: Conservative-retention Nursing Course Analyzer prompt (tunable, documented in Prompts.md).
 const COURSE_ANALYZER_PROMPT=`You are an expert nursing curriculum analyst specializing in concept-based nursing curricula, clinical reasoning, and exam-aligned study preparation.
 Analyze ONLY the uploaded curriculum materials for the ONE target COURSE and EXAM specified by the user and return a single valid JSON object matching the required schema (no markdown fence, no commentary outside JSON).
@@ -15776,7 +15808,8 @@ async function caRunAnalysisWithEnv({cfg,course,exam,notes,files,fileRoles,abort
       if(ctl.signal.aborted)throw new DOMException('Aborted','AbortError');
       const seg=segs[si];
       log(`  Segment ${si+1}/${segs.length}: ${seg.label} (${seg.text.length.toLocaleString()} chars)...`);
-      const userPrompt=`TARGET COURSE: ${tCourse}\nTARGET EXAM: ${tExam}`+(String(notes||'').trim()?`\nINSTRUCTOR / STUDENT NOTES:\n${String(notes).trim()}`:'')+(segs.length>1?`\nSEGMENT: ${si+1} of ${segs.length} (extract all exam-relevant syllabus/slide coverage in this segment; segments will be merged downstream without dropping content).`:'')+`\n\nUPLOADED CURRICULUM MATERIALS:\n${seg.text}`;
+      const tailHint=caBuildExamTailoringHint(tExam);
+      const userPrompt=`TARGET COURSE: ${tCourse}\nTARGET EXAM: ${tExam}`+(tailHint?`\n${tailHint}`:'')+(String(notes||'').trim()?`\nINSTRUCTOR / STUDENT NOTES:\n${String(notes).trim()}`:'')+(segs.length>1?`\nSEGMENT: ${si+1} of ${segs.length} (extract all exam-relevant syllabus/slide coverage in this segment; segments will be merged downstream without dropping content).`:'')+`\n\nUPLOADED CURRICULUM MATERIALS:\n${seg.text}`;
       const raw=await geminiRequest(cfg.apiKey,model,{
         systemInstruction:{parts:[{text:COURSE_ANALYZER_PROMPT}]},
         contents:[{parts:[{text:userPrompt}]}],
@@ -16304,9 +16337,12 @@ function CourseAnalyzer(){
     resultsLabel="Exam curriculum brief and Knowledge Base sync"
     setup={<>
       <Step n="01" title="Target exam" note={course.trim()&&exam.trim()?course.trim()+' · '+exam.trim():'required'} lede="Analyze one exam at a time. Specify the exact course and exam before running so boundaries stay focused.">
-        <div className="form-grid" style={{marginBottom:8}}>
+        <div className="form-grid" style={{marginBottom:6}}>
           <div className="field-block" style={{margin:0}}><label htmlFor="ca-course">Course</label><input id="ca-course" type="text" value={course} onChange={e=>setCourse(e.target.value)} placeholder="e.g. NUR221"/></div>
-          <div className="field-block" style={{margin:0}}><label htmlFor="ca-exam">Exam</label><input id="ca-exam" type="text" value={exam} onChange={e=>setExam(e.target.value)} placeholder="e.g. Exam 2"/></div>
+          <div className="field-block" style={{margin:0}}><label htmlFor="ca-exam">Exam</label><input id="ca-exam" type="text" value={exam} onChange={e=>setExam(e.target.value)} placeholder="e.g. Exam 2 or HESI Comprehensive"/></div>
+        </div>
+        <div role="group" aria-label="Quick-select exam targets" style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:8}}>
+          {COURSE_ANALYZER_EXAM_PRESETS.map(p=>{const on=caHasExamPreset(exam,p);return <button key={p} type="button" className="btn-secondary" aria-pressed={on} style={{padding:'2px 7px',fontSize:11,borderColor:on?'var(--accent)':undefined,color:on?'var(--accent)':undefined,background:on?'rgba(99,179,237,.12)':undefined}} onClick={()=>setExam(v=>caToggleExamPreset(v,p))}>{p}</button>;})}
         </div>
         <div className="field-block" style={{marginBottom:0}}>
           <label htmlFor="ca-notes">Exam blueprint / instructor notes <span className="badge-opt">optional</span></label>
@@ -17677,7 +17713,7 @@ function AnkiGenerator(){
   // v16.2: source checking has its own explicit settings; changing generation settings is not an audit experiment.
   const [auditFamily,setAuditFamily]=useState('hydrogen'),[auditLevel,setAuditLevel]=useState('medium');
   const [savingEvidence,setSavingEvidence]=useState(false),[evidenceError,setEvidenceError]=useState('');
-  const auditModel=auditFamily==='argon'?cfg.argonModel:cfg.hydrogenModel;
+  const auditModel=auditFamily==='neon'?cfg.neonModel:cfg.hydrogenModel;
   const auditRun=useRef(null),auditInputs=useRef(null);
   const [batch,setBatch]=useState(null);
   const [interruptedRun,setInterruptedRun]=useState(null);
@@ -18221,7 +18257,7 @@ CODE BLOCK #2 IS REDEFINED FOR THIS RUN — DISREGARD THE "COVERAGE LEDGER FORMA
           <p>Checks source meaning, missing recall targets, duplicate targets and priority loss. Uses the captured fact text and all note tiers, with Tier {tierFilter==='all'?'1–3':tierFilter} selected for export. Findings are suggestions, not clinical validation. This checks against the captured KB, so a mistake already in that KB can survive the check; compare questionable facts with the original source.</p>
           {/* v16.2: preparation and a completed AI check must not share an ambiguous download label. */}
           <p>Prepare a review packet locally, then run the check explicitly. The checker accounts for source words as targets or context, then compares complete note claims. Valid records survive an incomplete check; unresolved records remain available for review and retry.</p>
-          <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:8}}><label>Checker model <select aria-label="Source checker model" value={auditFamily} disabled={auditBusy} onChange={e=>{const fam=e.target.value;setAuditFamily(fam);if(fam==='argon'&&auditLevel==='xhigh')setAuditLevel('high');}}><option value="hydrogen">Hydrogen</option><option value="argon">Argon</option></select></label><label>Checker thinking <select aria-label="Source checker thinking" value={auditLevel} disabled={auditBusy} onChange={e=>setAuditLevel(e.target.value)}>{(auditFamily==='argon'?['low','medium','high']:['low','medium','high','xhigh']).map(level=><option key={level} value={level}>{level}</option>)}</select></label></div>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:8}}><label>Checker model <select aria-label="Source checker model" value={auditFamily} disabled={auditBusy} onChange={e=>{const fam=e.target.value;setAuditFamily(fam);if(fam==='neon'&&geminiIsArgon(cfg.neonModel)&&auditLevel==='xhigh')setAuditLevel('high');}}><option value="hydrogen">Hydrogen</option><option value="neon">Neon</option></select></label><label>Checker thinking <select aria-label="Source checker thinking" value={auditLevel} disabled={auditBusy} onChange={e=>setAuditLevel(e.target.value)}>{(auditFamily==='neon'&&geminiIsArgon(cfg.neonModel)?['low','medium','high']:['low','medium','high','xhigh']).map(level=><option key={level} value={level}>{level}</option>)}</select></label></div>
           <button className="btn-secondary" onClick={prepareSourceAudit} disabled={!current||busy||auditBusy}>Prepare review packet — no AI check yet</button>
           {sourceAudit&&<div>
             <p role="status">{ankiSourceAuditLabel(sourceAudit,ankiSourceAuditCurrent(sourceAudit,auditInputsValue))}{!ankiSourceAuditCurrent(sourceAudit,auditInputsValue)&&' · outdated for the current notes or source'}</p>
@@ -20342,19 +20378,19 @@ function ConfigSidebar({onClose,activeTool}){
                 runs the Hydrogen model, reads images at the level chosen in the tab and answers at high.
                 v19.0: Priority runs both Stage-1 harvest (priorityHarvest) and Stage-2 synthesis (priority); display both in the badge. */}
             {(()=>{const r=activeTool==='nclex2anki'?{model:cfg.hydrogenModel,level:'level set in tab',family:'hydrogen'}:cfg.forTool(activeTool);const h=activeTool==='priority'?cfg.forTool('priorityHarvest'):null;return(
-              <div className="model-badge"><div className={`model-dot ${r.family==='argon'?'argon':''}`}/><span style={{flex:1}}>{h?`${h.model} (${h.level}) → ${r.model}`:r.model}</span><span style={{fontSize:12,color:'var(--text-dim)'}}>{r.level}</span></div>
+              <div className="model-badge"><div className={`model-dot ${r.family==='neon'?'neon':''}`}/><span style={{flex:1}}>{h?`${h.model} (${h.level}) → ${r.model}`:r.model}</span><span style={{fontSize:12,color:'var(--text-dim)'}}>{r.level}</span></div>
             );})()}
             <div style={{fontSize:12,color:'var(--text-dim)',marginTop:3,marginBottom:7}}>↑ what the open tab will use</div>
             <button className="btn-secondary" aria-expanded={showProfiles} aria-controls="suite-profiles" style={{width:'100%'}} onClick={()=>setShowProfiles(s=>!s)}>{showProfiles?'Hide':'Customize'} per-tool profiles</button>
             {showProfiles&&<div id="suite-profiles" style={{marginTop:8,paddingTop:8,borderTop:'1px solid var(--border)'}}>
-              {PROFILE_ROWS.map(row=>{const p=cfg.profiles[row.id]||TOOL_PROFILE_DEFAULTS[row.id];return(
+              {PROFILE_ROWS.map(row=>{const p=cfg.profiles[row.id]||TOOL_PROFILE_DEFAULTS[row.id];const secondIsArgon=/argon/i.test(String(cfg.neonModel||''));return(
                 <div key={row.id} style={{marginBottom:8}}>
                   <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:3,gap:6}}>
                     <span style={{fontSize:12,color:'var(--text-dim)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{row.label}</span>
-                    <button className="btn-secondary" aria-label={row.label+': use '+(p.m==='argon'?'Hydrogen':'Argon')} onClick={()=>cfg.setProfile(row.id,p.m==='argon'?{m:'hydrogen'}:{m:'argon',...(p.lv==='xhigh'?{lv:'high'}:{})})} style={{flexShrink:0,background:p.m==='argon'?'var(--orange-soft)':'var(--bg-input)',color:p.m==='argon'?'var(--accent2)':'var(--text)'}}>{p.m==='argon'?'Argon':'Hydrogen'}</button>
+                    <button className="btn-secondary" aria-label={row.label+': use '+(p.m==='neon'?'Hydrogen':'Neon')} onClick={()=>cfg.setProfile(row.id,p.m==='neon'?{m:'hydrogen'}:{m:'neon',...(secondIsArgon&&p.lv==='xhigh'?{lv:'high'}:{})})} style={{flexShrink:0,background:p.m==='neon'?'var(--orange-soft)':'var(--bg-input)',color:p.m==='neon'?'var(--accent2)':'var(--text)'}}>{p.m==='neon'?'Neon':'Hydrogen'}</button>
                   </div>
                   <div className="level-pills">
-                    {['low','medium','high','xhigh'].map(lv=>{const dis=p.m==='argon'&&lv==='xhigh';return <button key={lv} type="button" disabled={dis} title={dis?'xhigh is supported on Hydrogen; Argon supports low, medium, and high':undefined} aria-pressed={p.lv===lv} aria-label={row.label+': '+lv+' thinking'} className={`level-pill ${p.lv===lv?'on':''}`} onClick={()=>!dis&&cfg.setProfile(row.id,{lv})}>{lv}</button>;})}
+                    {['low','medium','high','xhigh'].map(lv=>{const dis=p.m==='neon'&&secondIsArgon&&lv==='xhigh';return <button key={lv} type="button" disabled={dis} title={dis?'xhigh is supported on Hydrogen and Neon; Argon supports low, medium, and high':undefined} aria-pressed={p.lv===lv} aria-label={row.label+': '+lv+' thinking'} className={`level-pill ${p.lv===lv?'on':''}`} onClick={()=>!dis&&cfg.setProfile(row.id,{lv})}>{lv}</button>;})}
                   </div>
                 </div>
               );})}
@@ -20365,23 +20401,23 @@ function ConfigSidebar({onClose,activeTool}){
         ):(
           <div style={{marginTop:6}}>
             <div className="toggle-row" style={{marginBottom:6}}>
-              <span>{cfg.thinkingMode?'\uD83E\uDDE0 Argon':'⚡ Hydrogen'}</span>
-              <div role="switch" tabIndex={0} aria-checked={cfg.thinkingMode} aria-label="Use Argon model instead of Hydrogen" className={`toggle-switch ${cfg.thinkingMode?'on':''}`} onClick={()=>cfg.setThinkingMode(t=>!t)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();cfg.setThinkingMode(t=>!t);}}}/>
+              <span>{cfg.thinkingMode?'\uD83E\uDDE0 Neon':'⚡ Hydrogen'}</span>
+              <div role="switch" tabIndex={0} aria-checked={cfg.thinkingMode} aria-label="Use Neon model instead of Hydrogen" className={`toggle-switch ${cfg.thinkingMode?'on':''}`} onClick={()=>cfg.setThinkingMode(t=>!t)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();cfg.setThinkingMode(t=>!t);}}}/>
             </div>
-            <label style={{fontSize:12,color:'var(--text-dim)',display:'block',marginBottom:4,fontWeight:500}}>Thinking Level · {cfg.thinkingMode?'Argon':'Hydrogen'}</label>
+            <label style={{fontSize:12,color:'var(--text-dim)',display:'block',marginBottom:4,fontWeight:500}}>Thinking Level · {cfg.thinkingMode?'Neon':'Hydrogen'}</label>
             <div className="level-pills">
-              {['low','medium','high','xhigh'].map(lv=>{const dis=cfg.thinkingMode&&lv==='xhigh';return(
-                <button key={lv} type="button" disabled={dis} title={dis?'xhigh is supported on Hydrogen; Argon supports low, medium, and high':undefined} aria-pressed={cfg.thinkingLevel===lv} aria-label={lv+' thinking level'} className={`level-pill ${cfg.thinkingLevel===lv?'on':''}`} onClick={()=>!dis&&cfg.setThinkingLevel(lv)}>{lv}</button>
+              {['low','medium','high','xhigh'].map(lv=>{const dis=cfg.thinkingMode&&/argon/i.test(String(cfg.neonModel||''))&&lv==='xhigh';return(
+                <button key={lv} type="button" disabled={dis} title={dis?'xhigh is supported on Hydrogen and Neon; Argon supports low, medium, and high':undefined} aria-pressed={cfg.thinkingLevel===lv} aria-label={lv+' thinking level'} className={`level-pill ${cfg.thinkingLevel===lv?'on':''}`} onClick={()=>!dis&&cfg.setThinkingLevel(lv)}>{lv}</button>
               );})}
             </div>
-            <div className="sb-hint" style={{marginTop:5}}>Set per model — Hydrogen and Argon remember their levels independently. Every tool uses the active one, except NCLEX to Anki, which always uses the Hydrogen model.</div>
-            <div className="model-badge"><div className={`model-dot ${cfg.thinkingMode?'argon':''}`}/><span style={{flex:1}}>{cfg.activeModel}</span><span style={{fontSize:12,color:'var(--text-dim)'}}>{cfg.thinkingLevel}</span></div>
+            <div className="sb-hint" style={{marginTop:5}}>Set per model — Hydrogen and Neon remember their levels independently (both support low, medium, high, and xhigh). Every tool uses the active one, except NCLEX to Anki, which always uses the Hydrogen model.</div>
+            <div className="model-badge"><div className={`model-dot ${cfg.thinkingMode?'neon':''}`}/><span style={{flex:1}}>{cfg.activeModel}</span><span style={{fontSize:12,color:'var(--text-dim)'}}>{cfg.thinkingLevel}</span></div>
           </div>
         )}
         <div style={{marginTop:10}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:4}}><span className="sb-label" style={{marginBottom:0}}>Model IDs</span>{(cfg.hydrogenModel!=='gemini-4-hydrogen'||cfg.argonModel!=='gemini-4-argon')&&<button type="button" className="btn-ghost" style={{fontSize:11,padding:'2px 6px',minHeight:0}} onClick={()=>{setModelDraft({});cfg.setHydrogenModel('gemini-4-hydrogen');cfg.setArgonModel('gemini-4-argon');}}>Reset defaults</button>}</div>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:4}}><span className="sb-label" style={{marginBottom:0}}>Model IDs</span>{(cfg.hydrogenModel!=='gemini-4-hydrogen'||cfg.neonModel!=='gemini-4-neon')&&<button type="button" className="btn-ghost" style={{fontSize:11,padding:'2px 6px',minHeight:0}} onClick={()=>{setModelDraft({});cfg.setHydrogenModel('gemini-4-hydrogen');cfg.setNeonModel('gemini-4-neon');}}>Reset defaults</button>}</div>
           <div className="sb-field"><label htmlFor="suite-hydrogen-model">Hydrogen model</label><input id="suite-hydrogen-model" type="text" value={modelDraft.hydrogen??cfg.hydrogenModel} aria-invalid={modelDraft.hydrogenBad===true} aria-describedby={modelDraft.hydrogenBad?'suite-hydrogen-model-error':undefined} onChange={e=>commitModelId('hydrogen',e.target.value,cfg.setHydrogenModel)} spellCheck="false"/>{modelDraft.hydrogenBad&&<div className="sb-hint" id="suite-hydrogen-model-error" style={{color:'var(--accent-warm)'}}>Not a valid model ID (letters, digits, dot, dash, underscore). Still using {cfg.hydrogenModel}.</div>}</div>
-          <div className="sb-field"><label htmlFor="suite-argon-model">Argon model</label><input id="suite-argon-model" type="text" value={modelDraft.argon??cfg.argonModel} aria-invalid={modelDraft.argonBad===true} aria-describedby={modelDraft.argonBad?'suite-argon-model-error':undefined} onChange={e=>commitModelId('argon',e.target.value,cfg.setArgonModel)} spellCheck="false"/>{modelDraft.argonBad&&<div className="sb-hint" id="suite-argon-model-error" style={{color:'var(--accent-warm)'}}>Not a valid model ID (letters, digits, dot, dash, underscore). Still using {cfg.argonModel}.</div>}</div>
+          <div className="sb-field"><label htmlFor="suite-neon-model">Neon model</label><input id="suite-neon-model" type="text" value={modelDraft.neon??cfg.neonModel} aria-invalid={modelDraft.neonBad===true} aria-describedby={modelDraft.neonBad?'suite-neon-model-error':undefined} onChange={e=>commitModelId('neon',e.target.value,cfg.setNeonModel)} spellCheck="false"/>{modelDraft.neonBad&&<div className="sb-hint" id="suite-neon-model-error" style={{color:'var(--accent-warm)'}}>Not a valid model ID (letters, digits, dot, dash, underscore). Still using {cfg.neonModel}.</div>}</div>
         </div>
       </div>
       <div className="sb-section">
@@ -20436,15 +20472,15 @@ function App(){
   // v17.3: hydrate once from the validated snapshot; loadModelSettings holds the defaults and the validation.
   const [savedModels]=useState(()=>{try{return loadModelSettings(localStorage);}catch(e){return {...MODEL_SETTINGS_DEFAULTS};}});
   const [hydrogenModel,setHydrogenModel]=useState(savedModels.hydrogenModel); // v20.2: Gemini 4 Hydrogen (gemini-4-hydrogen) supports low/medium/high/xhigh thinking levels and a 65,536-token output ceiling.
-  const [argonModel,setArgonModel]=useState(savedModels.argonModel); // v17.13 (2026-10-13): Argon replaces 3.1 Pro (gemini-3.1-pro-preview) in this slot. The ID gemini-4-argon is the one Google's Cloud developer guide uses; if a key rejects it, type the right ID here — no code change is needed.
+  const [neonModel,setNeonModel]=useState(savedModels.neonModel); // v21.10: Gemini 4 Neon (gemini-4-neon) replaces Argon in the second slot; defaults to high and supports low/medium/high/xhigh.
   const [thinkingMode,setThinkingMode]=useState(savedModels.thinkingMode);
   // Thinking level is tracked per model family so decoupling doesn't silently change
-  // anyone's defaults: Hydrogen keeps running at low and Argon at high until changed.
-  // The old single toggle couldn't express Hydrogen+medium/high/xhigh at all.
+  // anyone's defaults: Hydrogen keeps running at low and Neon at high until changed.
+  // The old single toggle couldn't express Hydrogen/Neon independent levels at all.
   const [hydrogenLevel,setHydrogenLevel]=useState(savedModels.hydrogenLevel);
-  const [argonLevel,setArgonLevel]=useState(savedModels.argonLevel);
+  const [neonLevel,setNeonLevel]=useState(savedModels.neonLevel);
   // Auto mode: each tool resolves its own model+level from a profile table, overriding
-  // the manual Hydrogen/Argon toggle. Opt-in and persisted, so an untouched build behaves
+  // the manual Hydrogen/Neon toggle. Opt-in and persisted, so an untouched build behaves
   // exactly as before and a customized profile survives reload.
   const [autoProfile,setAutoProfile]=useState(()=>{try{const v=localStorage.getItem('latte_auto_profile_v1');return v===null?true:v==='1';}catch{return true;}});
   // v15.7: `casesAudit` was renamed to `itemAudit`. A saved profile from v15.6 still carries
@@ -20452,22 +20488,19 @@ function App(){
   // user had deliberately chosen. Migrate on read, and drop the stale key so it cannot
   // resurface later. Keep this shim — removing it re-breaks anyone who has not re-saved.
   const [profiles,setProfiles]=useState(()=>{try{const r=localStorage.getItem('latte_tool_profiles_v1');const p=r?JSON.parse(r):null;if(!p||typeof p!=='object'||Array.isArray(p))return TOOL_PROFILE_DEFAULTS;if(p.casesAudit&&!p.itemAudit){p.itemAudit=p.casesAudit;}delete p.casesAudit;
-    // v17.3: only complete, recognized rows are kept; a malformed row falls back to its recommended default so an arbitrary level cannot reach the API.
-    // v17.13: a row saved as 'pro' chose the second slot, which is now Argon; it would otherwise be discarded as an
-    // unknown family and quietly fall back to Hydrogen. Keep this shim, as with casesAudit above.
-    // v20.2: admit xhigh for Hydrogen rows while clamping Argon rows to high so Argon never receives an unsupported xhigh level.
-    const valid={};for(const id of Object.keys(TOOL_PROFILE_DEFAULTS)){const row=p[id];const m=row&&row.m==='pro'?'argon':row&&row.m;if(row&&typeof row==='object'&&!Array.isArray(row)&&['hydrogen','argon'].includes(m)&&['low','medium','high','xhigh'].includes(row.lv))valid[id]={m,lv:m==='argon'&&row.lv==='xhigh'?'high':row.lv};}
+    // v17.3/v21.10: migrate legacy 'pro'/'argon' family keys to 'neon' and admit low/medium/high/xhigh on both Hydrogen and Neon.
+    const valid={};for(const id of Object.keys(TOOL_PROFILE_DEFAULTS)){const row=p[id];const m=(row&&(row.m==='pro'||row.m==='argon'))?'neon':row&&row.m;if(row&&typeof row==='object'&&!Array.isArray(row)&&['hydrogen','neon'].includes(m)&&['low','medium','high','xhigh'].includes(row.lv))valid[id]={m,lv:row.lv};}
     return{...TOOL_PROFILE_DEFAULTS,...valid};}catch{return TOOL_PROFILE_DEFAULTS;}});
   useEffect(()=>{try{localStorage.setItem('latte_auto_profile_v1',autoProfile?'1':'0');localStorage.setItem('latte_tool_profiles_v1',JSON.stringify(profiles));}catch(e){}},[autoProfile,profiles]);
-  useEffect(()=>{saveModelSettings(localStorage,{hydrogenModel,argonModel,thinkingMode,hydrogenLevel,argonLevel});},[hydrogenModel,argonModel,thinkingMode,hydrogenLevel,argonLevel]);
+  useEffect(()=>{saveModelSettings(localStorage,{hydrogenModel,neonModel,thinkingMode,hydrogenLevel,neonLevel});},[hydrogenModel,neonModel,thinkingMode,hydrogenLevel,neonLevel]);
   // v20.2: keep model settings, auto-profile toggle, and per-tool profiles synchronized across sibling browser tabs.
   useEffect(()=>{
     const onStorage=ev=>{
       if(!ev||!ev.key||ev.storageArea!==localStorage)return;
       if(ev.key===MODEL_SETTINGS_KEY){
         const next=loadModelSettings(localStorage);
-        setHydrogenModel(next.hydrogenModel);setArgonModel(next.argonModel);
-        setThinkingMode(next.thinkingMode);setHydrogenLevel(next.hydrogenLevel);setArgonLevel(next.argonLevel);
+        setHydrogenModel(next.hydrogenModel);setNeonModel(next.neonModel);
+        setThinkingMode(next.thinkingMode);setHydrogenLevel(next.hydrogenLevel);setNeonLevel(next.neonLevel);
       }else if(ev.key==='latte_auto_profile_v1'){
         setAutoProfile(ev.newValue===null?true:ev.newValue==='1');
       }else if(ev.key==='latte_tool_profiles_v1'){
@@ -20475,7 +20508,7 @@ function App(){
           const p=ev.newValue?JSON.parse(ev.newValue):null;
           if(!p||typeof p!=='object'||Array.isArray(p)){setProfiles(TOOL_PROFILE_DEFAULTS);return;}
           const cp={...p};if(cp.casesAudit&&!cp.itemAudit)cp.itemAudit=cp.casesAudit;delete cp.casesAudit;
-          const valid={};for(const id of Object.keys(TOOL_PROFILE_DEFAULTS)){const row=cp[id];const m=row&&row.m==='pro'?'argon':row&&row.m;if(row&&typeof row==='object'&&!Array.isArray(row)&&['hydrogen','argon'].includes(m)&&['low','medium','high','xhigh'].includes(row.lv))valid[id]={m,lv:m==='argon'&&row.lv==='xhigh'?'high':row.lv};}
+          const valid={};for(const id of Object.keys(TOOL_PROFILE_DEFAULTS)){const row=cp[id];const m=(row&&(row.m==='pro'||row.m==='argon'))?'neon':row&&row.m;if(row&&typeof row==='object'&&!Array.isArray(row)&&['hydrogen','neon'].includes(m)&&['low','medium','high','xhigh'].includes(row.lv))valid[id]={m,lv:row.lv};}
           setProfiles({...TOOL_PROFILE_DEFAULTS,...valid});
         }catch(e){}
       }
@@ -20483,7 +20516,7 @@ function App(){
     window.addEventListener('storage',onStorage);
     return()=>window.removeEventListener('storage',onStorage);
   },[]);
-  const setProfile=useCallback((id,patch)=>setProfiles(p=>{const cur=p[id]||TOOL_PROFILE_DEFAULTS[id]||{m:'hydrogen',lv:'low'};const next={...cur,...patch};if(next.m==='argon'&&next.lv==='xhigh')next.lv='high';return{...p,[id]:next};}),[]);
+  const setProfile=useCallback((id,patch)=>setProfiles(p=>{const cur=p[id]||TOOL_PROFILE_DEFAULTS[id]||{m:'hydrogen',lv:'low'};const next={...cur,...patch};return{...p,[id]:next};}),[]);
   const resetProfiles=useCallback(()=>setProfiles(TOOL_PROFILE_DEFAULTS),[]);
   const [activeTool,setActiveTool]=useState('knowledge');
   // v20.2: mount only the active/visited tool(s) at boot so 7 unvisited workbenches skip initial hook & memo startup,
@@ -20582,13 +20615,13 @@ function App(){
   const forTool=useCallback(id=>{
     if(autoProfile){
       const p=profiles[id]||TOOL_PROFILE_DEFAULTS[id]||{m:'hydrogen',lv:'low'};
-      return{model:p.m==='argon'?argonModel:hydrogenModel,level:p.lv,family:p.m,auto:true};
+      return{model:p.m==='neon'?neonModel:hydrogenModel,level:p.lv,family:p.m,auto:true};
     }
-    return{model:thinkingMode?argonModel:hydrogenModel,level:thinkingMode?argonLevel:hydrogenLevel,family:thinkingMode?'argon':'hydrogen',auto:false};
-  },[autoProfile,profiles,argonModel,hydrogenModel,thinkingMode,argonLevel,hydrogenLevel]);
+    return{model:thinkingMode?neonModel:hydrogenModel,level:thinkingMode?neonLevel:hydrogenLevel,family:thinkingMode?'neon':'hydrogen',auto:false};
+  },[autoProfile,profiles,neonModel,hydrogenModel,thinkingMode,neonLevel,hydrogenLevel]);
 
   // v17.3: activeTool left this context; it invalidated every mounted tool on each tab switch and only the settings drawer read it.
-  const cfg=useMemo(()=>({apiKey,setApiKey,hydrogenModel,setHydrogenModel,argonModel,setArgonModel,thinkingMode,setThinkingMode,hydrogenLevel,argonLevel,thinkingLevel:thinkingMode?argonLevel:hydrogenLevel,setThinkingLevel:thinkingMode?setArgonLevel:setHydrogenLevel,activeModel:thinkingMode?argonModel:hydrogenModel,autoProfile,setAutoProfile,profiles,setProfile,resetProfiles,forTool}),[apiKey,hydrogenModel,argonModel,thinkingMode,hydrogenLevel,argonLevel,autoProfile,profiles,setProfile,resetProfiles,forTool]);
+  const cfg=useMemo(()=>({apiKey,setApiKey,hydrogenModel,setHydrogenModel,neonModel,setNeonModel,thinkingMode,setThinkingMode,hydrogenLevel,neonLevel,thinkingLevel:thinkingMode?neonLevel:hydrogenLevel,setThinkingLevel:thinkingMode?setNeonLevel:setHydrogenLevel,activeModel:thinkingMode?neonModel:hydrogenModel,autoProfile,setAutoProfile,profiles,setProfile,resetProfiles,forTool}),[apiKey,hydrogenModel,neonModel,thinkingMode,hydrogenLevel,neonLevel,autoProfile,profiles,setProfile,resetProfiles,forTool]);
 
   // O(1) fact lookup, rebuilt only when the KB changes — powers FactTag and the drawer.
   const factIndex=useMemo(()=>buildFactIndex(knowledgeBase),[knowledgeBase]);

@@ -58,22 +58,22 @@ function runAnkiReviewQualityTests({S,t,section}){
 
   const defaults=new Function(extract('const TOOL_PROFILE_DEFAULTS=','const PROFILE_ROWS=')+';return TOOL_PROFILE_DEFAULTS;')();
   t('Anki recommended Auto profile uses Hydrogen Medium',defaults.anki.m==='hydrogen'&&defaults.anki.lv==='medium');
-  const otherDefaults={knowledge:['hydrogen','medium'],knowledgeAudit:['hydrogen','medium'],cardTranscribe:['hydrogen','low'],priorityHarvest:['hydrogen','low'],priority:['argon','medium'],nclex:['hydrogen','medium'],nclexgen:['argon','high'],cases:['argon','high'],itemAudit:['argon','high']};
+  const otherDefaults={courseAnalyzer:['hydrogen','medium'],knowledge:['hydrogen','medium'],knowledgeAudit:['hydrogen','medium'],cardTranscribe:['hydrogen','low'],priorityHarvest:['hydrogen','low'],priority:['neon','high'],nclex:['hydrogen','medium'],nclexgen:['neon','high'],cases:['neon','high'],itemAudit:['neon','high'],gizmo:['hydrogen','low']};
   t('Anki recommendation leaves every other tool default unchanged',Object.entries(otherDefaults).every(([id,[m,lv]])=>defaults[id].m===m&&defaults[id].lv===lv));
   const savedSource=extract('  const [profiles,setProfiles]=useState(','  useEffect(()=>{try{localStorage.setItem(\'latte_auto_profile_v1\'');
   const loadProfiles=stored=>new Function('TOOL_PROFILE_DEFAULTS','localStorage','useState',savedSource+';return profiles;')(defaults,{getItem:()=>stored},fn=>[fn(),()=>{}]);
   t('Anki missing saved profile receives the new recommendation',loadProfiles(null).anki.lv==='medium');
   t('Anki existing saved Low override survives the recommendation change',loadProfiles(JSON.stringify({anki:{m:'hydrogen',lv:'low'}})).anki.lv==='low');
-  t('Anki saved model and thinking customizations remain intact',loadProfiles(JSON.stringify({anki:{m:'argon',lv:'high'}})).anki.m==='argon'&&loadProfiles(JSON.stringify({anki:{m:'argon',lv:'high'}})).anki.lv==='high');
-  t('Anki partial saved tables fill only missing profiles from current defaults',loadProfiles(JSON.stringify({nclex:{m:'argon',lv:'low'}})).anki.lv==='medium'&&loadProfiles(JSON.stringify({nclex:{m:'argon',lv:'low'}})).nclex.lv==='low');
+  t('Anki saved model and thinking customizations remain intact (and legacy argon migrates to neon)',loadProfiles(JSON.stringify({anki:{m:'neon',lv:'high'}})).anki.m==='neon'&&loadProfiles(JSON.stringify({anki:{m:'neon',lv:'high'}})).anki.lv==='high'&&loadProfiles(JSON.stringify({anki:{m:'argon',lv:'high'}})).anki.m==='neon');
+  t('Anki partial saved tables fill only missing profiles from current defaults',loadProfiles(JSON.stringify({nclex:{m:'neon',lv:'low'}})).anki.lv==='medium'&&loadProfiles(JSON.stringify({nclex:{m:'neon',lv:'low'}})).nclex.lv==='low');
   t('Anki malformed saved profile recovers the current recommendation',loadProfiles('{').anki.lv==='medium'&&loadProfiles('[]').anki.lv==='medium');
-  t('Anki profile loading preserves the existing audit-key migration',loadProfiles(JSON.stringify({casesAudit:{m:'argon',lv:'medium'}})).itemAudit.m==='argon'&&!Object.hasOwn(loadProfiles(JSON.stringify({casesAudit:{m:'argon',lv:'medium'}})),'casesAudit'));
+  t('Anki profile loading preserves the existing audit-key migration',loadProfiles(JSON.stringify({casesAudit:{m:'argon',lv:'medium'}})).itemAudit.m==='neon'&&!Object.hasOwn(loadProfiles(JSON.stringify({casesAudit:{m:'argon',lv:'medium'}})),'casesAudit'));
   const resolveSource=extract('  const forTool=useCallback(id=>{','  const cfg=useMemo');
-  const resolve=(autoProfile,profiles,thinkingMode=false)=>new Function('autoProfile','profiles','TOOL_PROFILE_DEFAULTS','thinkingMode','hydrogenModel','argonModel','hydrogenLevel','argonLevel','useCallback',resolveSource+';return forTool;')(autoProfile,profiles,defaults,thinkingMode,'synthetic-hydrogen','synthetic-argon','low','high',fn=>fn);
+  const resolve=(autoProfile,profiles,thinkingMode=false)=>new Function('autoProfile','profiles','TOOL_PROFILE_DEFAULTS','thinkingMode','hydrogenModel','neonModel','hydrogenLevel','neonLevel','useCallback',resolveSource+';return forTool;')(autoProfile,profiles,defaults,thinkingMode,'synthetic-hydrogen','synthetic-neon','low','high',fn=>fn);
   t('Anki live Auto resolution uses the Medium recommendation',resolve(true,defaults)('anki').model==='synthetic-hydrogen'&&resolve(true,defaults)('anki').level==='medium');
   t('Anki live Auto resolution respects an existing saved Low override',resolve(true,loadProfiles(JSON.stringify({anki:{m:'hydrogen',lv:'low'}})))('anki').level==='low');
   t('Anki Manual Hydrogen still uses the global Low setting',resolve(false,defaults)('anki').level==='low'&&resolve(false,defaults)('anki').auto===false);
-  t('Anki Manual Argon still uses the global High setting',resolve(false,defaults,true)('anki').model==='synthetic-argon'&&resolve(false,defaults,true)('anki').level==='high');
+  t('Anki Manual Neon still uses the global High setting',resolve(false,defaults,true)('anki').model==='synthetic-neon'&&resolve(false,defaults,true)('anki').level==='high');
   const resetSource=extract('  const resetProfiles=useCallback(', '  const [activeTool,setActiveTool]');
   let resetValue=null;
   new Function('useCallback','setProfiles','TOOL_PROFILE_DEFAULTS',resetSource+';resetProfiles();')(fn=>fn,value=>{resetValue=value;},defaults);
