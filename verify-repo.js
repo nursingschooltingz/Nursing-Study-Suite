@@ -171,7 +171,7 @@ function bootSmoke(code, source) {
       walk(window.__rootElement);
       const saved = captured.map(([c, v]) => { const prev = c._currentValue; c._currentValue = v; return [c, prev]; });
       try {
-        const expectedTools = ['knowledge', 'priority', 'anki', 'nclex', 'nclexgen', 'cases', 'nclex2anki', 'gizmo'];
+        const expectedTools = ['courseAnalyzer', 'knowledge', 'priority', 'anki', 'nclex', 'nclexgen', 'cases', 'nclex2anki', 'gizmo'];
         for (const id of expectedTools) {
           const entry = TOOL_COMPONENTS[id];
           const fn = entry && entry.$$memo ? entry.type : entry;
@@ -182,7 +182,7 @@ function bootSmoke(code, source) {
       } finally {
         for (let i = saved.length - 1; i >= 0; i--) saved[i][0]._currentValue = saved[i][1];
       }
-      const mustRender = ['App', 'KnowledgeBaseBuilder', 'PriorityAnalyzer', 'AnkiGenerator', 'NCLEXExtractor', 'NCLEXGenerator', 'CaseStudyGenerator', 'NCLEXToAnki', 'GizmoImporter', 'ConfigSidebar', 'FactInspectorDrawer'];
+      const mustRender = ['App', 'CourseAnalyzer', 'KnowledgeBaseBuilder', 'PriorityAnalyzer', 'AnkiGenerator', 'NCLEXExtractor', 'NCLEXGenerator', 'CaseStudyGenerator', 'NCLEXToAnki', 'GizmoImporter', 'ConfigSidebar', 'FactInspectorDrawer'];
       for (const name of mustRender) {
         if (!rendered.has(name)) throw new Error('bootSmoke did not render component: ' + name);
       }
@@ -221,7 +221,7 @@ function main() {
   const { code } = babel.Babel.transform(extractBabelScript(source), BROWSER_BABEL_OPTIONS);
   console.log('PASS  Babel parse with ' + babel.file);
   bootSmoke(code, source);
-  console.log('PASS  V8 compiles the app and the head scripts, evaluates top level, and render-smokes App + all 8 tool components');
+  console.log('PASS  V8 compiles the app and the head scripts, evaluates top level, and render-smokes App + all 9 tool components');
   console.log('\nALL REPOSITORY GATES PASSED');
 }
 

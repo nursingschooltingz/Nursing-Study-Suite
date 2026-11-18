@@ -119,7 +119,7 @@ module.exports=async function run(S,t){
   const SET=['L5: a typed model ID is trimmed before it is used and saved',
     'L5: an invalid model ID is not used; the field keeps it, marked invalid, and names the ID still running',
     'L4: the auto badge for NCLEX to Anki names the Hydrogen model and the level set in that tab; other tabs unchanged',
-    'L4: the drawer counts eight tools and the manual hint names the NCLEX to Anki exception',
+    'L4: the drawer counts nine tools and the manual hint names the NCLEX to Anki exception',
     'v20.2: xhigh pill is enabled on Hydrogen rows, disabled on Argon rows, and Reset defaults restores gemini-4-hydrogen/argon'];
   await section(t,SET,()=>{
     const Babel=loadBabel();
@@ -152,7 +152,7 @@ module.exports=async function run(S,t){
     const n2a=textOf(badge(auto({activeTool:'nclex2anki'}))),cases=textOf(badge(auto({activeTool:'cases'})));
     out[SET[2]]=n2a.includes('synthetic-hydrogen')&&n2a.includes('level set in tab')&&!/low$/.test(n2a)&&cases==='synthetic-argonhigh';
     const manualText=textOf(mount({...base,autoProfile:false})({activeTool:'knowledge'}));
-    out[SET[3]]=manualText.includes('Shared across all eight tools')&&!manualText.includes('six tools')&&!manualText.includes('seven tools')&&manualText.includes('except NCLEX to Anki, which always uses the Hydrogen model');
+    out[SET[3]]=manualText.includes('Shared across all nine tools')&&!manualText.includes('six tools')&&!manualText.includes('seven tools')&&!manualText.includes('eight tools')&&manualText.includes('except NCLEX to Anki, which always uses the Hydrogen model');
     const profPatches=[],resets={hydrogen:null,argon:null};
     const autoDrawer=mount({...base,autoProfile:true,profiles:{knowledge:{m:'hydrogen',lv:'xhigh'},cases:{m:'argon',lv:'high'}},setProfile:(id,p)=>profPatches.push([id,p]),setHydrogenModel:v=>{resets.hydrogen=v;},setArgonModel:v=>{resets.argon=v;}});
     let pTree=autoDrawer({activeTool:'knowledge'});

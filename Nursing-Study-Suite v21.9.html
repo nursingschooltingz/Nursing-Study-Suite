@@ -12,6 +12,26 @@
      policy and uses only its own inline style block and system fonts. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com">
 <title>P-LATE Study Suite</title>
+<!-- v21.9 (2026-11-18): 01 · Course Analyzer Tab (Syllabus & Lecture PPTX -> Knowledge Base 1-Click Sync) + Conservative
+     KB Retention Safeguards (Prioritize-Mode Tier-1 Safety Floor & Hardened Points Heading Parser).
+     All 13 frozen prompt constants in prompt-baseline.json unchanged.
+     (1) NEW 01 · COURSE ANALYZER TAB (COURSE_ANALYZER_PROMPT, COURSE_ANALYZER_JSON_SCHEMA, caInferFileRole, caNormalizeAnalysis,
+     caMergeAnalysisParts, caSegmentMaterials, caRunAnalysisWithEnv, CourseAnalyzer, CourseBriefCtx): Adds a dedicated curriculum
+     analysis tab under Source (01 · Course Analyzer -> 02 · Knowledge Base; default boot tab remains Knowledge Base) with its own
+     per-tool model profile (courseAnalyzer: Hydrogen medium). Reads uploaded syllabi, exam blueprints, and lecture PPTX/PDFs
+     locally (segmenting long decks on slide/page boundaries so zero slides are skipped), enforces one target exam at a time,
+     produces editable, 1-click-copyable conservative-retention blocks (Overarching Concepts, Outcomes, atomic concept-grouped
+     Points with the safety catch-all bullet, additive Additional Context with contrasting pairs & 4-pillar exam traps, plus
+     Source Coverage Report), and syncs all 4 blocks, Course/Exam, conservative KB settings, and checkbox-selected lecture decks
+     straight into Knowledge Base Step 01 via CourseBriefCtx without re-rendering unrelated tabs.
+     (2) CONSERVATIVE TIER-1 SAFETY FLOOR IN PRIORITIZE MODE (kbBuildFocusBlock, KnowledgeBaseBuilder #kb-keep-safety-t1):
+     Defaults ON (preserveSafetyTier=true) so narrow Focus Outcomes/Points never silently demote unmentioned drugs, doses, routes,
+     hold parameters, antidotes, critical lab thresholds, or safety warnings down to Tier 3; retains explicit opt-out checkbox.
+     (3) HARDENED POINTS HEADING DETECTION (parseAndNumberPoints): Skips parenthesized/punctuated colon headers, bracket/rule
+     dividers, and plain unbulleted short concept headers directly above bulleted/reset-numbered blocks so analyzer concept titles
+     never become orphan P# IDs, while keeping plain unbulleted point lists and lines with doses/operators intact.
+     (4) SUB-500 KB BABEL HEADROOM: Hoists pure export, worksheet-assembly, batch-queue, and file-reader helpers into the plain
+     script block so the text/babel script block remains safely below the 500,000-byte ceiling with all 9 tools mounted. -->
 <!-- v21.8 (2026-11-18): Digital Library (concept sort) 15-Resource Integration — Textbook Role Precedence Fix, Zero-Click
      Step 01 Bridge Role / Overarching Giddens Concept / Q-Bank Advisory Drop Inference, 04 · NCLEX Extractor Split Q&A Bookmark
      Auto-Fill, Lehne TOC Callout Classification, and APRN-to-RN Prescribing Firewall Guardrails.
@@ -872,6 +892,8 @@ const {useState,useRef,useCallback,useEffect,useMemo,createContext,useContext}=R
 // 'hydrogen'/'argon' resolve against whatever is typed in the Hydrogen/Argon model fields, so
 // these stay correct when model names change. Every value is user-editable.
 const TOOL_PROFILE_DEFAULTS={
+  // v21.9: Syllabus + lecture slide inventory & exam-trap brief for 01 · Course Analyzer (grounded, non-pruning sweep).
+  courseAnalyzer:{m:'hydrogen',lv:'medium'}, // syllabus + lecture slides -> conservative KB Focus brief
   knowledge:{m:'hydrogen',lv:'medium'},      // extraction — completeness-critical; pending A/B
   knowledgeAudit:{m:'hydrogen',lv:'medium'}, // omission audit — comparison task
   // v15.12: reading printed text off a photograph is transcription, not reasoning. Low
@@ -913,6 +935,7 @@ const TOOL_PROFILE_DEFAULTS={
   gizmo:{m:'hydrogen',lv:'low'},             // Anki -> Gizmo verbatim tab-separated chunk formatter
 };
 const PROFILE_ROWS=[
+  {id:'courseAnalyzer',label:'Course Analyzer'},
   {id:'knowledge',label:'Knowledge · extract'},
   {id:'knowledgeAudit',label:'Knowledge · audit'},
   {id:'cardTranscribe',label:'Knowledge · card OCR'},
@@ -986,6 +1009,9 @@ function useFactInspector(){return useContext(FactInspectorCtx);}
 // v19.2: KnowledgeCtx carries stable publishAnkiDeck while AnkiDeckCtx exposes the live deck only to GizmoImporter, avoiding extra AnkiGenerator or KB-consumer re-renders and keeping standalone Anki fixtures zero-config.
 const AnkiDeckCtx=createContext(null);
 function useAnkiDeck(){return useContext(AnkiDeckCtx);}
+// v21.9: KnowledgeCtx carries stable sendCourseBriefToKb while CourseBriefCtx exposes the synced syllabus/slide brief only to KnowledgeBaseBuilder, avoiding unrelated tab re-renders.
+const CourseBriefCtx=createContext(null);
+function useCourseBrief(){return useContext(CourseBriefCtx);}
 
 // Indexed KB lookup: id -> {condition, fact}. Normalizes case once so opening the inspector
 // is O(1) instead of scanning every condition's facts on each click.
@@ -2336,6 +2362,8 @@ const TOOL_STAGES=[
   {id:'practice',label:'Practice',note:'Work the facts until they stick'},
 ];
 const TOOLS=[
+  // v21.9: Curriculum analyst tab for syllabus + lecture PowerPoint analysis with 1-click sync into Knowledge Base Step 01.
+  {id:'courseAnalyzer',stage:'source',label:'Course Analyzer',step:'Analyze syllabus & slides',title:'Nursing Course Analyzer',desc:'Turn syllabus + lecture slides into conservative KB Focus inputs'},
   {id:'knowledge',stage:'source',label:'Knowledge Base',step:'Build your source',title:'P-LATE Knowledge Base',desc:'Extract once → reusable facts for every study output'},
   {id:'priority',stage:'plan',label:'Priority',step:'Plan what to study',title:'Pyramid Priority Analyzer',desc:'Triage study content into Tier 1/2/3 priorities'},
   {id:'anki',stage:'practice',label:'Anki',step:'Practice recall',title:'P-LATE Anki Generator',desc:'Create cloze cards from your Knowledge Base'},
@@ -2564,7 +2592,8 @@ HARD RULES
 // v19.2: optional concept-curriculum parameters (concepts + conceptAuto) and examTraps emit separate additive blocks
 // without activating Focus tier-demotion or scope-skipping rules when Outcomes/Points/Additional Context are blank.
 // v21.0: P-LATE multi-source RN Core + NP Mechanism Bridge focus block (keeps signature backward-compatible with 4..7 args).
-function kbBuildFocusBlock(outcomes,points,extra,mode,concepts='',conceptAuto=false,examTraps=false,plateBridge=false,sourceRole='rn'){
+// v21.8: preserveSafetyTier (default true) prevents narrow Focus Outcomes/Points in Prioritize mode from silently demoting unmentioned drugs, doses, hold thresholds, or safety alerts down to Tier 3.
+function kbBuildFocusBlock(outcomes,points,extra,mode,concepts='',conceptAuto=false,examTraps=false,plateBridge=false,sourceRole='rn',preserveSafetyTier=true){
   const seg=[],numberedPoints=parseAndNumberPoints(points);
   if(String(outcomes||'').trim())seg.push('OUTCOMES (learning objectives this exam covers):\n'+outcomes.trim());
   // v19.0: parse-time Point ID assignment (P1...Pn) + SOURCE & ANCHOR RULES with [NONE] escape hatch.
@@ -2601,8 +2630,9 @@ function kbBuildFocusBlock(outcomes,points,extra,mode,concepts='',conceptAuto=fa
 - Use the focus context ONLY to steer tier assignment:
   - Content matching a listed outcome or point is Tier 1.
   - Content related to the focus but not directly named keeps its normal tier.
-  - Content clearly unrelated to every listed outcome and point is Tier 3.
-- Clearly out-of-scope content is Tier 3 even when it is a drug, dose, threshold, or safety warning. This deliberately overrides the "always Tier 1" tier rules above, and applies ONLY to content unrelated to every listed outcome and point.
+  - Content clearly unrelated to every listed outcome and point is Tier 3.`+(preserveSafetyTier!==false?`
+- SAFETY FLOOR (CONSERVATIVE RETENTION): Drugs, doses, routes, hold parameters, antidotes, critical lab thresholds, and safety warnings/contraindications KEEP their Tier 1 floor even when not named in the listed outcomes or points — never demote clinical safety facts to Tier 3 just because a focus list did not mention them.`:`
+- Clearly out-of-scope content is Tier 3 even when it is a drug, dose, threshold, or safety warning. This deliberately overrides the "always Tier 1" tier rules above, and applies ONLY to content unrelated to every listed outcome and point.`)+`
 - Every listed outcome and point that this source actually covers must be represented by at least one extracted fact.`;
     out+='\n\n═══ STUDENT-PROVIDED FOCUS CONTEXT ═══\n'+seg.join('\n\n')+'\n\n'+rules+'\n═══════════════════════════════════════\n';
   }
@@ -3039,20 +3069,47 @@ function kbConditionMatchKeys(name,aliases=[]){
 }
 
 // 1. Parse-time Point ID assignment (skips headings, preserves "2.1" from turning into "1")
+// v21.8: previously colon headings rejected parentheses/periods ("Perfusion (Ch. 14):"), bracket/rule dividers ("[Perfusion]",
+// "=== Gas Exchange ===") were numbered as points, and plain unbulleted concept headers directly above bulleted lists became
+// orphan P# IDs. Now supports expanded explicit dividers plus block-level unbulleted concept headers above bulleted/reset lists
+// while preserving plain unbulleted point lists and any clinical line containing operators, doses, or sentence punctuation.
 function parseAndNumberPoints(rawPointsText) {
-  // Skip Markdown headers (# Topic), bold-only headers (**Topic**), or bare label lines ending in ":"
-  const isHeading = line =>
+  const isExplicitHeading = line =>
     /^#{1,6}\s+/.test(line) ||
     /^\*\*[^*]+\*\*:?$/.test(line) ||
-    /^[A-Za-z0-9\s/&,-]+:$/.test(line);
+    /^[A-Za-z0-9\s/&,.()'"–—-]+:$/.test(line) ||
+    /^(?:={2,}|-{2,})\s*[^=-].*?\s*(?:={2,}|-{2,})$/.test(line) ||
+    /^[-=_*]{3,}$/.test(line) ||
+    /^\[[^\]\r\n]{2,80}\]:?$/.test(line);
 
-  const lines = String(rawPointsText || '')
-    .split('\n')
-    .map(line => line.trim())
-    .filter(line => Boolean(line) && !isHeading(line));
+  const isBulletLine = line => /^[-*•]\s+/.test(line);
+  const isResetNumLine = line => /^(?:1(?:\.1)?[.)]|P1[\s:—-])\s*\S/i.test(line);
+  const isListPrefixed = line => /^(?:P\d+[\s:—-]+|[-*•](?:\s+|$)|\d+(?:\.\d+)+[.)]?(?:\s+|$)|\d+[.)](?:\s+|$))/i.test(line);
+  const looksLikePlainConceptHeader = line => {
+    if (!line || isListPrefixed(line) || line.length > 72) return false;
+    if (/[.?!]$/.test(line) || /[<>=≤≥%]/.test(line)) return false;
+    if (/^\d+\s*[-/]/.test(line) || /\b\d+(?:\.\d+)?\s*(?:mg|mcg|g|kg|mL|L|mEq|mmol|mmHg|bpm|hr|hrs|min|sec|mOsm|units?|IU)\b/i.test(line)) return false;
+    return line.split(/\s+/).length <= 8;
+  };
+
+  const rawLines = String(rawPointsText || '').split(/\r?\n/).map(line => line.trim());
+  const kept = [];
+  for (let i = 0; i < rawLines.length; i++) {
+    const line = rawLines[i];
+    if (!line || isExplicitHeading(line)) continue;
+    let nextNonEmpty = '';
+    for (let j = i + 1; j < rawLines.length; j++) { if (rawLines[j]) { nextNonEmpty = rawLines[j]; break; } }
+    const prevRaw = i > 0 ? rawLines[i - 1] : '';
+    let prevNonEmpty = '';
+    for (let j = i - 1; j >= 0; j--) { if (rawLines[j]) { prevNonEmpty = rawLines[j]; break; } }
+    const startsBlock = i === 0 || !prevRaw || isExplicitHeading(prevNonEmpty) || isListPrefixed(prevNonEmpty);
+    const leadsBullets = isBulletLine(nextNonEmpty) || (isResetNumLine(nextNonEmpty) && (i === 0 || !prevRaw || isExplicitHeading(prevNonEmpty)));
+    if (startsBlock && leadsBullets && looksLikePlainConceptHeader(line)) continue;
+    kept.push(line);
+  }
 
   // v19.0: re-filter after prefix stripping so bare prefixes ("P1 —", "1.") or bulleted headings ("- **Topic**:") never emit empty or heading Points.
-  const cleaned = lines
+  const cleaned = kept
     .map(line =>
       line
         // Requires whitespace (or end-of-line) after numbered/dotted prefixes so "2.1 Hypokalemia" -> "Hypokalemia"
@@ -3060,7 +3117,7 @@ function parseAndNumberPoints(rawPointsText) {
         .replace(/^(?:P\d+[\s:—-]+|[-*•](?:\s+|$)|\d+(?:\.\d+)+[.)]?(?:\s+|$)|\d+[.)](?:\s+|$))/i, '')
         .trim()
     )
-    .filter(line => Boolean(line) && !isHeading(line));
+    .filter(line => Boolean(line) && !isExplicitHeading(line));
 
   return cleaned.map((cleanText, idx) => ({ id: `P${idx + 1}`, text: cleanText }));
 }
@@ -15409,6 +15466,575 @@ function exportAsPdf(mdContent,title,subtitle){
   else win.addEventListener('load',()=>setTimeout(fire,350),{once:true});
 }
 
+/* ── COURSE ANALYZER PURE HELPERS (v21.9) ── */
+const COURSE_ANALYZER_SAFETY_BULLET='All source-stated medication doses, routes, hold parameters, antidotes, critical lab thresholds, and safety/contraindication alerts';
+const COURSE_ANALYZER_RETENTION_FOOTER='Preserve all source-stated clinical facts, pathophysiology bridges, tables, boxed alerts, numeric cutoffs, and nursing rationales in full; use the notes above only to highlight emphasis, contrasts, and exam traps, never to omit or demote other clinical content.';
+const COURSE_ANALYZER_FILE_ROLES=[
+  ['syllabus','Syllabus / Schedule'],
+  ['lecture','Lecture Slides'],
+  ['blueprint','Blueprint / Guide'],
+];
+// v21.9: Conservative-retention Nursing Course Analyzer prompt (tunable, documented in Prompts.md).
+const COURSE_ANALYZER_PROMPT=`You are an expert nursing curriculum analyst specializing in concept-based nursing curricula, clinical reasoning, and exam-aligned study preparation.
+Analyze ONLY the uploaded curriculum materials for the ONE target COURSE and EXAM specified by the user and return a single valid JSON object matching the required schema (no markdown fence, no commentary outside JSON).
+
+SOURCE HIERARCHY:
+1. Primary — Syllabus & Student Learning Outcomes (SLOs): course objectives, SLOs, exam coverage and boundaries, required overarching nursing concepts, and course structure. Do NOT assume a lecture held on an exam date belongs to that exam unless the schedule confirms it.
+2. Secondary — Lecture PowerPoints & PDFs: instructor emphasis, slide objectives, concepts, exemplars, pathophysiology mechanisms (Patho), unified bedside cues/hallmark signs/physical exam findings/clinical scales (Look), labs/diagnostics/imaging/formulas/cutoffs (Analyze), bedside nursing interventions/medications/doses/routes/hold parameters/antidotes/pre- and post-procedure safety checks (Treat), patient/discharge teaching/call-provider triggers/therapeutic vs. deteriorating trajectories (Educate / Evaluate), and professor-signaled exam traps (bold/colored callouts, bedside-first vs. ordered-escalation sequences, medication hold triangles, trend-slope or pseudo-improvement cues, never-click errors, and contrasting twin condition pairs).
+3. Optional — Exam Blueprints, Instructor Study Guides, and User Notes: refine scope, priorities, and exam expectations.
+
+CONSERVATIVE RETENTION PRINCIPLE (ZERO OVER-PRUNING):
+- Never invent or expand the curriculum using outside nursing knowledge, unuploaded textbooks, or generic NCLEX trivia.
+- Never over-prune, summarize away, or drop secondary slide concepts, medications, labs, bedside scales, boxed callouts, or pathophysiology bridges. Favor complete, faithful capture over aggressive compression.
+- NEVER emit "DROP background anatomy", "omit low-yield physiology", "only extract...", or "slide-only — ignore textbooks" instructions (the Study Suite enforces source-only grounding via verbatim quotes and separates RN Core vs. NP Bridge books via Step 01 per-file Source Role checkboxes).
+
+OUTPUT FIELD RULES:
+1. "overarchingConcepts": Array of the unit's overarching physiological/nursing concept names (e.g., ["Perfusion", "Gas Exchange", "Fluid & Electrolyte Balance"]) so Step 01 activates Concept-Based Curriculum structure.
+2. "outcomes": Array of clean, measurable learning outcomes preserving explicit syllabus SLOs and lecture objectives faithfully (keep secondary objectives and pathophysiology bridges intact). Tag explicit safety, first-action, or differentiation SLOs with "[Priority / Safety]" where supported by the source without asking to drop lower-tier facts.
+3. "pointGroups": Array of {"concept": "<Concept Name>", "points": ["<atomic clinical topic>", ...]}.
+   - Group atomic clinical topics strictly under overarching concept headers — NEVER split Points into per-disease P-LATE subheadings ("Patho", "Look", "Analyze", "Treat", "Educate"), so downstream Point-ID anchors (P1, P2, ...) stay clean without split-anchor collisions.
+   - Keep 1 concise topic bullet per clinical exemplar, contrasting pair, drug class, diagnostic/lab cluster, or high-alert protocol, preserving slide terminology across all P-LATEEE pillars (cues, scales, diagnostics, meds/holds/antidotes, teaching, trajectory trends). Do not write long explanatory paragraphs.
+4. "additionalContext": Array of strictly ADDITIVE guidance bullets complementing Outcomes and Points without repeating them:
+   - Instructor emphasis and expected depth of Patho -> Look -> Analyze -> Treat -> Educate/Evaluate connections.
+   - Professor-emphasized contrasting pairs (twin-cue / twin-rx-opposite) to keep co-located and contrasted.
+   - Slide-signaled exam traps (bedside-first vs. ordered-escalation, hold triangles, trend-slope, pseudo-improvement, never-click distractors).
+   - Non-destructive exam boundary notes (which decks/chapters belong to this exam).
+5. "coverageReport": Concise source verification object listing "materialsAnalyzed" (filenames and slide/page counts), "majorConceptsCovered", "missingOrUnreadable", "uncertainOrDiscrepancies" (syllabus vs. slide mismatches or uncertain exam dates), and "sourceVerification" (specific slides/syllabus sections supporting major topics, distinguishing explicit objectives from inferred ones).`;
+
+const COURSE_ANALYZER_JSON_SCHEMA={
+  type:'object',
+  properties:{
+    course:{type:'string'},
+    exam:{type:'string'},
+    overarchingConcepts:{type:'array',items:{type:'string'}},
+    outcomes:{type:'array',items:{type:'string'}},
+    pointGroups:{
+      type:'array',
+      items:{
+        type:'object',
+        properties:{
+          concept:{type:'string'},
+          points:{type:'array',items:{type:'string'}}
+        },
+        required:['concept','points']
+      }
+    },
+    additionalContext:{type:'array',items:{type:'string'}},
+    coverageReport:{
+      type:'object',
+      properties:{
+        materialsAnalyzed:{type:'array',items:{type:'string'}},
+        majorConceptsCovered:{type:'array',items:{type:'string'}},
+        missingOrUnreadable:{type:'array',items:{type:'string'}},
+        uncertainOrDiscrepancies:{type:'array',items:{type:'string'}},
+        sourceVerification:{type:'array',items:{type:'string'}}
+      },
+      required:['materialsAnalyzed','majorConceptsCovered','missingOrUnreadable','uncertainOrDiscrepancies','sourceVerification']
+    }
+  },
+  required:['course','exam','overarchingConcepts','outcomes','pointGroups','additionalContext','coverageReport']
+};
+
+function caInferFileRole(filename){
+  const n=String(filename||'').toLowerCase();
+  if(/(?:^|[^a-z0-9])(?:syllabus|syllabi|course[\s_-]*(?:outline|calendar|schedule|overview)|class[\s_-]*schedule|calendar|topical[\s_-]*outline)(?:[^a-z0-9]|$)/i.test(n))return 'syllabus';
+  if(/(?:^|[^a-z0-9])(?:blueprint|study[\s_-]*guide|exam[\s_-]*guide|objectives?|slo|rubric|review[\s_-]*sheet|test[\s_-]*plan)(?:[^a-z0-9]|$)/i.test(n))return 'blueprint';
+  return 'lecture';
+}
+function caDefaultCarryToKb(role){return role==='lecture';}
+function caCleanList(arr){
+  const seen=new Set(),out=[];
+  for(const raw of Array.isArray(arr)?arr:[]){
+    const s=String(raw||'').replace(/\s+/g,' ').trim();
+    if(!s)continue;
+    const k=s.toLowerCase();
+    if(seen.has(k))continue;
+    seen.add(k);out.push(s);
+  }
+  return out;
+}
+function caNormalizeAnalysis(raw,fallbackCourse='',fallbackExam=''){
+  const src=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{};
+  const course=String(src.course||fallbackCourse||'').replace(/\s+/g,' ').trim();
+  const exam=String(src.exam||fallbackExam||'').replace(/\s+/g,' ').trim();
+  const conceptArr=caCleanList(src.overarchingConcepts);
+  const rawOutcomes=caCleanList((Array.isArray(src.outcomes)?src.outcomes:[]).map(x=>String(x||'').replace(/^\s*(?:\d+[.)]|[-*•])\s*/,'').trim()));
+  const outcomesText=rawOutcomes.map((o,i)=>`${i+1}. ${o}`).join('\n');
+  const groups=[];
+  const groupByKey=new Map();
+  for(const g of Array.isArray(src.pointGroups)?src.pointGroups:[]){
+    if(!g||typeof g!=='object')continue;
+    const cname=String(g.concept||'').replace(/^#+\s*/,'').replace(/\*\*/g,'').replace(/:+$/,'').replace(/\s+/g,' ').trim()||'General Concepts';
+    const ckey=cname.toLowerCase();
+    if(ckey==='safety & high-alert catch-all'||ckey==='safety catch-all')continue;
+    let slot=groupByKey.get(ckey);
+    if(!slot){slot={concept:cname,points:[],seen:new Set()};groupByKey.set(ckey,slot);groups.push(slot);}
+    for(const rp of Array.isArray(g.points)?g.points:[]){
+      const pt=String(rp||'').replace(/^\s*(?:[-*•]+|\d+[.)]|P\d+[\s:—-]+)\s*/i,'').replace(/\s+/g,' ').trim();
+      if(!pt)continue;
+      const pk=pt.toLowerCase();
+      if(pk===COURSE_ANALYZER_SAFETY_BULLET.toLowerCase()||slot.seen.has(pk))continue;
+      slot.seen.add(pk);slot.points.push(pt);
+    }
+  }
+  const nonEmptyGroups=groups.filter(g=>g.points.length>0);
+  if(!conceptArr.length&&nonEmptyGroups.length){
+    for(const g of nonEmptyGroups)if(g.concept!=='General Concepts')conceptArr.push(g.concept);
+  }
+  const pointBlocks=nonEmptyGroups.map(g=>`## ${g.concept}\n`+g.points.map(p=>`- ${p}`).join('\n'));
+  pointBlocks.push(`## Safety & High-Alert Catch-All\n- ${COURSE_ANALYZER_SAFETY_BULLET}`);
+  const pointsText=pointBlocks.join('\n\n');
+  const rawExtra=caCleanList((Array.isArray(src.additionalContext)?src.additionalContext:[]).map(x=>String(x||'').replace(/^\s*[-*•]+\s*/,'').trim()))
+    .filter(x=>x.toLowerCase()!==COURSE_ANALYZER_RETENTION_FOOTER.toLowerCase());
+  rawExtra.push(COURSE_ANALYZER_RETENTION_FOOTER);
+  const additionalContextText=rawExtra.map(x=>`- ${x}`).join('\n');
+  const covSrc=src.coverageReport&&typeof src.coverageReport==='object'?src.coverageReport:{};
+  const coverageReport={
+    materialsAnalyzed:caCleanList(covSrc.materialsAnalyzed),
+    majorConceptsCovered:caCleanList(covSrc.majorConceptsCovered),
+    missingOrUnreadable:caCleanList(covSrc.missingOrUnreadable),
+    uncertainOrDiscrepancies:caCleanList(covSrc.uncertainOrDiscrepancies),
+    sourceVerification:caCleanList(covSrc.sourceVerification)
+  };
+  return{
+    course,exam,
+    concepts:conceptArr.join(', '),
+    overarchingConcepts:conceptArr,
+    outcomes:outcomesText,
+    points:pointsText,
+    additionalContext:additionalContextText,
+    pointGroups:nonEmptyGroups.map(g=>({concept:g.concept,points:g.points})),
+    coverageReport
+  };
+}
+function caMergeAnalysisParts(parts,course='',exam=''){
+  const merged={
+    course,exam,
+    overarchingConcepts:[],
+    outcomes:[],
+    pointGroups:[],
+    additionalContext:[],
+    coverageReport:{materialsAnalyzed:[],majorConceptsCovered:[],missingOrUnreadable:[],uncertainOrDiscrepancies:[],sourceVerification:[]}
+  };
+  for(const p of Array.isArray(parts)?parts:[]){
+    if(!p||typeof p!=='object')continue;
+    if(!merged.course&&p.course)merged.course=p.course;
+    if(!merged.exam&&p.exam)merged.exam=p.exam;
+    if(Array.isArray(p.overarchingConcepts))merged.overarchingConcepts.push(...p.overarchingConcepts);
+    if(Array.isArray(p.outcomes))merged.outcomes.push(...p.outcomes);
+    if(Array.isArray(p.pointGroups))merged.pointGroups.push(...p.pointGroups);
+    if(Array.isArray(p.additionalContext))merged.additionalContext.push(...p.additionalContext);
+    const cov=p.coverageReport&&typeof p.coverageReport==='object'?p.coverageReport:{};
+    for(const k of Object.keys(merged.coverageReport)){
+      if(Array.isArray(cov[k]))merged.coverageReport[k].push(...cov[k]);
+    }
+  }
+  return caNormalizeAnalysis(merged,course,exam);
+}
+function caFormatCoverageMarkdown(cov){
+  const c=cov||{};
+  const bullets=arr=>(Array.isArray(arr)&&arr.length?arr.map(x=>`- ${x}`).join('\n'):'- None reported');
+  return [
+    '## Source Coverage Report',
+    '',
+    '### Materials Analyzed',
+    bullets(c.materialsAnalyzed),
+    '',
+    '### Coverage',
+    '**Major Concepts Covered:**',
+    bullets(c.majorConceptsCovered),
+    '',
+    '**Missing or Unreadable Material:**',
+    bullets(c.missingOrUnreadable),
+    '',
+    '**Uncertain Exam Assignments or Discrepancies:**',
+    bullets(c.uncertainOrDiscrepancies),
+    '',
+    '### Source Verification',
+    bullets(c.sourceVerification)
+  ].join('\n');
+}
+function caFormatAllMarkdown(res){
+  const r=res||{};
+  const header=[r.course,r.exam].filter(Boolean).join(' — ')||'Exam Curriculum Brief';
+  return [
+    `# ${header}`,
+    '',
+    '> **Suite Settings Reminder:** Focus Mode: Prioritize (NOT Scope) · Preserve Tier 1 safety floor: ON · Auto-detect overarching concepts: ON · Map HESI/ATI Exam Traps: ON · Second-pass omission audit: ON · Set RN Core vs. NP Bridge via Step 01 per-file Source Roles.',
+    '',
+    '## OVERARCHING CONCEPTS',
+    r.concepts||'(none)',
+    '',
+    '## OUTCOMES',
+    r.outcomes||'(none)',
+    '',
+    '## POINTS',
+    r.points||'(none)',
+    '',
+    '## ADDITIONAL CONTEXT',
+    r.additionalContext||'(none)',
+    '',
+    '---',
+    '',
+    caFormatCoverageMarkdown(r.coverageReport)
+  ].join('\n');
+}
+function caBuildKbHandoff(res,selectedFiles=[]){
+  const r=res||{};
+  return{
+    course:String(r.course||'').trim(),
+    exam:String(r.exam||'').trim(),
+    concepts:String(r.concepts||'').trim(),
+    outcomes:String(r.outcomes||'').trim(),
+    points:String(r.points||'').trim(),
+    additionalContext:String(r.additionalContext||'').trim(),
+    files:Array.isArray(selectedFiles)?selectedFiles.filter(Boolean):[],
+    pointCount:typeof parseAndNumberPoints==='function'?parseAndNumberPoints(r.points||'').length:0
+  };
+}
+async function caReadSourceFile(file,role='lecture',{signal,onProgress}={}){
+  const ext=getExt(file.name||'');
+  if(ext==='txt'||ext==='md'||ext==='markdown'){
+    const text=String(await file.text()||'').trim();
+    const lines=text?text.split(/\r?\n/).length:0;
+    return{name:file.name,role,ext,unitLabel:'lines',unitCount:lines,units:[{kind:'text',n:1,text}],text,warning:text?'':'file is empty'};
+  }
+  const isPdf=ext==='pdf'||file.type==='application/pdf';
+  try{
+    const units=await kbSourceUnits(file,{signal,onProgress});
+    const kind=units[0]?.kind||(ext==='pptx'?'slide':'page');
+    const text=units.map(u=>u.text).join('\n');
+    const warn=!text.trim()?'no readable text layer (may be scanned/image-only)':(isPdf&&units.length>0&&text.length/units.length<100?'very low text density — may be a scanned PDF':'');
+    return{name:file.name,role,ext,unitLabel:kind==='slide'?'slides':'pages',unitCount:units.length,units,text,warning:warn};
+  }finally{
+    if(isPdf&&typeof destroyPdfDoc==='function')destroyPdfDoc(file);
+  }
+}
+function caSegmentMaterials(docs,maxChars=160000){
+  const anchors=docs.filter(d=>d.role==='syllabus'||d.role==='blueprint');
+  const lectures=docs.filter(d=>d.role!=='syllabus'&&d.role!=='blueprint');
+  const fmtDoc=(d,body)=>`=== ${d.role.toUpperCase()} FILE: ${d.name} (${d.unitCount} ${d.unitLabel}) ===\n${body}`;
+  const anchorText=anchors.map(d=>fmtDoc(d,d.text)).join('\n\n');
+  const fullLectureText=lectures.map(d=>fmtDoc(d,d.text)).join('\n\n');
+  const combined=[anchorText,fullLectureText].filter(Boolean).join('\n\n');
+  if(combined.length<=maxChars||!lectures.length)return[{label:'Full curriculum packet',text:combined,files:docs.map(d=>`${d.name} (${d.unitCount} ${d.unitLabel})`)}];
+  const anchorBudget=Math.min(anchorText.length,Math.floor(maxChars*0.45));
+  const clippedAnchor=anchorText.length>anchorBudget?anchorText.slice(0,anchorBudget)+'\n...[syllabus/blueprint truncated for segment context]':anchorText;
+  const segBudget=Math.max(30000,maxChars-clippedAnchor.length-4000);
+  const segs=[];let cur=[],curLen=0,curFiles=new Set();
+  const flush=()=>{
+    if(!cur.length)return;
+    segs.push({label:`Segment ${segs.length+1}`,text:[clippedAnchor,...cur].filter(Boolean).join('\n\n'),files:[...anchors.map(d=>`${d.name} (${d.unitCount} ${d.unitLabel})`),...curFiles]});
+    cur=[];curLen=0;curFiles=new Set();
+  };
+  for(const d of lectures){
+    const units=Array.isArray(d.units)&&d.units.length?d.units:[{kind:'unit',n:1,text:d.text}];
+    let buf=[],bufLen=0;
+    const pushBuf=(startN,endN)=>{
+      if(!buf.length)return;
+      const range=startN===endN?`${d.unitLabel.slice(0,-1)} ${startN}`:`${d.unitLabel} ${startN}-${endN}`;
+      const block=`=== LECTURE FILE: ${d.name} (${range} of ${d.unitCount}) ===\n${buf.join('\n')}`;
+      if(cur.length&&curLen+block.length>segBudget)flush();
+      cur.push(block);curLen+=block.length;curFiles.add(`${d.name} (${range})`);
+      buf=[];bufLen=0;
+    };
+    let startN=units[0].n||1,lastN=startN;
+    for(const u of units){
+      const t=String(u.text||'');
+      if(buf.length&&bufLen+t.length>segBudget){pushBuf(startN,lastN);startN=u.n||lastN+1;}
+      buf.push(t);bufLen+=t.length;lastN=u.n||lastN;
+    }
+    pushBuf(startN,lastN);
+  }
+  flush();
+  return segs.length?segs:[{label:'Full curriculum packet',text:combined,files:docs.map(d=>`${d.name} (${d.unitCount} ${d.unitLabel})`)}];
+}
+async function caRunAnalysisWithEnv({cfg,course,exam,notes,files,fileRoles,abortRef,setBusy,setError,setProg,setLogs,pushLog,setResult,setEditConcepts,setEditOutcomes,setEditPoints,setEditExtra}){
+  const tCourse=String(course||'').trim(),tExam=String(exam||'').trim();
+  if(!cfg.apiKey||!tCourse||!tExam||!files.length)return;
+  const ctl=new AbortController();abortRef.current=ctl;
+  const {model,level}=cfg.forTool('courseAnalyzer');
+  const log=(m,t='')=>pushLog({m,t,ts:new Date().toLocaleTimeString()});
+  setBusy(true);setError('');setProg(2);setLogs([]);
+  try{
+    log(`Reading ${files.length} curriculum file(s) locally for ${tCourse} — ${tExam}...`,'warn');
+    const docs=[],missing=[];
+    for(let i=0;i<files.length;i++){
+      if(ctl.signal.aborted)throw new DOMException('Aborted','AbortError');
+      const f=files[i],fid=cardFileId(f),role=fileRoles[fid]||caInferFileRole(f.name);
+      const doc=await caReadSourceFile(f,role,{signal:ctl.signal,onProgress:(p,tot)=>log(`  Reading ${f.name} — ${p}/${tot}`)});
+      if(doc.warning){log(`  ⚠ ${f.name}: ${doc.warning}`,'warn');missing.push(`${f.name}: ${doc.warning}`);}
+      if(doc.text.trim()){docs.push(doc);log(`  ✓ ${f.name} (${doc.role} · ${doc.unitCount} ${doc.unitLabel} · ${doc.text.length.toLocaleString()} chars)`,'ok');}
+      else missing.push(`${f.name}: no extractable text`);
+      setProg(Math.round(((i+1)/files.length)*35));
+    }
+    if(!docs.length)throw new Error('No readable text was found in the uploaded files.');
+    const segs=caSegmentMaterials(docs,160000);
+    log(`Analyzing ${segs.length} segment(s) · ${model} [${level}]${cfg.autoProfile?' (auto)':''}`,'warn');
+    const parts=[];
+    for(let si=0;si<segs.length;si++){
+      if(ctl.signal.aborted)throw new DOMException('Aborted','AbortError');
+      const seg=segs[si];
+      log(`  Segment ${si+1}/${segs.length}: ${seg.label} (${seg.text.length.toLocaleString()} chars)...`);
+      const userPrompt=`TARGET COURSE: ${tCourse}\nTARGET EXAM: ${tExam}`+(String(notes||'').trim()?`\nINSTRUCTOR / STUDENT NOTES:\n${String(notes).trim()}`:'')+(segs.length>1?`\nSEGMENT: ${si+1} of ${segs.length} (extract all exam-relevant syllabus/slide coverage in this segment; segments will be merged downstream without dropping content).`:'')+`\n\nUPLOADED CURRICULUM MATERIALS:\n${seg.text}`;
+      const raw=await geminiRequest(cfg.apiKey,model,{
+        systemInstruction:{parts:[{text:COURSE_ANALYZER_PROMPT}]},
+        contents:[{parts:[{text:userPrompt}]}],
+        generationConfig:{responseMimeType:'application/json',responseJsonSchema:COURSE_ANALYZER_JSON_SCHEMA,thinkingConfig:{thinkingLevel:level}}
+      },{signal:ctl.signal,retries:2,stream:true});
+      const parsed=extractJSON(raw);
+      parts.push(parsed);
+      setProg(35+Math.round(((si+1)/segs.length)*62));
+      log(`  ✓ Segment ${si+1}/${segs.length} complete`,'ok');
+    }
+    const merged=caMergeAnalysisParts(parts,tCourse,tExam);
+    const localMats=docs.map(d=>`${d.name} (${d.role} · ${d.unitCount} ${d.unitLabel})`);
+    merged.coverageReport.materialsAnalyzed=caCleanList([...localMats,...merged.coverageReport.materialsAnalyzed]);
+    if(missing.length)merged.coverageReport.missingOrUnreadable=caCleanList([...missing,...merged.coverageReport.missingOrUnreadable]);
+    setResult(merged);
+    setEditConcepts(merged.concepts);
+    setEditOutcomes(merged.outcomes);
+    setEditPoints(merged.points);
+    setEditExtra(merged.additionalContext);
+    setProg(100);
+    const ptCnt=typeof parseAndNumberPoints==='function'?parseAndNumberPoints(merged.points).length:0;
+    log(`✅ Ready: ${merged.overarchingConcepts.length} overarching concept(s) · ${ptCnt} atomic point(s). Review below or click Send to Knowledge Base.`,'ok');
+  }catch(e){
+    const rawMsg=e?.message||String(e);
+    const safeMsg=typeof redactApiSecrets==='function'?redactApiSecrets(rawMsg,cfg.apiKey):(cfg.apiKey?rawMsg.split(cfg.apiKey).join('[redacted]'):rawMsg);
+    if(e?.name==='AbortError'||ctl.signal.aborted){log('Cancelled.','warn');}
+    else{setError(safeMsg);log('❌ '+safeMsg,'err');}
+  }finally{
+    if(abortRef.current===ctl)abortRef.current=null;
+    setBusy(false);
+  }
+}
+/* ── END COURSE ANALYZER PURE HELPERS ── */
+
+// v21.9: pure export, worksheet-assembly, batch-runner, and transcript helpers hoisted out of text/babel to keep Babel JSX compilation safely below the 500 KB ceiling with 9 tools.
+function kbBuildExportDiag(diag,course,exam){
+  return{
+    kind:'latte-extraction-diagnostics',schemaVersion:2,exportedAt:new Date().toISOString(),
+    run:{buildStatus:diag.buildStatus,model:diag.model,level:diag.level,autoProfile:diag.auto,auditPass:diag.verified,focus:diag.focus,chunkChars:diag.chunkChars,overlap:diag.overlapUnits,lanes:diag.lanes,course,exam},
+    totals:{chunks:diag.chunks.length,flagged:diag.chunks.filter(c=>c.flag).length,recovered:diag.recovered,discarded:diag.discarded,quoteMiss:diag.quoteMiss,quoteChecked:diag.quoteChecked,quoteMissing:diag.quoteMissing,quoteMatched:diag.quoteMatched,quoteMissByReason:diag.byReason,discardByReason:diag.discardByReason,dehyphSaved:diag.dehyphSaved,opMismatch:diag.opMismatch},
+    operatorMismatches:diag.opDetail,
+    textQuality:diag.quality,pageComposition:diag.composition,diagnosticsUnavailable:diag.diagnosticsUnavailable,
+    chunks:diag.chunks,bucketGaps:diag.gaps
+  };
+}
+function kbBuildCardTranscriptsExport(cardChunks,transcripts,txReviewed,cardGate){
+  return{kind:'latte-card-transcripts',schemaVersion:1,exportedAt:new Date().toISOString(),
+    cards:cardChunks,raw:Object.values(transcripts),
+    reviewed:txReviewed,blocked:cardGate.blocked.map(r=>({key:r.card.key,blockers:r.blockers}))};
+}
+async function nclexRunMainWithEnv({cfg,files,mode,iRangeOn,model,toolLevel,abortRef,setError,setQuestions,setRunSummary,setLog,setStatus,addLog,runInline,runSplit}){
+  if(!cfg.apiKey||!files.length)return;
+  const ctl=new AbortController();abortRef.current=ctl;
+  setError('');setQuestions([]);setRunSummary(null);setLog([]);setStatus('processing');
+  const track=nclexNewTrack();
+  try{
+    addLog(`Mode: ${mode==='inline'?'Inline (Q+A together)':'Split Q&A (separated sections)'} · ${model} [${toolLevel}]${cfg.autoProfile?' (auto)':''}`);
+    const oneFile=files.length>1&&(mode==='split'||iRangeOn);
+    const workFiles=oneFile?[files[0]]:files;
+    if(oneFile)addLog(`⚠ ${mode==='split'?'Split mode':'Inline mode with page ranges'} uses one PDF per run — processing "${files[0].name}" only (the page ranges describe a single file). Run the other file(s) separately.`);
+    addLog(`Processing ${workFiles.length} PDF(s)...`);
+    let allQ=[];
+    for(let fi=0;fi<workFiles.length;fi++){
+      if(ctl.signal.aborted)throw new DOMException('Aborted','AbortError');
+      addLog(`\n📁 File ${fi+1}/${workFiles.length}: ${workFiles[fi].name}`);
+      try{
+        if(mode==='inline')allQ=await runInline(workFiles[fi],allQ,ctl.signal,track);
+        else allQ=await runSplit(workFiles[fi],allQ,ctl.signal,track);
+      }finally{destroyPdfDoc(workFiles[fi]);}
+    }
+    const summary=nclexRunSummary(track);setRunSummary(summary);
+    addLog(summary.status==='complete'?`✅ Done! ${allQ.length} unique questions from ${workFiles.length} file(s).`:`⚠ ${summary.headline} ${allQ.length} unique question(s) kept.`);setStatus('done');
+  }catch(e){
+    if(e.name==='AbortError'){track.cancelled=true;setRunSummary(nclexRunSummary(track));addLog('⚠ Aborted \u2014 keeping the questions extracted so far.');setStatus('done');}
+    else{track.stopped=e.message;setRunSummary(nclexRunSummary(track));setError(e.message);setStatus('error');addLog(`❌ ${e.message}`);}
+  }finally{abortRef.current=null;}
+}
+function ngAssembleWorksheet(batches){
+  let n=1;const qs=[],ks=[];
+  for(const b of batches){
+    const bq=ngSplitNumbered(b.p3),bk=ngSplitNumbered(b.p4);
+    for(const q of bq){
+      const k=bk.find(x=>x.num===q.num);
+      qs.push(ngRenumber(q.text,n));
+      ks.push(k?ngRenumber(k.text,n):n+'. ANSWER: [not parsed — see Audit Trail view]');
+      n++;
+    }
+  }
+  return{questions:qs,answers:ks,count:n-1};
+}
+function ngBuildWorksheetMd(ws,wsIssuesAll,exportNotice){
+  if(!ws.count)return'';
+  return exportNotice+caseValidationStamp(wsIssuesAll,'worksheet')
+    +'# NCLEX Practice Questions\n\n**'+ws.count+' questions** generated from source material.\n\n---\n\n## Questions\n\n'
+    +ws.questions.map(ngMdLiteralNumbers).join('\n\n')+'\n\n<div class="pagebreak"></div>\n\n## Answer Key\n\n'+ws.answers.map(ngMdLiteralNumbers).join('\n\n');
+}
+function caseComputeAuditTotals(auditRows){
+  const n=s=>auditRows.filter(r=>r.status===s).length;
+  return{pass:n('PASS'),fail:n('FAIL'),repaired:n('REPAIRED'),review:n('REVIEW'),na:n('N/A'),error:n('ERROR'),
+    accuracyFails:auditRows.filter(r=>r.status==='FAIL'&&itemAuditIsAnswerAccuracy(r.criterion)).length};
+}
+async function caseRunBatchWithEnv({cfg,batchPlan,generatorSlot,batchBusy,K,batchCancelRef,setBatchBusy,setLogs,log,currentSourceKB,setBatchStatus,batchOverrideRef,run,caseStudyRef,casePacketRef,selectPacketEntry}){
+  if(!cfg.apiKey){log('Enter your API key in the config sidebar.','err');return;}
+  if(!batchPlan.targets.length){log('No queued entries have facts at the selected tiers. Include Tier 2/3 or adjust your selection.','err');return;}
+  if(generatorSlot.current.active||batchBusy)return;
+  const startKB=K.knowledgeBase;
+  batchCancelRef.current=false;setBatchBusy(true);setLogs([]);
+  try{
+    await caseRunBatchQueue({
+      targets:batchPlan.targets,skipped:batchPlan.skipped,overflowCount:batchPlan.overflowCount,maxBatch:MAX_CASE_BATCH,
+      isCancelled:()=>batchCancelRef.current||currentSourceKB.current!==startKB,
+      log,onStatus:setBatchStatus,
+      runOne:async(t,idx)=>{
+        const ovr={condition:t.condition,facts:t.facts,sufficiency:t.sufficiency,keepLogs:true,packetId:'pkt-'+Date.now().toString(36)+'-'+idx+'-'+uid().slice(0,4),completed:false,halted:''};
+        batchOverrideRef.current=ovr;
+        try{await run();}finally{batchOverrideRef.current=null;}
+        return{completed:ovr.completed,halted:ovr.halted};
+      }
+    });
+    if(!caseStudyRef.current&&casePacketRef.current.length>0){
+      selectPacketEntry(casePacketRef.current[casePacketRef.current.length-1]);
+    }
+  }finally{batchOverrideRef.current=null;setBatchBusy(false);setBatchStatus(null);}
+}
+function n2aDeriveLiveCards(rawResult,liveExtraTags){
+  if(!rawResult)return[];
+  const initSet=new Set(rawResult.initExtraTags||[]);
+  return rawResult.cards.map(c=>{
+    const base=c.tags.filter(tg=>!initSet.has(tg)),have=new Set(base);
+    const merged=[...base,...liveExtraTags.filter(tg=>!have.has(tg))];
+    return merged.length===c.tags.length&&merged.every((tg,i)=>tg===c.tags[i])?c:{...c,tags:merged};
+  });
+}
+
+// v21.9: plain-script React.createElement panels hoisted out of text/babel for <500 KB headroom (zero JSX transform cost).
+function KBExamTrapCard({condition,showEmptyTrapWorksheet=false}){
+  const h=React.createElement;
+  const proj=useMemo(()=>typeof kbProjectExamTraps==='function'?kbProjectExamTraps(condition,null,{showEmptyTrapWorksheet}):null,[condition,showEmptyTrapWorksheet]);
+  if(!proj)return null;
+  const cs=proj.contrastStrip;
+  return h('div',{style:{marginTop:12,padding:'11px 13px',borderRadius:8,border:'1px solid var(--border)',background:'var(--bg-deep)'}},
+    h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap',marginBottom:8}},
+      h('span',{style:{fontSize:13,fontWeight:700,color:'var(--text-bright)'}},'⚡ Exam Trap Block — ',proj.header),
+      h('button',{type:'button',className:'btn-secondary',style:{padding:'3px 10px',fontSize:12},onClick:()=>copyText(kbFormatExamTrapText(proj))},'📋 Copy Exam Trap Block')
+    ),
+    cs&&h('div',{style:{overflowX:'auto',marginBottom:9}},
+      h('table',{style:{width:'100%',borderCollapse:'collapse',fontSize:12}},
+        h('thead',null,h('tr',{style:{borderBottom:'1px solid var(--border)',textAlign:'left'}},
+          h('th',{style:{padding:'5px 8px',color:'var(--text-dim)'}},'Twin Contrast'),
+          h('th',{style:{padding:'5px 8px',color:'var(--text-bright)'}},cs.selfName),
+          h('th',{style:{padding:'5px 8px',color:'var(--text-bright)'}},cs.partnerName)
+        )),
+        h('tbody',null,
+          h('tr',{style:{borderBottom:'1px solid var(--border)'}},
+            h('td',{style:{padding:'5px 8px',fontWeight:600,color:'var(--text-dim)'}},'Tie-Breaker Cues'),
+            h('td',{style:{padding:'5px 8px',color:'var(--text)'}},cs.selfCue),
+            h('td',{style:{padding:'5px 8px',color:'var(--text)'}},cs.partnerCue)
+          ),
+          h('tr',null,
+            h('td',{style:{padding:'5px 8px',fontWeight:600,color:'var(--text-dim)'}},'Treatment Opposite'),
+            h('td',{style:{padding:'5px 8px',color:'var(--text)'}},cs.selfRx),
+            h('td',{style:{padding:'5px 8px',color:'var(--text)'}},cs.partnerRx)
+          )
+        )
+      )
+    ),
+    h('div',{style:{display:'grid',gap:6}},
+      proj.rows.map(r=>h('div',{key:r.key,style:{fontSize:12.5,lineHeight:1.55,color:r.empty?'var(--text-dim)':'var(--text)',display:'flex',gap:6,flexWrap:'wrap',alignItems:'baseline'}},
+        h('span',null,h('b',{style:{color:'var(--text-bright)'}},r.label,':'),' ',r.text),
+        r.factIds.map(id=>h(FactTag,{key:id,factId:id}))
+      ))
+    )
+  );
+}
+function KBFactList({condition,showEmptyTrapWorksheet=false}){
+  const h=React.createElement;
+  const [q,setQ]=useState(''),[bucket,setBucket]=useState('all'),[onlyTraps,setOnlyTraps]=useState(false),[layerFilter,setLayerFilter]=useState('all');
+  const facts=condition.facts||[];
+  const trapCount=useMemo(()=>facts.filter(f=>f&&f.trapRole).length,[facts]);
+  const bridgeCount=useMemo(()=>facts.filter(f=>f&&f.clinicalLayer==='bridge').length,[facts]);
+  const rnCount=facts.length-bridgeCount;
+  const counts=useMemo(()=>{const c={};for(const f of facts)c[f.latteBucket]=(c[f.latteBucket]||0)+1;return c;},[facts]);
+  const shown=useMemo(()=>{
+    const needle=q.trim().toLowerCase();
+    return facts.filter(f=>(bucket==='all'||f.latteBucket===bucket)&&(!onlyTraps||Boolean(f.trapRole))&&
+      (layerFilter==='all'||(layerFilter==='bridge'?f.clinicalLayer==='bridge':f.clinicalLayer!=='bridge'))&&
+      (!needle||String(f.text||'').toLowerCase().includes(needle)||String(f.id||'').toLowerCase().includes(needle)||String(f.sourceQuote||'').toLowerCase().includes(needle)||String(f.conceptScope||'').toLowerCase().includes(needle)||String(f.plateSlot||'').toLowerCase().includes(needle)||String(f.trapRole||'').toLowerCase().includes(needle)||String(f.contrastWith||'').toLowerCase().includes(needle)||(Array.isArray(f.pointAnchors)&&f.pointAnchors.some(p=>String(p||'').toLowerCase().includes(needle)))));
+  },[facts,q,bucket,onlyTraps,layerFilter]);
+  const allOn=bucket==='all'&&!onlyTraps&&layerFilter==='all';
+  return h('div',null,
+    h('div',{style:{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center',marginBottom:10}},
+      h('input',{'aria-label':'Filter facts by text, ID, or source quote',type:'text',value:q,onChange:e=>setQ(e.target.value),placeholder:'Filter facts…',style:{flex:'1 1 150px',minWidth:110}}),
+      h('button',{type:'button',className:'tier-btn'+(allOn?' t3 active':''),'aria-pressed':allOn,onClick:()=>{setBucket('all');setOnlyTraps(false);setLayerFilter('all');}},'All ',h('b',null,facts.length)),
+      KB_BUCKETS.filter(b=>counts[b]).map(b=>h('button',{key:b,type:'button',className:'tier-btn'+(bucket===b?' t3 active':''),'aria-pressed':bucket===b,onClick:()=>setBucket(bucket===b?'all':b)},b,' ',h('b',null,counts[b]))),
+      bridgeCount>0&&h(React.Fragment,null,
+        h('button',{type:'button',className:'tier-btn'+(layerFilter==='rn'?' t3 active':''),'aria-pressed':layerFilter==='rn',onClick:()=>setLayerFilter(layerFilter==='rn'?'all':'rn')},'RN Core ',h('b',null,rnCount)),
+        h('button',{type:'button',className:'tier-btn'+(layerFilter==='bridge'?' t2 active':''),'aria-pressed':layerFilter==='bridge',onClick:()=>setLayerFilter(layerFilter==='bridge'?'all':'bridge')},'NP Bridge ',h('b',null,bridgeCount))
+      ),
+      trapCount>0&&h('button',{type:'button',className:'tier-btn'+(onlyTraps?' t2 active':''),'aria-pressed':onlyTraps,onClick:()=>setOnlyTraps(v=>!v)},'⚡ Traps ',h('b',null,trapCount))
+    ),
+    h('div',{style:{fontSize:12,color:'var(--text-dim)',marginBottom:8}},'Click any fact ID to inspect its verbatim anchor, source pointer, and downstream usage.'),
+    !shown.length&&h('div',{style:{fontSize:14,color:'var(--text-dim)'}},'No facts match this filter.'),
+    shown.map(f=>h('div',{key:f.id,style:{display:'flex',gap:8,alignItems:'flex-start',padding:'7px 9px',borderRadius:6,border:'1px solid var(--border)',background:'var(--bg-input)',marginBottom:4}},
+      h(FactTag,{factId:f.id}),
+      h('div',{style:{flex:1,minWidth:0}},
+        h('div',{style:{fontSize:14,lineHeight:1.5,color:'var(--text)'}},f.text),
+        h('div',{style:{display:'flex',gap:5,flexWrap:'wrap',marginTop:4,alignItems:'center'}},
+          h('span',{className:'fact-bucket-badge'},f.latteBucket,f.subtype?' \u00b7 '+f.subtype:''),
+          h('span',{className:'tier-badge t'+(f.tier||'')},'T',f.tier),
+          f.safetyCritical&&h('span',{className:'tier-badge t1'},'safety'),
+          f.clinicalLayer==='bridge'&&h('span',{className:'tier-badge t2',title:'Provider / NP Mechanism Bridge'},'NP Bridge'),
+          f.plateSlot&&h('span',{className:'fact-bucket-badge',title:'P-LATE semantic slot'},f.plateSlot),
+          f.conceptScope==='differentiator'&&h('span',{className:'tier-badge t1',title:'Highest-priority complication or bedside differentiator'},'⚑ differentiator'),
+          f.conceptScope==='delta'&&h('span',{className:'tier-badge t3',title:'Exemplar-specific deviation from parent concept'},'delta'),
+          f.conceptScope==='shared'&&h('span',{className:'fact-bucket-badge',title:'Shared across exemplars of this overarching concept'},'shared concept'),
+          f.trapRole&&h('span',{className:'tier-badge '+(f.trapRole==='never-click'||f.trapRole==='pseudo-improvement'||f.trapRole==='hold-triangle'?'t1':'t2'),title:'Exam Trap role'},'⚡ ',(typeof KB_TRAP_ROLE_BADGE==='object'&&KB_TRAP_ROLE_BADGE[f.trapRole])||f.trapRole,f.contrastWith?' vs. '+f.contrastWith:''),
+          Array.isArray(f.pointAnchors)&&f.pointAnchors.length>0&&h('span',{className:'tier-badge '+(f.pointAnchors.includes('NONE')?'t2':'t3'),title:'Mapped Point ID(s)'},'[',f.pointAnchors.join(', '),']'),
+          h('span',{style:{fontSize:12,color:'var(--text-dim)',fontFamily:'JetBrains Mono',wordBreak:'break-word'}},kbSourceText(f)||'no source pointer')
+        )
+      )
+    )),
+    h(KBExamTrapCard,{condition,showEmptyTrapWorksheet})
+  );
+}
+function caRenderBriefPanels({Panel,editConcepts,setEditConcepts,editOutcomes,setEditOutcomes,editPoints,setEditPoints,editExtra,setEditExtra,livePointCount,cov,showNotice}){
+  const h=React.createElement;
+  const copyBtn=(txt,lbl)=>h('button',{type:'button',className:'btn-secondary',style:{padding:'3px 9px',fontSize:11.5},onClick:()=>{copyText(txt);showNotice('Copied '+lbl);}},'📋 Copy');
+  const lblSt={fontSize:11.5,color:'var(--text-dim)',display:'block',marginBottom:4};
+  return h(React.Fragment,null,
+    h('div',{className:'note-info',style:{marginBottom:12}},'Conservative sync defaults: ',h('b',null,'Focus: Prioritize'),' (never Scope) · ',h('b',null,'Tier-1 safety floor ON'),' · ',h('b',null,'Auto-detect concepts ON'),' · ',h('b',null,'Map Exam Traps ON'),'. Edit any block below before syncing or copying.'),
+    h(Panel,{title:'1 · Overarching Concepts',actions:copyBtn(editConcepts,'Overarching Concepts')},
+      h('label',{htmlFor:'ca-out-concepts',style:lblSt},'Maps to Step 01 → Overarching concept(s)'),
+      h('input',{id:'ca-out-concepts',type:'text',value:editConcepts,onChange:e=>setEditConcepts(e.target.value),style:{width:'100%'}})
+    ),
+    h(Panel,{title:'2 · Outcomes',actions:copyBtn(editOutcomes,'Outcomes')},
+      h('label',{htmlFor:'ca-out-outcomes',style:lblSt},'Maps to Focus context → Outcomes'),
+      h('textarea',{id:'ca-out-outcomes',rows:5,value:editOutcomes,onChange:e=>setEditOutcomes(e.target.value),style:{width:'100%'}})
+    ),
+    h(Panel,{title:'3 · Points ('+livePointCount+' atomic IDs)',actions:copyBtn(editPoints,'Points')},
+      h('label',{htmlFor:'ca-out-points',style:lblSt},'Maps to Focus context → Points (concept-grouped, includes safety catch-all bullet)'),
+      h('textarea',{id:'ca-out-points',rows:9,value:editPoints,onChange:e=>setEditPoints(e.target.value),style:{width:'100%',fontFamily:'JetBrains Mono',fontSize:12}})
+    ),
+    h(Panel,{title:'4 · Additional Context',actions:copyBtn(editExtra,'Additional Context')},
+      h('label',{htmlFor:'ca-out-extra',style:lblSt},'Maps to Focus context → Additional Context (additive traps & contrasting pairs only)'),
+      h('textarea',{id:'ca-out-extra',rows:5,value:editExtra,onChange:e=>setEditExtra(e.target.value),style:{width:'100%'}})
+    ),
+    cov&&h(Panel,{title:'Source Coverage Report',actions:copyBtn(caFormatCoverageMarkdown(cov),'Source Coverage Report')},
+      h('div',{style:{display:'grid',gap:8,fontSize:12.5,lineHeight:1.5}},
+        h('div',null,h('b',null,'Materials Analyzed: '),(cov.materialsAnalyzed.length?cov.materialsAnalyzed.join(' · '):'None listed')),
+        h('div',null,h('b',null,'Major Concepts Covered: '),(cov.majorConceptsCovered.length?cov.majorConceptsCovered.join(' · '):'None listed')),
+        cov.missingOrUnreadable.length>0&&h('div',{style:{color:'var(--accent-warm)'}},h('b',null,'Missing / Unreadable: '),cov.missingOrUnreadable.join(' · ')),
+        cov.uncertainOrDiscrepancies.length>0&&h('div',{style:{color:'var(--accent-warm)'}},h('b',null,'Uncertain / Discrepancies: '),cov.uncertainOrDiscrepancies.join(' · ')),
+        cov.sourceVerification.length>0&&h('div',null,h('b',null,'Source Verification:'),h('ul',{style:{margin:'4px 0 0 18px',padding:0}},cov.sourceVerification.map((v,i)=>h('li',{key:i},v))))
+      )
+    )
+  );
+}
+
 /* ═══ JSX UI & APPLICATION SHELL ═══ */
 </script>
 <script type="text/babel" data-presets="react">
@@ -15631,102 +16257,115 @@ function RunStatus({label,value,max=100,caption,detail,children}){
   </div>;
 }
 
-// Compact, inspectable fact rows for one condition. Every row's ID is a FactTag, so any
-// fact opens the read-only inspector with its verbatim anchor and source pointer.
-function KBExamTrapCard({condition,showEmptyTrapWorksheet=false}){
-  const proj=useMemo(()=>typeof kbProjectExamTraps==='function'?kbProjectExamTraps(condition,null,{showEmptyTrapWorksheet}):null,[condition,showEmptyTrapWorksheet]);
-  if(!proj)return null;
-  return <div style={{marginTop:12,padding:'11px 13px',borderRadius:8,border:'1px solid var(--border)',background:'var(--bg-deep)'}}>
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap',marginBottom:8}}>
-      <span style={{fontSize:13,fontWeight:700,color:'var(--text-bright)'}}>⚡ Exam Trap Block — {proj.header}</span>
-      <button type="button" className="btn-secondary" style={{padding:'3px 10px',fontSize:12}} onClick={()=>copyText(kbFormatExamTrapText(proj))}>📋 Copy Exam Trap Block</button>
-    </div>
-    {proj.contrastStrip&&<div style={{overflowX:'auto',marginBottom:9}}>
-      <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
-        <thead><tr style={{borderBottom:'1px solid var(--border)',textAlign:'left'}}>
-          <th style={{padding:'5px 8px',color:'var(--text-dim)'}}>Twin Contrast</th>
-          <th style={{padding:'5px 8px',color:'var(--text-bright)'}}>{proj.contrastStrip.selfName}</th>
-          <th style={{padding:'5px 8px',color:'var(--text-bright)'}}>{proj.contrastStrip.partnerName}</th>
-        </tr></thead>
-        <tbody>
-          <tr style={{borderBottom:'1px solid var(--border)'}}>
-            <td style={{padding:'5px 8px',fontWeight:600,color:'var(--text-dim)'}}>Tie-Breaker Cues</td>
-            <td style={{padding:'5px 8px',color:'var(--text)'}}>{proj.contrastStrip.selfCue}</td>
-            <td style={{padding:'5px 8px',color:'var(--text)'}}>{proj.contrastStrip.partnerCue}</td>
-          </tr>
-          <tr>
-            <td style={{padding:'5px 8px',fontWeight:600,color:'var(--text-dim)'}}>Treatment Opposite</td>
-            <td style={{padding:'5px 8px',color:'var(--text)'}}>{proj.contrastStrip.selfRx}</td>
-            <td style={{padding:'5px 8px',color:'var(--text)'}}>{proj.contrastStrip.partnerRx}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>}
-    <div style={{display:'grid',gap:6}}>
-      {proj.rows.map(r=><div key={r.key} style={{fontSize:12.5,lineHeight:1.55,color:r.empty?'var(--text-dim)':'var(--text)',display:'flex',gap:6,flexWrap:'wrap',alignItems:'baseline'}}>
-        <span><b style={{color:'var(--text-bright)'}}>{r.label}:</b> {r.text}</span>
-        {r.factIds.map(id=><FactTag key={id} factId={id}/>)}
-      </div>)}
-    </div>
-  </div>;
+// v21.9: KBExamTrapCard and KBFactList live in the plain script block above for <500 KB Babel headroom.
+// ──── TOOL: Nursing Course Analyzer (v21.9) ────
+function CourseAnalyzer(){
+  const cfg=useConfig();const K=useKnowledge();
+  const [course,setCourse]=useState(''),[exam,setExam]=useState(''),[notes,setNotes]=useState('');
+  const [files,setFiles]=useState([]),[fileRoles,setFileRoles]=useState({}),[carryToKb,setCarryToKb]=useState({});
+  const [busy,setBusy]=useState(false),[prog,setProg]=useState(0),[error,setError]=useState(''),[notice,setNotice]=useState('');
+  const [logs,pushLog,setLogs]=useCappedLog();
+  const [result,setResult]=useState(null);
+  const [editConcepts,setEditConcepts]=useState(''),[editOutcomes,setEditOutcomes]=useState(''),[editPoints,setEditPoints]=useState(''),[editExtra,setEditExtra]=useState('');
+  const fileRef=useRef(null),abortRef=useRef(null),noticeTimer=useRef(null);
+  useEffect(()=>()=>{abortRef.current?.abort();abortRef.current=null;if(noticeTimer.current)clearTimeout(noticeTimer.current);},[]);
+  const showNotice=msg=>{setNotice(msg);if(noticeTimer.current)clearTimeout(noticeTimer.current);noticeTimer.current=setTimeout(()=>setNotice(''),3200);};
+  const addCurriculumFiles=fl=>{
+    const picked=Array.from(fl||[]).filter(f=>/\.(pdf|pptx|txt|md|markdown)$/i.test(f.name||''));
+    if(!picked.length)return;
+    setFileRoles(p=>{const n={...p};for(const f of picked){const id=cardFileId(f);if(!n[id])n[id]=caInferFileRole(f.name);}return n;});
+    setCarryToKb(p=>{const n={...p};for(const f of picked){const id=cardFileId(f);if(!(id in n))n[id]=caDefaultCarryToKb(caInferFileRole(f.name));}return n;});
+    setFiles(p=>[...p,...picked.filter(f=>!p.some(x=>cardFileId(x)===cardFileId(f)))]);
+  };
+  const removeFile=fid=>{
+    if(busy)return;
+    setFiles(p=>p.filter(x=>cardFileId(x)!==fid));
+    setFileRoles(p=>{const n={...p};delete n[fid];return n;});
+    setCarryToKb(p=>{const n={...p};delete n[fid];return n;});
+  };
+  const setRole=(fid,role)=>{setFileRoles(p=>({...p,[fid]:role}));setCarryToKb(p=>({...p,[fid]:caDefaultCarryToKb(role)}));};
+  const runAnalyze=()=>caRunAnalysisWithEnv({cfg,course,exam,notes,files,fileRoles,abortRef,setBusy,setError,setProg,setLogs,pushLog,setResult,setEditConcepts,setEditOutcomes,setEditPoints,setEditExtra});
+  const selectedKbFiles=useMemo(()=>files.filter(f=>{const id=cardFileId(f);return carryToKb[id]!==false&&/\.(pdf|pptx)$/i.test(f.name||'');}),[files,carryToKb]);
+  const liveBrief=useMemo(()=>result?{...result,course:course.trim()||result.course,exam:exam.trim()||result.exam,concepts:editConcepts,outcomes:editOutcomes,points:editPoints,additionalContext:editExtra}:null,[result,course,exam,editConcepts,editOutcomes,editPoints,editExtra]);
+  const livePointCount=useMemo(()=>editPoints.trim()?parseAndNumberPoints(editPoints).length:0,[editPoints]);
+  const liveConceptCount=useMemo(()=>kbParseConceptNames(editConcepts).length,[editConcepts]);
+  const fullMd=useMemo(()=>liveBrief?caFormatAllMarkdown(liveBrief):'',[liveBrief]);
+  const sendToKb=()=>{
+    if(!liveBrief||!K.sendCourseBriefToKb)return;
+    K.sendCourseBriefToKb(caBuildKbHandoff(liveBrief,selectedKbFiles));
+    showNotice('Synced to 02 · Knowledge Base');
+  };
+  const {model,level}=cfg.forTool('courseAnalyzer');
+  const blocked=busy||!cfg.apiKey||!course.trim()||!exam.trim()||!files.length;
+  const runLabel=busy?'Analyzing…':!cfg.apiKey?'Enter API Key':(!course.trim()||!exam.trim())?'Enter Course & Exam':!files.length?'Add Syllabus / Slides':'▶ Analyze Exam';
+  const cov=result?.coverageReport;
+  return <Workbench
+    setupLabel="Course analyzer target exam and curriculum files"
+    resultsLabel="Exam curriculum brief and Knowledge Base sync"
+    setup={<>
+      <Step n="01" title="Target exam" note={course.trim()&&exam.trim()?course.trim()+' · '+exam.trim():'required'} lede="Analyze one exam at a time. Specify the exact course and exam before running so boundaries stay focused.">
+        <div className="form-grid" style={{marginBottom:8}}>
+          <div className="field-block" style={{margin:0}}><label htmlFor="ca-course">Course</label><input id="ca-course" type="text" value={course} onChange={e=>setCourse(e.target.value)} placeholder="e.g. NUR221"/></div>
+          <div className="field-block" style={{margin:0}}><label htmlFor="ca-exam">Exam</label><input id="ca-exam" type="text" value={exam} onChange={e=>setExam(e.target.value)} placeholder="e.g. Exam 2"/></div>
+        </div>
+        <div className="field-block" style={{marginBottom:0}}>
+          <label htmlFor="ca-notes">Exam blueprint / instructor notes <span className="badge-opt">optional</span></label>
+          <textarea id="ca-notes" rows={2} value={notes} onChange={e=>setNotes(e.target.value)} placeholder="e.g. 'Focus on Ch. 14–16; professor stressed DKA vs. HHS & loop diuretic holds'"/>
+        </div>
+      </Step>
+      <Step n="02" title="Curriculum materials" note={files.length?files.length+' file'+(files.length===1?'':'s'):'none yet'} lede="Upload syllabus, exam blueprint, and lecture PowerPoints/PDFs. Checked lecture files can carry straight into Knowledge Base Step 01 on sync.">
+        <div role="button" tabIndex={0} aria-label="Add syllabus, blueprint, or lecture slide files" onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fileRef.current?.click();}}} className="upload-zone" onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();addCurriculumFiles(e.dataTransfer.files);}}>
+          <h3>Drop syllabus, blueprint, &amp; lecture PPTX/PDFs</h3>
+          <p>Reads PDFs, PPTX slides (with speaker notes), and .txt/.md locally. Large decks segment automatically on slide/page boundaries without skipping slides.</p>
+          <input aria-label="Curriculum files" ref={fileRef} type="file" multiple accept=".pdf,.pptx,.txt,.md,.markdown" style={{display:'none'}} onChange={e=>{addCurriculumFiles(e.target.files);e.target.value='';}}/>
+        </div>
+        {files.length>0&&<div style={{marginTop:8}}>{files.map(f=>{const fid=cardFileId(f),role=fileRoles[fid]||caInferFileRole(f.name),canKb=/\.(pdf|pptx)$/i.test(f.name||''),carry=canKb&&carryToKb[fid]!==false;return <div className="file-chip" key={fid} style={{flexWrap:'wrap'}}>
+          <div className={'f-icon '+getExt(f.name)}>{getExt(f.name)}</div><span className="f-name">{f.name}</span><span className="f-size">{formatSize(f.size)}</span>
+          <button className="f-rm" aria-label={'Remove curriculum file '+f.name} disabled={busy} onClick={()=>removeFile(fid)}>×</button>
+          <div style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,flexWrap:'wrap',paddingTop:5,marginTop:2,borderTop:'1px solid var(--border)'}}>
+            <select aria-label={'Role for '+f.name} value={role} disabled={busy} onChange={e=>setRole(fid,e.target.value)} style={{fontSize:11.5,padding:'2px 6px',height:24}}>
+              {COURSE_ANALYZER_FILE_ROLES.map(([v,l])=><option key={v} value={v}>{l}</option>)}
+            </select>
+            {canKb&&<label style={{display:'inline-flex',alignItems:'center',gap:5,fontSize:11.5,color:carry?'var(--text)':'var(--text-dim)',cursor:'pointer'}}>
+              <input type="checkbox" aria-label={'Send '+f.name+' to Knowledge Base'} checked={carry} onChange={e=>setCarryToKb(p=>({...p,[fid]:e.target.checked}))} style={{accentColor:'var(--accent)',margin:0}}/>
+              <span>Send to KB Step 01</span>
+            </label>}
+          </div>
+        </div>;})}</div>}
+      </Step>
+    </>}
+    action={<>
+      <div className="act-row">
+        <button className="btn-primary" disabled={blocked} onClick={runAnalyze}>{runLabel}</button>
+        {busy&&<button className="btn-danger" onClick={()=>abortRef.current?.abort()}>Cancel</button>}
+      </div>
+      <p className="act-note">Analyze: {model} · {level} <span style={{color:'var(--text-dim)'}}>({cfg.autoProfile?'auto profile':'manual toggle'})</span></p>
+    </>}
+  >
+    {busy&&<RunStatus label="Course curriculum analysis" value={prog} detail={logs.length?('['+logs[logs.length-1].ts+'] '+logs[logs.length-1].m):'Starting…'}/>}
+    {error&&<div className="error-banner" style={{marginTop:10}}>⚠ {error}</div>}
+    {notice&&<div className="tip-banner" role="status" style={{marginTop:10,color:'var(--accent-green)'}}>✓ {notice}</div>}
+    {logs.length>0&&<Disclose summary="Analysis log" open={logs.some(l=>l.t==='err')} note={logs.length+' line(s)'}>
+      <div className="log-stream">{logs.map((l,i)=><div key={i} style={{color:l.t==='ok'?'var(--accent-green)':l.t==='err'?'var(--accent-red)':l.t==='warn'?'var(--accent-warm)':'var(--text-dim)'}}>[{l.ts}] {l.m}</div>)}</div>
+    </Disclose>}
+    {liveBrief&&<>
+      <ResultsHead title={liveBrief.course+' — '+liveBrief.exam} count={liveConceptCount+' concept(s) · '+livePointCount+' atomic point(s)'}>
+        <button type="button" className="btn-primary" onClick={sendToKb}>↳ Send to Knowledge Base{selectedKbFiles.length?' (+'+selectedKbFiles.length+' file'+(selectedKbFiles.length===1?'':'s')+')':''}</button>
+        <button type="button" className="btn-secondary" onClick={()=>{copyText(fullMd);showNotice('Copied full brief');}}>📋 Copy All</button>
+        <button type="button" className="btn-secondary" onClick={()=>exportAsMd(fullMd,(liveBrief.course+'-'+liveBrief.exam).replace(/[^A-Za-z0-9_-]+/g,'_')+'-Course-Brief.md')}>⬇ .md</button>
+        <button type="button" className="btn-secondary" onClick={()=>exportAsPdf(fullMd,'Nursing Course Brief',liveBrief.course+' · '+liveBrief.exam)}>🖨 PDF</button>
+      </ResultsHead>
+      {caRenderBriefPanels({Panel,editConcepts,setEditConcepts,editOutcomes,setEditOutcomes,editPoints,setEditPoints,editExtra,setEditExtra,livePointCount,cov,showNotice})}
+    </>}
+    {!liveBrief&&!busy&&<EmptyState mark="◎" title="No exam analyzed yet" note="Upload your syllabus and lecture PowerPoints once, generate conservative-retention KB inputs, and sync everything straight into Knowledge Base Step 01 in one click." steps={['Enter the target Course and Exam (one exam per run).','Drop your syllabus, optional exam blueprint, and lecture PPTX/PDF decks.','Analyze Exam, review or tweak the 4 blocks, then click Send to Knowledge Base.']}/>}
+  </Workbench>;
 }
 
-function KBFactList({condition,showEmptyTrapWorksheet=false}){
-  // v16.0: named controls, visible selection states, and reflowing groups replace inaccessible fixed layouts.
-  const [q,setQ]=useState('');
-  const [bucket,setBucket]=useState('all');
-  const [onlyTraps,setOnlyTraps]=useState(false);
-  const [layerFilter,setLayerFilter]=useState('all');
-  const facts=condition.facts||[];
-  const trapCount=useMemo(()=>facts.filter(f=>f&&f.trapRole).length,[facts]);
-  const bridgeCount=useMemo(()=>facts.filter(f=>f&&f.clinicalLayer==='bridge').length,[facts]);
-  const rnCount=facts.length-bridgeCount;
-  const counts=useMemo(()=>{const c={};for(const f of facts)c[f.latteBucket]=(c[f.latteBucket]||0)+1;return c;},[facts]);
-  const shown=useMemo(()=>{
-    const needle=q.trim().toLowerCase();
-    return facts.filter(f=>(bucket==='all'||f.latteBucket===bucket)&&(!onlyTraps||Boolean(f.trapRole))&&
-      (layerFilter==='all'||(layerFilter==='bridge'?f.clinicalLayer==='bridge':f.clinicalLayer!=='bridge'))&&
-      (!needle||String(f.text||'').toLowerCase().includes(needle)||String(f.id||'').toLowerCase().includes(needle)||String(f.sourceQuote||'').toLowerCase().includes(needle)||String(f.conceptScope||'').toLowerCase().includes(needle)||String(f.plateSlot||'').toLowerCase().includes(needle)||String(f.trapRole||'').toLowerCase().includes(needle)||String(f.contrastWith||'').toLowerCase().includes(needle)||(Array.isArray(f.pointAnchors)&&f.pointAnchors.some(p=>String(p||'').toLowerCase().includes(needle)))));
-  },[facts,q,bucket,onlyTraps,layerFilter]);
-  return <div>
-    <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center',marginBottom:10}}>
-      <input aria-label="Filter facts by text, ID, or source quote" type="text" value={q} onChange={e=>setQ(e.target.value)} placeholder="Filter facts…" style={{flex:'1 1 150px',minWidth:110}}/>
-      <button type="button" className={'tier-btn'+(bucket==='all'&&!onlyTraps&&layerFilter==='all'?' t3 active':'')} aria-pressed={bucket==='all'&&!onlyTraps&&layerFilter==='all'} onClick={()=>{setBucket('all');setOnlyTraps(false);setLayerFilter('all');}}>All <b>{facts.length}</b></button>
-      {KB_BUCKETS.filter(b=>counts[b]).map(b=><button key={b} type="button" className={'tier-btn'+(bucket===b?' t3 active':'')} aria-pressed={bucket===b} onClick={()=>setBucket(bucket===b?'all':b)}>{b} <b>{counts[b]}</b></button>)}
-      {bridgeCount>0&&<>
-        <button type="button" className={'tier-btn'+(layerFilter==='rn'?' t3 active':'')} aria-pressed={layerFilter==='rn'} onClick={()=>setLayerFilter(layerFilter==='rn'?'all':'rn')}>RN Core <b>{rnCount}</b></button>
-        <button type="button" className={'tier-btn'+(layerFilter==='bridge'?' t2 active':'')} aria-pressed={layerFilter==='bridge'} onClick={()=>setLayerFilter(layerFilter==='bridge'?'all':'bridge')}>NP Bridge <b>{bridgeCount}</b></button>
-      </>}
-      {trapCount>0&&<button type="button" className={'tier-btn'+(onlyTraps?' t2 active':'')} aria-pressed={onlyTraps} onClick={()=>setOnlyTraps(v=>!v)}>⚡ Traps <b>{trapCount}</b></button>}
-    </div>
-    <div style={{fontSize:12,color:'var(--text-dim)',marginBottom:8}}>Click any fact ID to inspect its verbatim anchor, source pointer, and downstream usage.</div>
-    {!shown.length&&<div style={{fontSize:14,color:'var(--text-dim)'}}>No facts match this filter.</div>}
-    {shown.map(f=><div key={f.id} style={{display:'flex',gap:8,alignItems:'flex-start',padding:'7px 9px',borderRadius:6,border:'1px solid var(--border)',background:'var(--bg-input)',marginBottom:4}}>
-      <FactTag factId={f.id}/>
-      <div style={{flex:1,minWidth:0}}>
-        <div style={{fontSize:14,lineHeight:1.5,color:'var(--text)'}}>{f.text}</div>
-        <div style={{display:'flex',gap:5,flexWrap:'wrap',marginTop:4,alignItems:'center'}}>
-          <span className="fact-bucket-badge">{f.latteBucket}{f.subtype?' \u00b7 '+f.subtype:''}</span>
-          <span className={'tier-badge t'+(f.tier||'')}>T{f.tier}</span>
-          {f.safetyCritical&&<span className="tier-badge t1">safety</span>}
-          {f.clinicalLayer==='bridge'&&<span className="tier-badge t2" title="Provider / NP Mechanism Bridge">NP Bridge</span>}
-          {f.plateSlot&&<span className="fact-bucket-badge" title="P-LATE semantic slot">{f.plateSlot}</span>}
-          {f.conceptScope==='differentiator'&&<span className="tier-badge t1" title="Highest-priority complication or bedside differentiator">⚑ differentiator</span>}
-          {f.conceptScope==='delta'&&<span className="tier-badge t3" title="Exemplar-specific deviation from parent concept">delta</span>}
-          {f.conceptScope==='shared'&&<span className="fact-bucket-badge" title="Shared across exemplars of this overarching concept">shared concept</span>}
-          {f.trapRole&&<span className={'tier-badge '+(f.trapRole==='never-click'||f.trapRole==='pseudo-improvement'||f.trapRole==='hold-triangle'?'t1':'t2')} title="Exam Trap role">⚡ {(typeof KB_TRAP_ROLE_BADGE==='object'&&KB_TRAP_ROLE_BADGE[f.trapRole])||f.trapRole}{f.contrastWith?' vs. '+f.contrastWith:''}</span>}
-          {Array.isArray(f.pointAnchors)&&f.pointAnchors.length>0&&<span className={'tier-badge '+(f.pointAnchors.includes('NONE')?'t2':'t3')} title="Mapped Point ID(s)">[{f.pointAnchors.join(', ')}]</span>}
-          <span style={{fontSize:12,color:'var(--text-dim)',fontFamily:'JetBrains Mono',wordBreak:'break-word'}}>{kbSourceText(f)||'no source pointer'}</span>
-        </div>
-      </div>
-    </div>)}
-    <KBExamTrapCard condition={condition} showEmptyTrapWorksheet={showEmptyTrapWorksheet}/>
-  </div>;
-}
 function KnowledgeBaseBuilder(){
   // v16.0: full-opacity text preserves contrast; background and checkboxes convey exclusions.
   // v16.0: named controls, visible selection states, and reflowing groups replace inaccessible fixed layouts.
-  const cfg=useConfig();const K=useKnowledge();
+  const cfg=useConfig();const K=useKnowledge();const kbHandoff=useCourseBrief();
+  const [handoffNotice,setHandoffNotice]=useState('');const lastHandoffRef=useRef(0);
   // v15.8: release worker-side PDF documents on unmount. Collecting the File does not free
   // them; pdf.js holds each document in the worker until destroy() is called.
   const [files,setFiles]=useState([]),[course,setCourse]=useState(''),[exam,setExam]=useState(''),[busy,setBusy]=useState(false),[prog,setProg]=useState(0),[error,setError]=useState(''),[warnings,setWarnings]=useState([]),[selected,setSelected]=useState(null);const fileRef=useRef(null),importRef=useRef(null),abortRef=useRef(null);
@@ -15773,6 +16412,7 @@ function KnowledgeBaseBuilder(){
   const [kbPoints,setKbPoints]=useState('');
   const [kbExtra,setKbExtra]=useState('');
   const [focusMode,setFocusMode]=useState('prioritize');
+  const [kbKeepSafetyT1,setKbKeepSafetyT1]=useState(true);
   const [kbConcepts,setKbConcepts]=useState('');
   const [kbConceptAuto,setKbConceptAuto]=useState(false);
   // v19.2 (Decision 2 & Decision 3): Exam Trap mapping defaults ON during builds (omitting extra keys when no traps exist),
@@ -15843,6 +16483,21 @@ function KnowledgeBaseBuilder(){
     const nFacts=K.knowledgeBase.conditions.reduce((n,c)=>n+((c.facts||[]).length),0);
     return window.confirm(action+' will REPLACE the current Knowledge Base ('+conds+' condition'+(conds!==1?'s':'')+', '+nFacts+' fact'+(nFacts!==1?'s':'')+').\n\nExport it first if you want to keep it. Continue?');
   };
+  // v21.9: receive 1-click syllabus/slide brief & checked lecture decks from 01 · Course Analyzer with conservative defaults.
+  useEffect(()=>{
+    if(!kbHandoff||!kbHandoff.sentAt||kbHandoff.sentAt===lastHandoffRef.current)return;
+    lastHandoffRef.current=kbHandoff.sentAt;
+    if(kbHandoff.course)setCourse(kbHandoff.course);
+    if(kbHandoff.exam)setExam(kbHandoff.exam);
+    if(kbHandoff.concepts!=null)setKbConcepts(kbHandoff.concepts);
+    setKbConceptAuto(true);setKbExamTraps(true);setFocusMode('prioritize');setKbKeepSafetyT1(true);
+    if(kbHandoff.outcomes!=null)setKbOutcomes(kbHandoff.outcomes);
+    if(kbHandoff.points!=null)setKbPoints(kbHandoff.points);
+    if(kbHandoff.additionalContext!=null)setKbExtra(kbHandoff.additionalContext);
+    if(Array.isArray(kbHandoff.files)&&kbHandoff.files.length)addFiles(kbHandoff.files);
+    const lbl=[kbHandoff.course,kbHandoff.exam].filter(Boolean).join(' · ')||'Exam brief';
+    setHandoffNotice('Synced from 01 · Course Analyzer ('+lbl+') — Focus set to Prioritize + Tier-1 safety floor'+(kbHandoff.pointCount?' · '+kbHandoff.pointCount+' atomic point(s)':'')+(kbHandoff.files?.length?' · '+kbHandoff.files.length+' file(s) added':'')+'.');
+  },[kbHandoff]);
   // v15.12: hoisted out of build() — pass 1 logs to the same panel, and two copies would
   // drift. Identical behaviour, wider scope.
   const addLog=(m,t='')=>pushLog({m,t,ts:new Date().toLocaleTimeString()});
@@ -15867,13 +16522,7 @@ function KnowledgeBaseBuilder(){
   },[cardChunks,cardUnstable]);
   // v17.3: keyed by file identity rather than basename; two photos can share a name.
   const identityConflicts=useMemo(()=>{const ids=new Set(files.filter(cardIsImage).map(cardFileId));return Object.entries(transcripts).filter(([id,entry])=>ids.has(id)&&cardIdentityConflict(entry));},[transcripts,files]);
-  const exportTranscripts=()=>{
-    const payload={kind:'latte-card-transcripts',schemaVersion:1,exportedAt:new Date().toISOString(),
-      cards:cardChunks,raw:Object.values(transcripts),
-      // v15.14: an artifact that cannot say whether a human looked at it is not an audit trail.
-      reviewed:txReviewed,blocked:cardGate.blocked.map(r=>({key:r.card.key,blockers:r.blockers}))};
-    downloadBlob(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),'card-transcripts-'+new Date().toISOString().slice(0,10)+'.json');
-  };
+  const exportTranscripts=()=>downloadBlob(new Blob([JSON.stringify(kbBuildCardTranscriptsExport(cardChunks,transcripts,txReviewed,cardGate),null,2)],{type:'application/json'}),'card-transcripts-'+new Date().toISOString().slice(0,10)+'.json');
   const build=async()=>{
     if(!cfg.apiKey||!files.length||currentFiles.current!==files)return;
     if(!kbConfirmReplace('Building from the loaded files'))return;
@@ -15895,11 +16544,12 @@ function KnowledgeBaseBuilder(){
     const _examTraps=typeof kbExamTraps==='boolean'?kbExamTraps:false;
     const _plateBridge=typeof kbPlateBridge==='boolean'?kbPlateBridge:false;
     const _capBridgeTier=typeof kbCapBridgeTier==='boolean'?kbCapBridgeTier:true;
+    const _keepSafetyT1=typeof kbKeepSafetyT1==='boolean'?kbKeepSafetyT1:true;
     const _normRoles=r=>typeof kbNormalizeSourceRoles==='function'?kbNormalizeSourceRoles(r):(Array.isArray(r)?(r.length?r:['rn']):[r||'rn']);
     const _defaultRoles=typeof defaultSourceRoles!=='undefined'?_normRoles(defaultSourceRoles):['rn'];
     const _sourceRoles=typeof sourceRoles==='object'&&sourceRoles?sourceRoles:{};
     const _sourcePageRanges=typeof sourcePageRanges==='object'&&sourcePageRanges?sourcePageRanges:{};
-    const baseFocusBlock=kbBuildFocusBlock(kbOutcomes,kbPoints,kbExtra,focusMode,_concepts,_conceptAuto,_examTraps,_plateBridge,'rn');
+    const baseFocusBlock=kbBuildFocusBlock(kbOutcomes,kbPoints,kbExtra,focusMode,_concepts,_conceptAuto,_examTraps,_plateBridge,'rn',_keepSafetyT1);
     const hasFocusText=Boolean(String(kbOutcomes||'').trim()||String(kbPoints||'').trim()||String(kbExtra||'').trim());
     const scoped=hasFocusText&&focusMode==='scope';
     try{
@@ -15993,7 +16643,7 @@ function KnowledgeBaseBuilder(){
         const isPlainRn=jobRoles.length===1&&jobRoles[0]==='rn';
         const jobRole=jobRoles.length===1?jobRoles[0]:jobRoles;
         const srcRoleMeta=isPlainRn?{}:jobRoles.length===1?{sourceRole:jobRoles[0]}:{sourceRole:jobRoles.join(','),sourceRoles:jobRoles};
-        const focusBlock=isPlainRn?baseFocusBlock:kbBuildFocusBlock(kbOutcomes,kbPoints,kbExtra,focusMode,_concepts,_conceptAuto,_examTraps,_plateBridge,jobRole);
+        const focusBlock=isPlainRn?baseFocusBlock:kbBuildFocusBlock(kbOutcomes,kbPoints,kbExtra,focusMode,_concepts,_conceptAuto,_examTraps,_plateBridge,jobRole,_keepSafetyT1);
         const srcNorm=kbNormForMatch(chunk.text);
         // v15.11: srcDehyph now feeds kbQuoteInSource as well as the classifier.
         const srcDehyph=kbDehyphNormForMatch(chunk.text),srcToks=new Set(srcNorm.split(' '));
@@ -16207,22 +16857,8 @@ function KnowledgeBaseBuilder(){
     }catch(e){if(replacementSlot.current.owns(run))setError(e.name==='AbortError'?'Knowledge Base extraction cancelled. Completed chunks were not committed.':e.message||String(e));}
     finally{if(replacementSlot.current.finish(run)){abortRef.current=null;setBusy(false);}}
   };
-  // v15.10: the diagnostics panel is a scroll box that the next build discards, and the
-  // v16 §11 benchmark needs its numbers to outlive the session — §11 explicitly stages
-  // this run into a 50-100 page calibration set later. Build-time QA only: this file is
-  // NOT a Knowledge Base, and it carries verbatim source quotes, so it stays out of git.
-  const exportDiag=()=>{
-    if(!diag)return;
-    const payload={
-      kind:'latte-extraction-diagnostics',schemaVersion:2,exportedAt:new Date().toISOString(),
-      run:{buildStatus:diag.buildStatus,model:diag.model,level:diag.level,autoProfile:diag.auto,auditPass:diag.verified,focus:diag.focus,chunkChars:diag.chunkChars,overlap:diag.overlapUnits,lanes:diag.lanes,course,exam},
-      totals:{chunks:diag.chunks.length,flagged:diag.chunks.filter(c=>c.flag).length,recovered:diag.recovered,discarded:diag.discarded,quoteMiss:diag.quoteMiss,quoteChecked:diag.quoteChecked,quoteMissing:diag.quoteMissing,quoteMatched:diag.quoteMatched,quoteMissByReason:diag.byReason,discardByReason:diag.discardByReason,dehyphSaved:diag.dehyphSaved,opMismatch:diag.opMismatch},
-      operatorMismatches:diag.opDetail,
-      textQuality:diag.quality,pageComposition:diag.composition,diagnosticsUnavailable:diag.diagnosticsUnavailable,
-      chunks:diag.chunks,bucketGaps:diag.gaps
-    };
-    downloadBlob(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),'LATTE-Extraction-Diagnostics-'+new Date().toISOString().slice(0,10)+'.json');
-  };
+  // v15.10: the diagnostics panel is a scroll box that the next build discards (payload builder hoisted to kbBuildExportDiag in v21.9).
+  const exportDiag=()=>{if(diag)downloadBlob(new Blob([JSON.stringify(kbBuildExportDiag(diag,course,exam),null,2)],{type:'application/json'}),'LATTE-Extraction-Diagnostics-'+new Date().toISOString().slice(0,10)+'.json');};
   // v15.14: Build was gated only on busy/apiKey/files, so it was clickable mid-transcription
   // and clickable on cards nobody had looked at. Named conditions rather than one long
   // boolean, so the disabled button can say WHICH one is stopping it.
@@ -16382,6 +17018,10 @@ function KnowledgeBaseBuilder(){
             <div style={{fontSize:12,color:'var(--text-dim)',marginTop:2}}>{m.d}</div>
           </button>)}
       </div>
+      {focusMode==='prioritize'&&<label style={{display:'flex',alignItems:'flex-start',gap:8,fontSize:12,color:'var(--text)',cursor:'pointer',marginBottom:10}}>
+        <input id="kb-keep-safety-t1" type="checkbox" checked={kbKeepSafetyT1} onChange={e=>setKbKeepSafetyT1(e.target.checked)} style={{accentColor:'var(--accent)',marginTop:2}}/>
+        <span>Preserve Tier 1 floor on drugs, doses &amp; safety thresholds <span className="badge-opt">conservative</span></span>
+      </label>}
       {focusMode==='scope'&&<div className="tip-banner" style={{marginBottom:11,fontSize:12,lineHeight:1.5}}>⚠ Scope mode is lossy and permanent. Content skipped here never enters the Knowledge Base, so no downstream tool can recover it — you would need to rebuild. Prefer Prioritize unless the off-topic material is large enough to be worth the tokens.</div>}
       <div className="field-block" style={{marginBottom:8}}>
         <label htmlFor="kb-outcomes" style={{fontSize:12}}>Outcomes <span className="badge-opt">optional</span></label>
@@ -16434,6 +17074,7 @@ function KnowledgeBaseBuilder(){
     </>}
   >
     {K.persistenceError&&<div className="error-banner"><span>⚠</span><div>{K.persistenceError}</div></div>}
+    {handoffNotice&&<div className="tip-banner" role="status" style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:10,color:'var(--accent-green)'}}><span>✓ {handoffNotice}</span><button type="button" className="btn-ghost" style={{fontSize:11,padding:'1px 7px',minHeight:22}} onClick={()=>setHandoffNotice('')}>Dismiss</button></div>}
     {K.recoveryChoices?.length>0&&<div className="card"><p>Saving is paused while these copies are preserved. Choose a saved copy, or import/build a replacement and use the current workspace. The saved copies are archived before saving resumes.</p><button className="btn-secondary" onClick={()=>K.chooseRecovery(-1)}>Use current workspace</button>{K.recoveryChoices.map((record,index)=>record.recoveryError?<div key={index}><strong>Unreadable saved copy {index+1}</strong> · {record.storageKey}<p>{record.recoveryError}</p>{typeof record.raw==='string'&&<><button className="btn-ghost" onClick={()=>downloadBlob(new Blob([record.raw],{type:'text/plain'}),'LATTE-Knowledge-Base-recovery-'+(index+1)+'-raw.txt')}>Export raw copy</button><details><summary>Inspect raw copy</summary><pre style={{whiteSpace:'pre-wrap',maxHeight:240,overflow:'auto'}}>{record.raw}</pre></details></>}</div>:<div key={index}><strong>Saved copy {index+1}</strong> · {(record.kb?.conditions||[]).length} conditions <button className="btn-ghost" onClick={()=>downloadBlob(new Blob([JSON.stringify(record.kb||EMPTY_LATTE_KB,null,2)],{type:'application/json'}),'LATTE-Knowledge-Base-recovery-'+(index+1)+'.json')}>Export copy</button><button className="btn-ghost" onClick={()=>K.chooseRecovery(index)}>Use this copy</button><details><summary>Inspect copy</summary><pre style={{whiteSpace:'pre-wrap',maxHeight:240,overflow:'auto'}}>{JSON.stringify(record.kb||EMPTY_LATTE_KB,null,2)}</pre></details></div>)}</div>}
     {busy&&<RunStatus label="Knowledge Base extraction" value={prog} detail={logs.length?('['+logs[logs.length-1].ts+'] '+logs[logs.length-1].m):'Starting…'}/>}
     {error&&<div className="error-banner" style={{marginTop:10}}>⚠ {error}</div>}{warnings.length>0&&<div className="tip-banner" style={{marginTop:10}}>Build notices ({warnings.length}): {warnings.slice(0,3).join(' · ')}{warnings.length>3?' …':''}</div>}
@@ -17839,37 +18480,7 @@ function NCLEXExtractor(){
   // ── Split Q&A mode runner ──
   const runSplit=(file,existingQ,signal,track)=>nclexRunSplitWithEnv({addLog,qRanges,aRanges,nclexCallGemini,batchSize,model,setProgress,admit},file,existingQ,signal,track);
 
-  const run=useCallback(async()=>{
-    if(!cfg.apiKey||!files.length)return;
-    const ctl=new AbortController();abortRef.current=ctl;
-    setError('');setQuestions([]);setRunSummary(null);setLog([]);setStatus('processing');
-    const track=nclexNewTrack();
-    try{
-      addLog(`Mode: ${mode==='inline'?'Inline (Q+A together)':'Split Q&A (separated sections)'} · ${model} [${toolLevel}]${cfg.autoProfile?' (auto)':''}`);
-      // v15.15: a page range describes ONE file's layout, so inline mode with ranges enabled
-      // takes the same one-PDF-per-run restriction split mode has always had. Applying page
-      // 1-50 of file A to file B would quietly extract the wrong chapter.
-      const oneFile=files.length>1&&(mode==='split'||iRangeOn);
-      const workFiles=oneFile?[files[0]]:files;
-      if(oneFile)addLog(`⚠ ${mode==='split'?'Split mode':'Inline mode with page ranges'} uses one PDF per run — processing "${files[0].name}" only (the page ranges describe a single file). Run the other file(s) separately.`);
-      addLog(`Processing ${workFiles.length} PDF(s)...`);
-      let allQ=[];
-      for(let fi=0;fi<workFiles.length;fi++){
-        if(ctl.signal.aborted)throw new DOMException('Aborted','AbortError');
-        addLog(`\n📁 File ${fi+1}/${workFiles.length}: ${workFiles[fi].name}`);
-        try{
-          if(mode==='inline')allQ=await runInline(workFiles[fi],allQ,ctl.signal,track);
-          else allQ=await runSplit(workFiles[fi],allQ,ctl.signal,track);
-        }finally{destroyPdfDoc(workFiles[fi]);} // v20.2: release PDF.js worker after each extracted file
-      }
-      // v17.4: "Done" is earned, not assumed (nclexRunSummary).
-      const summary=nclexRunSummary(track);setRunSummary(summary);
-      addLog(summary.status==='complete'?`✅ Done! ${allQ.length} unique questions from ${workFiles.length} file(s).`:`⚠ ${summary.headline} ${allQ.length} unique question(s) kept.`);setStatus('done');
-    }catch(e){
-      if(e.name==='AbortError'){track.cancelled=true;setRunSummary(nclexRunSummary(track));addLog('⚠ Aborted \u2014 keeping the questions extracted so far.');setStatus('done');}
-      else{track.stopped=e.message;setRunSummary(nclexRunSummary(track));setError(e.message);setStatus('error');addLog(`❌ ${e.message}`);}
-    }finally{abortRef.current=null;}
-  },[cfg,files,mode,chunkSize,overlap,iRangeOn,iRanges,qRanges,aRanges,batchSize,model,toolLevel,addLog]);
+  const run=useCallback(()=>nclexRunMainWithEnv({cfg,files,mode,iRangeOn,model,toolLevel,abortRef,setError,setQuestions,setRunSummary,setLog,setStatus,addLog,runInline,runSplit}),[cfg,files,mode,chunkSize,overlap,iRangeOn,iRanges,qRanges,aRanges,batchSize,model,toolLevel,addLog]);
 
   // v15.15: every export is now QUESTIONS first, then ONE answer key at the end. Answers used
   // to sit directly under their own question, so an exported file could not be worked through
@@ -18045,15 +18656,7 @@ function NCLEXToAnki(){
   // v21.6: derive live cards, deck header, and Anki export text reactively when #n2a-deck or #n2a-tags change post-conversion
   // without re-running Gemini OCR or re-sanitizing unchanged card HTML previews.
   const liveExtraTags=useMemo(()=>tagText.split(/\s+/).filter(Boolean).map(n2aTagSafe),[tagText]);
-  const liveCards=useMemo(()=>{
-    if(!rawResult)return[];
-    const initSet=new Set(rawResult.initExtraTags||[]);
-    return rawResult.cards.map(c=>{
-      const base=c.tags.filter(tg=>!initSet.has(tg)),have=new Set(base);
-      const merged=[...base,...liveExtraTags.filter(tg=>!have.has(tg))];
-      return merged.length===c.tags.length&&merged.every((tg,i)=>tg===c.tags[i])?c:{...c,tags:merged};
-    });
-  },[rawResult,liveExtraTags]);
+  const liveCards=useMemo(()=>n2aDeriveLiveCards(rawResult,liveExtraTags),[rawResult,liveExtraTags]);
   const result=useMemo(()=>rawResult?{...rawResult,cards:liveCards,deck,text:liveCards.length?n2aAnkiFileText(liveCards,deck,mode==='images'):''}:undefined,[rawResult,liveCards,deck,mode]);
   const fileKey=f=>f.name+'|'+f.size+'|'+f.lastModified;
   const addInputs=fl=>{
@@ -18323,34 +18926,11 @@ Scale every quota to ${size} questions:
   useEffect(()=>()=>generatorSlot.current.cancel(),[]);
   const run=useCallback(()=>ngRunGeneratorWithEnv({cfg,log,K,generatorSlot,setArtifactSource,targetCount,runAudit,setAuditState,currentSourceKB,setBusy,setProg,setLogs,setBatches,setCoverage,setShowUncov,setAbortCtl,setProvenance,setTrackers,setLiveKB,numBatches,batchSize,hasStructuredScope,nclexScope,kbIncludeBridge,kbTiers,kbConditionFilter,allocMode,factsPerQ,points,outcomes,buildBatchBlock,buildFocusBlock}),[cfg,targetCount,batchSize,numBatches,outcomes,points,focusContext,K.knowledgeBase,kbTiers,kbConditionFilter,hasStructuredScope,nclexScope,kbIncludeBridge,log,allocMode,factsPerQ,runAudit]);
 
-  // ── Assemble worksheet (renumbered across batches) ──
-  const ws=useMemo(()=>{
-    let n=1;const qs=[],ks=[];
-    for(const b of batches){
-      const bq=ngSplitNumbered(b.p3),bk=ngSplitNumbered(b.p4);
-      for(const q of bq){
-        const k=bk.find(x=>x.num===q.num);
-        qs.push(ngRenumber(q.text,n));
-        ks.push(k?ngRenumber(k.text,n):n+'. ANSWER: [not parsed — see Audit Trail view]');
-        n++;
-      }
-    }
-    return{questions:qs,answers:ks,count:n-1};
-  },[batches]);
-
-  // v15.14: validateNCLEXWorksheet already found these; nothing carried them out of the app.
+  const ws=useMemo(()=>ngAssembleWorksheet(batches),[batches]);
   const wsIssuesAll=useMemo(()=>batches.flatMap(b=>(b.wsIssues||[]).map(x=>({...x,msg:'Batch '+b.n+': '+x.msg}))),[batches]);
   const wsErrCount=useMemo(()=>wsIssuesAll.filter(x=>x.sev==='error').length,[wsIssuesAll]);
   const exportNotice=useMemo(()=>artifactExportNotice({source:artifactSource,activeKB:K.knowledgeBase,requested:artifactSource?.requested,actual:ws.count,auditRequested:artifactSource?.auditRequested,auditState,rows:batches.flatMap(b=>b.auditRows||[])}),[artifactSource,K.knowledgeBase,ws.count,auditState,batches]);
-  const wsMd=useMemo(()=>{
-    if(!ws.count)return'';
-    // Stamped, not blocked. A failed worksheet is still worth inspecting and hand-correcting;
-    // what it must not do is leave the app looking indistinguishable from a validated one.
-    // Same policy the case generator already applies to a failed case.
-    return exportNotice+caseValidationStamp(wsIssuesAll,'worksheet')
-      +'# NCLEX Practice Questions\n\n**'+ws.count+' questions** generated from source material.\n\n---\n\n## Questions\n\n'
-      +ws.questions.map(ngMdLiteralNumbers).join('\n\n')+'\n\n<div class="pagebreak"></div>\n\n## Answer Key\n\n'+ws.answers.map(ngMdLiteralNumbers).join('\n\n');
-  },[ws,wsIssuesAll,exportNotice]);
+  const wsMd=useMemo(()=>ngBuildWorksheetMd(ws,wsIssuesAll,exportNotice),[ws,wsIssuesAll,exportNotice]);
 
   // v15.7: the audit trail now carries the deterministic worksheet findings, the per-item
   // audit verdicts, and the provenance stamp. The printable worksheet stays clean.
@@ -18937,11 +19517,7 @@ function CaseStudyGenerator(){
   // v17.1: include pending/unscored items and captured status, even before the first verdict.
   const auditRows=useMemo(()=>caseStudy?caseReviewRows(caseStudy,audit,auditState):[],[caseStudy,audit,auditState]);
   const auditUnresolved=auditState!=='complete'||auditRows.some(r=>['PENDING','UNSCORED','ERROR','REVIEW','REPAIRED'].includes(r.status));
-  const auditTotals=useMemo(()=>{
-    const n=s=>auditRows.filter(r=>r.status===s).length;
-    return{pass:n('PASS'),fail:n('FAIL'),repaired:n('REPAIRED'),review:n('REVIEW'),na:n('N/A'),error:n('ERROR'),
-      accuracyFails:auditRows.filter(r=>r.status==='FAIL'&&itemAuditIsAnswerAccuracy(r.criterion)).length};
-  },[auditRows]);
+  const auditTotals=useMemo(()=>caseComputeAuditTotals(auditRows),[auditRows]);
 
   // The audit-trail view carries the provenance stamp; the printable student view does not.
   const exportNotice=useMemo(()=>artifactExportNotice({source:artifactSource,activeKB:K.knowledgeBase,requested:artifactSource?.requested,actual:(caseStudy?.stages||[]).reduce((n,s)=>n+(s.questions||[]).length,0),auditRequested:artifactSource?.auditRequested,auditState,rows:auditRows}),[artifactSource,K.knowledgeBase,caseStudy,auditState,auditRows]);
@@ -18986,29 +19562,7 @@ function CaseStudyGenerator(){
   },[K]);
   const isBatchMode=hasCustomCaseScope&&resolvedCaseConditions.length>1&&caseRunMode==='batch';
   const batchPlan=useMemo(()=>isBatchMode?caseBuildBatchTargets({conditions,resolvedConditions:resolvedCaseConditions,concepts:validCaseConcepts,mixConceptExemplars:caseMixExemplars,includeRelated:caseIncludeRelated,mixMode:caseMixMode,batchUnit:(validCaseConcepts.length>0&&caseMixExemplars)?caseBatchUnit:'conditions',factOpts:{includeTier2,includeTier3,includeCalculation:types.calculation,includeEducation:types.education,includeBridge:caseIncludeBridge},includeTypes:types,stages,questionsPerStage,maxBatch:MAX_CASE_BATCH}):{targets:[],skipped:[],overflowCount:0,totalEligible:0},[isBatchMode,conditions,resolvedCaseConditions,validCaseConcepts,caseMixExemplars,caseIncludeRelated,caseMixMode,caseBatchUnit,includeTier2,includeTier3,types,caseIncludeBridge,stages,questionsPerStage]);
-  const runBatch=useCallback(async()=>{
-    if(!cfg.apiKey){log('Enter your API key in the config sidebar.','err');return;}
-    if(!batchPlan.targets.length){log('No queued entries have facts at the selected tiers. Include Tier 2/3 or adjust your selection.','err');return;}
-    if(generatorSlot.current.active||batchBusy)return;
-    const startKB=K.knowledgeBase;
-    batchCancelRef.current=false;setBatchBusy(true);setLogs([]);
-    try{
-      await caseRunBatchQueue({
-        targets:batchPlan.targets,skipped:batchPlan.skipped,overflowCount:batchPlan.overflowCount,maxBatch:MAX_CASE_BATCH,
-        isCancelled:()=>batchCancelRef.current||currentSourceKB.current!==startKB,
-        log,onStatus:setBatchStatus,
-        runOne:async(t,idx)=>{
-          const ovr={condition:t.condition,facts:t.facts,sufficiency:t.sufficiency,keepLogs:true,packetId:'pkt-'+Date.now().toString(36)+'-'+idx+'-'+uid().slice(0,4),completed:false,halted:''};
-          batchOverrideRef.current=ovr;
-          try{await run();}finally{batchOverrideRef.current=null;}
-          return{completed:ovr.completed,halted:ovr.halted};
-        }
-      });
-      if(!caseStudyRef.current&&casePacketRef.current.length>0){
-        selectPacketEntry(casePacketRef.current[casePacketRef.current.length-1]);
-      }
-    }finally{batchOverrideRef.current=null;setBatchBusy(false);setBatchStatus(null);}
-  },[cfg.apiKey,batchPlan,batchBusy,K.knowledgeBase,log,setLogs,run,selectPacketEntry]);
+  const runBatch=useCallback(()=>caseRunBatchWithEnv({cfg,batchPlan,generatorSlot,batchBusy,K,batchCancelRef,setBatchBusy,setLogs,log,currentSourceKB,setBatchStatus,batchOverrideRef,run,caseStudyRef,casePacketRef,selectPacketEntry}),[cfg.apiKey,batchPlan,batchBusy,K.knowledgeBase,log,setLogs,run,selectPacketEntry]);
   const cancelCaseRun=useCallback(()=>{batchCancelRef.current=true;abortCtl?.abort();},[abortCtl]);
   const packetMd=useMemo(()=>casePacket.length?casePacketToMarkdown(casePacket,{activeKB:K.knowledgeBase,layout:packetLayout,worksheetFactIds:true,includeProvenance:true}):'',[casePacket,K.knowledgeBase,packetLayout]);
   const packetPrintMd=useMemo(()=>casePacket.length?casePacketToMarkdown(casePacket,{activeKB:K.knowledgeBase,layout:packetLayout,worksheetFactIds:false,includeProvenance:false}):'',[casePacket,K.knowledgeBase,packetLayout]);
@@ -19762,7 +20316,7 @@ function ConfigSidebar({onClose,activeTool}){
   return(
     <aside ref={panelRef} className="drawer config-drawer" id="suite-settings" aria-label="Study settings">
       {/* v19.2: Import to Gizmo brings the study suite to eight tools. */}
-      <div className="drawer-head"><div><h2>Study settings</h2><p>Shared across all eight tools</p></div><button type="button" className="drawer-close settings-close" aria-label="Close study settings" onClick={onClose}>×</button></div>
+      <div className="drawer-head"><div><h2>Study settings</h2><p>Shared across all nine tools</p></div><button type="button" className="drawer-close settings-close" aria-label="Close study settings" onClick={onClose}>×</button></div>
       <div className="drawer-body sb-body">
       <div className="sb-section">
         <label className="sb-label" htmlFor="suite-api-key">Gemini API key</label>
@@ -19874,7 +20428,7 @@ class BootErrorBoundary extends React.Component{
 
 // v17.3: the six tools take no props, so React.memo lets an App re-render (tab switch, header chip,
 // drawer toggle) skip them; changes to the contexts they consume still reach them.
-const TOOL_COMPONENTS={knowledge:React.memo(KnowledgeBaseBuilder),priority:React.memo(PriorityAnalyzer),anki:React.memo(AnkiGenerator),nclex:React.memo(NCLEXExtractor),nclexgen:React.memo(NCLEXGenerator),cases:React.memo(CaseStudyGenerator),nclex2anki:React.memo(NCLEXToAnki),gizmo:React.memo(GizmoImporter)}; // v15: hoisted — was rebuilt on every App render
+const TOOL_COMPONENTS={courseAnalyzer:React.memo(CourseAnalyzer),knowledge:React.memo(KnowledgeBaseBuilder),priority:React.memo(PriorityAnalyzer),anki:React.memo(AnkiGenerator),nclex:React.memo(NCLEXExtractor),nclexgen:React.memo(NCLEXGenerator),cases:React.memo(CaseStudyGenerator),nclex2anki:React.memo(NCLEXToAnki),gizmo:React.memo(GizmoImporter)}; // v15/v21.9: hoisted — was rebuilt on every App render
 const NoopTool=()=>null; // v20.2: unvisited tabs render NoopTool on boot and stay mounted once visited
 
 function App(){
@@ -19970,6 +20524,9 @@ function App(){
   const [artifactRegistry,setArtifactRegistry]=useState(EMPTY_ARTIFACT_REGISTRY);
   // v19.2: live Anki deck bridge so Import to Gizmo reads kept Anki cards without re-rendering other tabs.
   const [sharedAnkiDeck,setSharedAnkiDeck]=useState(null);
+  // v21.9: live Course Analyzer -> Knowledge Base handoff bridge (read only by KnowledgeBaseBuilder).
+  const [kbHandoff,setKbHandoff]=useState(null);
+  const sendCourseBriefToKb=useCallback(brief=>{setKbHandoff({...brief,sentAt:Date.now()});selectTool('knowledge');},[selectTool]);
 
   useEffect(()=>{try{if(apiKey)sessionStorage.setItem('suite_key',apiKey);else sessionStorage.removeItem('suite_key');}catch{}},[apiKey]);
   useEffect(()=>{
@@ -20056,7 +20613,7 @@ function App(){
     const next=Array.isArray(entries)?entries:[];
     setArtifactRegistry(r=>({...r,[kind]:merge?mergeArtifactEntries(r[kind],next):next}));
   },[]);
-  const knowledgeValue=useMemo(()=>({knowledgeBase,setKnowledgeBase,isCurrentSource:sourceKB=>sourceKB===currentKnowledge.current,persistenceStatus,persistenceError,recoveryChoices,chooseRecovery,factIndex,artifactRegistry,registerArtifact,pruneArtifact,publishAnkiDeck:setSharedAnkiDeck}),[knowledgeBase,persistenceStatus,persistenceError,recoveryChoices,chooseRecovery,factIndex,artifactRegistry,registerArtifact,pruneArtifact]);
+  const knowledgeValue=useMemo(()=>({knowledgeBase,setKnowledgeBase,isCurrentSource:sourceKB=>sourceKB===currentKnowledge.current,persistenceStatus,persistenceError,recoveryChoices,chooseRecovery,factIndex,artifactRegistry,registerArtifact,pruneArtifact,publishAnkiDeck:setSharedAnkiDeck,sendCourseBriefToKb}),[knowledgeBase,persistenceStatus,persistenceError,recoveryChoices,chooseRecovery,factIndex,artifactRegistry,registerArtifact,pruneArtifact,sendCourseBriefToKb]);
   const inspectorValue=useMemo(()=>({inspectedFactId,openFactInspector:setInspectedFactId,closeFactInspector:()=>setInspectedFactId(null)}),[inspectedFactId]);
 
 
@@ -20064,6 +20621,7 @@ function App(){
     <ConfigCtx.Provider value={cfg}>
       <FactInspectorCtx.Provider value={inspectorValue}>
       <KnowledgeCtx.Provider value={knowledgeValue}>
+      <CourseBriefCtx.Provider value={kbHandoff}>
       <AnkiDeckCtx.Provider value={sharedAnkiDeck}>
       <FactInspectorDrawer/>
       {/* v16.0: landmark navigation and a source-aware header clarify the workflow; all tools remain mounted. */}
@@ -20122,6 +20680,7 @@ function App(){
         </main>
       </div>
       </AnkiDeckCtx.Provider>
+      </CourseBriefCtx.Provider>
       </KnowledgeCtx.Provider>
       </FactInspectorCtx.Provider>
     </ConfigCtx.Provider>

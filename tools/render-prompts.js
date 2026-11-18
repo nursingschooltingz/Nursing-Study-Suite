@@ -32,6 +32,7 @@ const APPENDIX_PROMPTS = [
   'CASE_NGN_TYPE_RULES',
   'GIZMO_DEFAULT_IMPORT_PROMPT',
   'GIZMO_CONVERT_PROMPT',
+  'COURSE_ANALYZER_PROMPT',
 ];
 
 function promptBlock(literal, status) {
@@ -66,7 +67,9 @@ function buildGeneratedAppendix(source) {
                     ? 'tunable; v21.0 Unfolding EHR State-Machine & Cross-Stage Synchronization directive for CaseStudyGenerator'
                     : name === 'CASE_NGN_TYPE_RULES'
                       ? 'tunable; v21.7 Next Generation NCLEX (Bowtie, Matrix, Cloze, Trend) format contract for CaseStudyGenerator'
-                      : 'byte-frozen';
+                      : name === 'COURSE_ANALYZER_PROMPT'
+                        ? 'tunable; v21.9 conservative-retention syllabus & lecture PPTX curriculum analyst for 01 · Course Analyzer'
+                        : 'byte-frozen';
     return promptBlock(extractPromptLiteral(source, name), status);
   });
   return [

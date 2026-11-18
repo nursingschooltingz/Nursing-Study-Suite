@@ -422,7 +422,7 @@ module.exports = async function run(S, t) {
     S.includes('id="kb-concepts"') &&
     S.includes('Auto-detect overarching concepts from source') &&
     S.includes("c.entryRole==='concept'?'◆ ':(!c.entityKind&&c.concept)?'↳ ':''") &&
-    S.includes("f.conceptScope==='differentiator'&&<span className=\"tier-badge t1\"") &&
+    (S.includes("f.conceptScope==='differentiator'&&<span className=\"tier-badge t1\"") || S.includes("f.conceptScope==='differentiator'&&h('span',{className:'tier-badge t1'")) &&
     S.includes("fact.conceptScope==='differentiator'&&<span className=\"tier-badge t1\">⚑ priority differentiator</span>") &&
     S.includes('allConditions:conditions'));
 

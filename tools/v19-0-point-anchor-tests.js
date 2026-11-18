@@ -543,4 +543,67 @@ module.exports = function runV190PointAnchorTests(S, t) {
     splitInlineVitaminD[2].startsWith('⚠ No answer for this question was found on the answer pages') &&
     builtUnmatchedWarn[0].tags.includes('NeedsReview') &&
     builtUnmatchedWarn[1].some(w => w.includes('no answer on the answer pages')));
+
+  // 19. v21.8 conservative KB safeguards: hardened heading detection in parseAndNumberPoints & Prioritize-mode Tier-1 safety floor
+  const analyzerPoints = H.parseAndNumberPoints([
+    'Perfusion',
+    '- Left vs. right-sided heart failure cues and hemodynamics',
+    '- Loop diuretics vs. potassium-sparing diuretics hold parameters',
+    '',
+    'Gas Exchange',
+    '- COPD oxygen titration targets (88-92% SpO2)',
+    'Perfusion (Ch. 14):',
+    '=== Intracranial Regulation ===',
+    '[Acid-Base Balance]',
+    '---',
+    '- Cushing triad late signs of increased ICP',
+    'Fluid & Electrolytes — Potassium:',
+    '1. Hypokalemia U waves and IV KCl rate limits'
+  ].join('\n'));
+  const plainNoBullets = H.parseAndNumberPoints([
+    'Parkland formula',
+    'Herpes zoster staffing restrictions',
+    'ABCDs of melanoma screening'
+  ].join('\n'));
+  const clinicalLineBeforeBullet = H.parseAndNumberPoints([
+    'Hold digoxin if HR < 60 bpm',
+    '- Check apical pulse for 1 full minute',
+    'Administer 40 mg IV furosemide over 2 min',
+    '- Monitor serum potassium and urine output'
+  ].join('\n'));
+  const mixedTwoUnbulletedThenBullet = H.parseAndNumberPoints([
+    'Parkland formula',
+    'Herpes zoster staffing restrictions',
+    '- ABCDs of melanoma screening'
+  ].join('\n'));
+  t('v21.8: parseAndNumberPoints skips plain unbulleted concept headers above bullets plus parenthesized/bracketed/rule dividers without orphan P# IDs',
+    analyzerPoints.length === 5 &&
+    analyzerPoints[0].id === 'P1' && analyzerPoints[0].text === 'Left vs. right-sided heart failure cues and hemodynamics' &&
+    analyzerPoints[1].id === 'P2' && analyzerPoints[1].text === 'Loop diuretics vs. potassium-sparing diuretics hold parameters' &&
+    analyzerPoints[2].id === 'P3' && analyzerPoints[2].text === 'COPD oxygen titration targets (88-92% SpO2)' &&
+    analyzerPoints[3].id === 'P4' && analyzerPoints[3].text === 'Cushing triad late signs of increased ICP' &&
+    analyzerPoints[4].id === 'P5' && analyzerPoints[4].text === 'Hypokalemia U waves and IV KCl rate limits');
+
+  t('v21.8: parseAndNumberPoints keeps plain unbulleted point lists, mixed unbulleted lines, and clinical lines with doses/operators intact',
+    plainNoBullets.length === 3 &&
+    plainNoBullets.map(p => p.text).join('|') === 'Parkland formula|Herpes zoster staffing restrictions|ABCDs of melanoma screening' &&
+    clinicalLineBeforeBullet.length === 4 &&
+    clinicalLineBeforeBullet[0].text === 'Hold digoxin if HR < 60 bpm' &&
+    clinicalLineBeforeBullet[2].text === 'Administer 40 mg IV furosemide over 2 min' &&
+    mixedTwoUnbulletedThenBullet.length === 3 &&
+    mixedTwoUnbulletedThenBullet[1].text === 'Herpes zoster staffing restrictions');
+
+  const focusSafetyDefault = H.kbBuildFocusBlock('1. Manage HF', 'Perfusion\n- Heart failure cues', '', 'prioritize');
+  const focusSafetyOptOut = H.kbBuildFocusBlock('1. Manage HF', 'Perfusion\n- Heart failure cues', '', 'prioritize', '', false, false, false, 'rn', false);
+  t('v21.8: kbBuildFocusBlock preserves Tier 1 safety floor by default in Prioritize mode, supports explicit opt-out, and wires #kb-keep-safety-t1 in KnowledgeBaseBuilder',
+    focusSafetyDefault.includes('SAFETY FLOOR (CONSERVATIVE RETENTION)') &&
+    !focusSafetyDefault.includes('even when it is a drug, dose, threshold, or safety warning') &&
+    focusSafetyDefault.includes('P1: Heart failure cues') &&
+    !focusSafetyDefault.includes('P1: Perfusion') &&
+    focusSafetyOptOut.includes('even when it is a drug, dose, threshold, or safety warning') &&
+    !focusSafetyOptOut.includes('SAFETY FLOOR (CONSERVATIVE RETENTION)') &&
+    S.includes('const [kbKeepSafetyT1,setKbKeepSafetyT1]=useState(true);') &&
+    S.includes('id="kb-keep-safety-t1"') &&
+    S.includes("kbBuildFocusBlock(kbOutcomes,kbPoints,kbExtra,focusMode,_concepts,_conceptAuto,_examTraps,_plateBridge,'rn',_keepSafetyT1)") &&
+    S.includes('kbBuildFocusBlock(kbOutcomes,kbPoints,kbExtra,focusMode,_concepts,_conceptAuto,_examTraps,_plateBridge,jobRole,_keepSafetyT1)'));
 };

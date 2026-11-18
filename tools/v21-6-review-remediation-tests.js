@@ -557,7 +557,7 @@ module.exports = async function runV216ReviewRemediationTests(S, t) {
       getCap3().join(',') === 'b,c,d' &&
       getCap1().join(',') === 'y' &&
       getCap0().length === 0 &&
-      S.includes('const liveCards=useMemo(()=>{') &&
+      (S.includes('const liveCards=useMemo(()=>{') || S.includes('const liveCards=useMemo(()=>n2aDeriveLiveCards(rawResult,liveExtraTags),[rawResult,liveExtraTags]);')) &&
       S.includes('kbProjectExamTraps._entryCache') &&
       S.includes('ngAllocateBatch._entryCache') &&
       S.includes('selectCaseFacts._entryCache') &&

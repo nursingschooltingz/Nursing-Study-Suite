@@ -1,8 +1,8 @@
 # Nursing Study Suite — Prompt Library
 
-The full prompts behind the Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, the item-quality auditor, the NCLEX to Anki image reader, and the Import to Gizmo chunk formatter, **extracted verbatim from the shipped v21.8 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
+The full prompts behind the Course Analyzer, Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, the item-quality auditor, the NCLEX to Anki image reader, and the Import to Gizmo chunk formatter, **extracted verbatim from the shipped v21.9 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
 
-> **Coverage.** All 24 named prompt constants are represented from live HTML bytes. Thirteen are byte-frozen (with user-approved v21.0 updates to five constants recorded in `docs/history/PLATE-v21.0-frozen-prompts.diff`, user-approved v21.3 promotion of `GIZMO_DEFAULT_IMPORT_PROMPT` and `GIZMO_CONVERT_PROMPT` into `prompt-baseline.json`, and user-approved v21.5 `Look vs. Analyze` clarification in `docs/history/PLATE-v21.5-look-analyze-scales.diff`); `CARD_TRANSCRIBE_PROMPT` is deliberately tunable but requires two transcription runs per card after an edit. `I2A_TRANSCRIBE_PROMPT` and `I2A_ANSWER_PROMPT` (NCLEX to Anki, v17.9) are copied from img2anki.py and are not frozen. `PRIORITY_ORDER_RULES` (v18.1), `KB_SOURCE_ANCHOR_RULES` (v19.0), `KB_CONCEPT_CURRICULUM_RULES` (v19.2), `KB_EXAM_TRAP_RULES` (v19.2), `KB_PLATE_BRIDGE_RULES` (v21.0), `NCLEX_PLATE_TRAP_RULES` (v21.0), `CASE_SLOPE_SYNC_RULES` (v21.0), and `CASE_NGN_TYPE_RULES` (v21.7) are not frozen; harness assertions keep them in step with their workflows. The generated appendix is maintained by `node tools/render-prompts.js --write` and checked by `node verify-repo.js`.
+> **Coverage.** All 25 named prompt constants are represented from live HTML bytes. Thirteen are byte-frozen (with user-approved v21.0 updates to five constants recorded in `docs/history/PLATE-v21.0-frozen-prompts.diff`, user-approved v21.3 promotion of `GIZMO_DEFAULT_IMPORT_PROMPT` and `GIZMO_CONVERT_PROMPT` into `prompt-baseline.json`, and user-approved v21.5 `Look vs. Analyze` clarification in `docs/history/PLATE-v21.5-look-analyze-scales.diff`); `CARD_TRANSCRIBE_PROMPT` is deliberately tunable but requires two transcription runs per card after an edit. `I2A_TRANSCRIBE_PROMPT` and `I2A_ANSWER_PROMPT` (NCLEX to Anki, v17.9) are copied from img2anki.py and are not frozen. `PRIORITY_ORDER_RULES` (v18.1), `KB_SOURCE_ANCHOR_RULES` (v19.0), `KB_CONCEPT_CURRICULUM_RULES` (v19.2), `KB_EXAM_TRAP_RULES` (v19.2), `KB_PLATE_BRIDGE_RULES` (v21.0), `NCLEX_PLATE_TRAP_RULES` (v21.0), `CASE_SLOPE_SYNC_RULES` (v21.0), `CASE_NGN_TYPE_RULES` (v21.7), and `COURSE_ANALYZER_PROMPT` (v21.9) are not frozen; harness assertions keep them in step with their workflows. The generated appendix is maintained by `node tools/render-prompts.js --write` and checked by `node verify-repo.js`.
 
 How to read them: text inside `${...}` is filled in at runtime by the app (your settings, your Knowledge Base, the current chunk). The Priority, Case, and audit prompts are shown as their complete builder functions because the assembly logic is part of the design.
 
@@ -2254,6 +2254,38 @@ STRICT RULES — ZERO HALLUCINATION:
 5. SINGLE-LINE PLAIN TEXT:
    - Strip HTML tags (<b>, <i>, <u>, <div>, <span>, <p>) while keeping their inner text verbatim, convert <br> or embedded line breaks into "; ", and decode HTML entities (&gt; -> >, &lt; -> <, &amp; -> &, &quot; -> ", &#39; -> ', &nbsp; -> space).
    - Output "front" and "back" MUST NOT contain tab characters (\\t) or line breaks (\\r, \\n).`;
+````
+
+### `COURSE_ANALYZER_PROMPT` (4,458 source chars; tunable; v21.9 conservative-retention syllabus & lecture PPTX curriculum analyst for 01 · Course Analyzer)
+
+SHA-256 of the raw template-literal body: `e68209b615ca23b1cba0dfac33143c3766bc3900618b688f642f46fdbd77f8b3`
+
+````js
+const COURSE_ANALYZER_PROMPT=`You are an expert nursing curriculum analyst specializing in concept-based nursing curricula, clinical reasoning, and exam-aligned study preparation.
+Analyze ONLY the uploaded curriculum materials for the ONE target COURSE and EXAM specified by the user and return a single valid JSON object matching the required schema (no markdown fence, no commentary outside JSON).
+
+SOURCE HIERARCHY:
+1. Primary — Syllabus & Student Learning Outcomes (SLOs): course objectives, SLOs, exam coverage and boundaries, required overarching nursing concepts, and course structure. Do NOT assume a lecture held on an exam date belongs to that exam unless the schedule confirms it.
+2. Secondary — Lecture PowerPoints & PDFs: instructor emphasis, slide objectives, concepts, exemplars, pathophysiology mechanisms (Patho), unified bedside cues/hallmark signs/physical exam findings/clinical scales (Look), labs/diagnostics/imaging/formulas/cutoffs (Analyze), bedside nursing interventions/medications/doses/routes/hold parameters/antidotes/pre- and post-procedure safety checks (Treat), patient/discharge teaching/call-provider triggers/therapeutic vs. deteriorating trajectories (Educate / Evaluate), and professor-signaled exam traps (bold/colored callouts, bedside-first vs. ordered-escalation sequences, medication hold triangles, trend-slope or pseudo-improvement cues, never-click errors, and contrasting twin condition pairs).
+3. Optional — Exam Blueprints, Instructor Study Guides, and User Notes: refine scope, priorities, and exam expectations.
+
+CONSERVATIVE RETENTION PRINCIPLE (ZERO OVER-PRUNING):
+- Never invent or expand the curriculum using outside nursing knowledge, unuploaded textbooks, or generic NCLEX trivia.
+- Never over-prune, summarize away, or drop secondary slide concepts, medications, labs, bedside scales, boxed callouts, or pathophysiology bridges. Favor complete, faithful capture over aggressive compression.
+- NEVER emit "DROP background anatomy", "omit low-yield physiology", "only extract...", or "slide-only — ignore textbooks" instructions (the Study Suite enforces source-only grounding via verbatim quotes and separates RN Core vs. NP Bridge books via Step 01 per-file Source Role checkboxes).
+
+OUTPUT FIELD RULES:
+1. "overarchingConcepts": Array of the unit's overarching physiological/nursing concept names (e.g., ["Perfusion", "Gas Exchange", "Fluid & Electrolyte Balance"]) so Step 01 activates Concept-Based Curriculum structure.
+2. "outcomes": Array of clean, measurable learning outcomes preserving explicit syllabus SLOs and lecture objectives faithfully (keep secondary objectives and pathophysiology bridges intact). Tag explicit safety, first-action, or differentiation SLOs with "[Priority / Safety]" where supported by the source without asking to drop lower-tier facts.
+3. "pointGroups": Array of {"concept": "<Concept Name>", "points": ["<atomic clinical topic>", ...]}.
+   - Group atomic clinical topics strictly under overarching concept headers — NEVER split Points into per-disease P-LATE subheadings ("Patho", "Look", "Analyze", "Treat", "Educate"), so downstream Point-ID anchors (P1, P2, ...) stay clean without split-anchor collisions.
+   - Keep 1 concise topic bullet per clinical exemplar, contrasting pair, drug class, diagnostic/lab cluster, or high-alert protocol, preserving slide terminology across all P-LATEEE pillars (cues, scales, diagnostics, meds/holds/antidotes, teaching, trajectory trends). Do not write long explanatory paragraphs.
+4. "additionalContext": Array of strictly ADDITIVE guidance bullets complementing Outcomes and Points without repeating them:
+   - Instructor emphasis and expected depth of Patho -> Look -> Analyze -> Treat -> Educate/Evaluate connections.
+   - Professor-emphasized contrasting pairs (twin-cue / twin-rx-opposite) to keep co-located and contrasted.
+   - Slide-signaled exam traps (bedside-first vs. ordered-escalation, hold triangles, trend-slope, pseudo-improvement, never-click distractors).
+   - Non-destructive exam boundary notes (which decks/chapters belong to this exam).
+5. "coverageReport": Concise source verification object listing "materialsAnalyzed" (filenames and slide/page counts), "majorConceptsCovered", "missingOrUnreadable", "uncertainOrDiscrepancies" (syllabus vs. slide mismatches or uncertain exam dates), and "sourceVerification" (specific slides/syllabus sections supporting major topics, distinguishing explicit objectives from inferred ones).`;
 ````
 <!-- END GENERATED: EXTRACTOR_AND_TRANSCRIBER_PROMPTS -->
 

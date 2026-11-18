@@ -13,6 +13,7 @@ const {syntheticKB}=require('./remediation-browser-fixture');
 const {worksheet}=require('./remediation-worksheet-browser-tests');
 const widths=[360,768,1024,1440];
 const tabs=[
+  ['courseAnalyzer','Nursing Course Analyzer'],
   ['knowledge','P-LATE Knowledge Base'],['priority','Pyramid Priority Analyzer'],
   ['anki','P-LATE Anki Generator'],['nclex','NCLEX Question Extractor'],
   ['nclexgen','NCLEX Question Generator'],['cases','Clinical Case Study Generator'],

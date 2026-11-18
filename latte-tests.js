@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 4091;
+const EXPECTED_ASSERTIONS = 4103;
 
 let file;
 try {
@@ -2568,7 +2568,8 @@ section('v15.14 — tier 3');
   // v17.3: one useCappedLog hook (definition plus five tools) replaced the six copies.
   // v17.9: the NCLEX to Anki tab's image log is the seventh use of the same hook.
   // v19.2: the Import to Gizmo tab's AI chunk log is the eighth use of the same hook.
-  t('all seven tool logs and the hook definition are capped', S.split('useCappedLog(').length - 1 === 8 && S.split('p.slice(1-cap)').length - 1 === 1 && !S.includes('p.slice(-200)'));
+  // v21.9: the Course Analyzer tab's curriculum log is the ninth use of the same hook (definition + 8 tools).
+  t('all eight tool logs and the hook definition are capped', S.split('useCappedLog(').length - 1 === 9 && S.split('p.slice(1-cap)').length - 1 === 1 && !S.includes('p.slice(-200)'));
   // T3.13i — ten positional parameters, one of them inert since v15.
   t('callGemini takes an options object', S.includes('async function callGemini(apiKey,model,parts,opts={}){'));
   // v17.9: the NCLEX to Anki image reader adds one options-object call site (13 -> 14).
@@ -2949,6 +2950,9 @@ section('v15.14 — clamps, backoff, storage');
 
   section('v21.7 Next Generation NCLEX (NGN) Case Study Question Types (Bowtie, Matrix, Cloze, Trend)');
   await require('./tools/case-ngn-types-tests')(S,t);
+
+  section('v21.9 01 · Course Analyzer Tab (Syllabus & Lecture PPTX -> Knowledge Base 1-Click Sync)');
+  await require('./tools/course-analyzer-tests')(S,t);
 
   console.log('\n════════════════════════════');
   const total = pass + fail;

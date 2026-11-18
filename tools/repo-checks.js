@@ -44,6 +44,8 @@ const DOCUMENTED_PROMPTS = Object.freeze([
   'CASE_SLOPE_SYNC_RULES',
   // v21.7: the NGN item-format rules (Bowtie, Matrix, Cloze, Trend) injected by caseBuildPrompt when NGN types are enabled (not frozen).
   'CASE_NGN_TYPE_RULES',
+  // v21.9: the conservative-retention Nursing Course Analyzer curriculum prompt for 01 · Course Analyzer (not frozen).
+  'COURSE_ANALYZER_PROMPT',
 ]);
 
 function listSuiteFiles(rootDir = process.cwd()) {
