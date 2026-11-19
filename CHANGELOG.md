@@ -9,7 +9,7 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
-## [21.11] — 2026-11-19
+## [22.0] — 2026-11-19
 
 Completes the full 6-phase **Production Code-Review Remediation (`C1`–`C6`, `H1`–`H24`, `M1`–`M20`, `L1`–`L8`)** plus **Phase 7 Options A & B** (removing external Google Fonts links/CSP origins, replacing unmaintained `jszip@3.10.1` with a bounded native `DecompressionStream('deflate-raw')` ZIP reader, and updating `@babel/standalone` to `7.29.14` and `marked` to `18.2.1`). Reclaims **~110 KB** of `<script type="text/babel">` headroom (`387,772 / 500,000` UTF-8 bytes), adds an AST free-identifier verifier gate across all inline script blocks, expands deterministic regression coverage by **73 live assertions** (`4,181 passed · 0 failed`), and leaves all 13 byte-frozen prompt constants in `prompt-baseline.json` untouched.
 
@@ -30,7 +30,7 @@ Completes the full 6-phase **Production Code-Review Remediation (`C1`–`C6`, `H
 - **Babel, AST, & V8 boot smoke.** `<script type="text/babel">` measures `385,876` chars / `387,772` UTF-8 bytes (`< 500,000` ceiling) parsed by `@babel/standalone@7.29.14`; `0` undeclared references across all 4 inline script blocks (`JSZip` removed from `AST_KNOWN_GLOBALS`); `App`, `ConfigSidebar`, `FactInspectorDrawer`, and all 9 `TOOL_COMPONENTS` render-smoked cleanly.
 - **CDN SRI pins.** All 7 pinned CDN script endpoints plus both `PDF_WORKER_URLS` copies verified live via SHA-384 digest match (`9/9`, `0` mismatches).
 
-See the [release verification record](docs/reviews/v21.11-release.md).
+See the [release verification record](docs/reviews/v22.0-release.md).
 
 ---
 

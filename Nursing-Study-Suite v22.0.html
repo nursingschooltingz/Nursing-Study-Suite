@@ -14,7 +14,7 @@
      The print preview (about:blank window or srcdoc frame) inherits this policy and uses only its own inline style block and system fonts. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline'; font-src 'none'">
 <title>P-LATE Study Suite</title>
-<!-- v21.11 (2026-11-19): Production Code-Review Remediation (Phases 1–6: C1–C6, H1–H24, M1–M20, L1–L8)
+<!-- v22.0 (2026-11-19): Production Code-Review Remediation (Phases 1–6: C1–C6, H1–H24, M1–M20, L1–L8)
      + Phase 7 Options A & B (Zero-External-Font Privacy Cleanup, Native Bounded PPTX ZIP Reader Replacing JSZip, & CDN Patch Bumps).
      All 13 frozen prompt constants in prompt-baseline.json unchanged.
      (1) CRITICAL & SECURITY HARDENING (C1–C6, H1–H9, H20, H22–H23, M2, M7, M16–M18): Fixes NCLEXToAnki ReferenceError crash,
@@ -8428,7 +8428,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '21.11';}
+function suiteVersion(){return '22.0';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
