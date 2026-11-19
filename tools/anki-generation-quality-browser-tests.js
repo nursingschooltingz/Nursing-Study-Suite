@@ -35,8 +35,6 @@ window.__ankiQualityFixture={generationCalls:[],auditCalls:[],exports:[]};`);
   return String.fromCharCode(96).repeat(3)+'text\n'+notes.join('\n')+'\n'+String.fromCharCode(96).repeat(3)+'\n'+String.fromCharCode(96).repeat(3)+'text\n'+notes.map((_,i)=>'fact-'+(i+1)+' -> line #'+(i+1)).join('\n')+'\n'+String.fromCharCode(96).repeat(3);
 };`);
   html=once(html,'downloadBlob=async blob=>fixtureExport(await blob.text());',String.raw`downloadBlob=async(blob,name)=>{const text=await blob.text();window.__ankiQualityFixture.exports.push({name,text});fixtureExport(text);};`);
-  html=once(html,"const cfg=useMemo(()=>({apiKey:'synthetic-only',forTool:()=>({model:'synthetic-fixture',level:'low'}),autoProfile:true}),[]);",
-    "const cfg=useMemo(()=>({apiKey:'synthetic-only',hydrogenModel:'synthetic-hydrogen',neonModel:'synthetic-neon',forTool:id=>({model:TOOL_PROFILE_DEFAULTS[id].m==='neon'?'synthetic-neon':'synthetic-hydrogen',level:TOOL_PROFILE_DEFAULTS[id].lv}),autoProfile:true}),[]);");
   return html;
 }
 

@@ -157,7 +157,7 @@ module.exports = async function run(S, t) {
 
   // ── 3. build() end-to-end with kbExamTraps=true (Pass 1 + Pass 2 [trap:...] inventory + recovery) ──
   {
-    const buildSpan = span('const build=async()=>{', '\n  const exportDiag=()=>{');
+    const buildSpan = span('const build=async()=>{', '\n  // v15.10: the diagnostics panel is a scroll box');
     const sourceText = 'Acute Hyperkalemia: stop potassium IV fluids first. Check capillary blood glucose after IV regular insulin with dextrose.';
     const pass1Reply = {
       conditions: [

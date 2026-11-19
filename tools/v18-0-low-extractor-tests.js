@@ -81,7 +81,7 @@ module.exports=async function run(S,t){
     split.track.succeeded===1&&split.kept.length===2&&split.kept[0].options_repaired===true&&/Choice 1c/.test(split.kept[0].question)&&
     !split.kept[1].options_repaired&&split.kept[1].question==='A client with asthma uses an inhaler.');
 
-  const runInline=inject(span(S,'  async function runInline(file,existingQ,signal,track){','\n  // ── Split Q&A mode runner ──'),'runInline',{
+  const runInline=inject(span(S,'  async function runInline(file,existingQ,signal,track){','\n  return runInline(file,existingQ,signal,track);'),'runInline',{
     addLog:()=>{},iRangeOn:false,iRanges:[],nclexExtractPageRange:async()=>'',extractPdfTextSpaced:async()=>'synthetic text',
     nclexChunkText:()=>['chunk one','chunk two','chunk three'],chunkSize:3000,overlap:800,setProgress:()=>{},nclexKey:q=>String(q.question),
     nclexCallGemini:(()=>{const replies=[{questions:[{question:'Hidden?'}]},'not a list',[]];let call=0;return async()=>replies[call++];})(),
@@ -101,7 +101,7 @@ module.exports=async function run(S,t){
     extractor.includes("aria-label={'Remove PDF '+f.name} disabled={isProcessing} onClick=")&&toAnki.includes("aria-label={'Remove '+f.name} disabled={busy}"));
 
   /* ── L24: hard line breaks between printed choices ── */
-  const toMd=filtered=>new Function('filtered','nclexSplitStemOptions','runSummary','nclexSummaryLine',span(S,'  const nclexToMd=()=>{','  const exportMd=')+';return nclexToMd();')(filtered,P,null,()=>'');
+  const toMd=filtered=>new Function('filtered','nclexSplitStemOptions','runSummary','nclexSummaryLine',span(S,'function nclexFormatExportMd(','\n  return out;\n}')+'\n  return out;\n};return nclexFormatExportMd(filtered,runSummary);')(filtered,P,null,()=>'');
   const md=toMd([{question:'Which action is first?\nA. Give oxygen\nB. Call the provider\nC. Recheck vitals\nD. Document',correct_answer:'A. Give oxygen',rationale:'Airway comes first.'}]);
   const M=new Function(span(S,'// ──── TOOL: NCLEX to Anki ────','async function i2aFileKey(')+';return {x2aConvertSources};')();
   const cards=text=>M.x2aConvertSources([{name:'synthetic',text}]).cards.map(c=>[c.guid,c.front,c.back].join('|')).join('\n');
@@ -117,8 +117,8 @@ module.exports=async function run(S,t){
     payload.includes('**Q1.1 (MCQ)** Which action is first?\n   A. One\n   B. Two\n   C. Three')&&!/ \n/.test(payload));
 
   /* ── Dead code: the post-await truncation checks are gone; the transport invariant that made them dead holds ── */
-  const callSrc=span(S,'  async function nclexCallGemini(prompt,signal){','\n  // v17.4: one admission path');
-  const imageSrc=span(S,'  const runImages=async()=>{','\n  const saveTranscripts=');
+  const callSrc=span(S,'  async function nclexCallGemini(prompt,signal){','\n  return nclexCallGemini(prompt,signal);');
+  const imageSrc=span(S,'  const runImages=async()=>{','\n  return runImages();');
   const a=S.indexOf('function geminiSSEParser('),b=S.indexOf('\nasync function callGemini(',a);
   if(a<0||b<0)throw Error('Low-extractor transport anchor missing');
   const LEVELS=new Function(span(S,'const THINKING_LEVELS=','const MODEL_ID_RE=')+';return THINKING_LEVELS;')();

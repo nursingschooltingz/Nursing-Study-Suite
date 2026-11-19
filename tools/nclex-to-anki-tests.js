@@ -131,7 +131,7 @@ async function run(S,t){
   const components=S.match(/const TOOL_COMPONENTS=\{([^}]*)\}/);
   t('the NCLEX to Anki tab is a memoized tool component',!!components&&components[1].includes('nclex2anki:React.memo(NCLEXToAnki)'));
   const core=span(S,'// ──── TOOL: NCLEX to Anki ────','async function i2aFileKey(');
-  const ui=span(S,'async function i2aFileKey(','/* ── END NCLEX TO ANKI PURE HELPERS ── */')+'\n'+span(S,'function n2aConvertTextWithEnv(','\n  return convertText();\n}')+'\n'+span(S,'function NCLEXToAnki(){','// ──── TOOL: NCLEX Question Generator ────');
+  const ui=span(S,'async function i2aFileKey(','/* ── END NCLEX TO ANKI PURE HELPERS ── */')+'\n'+span(S,'function n2aConvertTextWithEnv(','\n  return convertText();\n}')+'\n'+span(S,'async function n2aRunImagesWithEnv(','\n  return runImages();\n}')+'\n'+span(S,'function NCLEXToAnki(){','// ──── TOOL: NCLEX Question Generator ────');
   const M=new Function(core+';return {n2aSha1Hex,n2aGuidBasis,n2aEsc,n2aConvertSources,n2aAnkiFileText,x2aConvertSources,x2aResolveAnswer,i2aNormalizeTranscript,i2aAssemble,i2aBuildCards,i2aConvert,i2aWorksheetMd,i2aGuid,i2aNaturalCompare,i2aMergeCache,i2aEmptyCache,I2A_TRANSCRIBE_PROMPT,I2A_PROMPT_VERSION,n2aPdfPageLines,n2aPdfBlocks,n2aPdfChoiceLines,n2aPdfToWorksheetText,x2aPdfToExportText,n2aConvertExports,n2aExportKind,n2aConvertText,n2aKeyFit,n2aParseQuestion,n2aParseKey};')();
 
   t('the converter SHA-1 matches Node crypto on ASCII, Unicode and multi-block input',
@@ -322,8 +322,9 @@ async function run(S,t){
     mixed.cards.length===5&&mixed.kinds.map(k=>k.kind+':'+k.cards).join(',')==='worksheet:2,extract:2,extract:1'&&
     mixed.cards.slice(0,2).every(c=>c.guid===ws.cards[mixed.cards.indexOf(c)].guid)&&mixed.cards.slice(2).every(c=>/^x2a/.test(c.guid)));
   t('merged worksheet cards carry no raw double quote, so one Anki file serves both kinds',!M.n2aAnkiFileText(mixed.cards,'D',false).split('\n').slice(6).join('').includes('"'));
+  const modesBlock=span(S,'const N2A_MODES=[','];');
   t('the tab offers one export option beside the image option, and reads PDFs through the shared page walk',
-    /const N2A_MODES=\[\n  \{id:'export',/.test(ui.slice(0,0)+S)&&!S.includes("{id:'extract',icon:")&&ui.includes('accept=".md,.txt,.markdown,.pdf"')&&ui.includes('n2aConvertExports(sources,extraTags)')&&
+    modesBlock.includes("{id:'export',")&&modesBlock.includes("{id:'images',")&&!modesBlock.includes("{id:'extract',icon:")&&ui.includes('accept=".md,.txt,.markdown,.pdf"')&&ui.includes('n2aConvertExports(sources,extraTags)')&&
     ui.includes("if(/\\.pdf$/i.test(f.name||'')){")&&core.includes('await pdfWalkPages(file,{onPage:(text,i,pg,total,tc)=>')&&core.includes('finally{destroyPdfDoc(file);}'));
   // v18.0 (review L27): the PDF reader used the shared walk's text content and then read every page's again.
   {

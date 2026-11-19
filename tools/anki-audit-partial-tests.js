@@ -92,7 +92,7 @@ function runAnkiAuditPartialTests({S,t,section}){
   const twice=H.ankiMergeSourceAuditResult(supportedFinding,supportedFinding,group);
   t('V4 retry deduplicates identical validated findings',twice.findings.length===1);
   t('V4 public legacy parser remains strict about complete receipt counts',throws(()=>H.ankiParseSourceAudit(JSON.stringify({factReviews:[],noteReviews:[],findings:[]}),group)));
-  t('V4 extraction reaches the merge tail and retains explicit completion accounting',source.includes('requiredFacts.every(id=>factIds.has(id))')&&source.includes('citationRecoveries:[...(prior.citationRecoveries||[])')&&merged.complete);
+  t('V4 extraction reaches the merge tail and retains explicit completion accounting',source.includes('requiredFacts.every(id=>factIds.has(id))')&&source.includes('const citationRecoveries=[...new Map([...(prior.citationRecoveries||[])')&&merged.complete);
 }
 
 module.exports={runAnkiAuditPartialTests};

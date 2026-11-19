@@ -23,7 +23,7 @@ async function runTests(S,t){
   t('category or number disagreement blocks structural identity',H.cardIdentityConflict({agreement:{idsDisagree:true}}));
   t('incomplete requested repeat cannot claim stable identity',H.cardIdentityConflict({comparisonIncomplete:true}));
   t('matching completed comparisons retain pairing eligibility',!H.cardIdentityConflict({agreement:{idsDisagree:false,facesDisagree:false},comparisonIncomplete:false}));
-  const start=S.indexOf('  const importJSON=async file=>{'),end=S.indexOf('\n  // v15.3 ',start);
+  const start=S.indexOf('  const importJSON=async file=>{'),end=S.indexOf('\n  return importJSON(file);',start);
   if(start<0||end<0)throw Error('Import closure anchors missing');
   const imported=[],errors=[],busy=[];let resolveA,resolveB;
   const slot2=H.createOperationSlot();

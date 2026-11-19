@@ -60,7 +60,7 @@ function runAnkiReviewQualityTests({S,t,section}){
   t('Anki recommended Auto profile uses Hydrogen Medium',defaults.anki.m==='hydrogen'&&defaults.anki.lv==='medium');
   const otherDefaults={courseAnalyzer:['hydrogen','medium'],knowledge:['hydrogen','medium'],knowledgeAudit:['hydrogen','medium'],cardTranscribe:['hydrogen','low'],priorityHarvest:['hydrogen','low'],priority:['neon','high'],nclex:['hydrogen','medium'],nclexgen:['neon','high'],cases:['neon','high'],itemAudit:['neon','high'],gizmo:['hydrogen','low']};
   t('Anki recommendation leaves every other tool default unchanged',Object.entries(otherDefaults).every(([id,[m,lv]])=>defaults[id].m===m&&defaults[id].lv===lv));
-  const savedSource=extract('  const [profiles,setProfiles]=useState(','  useEffect(()=>{try{localStorage.setItem(\'latte_auto_profile_v1\'');
+  const savedSource=extract('  const [profiles,setProfiles]=useState(','  // v21.10 (Phase 4): skip redundant localStorage write-backs');
   const loadProfiles=stored=>new Function('TOOL_PROFILE_DEFAULTS','localStorage','useState',savedSource+';return profiles;')(defaults,{getItem:()=>stored},fn=>[fn(),()=>{}]);
   t('Anki missing saved profile receives the new recommendation',loadProfiles(null).anki.lv==='medium');
   t('Anki existing saved Low override survives the recommendation change',loadProfiles(JSON.stringify({anki:{m:'hydrogen',lv:'low'}})).anki.lv==='low');

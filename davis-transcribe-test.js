@@ -24,11 +24,39 @@ const fs = require('fs');
 const path = require('path');
 const { resolveSuiteFile, extractPromptLiteral, sha256, parseMeasurementArgs,
   resolveMeasurementProfile, measurementPlan, createMeasurementPacer, measurementOutputCap,
-  MEASUREMENT_SAFETY_SETTINGS, redactSecrets, cliRetryDelayMs } = require('./tools/repo-checks');
+  MEASUREMENT_SAFETY_SETTINGS, redactSecrets, cliRetryDelayMs, writePrivateReport } = require('./tools/repo-checks');
 
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
   '.webp': 'image/webp', '.heic': 'image/heic', '.heif': 'image/heif' };
 const SAFETY = MEASUREMENT_SAFETY_SETTINGS;
+const DEFAULT_CARD_SCHEMA = {
+  type: 'object',
+  required: ['face', 'category', 'cardNumber', 'sections', 'numerics', 'overallLegibility'],
+  properties: {
+    face: { type: 'string', enum: ['front', 'back', 'unknown'] },
+    category: { type: ['string', 'null'] },
+    cardNumber: { type: ['string', 'null'] },
+    title: { type: ['string', 'null'] },
+    pronunciation: { type: ['string', 'null'] },
+    sections: { type: 'array', items: { type: 'object', required: ['key', 'bullets'], properties: { key: { type: 'string' }, heading: { type: ['string', 'null'] }, bullets: { type: 'array', items: { type: 'string' } }, legibility: { type: 'string', enum: ['clean', 'uncertain', 'unreadable'] } } } },
+    numerics: { type: 'array', items: { type: 'object', required: ['value', 'context'], properties: { value: { type: 'string' }, context: { type: 'string' }, legibility: { type: 'string', enum: ['clean', 'uncertain', 'unreadable'] } } } },
+    symbols: { type: 'array', items: { type: 'string' } },
+    unreadable: { type: 'array', items: { type: 'string' } },
+    overallLegibility: { type: 'string', enum: ['clean', 'uncertain', 'unreadable'] }
+  }
+};
+function extractCardSchema(source) {
+  if (typeof source !== 'string') return DEFAULT_CARD_SCHEMA;
+  const start = source.indexOf('const CARD_TRANSCRIBE_JSON_SCHEMA=');
+  if (start < 0) return DEFAULT_CARD_SCHEMA;
+  const end = source.indexOf(';\nasync function cardTranscribe(', start);
+  if (end < 0) return DEFAULT_CARD_SCHEMA;
+  try {
+    return new Function(source.slice(start, end + 1) + ';return CARD_TRANSCRIBE_JSON_SCHEMA;')();
+  } catch {
+    return DEFAULT_CARD_SCHEMA;
+  }
+}
 const parseArgs = argv => parseMeasurementArgs(argv, 'davis');
 
 function bulletsOf(t) {
@@ -52,8 +80,12 @@ function compareRuns(runs) {
   };
 }
 function validateTranscript(value) {
+  // v21.10 (Phase 5 M17): also validate overallLegibility enum and category/cardNumber string-or-null types to match shipped cardTranscribe schema.
+  const nullableStr = v => v === null || v === undefined || typeof v === 'string';
   if (!value || typeof value !== 'object' || Array.isArray(value) ||
       !['front', 'back', 'unknown'].includes(value.face) ||
+      !['clean', 'uncertain', 'unreadable'].includes(value.overallLegibility) ||
+      !nullableStr(value.category) || !nullableStr(value.cardNumber) ||
       !Array.isArray(value.sections) || !Array.isArray(value.numerics) ||
       !value.sections.every(s => s && typeof s.key === 'string' && Array.isArray(s.bullets) && s.bullets.every(b => typeof b === 'string')) ||
       !value.numerics.every(n => n && typeof n === 'object' && !Array.isArray(n) && n.value != null)) {
@@ -92,42 +124,77 @@ function payloadMetadata(bytes, mimeType) {
 }
 function createTranscriber(config, prompt, key, deps = {}) {
   const readFile = deps.readFile || fs.readFileSync;
+  const statFile = deps.statFile || (deps.readFile ? null : fs.statSync);
   const fetchFn = deps.fetch || globalThis.fetch;
   const sleep = deps.sleep || (ms => new Promise(resolve => setTimeout(resolve, ms)));
   const rand = deps.random || Math.random;
+  const schema = deps.schema || DEFAULT_CARD_SCHEMA;
   const pace = createMeasurementPacer(config.rpm, { now: deps.now || Date.now, sleep });
+  // v21.10 (Phase 5 M17): cache decoded image payloads across repeated --runs per image instead of re-reading and re-encoding every run.
+  const payloadCache = new Map();
   let storeUnsupported = false;
   return async function transcribe(imgPath, observation) {
     if (!config.live || config.dryRun) throw new Error('Live transcription requires --live and per-run human authorization');
     const mimeType = MIME[path.extname(imgPath).toLowerCase()];
     if (!mimeType) throw new Error('Unsupported image type');
-    const bytes = readFile(imgPath);
-    observation.originalPayload = payloadMetadata(bytes, mimeType);
-    observation.actualPayload = { ...observation.originalPayload, resized: false };
-    if (bytes.length > 15 * 1024 * 1024) throw new Error('Image too large for an inline request: ' + (bytes.length / 1048576).toFixed(1) + ' MB');
-    const body = { contents: [{ parts: [{ inlineData: { mimeType, data: bytes.toString('base64') } }, { text: prompt }] }],
-      generationConfig: { responseMimeType: 'application/json', maxOutputTokens: measurementOutputCap(config.model), thinkingConfig: { thinkingLevel: config.level } },
+    let cached = payloadCache.get(imgPath);
+    if (!cached) {
+      if (typeof statFile === 'function') {
+        const st = statFile(imgPath);
+        if (st && Number.isFinite(st.size) && st.size > 15 * 1024 * 1024) {
+          throw new Error('Image too large for an inline request: ' + (st.size / 1048576).toFixed(1) + ' MB');
+        }
+      }
+      const bytes = readFile(imgPath);
+      const meta = payloadMetadata(bytes, mimeType);
+      if (bytes.length > 15 * 1024 * 1024) {
+        observation.originalPayload = meta;
+        observation.actualPayload = { ...meta, resized: false };
+        throw new Error('Image too large for an inline request: ' + (bytes.length / 1048576).toFixed(1) + ' MB');
+      }
+      cached = { meta, base64: bytes.toString('base64') };
+      payloadCache.set(imgPath, cached);
+    }
+    observation.originalPayload = cached.meta;
+    observation.actualPayload = { ...cached.meta, resized: false };
+    // v21.10 (Phase 5 M17): align wire format with shipped cardTranscribe (systemInstruction + responseJsonSchema + single inlineData part).
+    const body = {
+      systemInstruction: { parts: [{ text: prompt }] },
+      contents: [{ parts: [{ inlineData: { mimeType, data: cached.base64 } }] }],
+      generationConfig: {
+        responseMimeType: 'application/json',
+        responseJsonSchema: schema,
+        maxOutputTokens: measurementOutputCap(config.model),
+        thinkingConfig: { thinkingLevel: config.level }
+      },
       safetySettings: SAFETY,
-      ...(storeUnsupported ? {} : { store: false }) };
-    const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + config.model + ':generateContent';
+      ...(storeUnsupported ? {} : { store: false })
+    };
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(String(config.model)) + ':generateContent';
     let resp, retriedStore = false;
     for (let attempt = 0; attempt < 4; attempt++) {
       await pace();
       observation.attempts++;
       const signal = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(900000) : undefined;
-      resp = await fetchFn(url, { method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-        body: JSON.stringify(body),
-        ...(signal ? { signal } : {}) });
+      try {
+        resp = await fetchFn(url, { method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+          body: JSON.stringify(body),
+          ...(signal ? { signal } : {}) });
+      } catch (fetchErr) {
+        if (attempt === 3) throw fetchErr;
+        await sleep(cliRetryDelayMs(null, null, config.retryms, attempt, rand));
+        continue;
+      }
       if (resp.ok) break;
       const errBody = typeof resp.json === 'function' ? await resp.json().catch(() => null) : null;
       const errMsg = String((errBody && errBody.error && errBody.error.message) || '');
+      // v21.10 (Phase 5 M17): honor maxAttemptsPerOperation === 4 strictly (never attempt-- on store:false 400 fallback).
       if (resp.status === 400 && body.store === false && !retriedStore && /\bstore\b/i.test(errMsg)) {
         storeUnsupported = true;
         retriedStore = true;
         delete body.store;
-        attempt--;
-        continue;
+        if (attempt < 3) continue;
       }
       // Do not copy an upstream error body into a report: it can echo request data.
       if ((resp.status !== 429 && resp.status < 500) || attempt === 3) throw new Error('HTTP ' + resp.status);
@@ -190,6 +257,7 @@ async function main(argv = process.argv.slice(2), deps = {}) {
     const suiteFile = (deps.resolveSuite || resolveSuiteFile)({ rootDir: deps.cwd || process.cwd(), explicit: config.suite });
     const source = readFile(suiteFile, 'utf8');
     const prompt = extractPromptLiteral(source, 'CARD_TRANSCRIBE_PROMPT').body;
+    const schema = extractCardSchema(source);
     const profile = resolveMeasurementProfile(config, source, 'cardTranscribe');
     config = { ...config, ...profile };
     const plan = { ...measurementPlan(config, config.images.length, profile),
@@ -198,12 +266,12 @@ async function main(argv = process.argv.slice(2), deps = {}) {
     if (config.dryRun) return 0;
     log('--live does not replace the required human authorization for these images and this run.');
     measuring = true;
-    const summary = await runMeasurement(config, createTranscriber(config, prompt, key, deps), log);
+    const summary = await runMeasurement(config, createTranscriber(config, prompt, key, { ...deps, schema }), log);
     const report = { at: new Date().toISOString(), model: config.model, level: config.level,
       runs: config.runs, suite: path.basename(suiteFile), plan, ...summary };
     // A locally thrown error may include the key; reports must never retain it.
     const reportText = redactSecrets(JSON.stringify(report, null, 2), key);
-    writeFile(config.out, reportText, { encoding: 'utf8', mode: 0o600 });
+    writePrivateReport(config.out, reportText, deps.writeFile);
     printSummary(JSON.parse(reportText), log);
     log('Full private report: ' + config.out + '; observed HTTP attempts: ' + summary.observedAttempts);
     return summary.exitCode;
@@ -214,6 +282,6 @@ async function main(argv = process.argv.slice(2), deps = {}) {
   }
 }
 module.exports = { parseArgs, compareRuns, validateTranscript, summarizeImages, payloadMetadata,
-  createTranscriber, runMeasurement, printSummary, main };
+  extractCardSchema, createTranscriber, runMeasurement, printSummary, main };
 if (require.main === module) main().then(code => { process.exitCode = code; },
-  error => { console.error(String(error.message || error)); process.exitCode = 1; });
+  error => { console.error(redactSecrets(error && error.message || error, process.env.GEMINI_API_KEY || '')); process.exitCode = 1; });

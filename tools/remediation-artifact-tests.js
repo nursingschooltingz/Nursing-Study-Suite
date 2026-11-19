@@ -22,8 +22,8 @@ module.exports=function runTests(S,t,A){
   t('JSON Copy preserves artifact fields and appends review metadata',json.title==='Original'&&json.stages[0].questions[0].answer==='A'&&json._suiteReview.notice===notice.trim());
   t('JSON Copy retains validation severity and unre-audited outcome',json._suiteReview.validation[0].severity==='error'&&json._suiteReview.itemAudit[0].status==='REPAIRED'&&json._suiteReview.itemAudit[0].id==='Q1');
   t('JSON Copy does not mutate the generated object or put audit answers in metadata',JSON.stringify(artifact)===before&&!JSON.stringify(json._suiteReview).includes('secret'));
-  t('JSON-view Copy uses the common export metadata path',S.includes("copyText(view==='json'?artifactJsonExport(caseStudy,exportNotice,issues,auditRows):caseMd)"));
-  const caseStart=S.indexOf('function CaseStudyGenerator(){'),quotaStart=S.indexOf('results=(e.partial||[]).filter(Boolean);',caseStart),quotaEnd=S.indexOf('            owned_log(',quotaStart),finishStart=S.indexOf('if(generatorSlot.current.current(operation))setAuditState(runAudit?',quotaEnd),finishEnd=S.indexOf('\n',finishStart);
+  t('JSON-view Copy uses the common export metadata path',S.includes("copyText(view==='json'?artifactJsonExport(caseStudy,exportNotice,issues,auditRows):buildCaseMd())"));
+  const caseStart=S.indexOf('async function caseRunSingleWithEnv('),quotaStart=S.indexOf('results=(e.partial||[]).filter(Boolean);',caseStart),quotaEnd=S.indexOf('            owned_log(',quotaStart),finishStart=S.indexOf('if(generatorSlot.current.current(operation))setAuditState(runAudit?',quotaEnd),finishEnd=S.indexOf('\n',finishStart);
   if([caseStart,quotaStart,quotaEnd,finishStart,finishEnd].some(n=>n<0))throw Error('Case audit-state extraction anchors missing');
   const finishQuota=new Function('active','let results=[],auditInterrupted=false,states=[],runAudit=true,operation={},e={partial:[{status:"PASS"}]},generatorSlot={current:{current:()=>active}},setAuditState=s=>states.push(s);'+S.slice(quotaStart,quotaEnd)+S.slice(finishStart,finishEnd)+';return {results,states};');
   const quotaResult=finishQuota(true);

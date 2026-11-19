@@ -135,8 +135,10 @@ async function runTests({ source, test = (name, value) => assert.ok(value, name)
     observation.actualPayload.mimeType === 'image/jpeg');
   t('Davis keeps measured request settings', sent[0].body.generationConfig.maxOutputTokens === 65536 &&
     sent[0].body.generationConfig.thinkingConfig.thinkingLevel === 'low' &&
+    sent[0].body.generationConfig.responseJsonSchema?.type === 'object' &&
     sent[0].body.safetySettings.every(s => s.threshold === 'BLOCK_NONE') &&
-    sent[0].body.contents[0].parts[1].text === 'synthetic prompt');
+    sent[0].body.systemInstruction.parts[0].text === 'synthetic prompt' &&
+    sent[0].body.contents[0].parts.length === 1 && !!sent[0].body.contents[0].parts[0].inlineData);
   let retryAttempts = 0;
   const failedObservation = { attempts: 0 };
   const failCall = neia.createAuditCaller({ ...neia.parseArgs(['--live']), retryms: 0 }, 'synthetic-key', {
@@ -232,8 +234,8 @@ async function runTests({ source, test = (name, value) => assert.ok(value, name)
     throws(() => browserFixture.once('duplicate duplicate', 'duplicate', 'replacement'), /exactly once/) &&
     throws(() => browserFixture.once('missing', 'absent', 'replacement'), /exactly once/));
   const resources = browserTests.approvedResources(realAppFixtureHtml);
-  t('Browser fixture approvedResources accounts for all 8 pinned CDN scripts and 2 PDF workers',
-    resources.scripts.size === 8 && resources.workers.size === 2 && resources.styles.size === 1);
+  t('Browser fixture approvedResources accounts for all 8 pinned CDN scripts, 2 PDF workers, and 0 external stylesheets',
+    resources.scripts.size === 8 && resources.workers.size === 2 && resources.styles.size === 0);
   t('All four Anki browser fixtures build cleanly against the live suite HTML without anchor drift',
     [ankiFixture, ankiSourceReviewBrowser, ankiGenQualityBrowser, ankiV166Browser].every(mod => {
       const html = mod.page();

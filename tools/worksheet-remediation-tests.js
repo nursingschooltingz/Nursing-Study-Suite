@@ -94,7 +94,7 @@ module.exports=function worksheetRemediationTests(S,t){
   const ungroundedCase=fixCase({...caseQuestion,rationales:caseQuestion.rationales.map(r=>({...r,factIds:['fact-999']}))});
   t('ungrounded case repair cannot replace previously usable content',!!ungroundedCase.error&&ungroundedCase.parsed===originalCase);
   t('initial and repaired worksheet validations share the captured contract',S.includes('let wsIssues=validateNCLEXWorksheet(workRaw,size,worksheetContract)')&&S.includes('wsIssues=validateNCLEXWorksheet(workRaw,size,worksheetContract)'));
-  t('case repair candidate must pass validation before replacing prior output',S.includes("revalidate(candidate).some(i=>i.sev==='error')")&&S.includes('parsed=candidate;'));
+  t('case repair candidate must pass validation before replacing prior output',S.includes('const nextIssues=revalidate(candidate);')&&S.includes("nextIssues.some(i=>i.sev==='error')")&&S.includes('parsed=candidate;'));
   t('worksheet registry links only actually cited concepts',S.includes('factIds:[...ngCitedFactIds(RP.p1,RP.p3,RP.p4)]'));
   const publishCode=span('let auditRows=[];\n        const publishBatch=','        if(runAudit&&!wsErr){');
   const recordCode=span('const completed={...g,...v};','              return completed;');

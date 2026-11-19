@@ -20,7 +20,8 @@ module.exports=function evidenceRegressionTests(S,t){
   t('a sign is part of numeric equality',error(audit('−15 mg')));
   t('direct blood pressure compares both values',!error(audit('120/80 mm Hg')));
   t('a neutral label cannot exempt an arbitrary dose',error(audit('900 mg',[],'neutral-framing')));
-  t('missing citations keep their established separate warning policy',audit('5 mg',[]).length===0);
+  // v21.10 (Phase 3 H16): unit-bearing uncited text errors instead of bypassing numeric entailment; non-numeric prose stays with the separate warn policy.
+  t('missing citations catch uncited unit-bearing numbers while leaving non-numeric prose to the separate warning policy',error(audit('5 mg',[]))&&audit('Monitor closely.',[]).length===0);
   const split=new Map([['a',{fact:{text:'15',sourceQuote:'mg'}}],['b',{fact:{text:'mg',sourceQuote:''}}]]),splitIssues=[];
   C.caseAuditTextValues('15 mg',['a','b'],split,'X',splitIssues,'direct');
   t('evidence cannot manufacture a token across facts or quote boundaries',error(splitIssues));

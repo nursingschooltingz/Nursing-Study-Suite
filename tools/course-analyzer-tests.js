@@ -53,8 +53,8 @@ module.exports = async function runCourseAnalyzerTests(S, t) {
   t('v21.9: COURSE_ANALYZER_PROMPT enforces conservative retention without DROP-anatomy directives and COURSE_ANALYZER_JSON_SCHEMA uses standard lowercase JSON Schema',
     H.COURSE_ANALYZER_PROMPT.includes('CONSERVATIVE RETENTION PRINCIPLE (ZERO OVER-PRUNING)') &&
     H.COURSE_ANALYZER_PROMPT.includes('NEVER split Points into per-disease P-LATE subheadings') &&
-    H.COURSE_ANALYZER_PROMPT.includes('STRICTLY ADDITIVE'.toLowerCase()) === false &&
-    H.COURSE_ANALYZER_PROMPT.includes('strictly ADDITIVE guidance bullets') &&
+    H.COURSE_ANALYZER_PROMPT.includes('NEVER emit "DROP background anatomy"') &&
+    /strictly\s+additive\s+guidance\s+bullets/i.test(H.COURSE_ANALYZER_PROMPT) &&
     H.COURSE_ANALYZER_JSON_SCHEMA.type === 'object' &&
     H.COURSE_ANALYZER_JSON_SCHEMA.required.join(',') === 'course,exam,overarchingConcepts,outcomes,pointGroups,additionalContext,coverageReport' &&
     H.COURSE_ANALYZER_JSON_SCHEMA.properties.pointGroups.items.required.join(',') === 'concept,points');

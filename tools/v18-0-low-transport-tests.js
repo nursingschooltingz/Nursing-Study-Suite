@@ -189,18 +189,18 @@ module.exports=async function run(S,t){
     el.props.onBlur({});el=rt.render(NumberInput,props());const blurred=el.props.value;
     el.props.onChange({target:{value:''}});el=rt.render(NumberInput,props());const cleared=[el.props.value,total];
     el.props.onBlur({});el=rt.render(NumberInput,props());
-    const fields=S.split('<NumberInput ').length-1;
+    const fields=(S.split('<NumberInput ').length-1)+(S.split('h(NumberInput,').length-1);
     return {
       [NUM[0]]:el.type==='input'&&el.props.type==='number'&&el.props.min===5&&afterOne[0]==='1'&&afterOne[1]===5&&afterTwelve[0]==='12'&&afterTwelve[1]===12&&blurred===12,
       [NUM[1]]:cleared[0]===''&&cleared[1]===50&&el.props.value===50,
       [NUM[2]]:fields===17&&!/<input [^>]*type="number"/.test(S)&&['kb-runs','kb-chunk-size','kb-overlap','priority-chunk-size','priority-overlap','extract-chunk-size','extract-overlap','extract-batch-size','nclex-total','nclex-facts-per-question','gizmo-pages-per-chunk','gizmo-ai-batch-size','gizmo-cards-per-page','gizmo-range-start','gizmo-range-end'].every(id=>S.includes('<NumberInput id="'+id+'" type="number"'))&&
-        S.includes("<NumberInput aria-label={sLabel+' range '+(i+1)+' start page'}")&&S.includes("<NumberInput aria-label={sLabel+' range '+(i+1)+' end page'}"),
+        S.includes("h(NumberInput,{'aria-label':sLabel+' range '+(i+1)+' start page'")&&S.includes("h(NumberInput,{'aria-label':sLabel+' range '+(i+1)+' end page'"),
     };
   });
 
   // ── L44: style/font CSP directives and print links ──
-  const SEC=['L44: the suite CSP limits styles to inline and the Google Fonts stylesheet, and fonts to its font host',
-    'L44: every linked stylesheet is allowed by style-src and no other font source is declared',
+  const SEC=['L44: the suite CSP restricts styles to inline only and disables external font hosts (font-src none)',
+    'L44: zero external stylesheets, @font-face, or @import rules are declared',
     'L44: the print preview underlines links on screen and keeps them plain in print'];
   await section(t,SEC,()=>{
     const meta=S.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)">/);
@@ -211,9 +211,9 @@ module.exports=async function run(S,t){
       s=>String(s),()=>'<p><a href="https://example.invalid/source">synthetic link</a></p>')('# synthetic','Synthetic title','');
     const screen=doc.slice(doc.indexOf('@media screen{'),doc.indexOf('@media print{'));
     return {
-      [SEC[0]]:style.join(' ')==="'unsafe-inline' https://fonts.googleapis.com"&&font.join(' ')==='https://fonts.gstatic.com'&&
-        !policy.has('default-src')&&(policy.get('script-src')||[]).join(' ')==="'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:"&&(policy.get('object-src')||[]).join()==="'none'",
-      [SEC[1]]:sheets.length===1&&sheets.every(o=>style.includes(o))&&!/@font-face/.test(S)&&!/@import/.test(S)&&style.includes("'unsafe-inline'"),
+      [SEC[0]]:style.join(' ')==="'unsafe-inline'"&&font.join(' ')==="'none'"&&
+        (policy.get('default-src')||[]).join()==="'none'"&&(policy.get('script-src')||[]).join(' ')==="'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:"&&(policy.get('object-src')||[]).join()==="'none'",
+      [SEC[1]]:sheets.length===0&&!/@font-face/.test(S)&&!/@import/.test(S)&&style.includes("'unsafe-inline'"),
       [SEC[2]]:/a\{text-decoration:underline;\}/.test(screen)&&doc.includes('a{color:#14161f;text-decoration:none;}')&&doc.includes('synthetic link'),
     };
   });

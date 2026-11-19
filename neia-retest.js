@@ -21,7 +21,7 @@ const fs = require('fs');
 const path = require('path');
 const { resolveSuiteFile, sha256, parseMeasurementArgs, resolveMeasurementProfile,
   measurementPlan, createMeasurementPacer, measurementOutputCap,
-  MEASUREMENT_SAFETY_SETTINGS, redactSecrets, cliRetryDelayMs } = require('./tools/repo-checks');
+  MEASUREMENT_SAFETY_SETTINGS, redactSecrets, cliRetryDelayMs, writePrivateReport } = require('./tools/repo-checks');
 const parseArgs = argv => parseMeasurementArgs(argv, 'neia');
 const SAFETY = MEASUREMENT_SAFETY_SETTINGS;
 
@@ -36,7 +36,7 @@ function extractAudit(source) {
   const markdown = spanFrom(source, 'function caseToMarkdown(', "\n  return L.join('\\n');\n}");
   const audit = spanFrom(source, 'function caseIsGateEligible(', '/* ── END CASE STUDY PURE HELPERS ── */');
   const result = new Function('CASE_QUESTION_RULES', 'caseRenderFactPacket', markdown + audit +
-    ';return {caseAuditPayload,itemBuildAuditPrompt,itemParseAuditVerdict,caseIsGateEligible,itemAuditSummary};')('', () => '');
+    ';return {caseAuditPayload,itemBuildAuditPrompt,itemSplitAuditPrompt,itemParseAuditVerdict,caseIsGateEligible,itemAuditSummary};')('', () => '');
   if (typeof result.itemAuditSummary !== 'function') throw new Error('Audit extraction tail missing: itemAuditSummary');
   return result;
 }
@@ -70,21 +70,34 @@ function createAuditCaller(config, key, deps = {}) {
   let storeUnsupported = false;
   return async function callOnce(prompt, observation) {
     if (!config.live || config.dryRun) throw new Error('Live audit requires --live and per-run human authorization');
-    const body = { contents: [{ parts: [{ text: prompt }] }],
+    // v21.10 (Phase 5 M17): align wire format with shipped itemAudit (static rubric in systemInstruction when marker present), encode model ID, catch transient fetch rejections, honor 4-attempt ceiling, and respect cliRetryDelayMs 600s cap.
+    const promptStr = String(prompt || '');
+    const splitMarker = '\n\n═══ THE CASE, AS THE STUDENT SEES IT ═══\n';
+    const cut = promptStr.indexOf(splitMarker);
+    const body = {
+      ...(cut > 0 ? { systemInstruction: { parts: [{ text: promptStr.slice(0, cut) }] } } : {}),
+      contents: [{ parts: [{ text: cut > 0 ? promptStr.slice(cut + 2) : promptStr }] }],
       generationConfig: { maxOutputTokens: measurementOutputCap(config.model), thinkingConfig: { thinkingLevel: config.level } },
       safetySettings: SAFETY,
-      ...(storeUnsupported ? {} : { store: false }) };
-    const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + config.model + ':generateContent';
+      ...(storeUnsupported ? {} : { store: false })
+    };
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(String(config.model)) + ':generateContent';
     const started = now();
     let resp, retriedStore = false;
     for (let attempt = 0; attempt < 4; attempt++) {
       await pace();
       observation.attempts++;
       const signal = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(900000) : undefined;
-      resp = await fetchFn(url, { method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-        body: JSON.stringify(body),
-        ...(signal ? { signal } : {}) });
+      try {
+        resp = await fetchFn(url, { method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+          body: JSON.stringify(body),
+          ...(signal ? { signal } : {}) });
+      } catch (fetchErr) {
+        if (attempt === 3) throw fetchErr;
+        await sleep(cliRetryDelayMs(null, null, config.retryms, attempt, rand));
+        continue;
+      }
       if (resp.ok) break;
       const errBody = typeof resp.json === 'function' ? await resp.json().catch(() => null) : null;
       const errMsg = String((errBody && errBody.error && errBody.error.message) || '');
@@ -92,12 +105,10 @@ function createAuditCaller(config, key, deps = {}) {
         storeUnsupported = true;
         retriedStore = true;
         delete body.store;
-        attempt--;
-        continue;
+        if (attempt < 3) continue;
       }
       if ((resp.status !== 429 && resp.status < 500) || attempt === 3) throw new Error('HTTP ' + resp.status);
-      const baseDelay = config.retryms * Math.pow(2, attempt);
-      await sleep(Math.max(baseDelay, cliRetryDelayMs(errBody, resp.headers, config.retryms, attempt, rand)));
+      await sleep(cliRetryDelayMs(errBody, resp.headers, config.retryms, attempt, rand));
     }
     const response = await resp.json(), candidate = (response.candidates || [])[0] || {};
     observation.finishReason = candidate.finishReason || '';
@@ -161,12 +172,14 @@ function analyzeResults(results, requestedRuns, expectedIds) {
     if (measurable && acc > 0 && acc < ok.length) accuracyDisagree++;
     if (measurable && pla > 0 && pla < ok.length) plausibilityDisagree++;
 
+    // v21.10 (Phase 5 M17): compute latency/token means over successful runs (ok) so ERROR rows (which record 0s) never deflate means.
+    const meanOf = fn => ok.length ? Math.round(ok.reduce((a, r) => a + fn(r), 0) / ok.length) : 0;
     rows.push({ id, band, seededCriterion: seeded, statuses, uniqueStatuses: uniqStatus,
       failCriteria: uniqCrit, flipped, measurable, okRuns: ok.length,
-      meanMs: Math.round(rs.reduce((a, r) => a + r.ms, 0) / rs.length),
-      meanTokensIn: Math.round(rs.reduce((a, r) => a + r.tokensIn, 0) / rs.length),
-      meanTokensOut: Math.round(rs.reduce((a, r) => a + r.tokensOut, 0) / rs.length),
-      meanTokensThought: Math.round(rs.reduce((a, r) => a + r.tokensThought, 0) / rs.length) });
+      meanMs: meanOf(r => r.ms),
+      meanTokensIn: meanOf(r => r.tokensIn),
+      meanTokensOut: meanOf(r => r.tokensOut),
+      meanTokensThought: meanOf(r => r.tokensThought) });
   }
 
   // Which criteria were unstable — this is the list that drives FAIL -> WARN demotion.
@@ -294,7 +307,7 @@ async function main(argv = process.argv.slice(2), deps = {}) {
       noPublishedComparison: 'No figure here may be compared to any published ICC or accuracy value. The June 2026 study tested zero Gemini configurations.',
       ...summary };
     const reportText = redactSecrets(JSON.stringify(report, null, 2), key);
-    writeFile(config.out, reportText, { encoding: 'utf8', mode: 0o600 });
+    writePrivateReport(config.out, reportText, deps.writeFile);
     printSummary(JSON.parse(reportText), log);
     log('Full private report: ' + config.out);
     return summary.exitCode;
@@ -307,4 +320,4 @@ async function main(argv = process.argv.slice(2), deps = {}) {
 module.exports = { parseArgs, spanFrom, extractAudit, selectItems, prepareJobs, createAuditCaller,
   pool, analyzeResults, runMeasurement, printSummary, main };
 if (require.main === module) main().then(code => { process.exitCode = code; },
-  error => { console.error(String(error.message || error)); process.exitCode = 1; });
+  error => { console.error(redactSecrets(error && error.message || error, process.env.GEMINI_API_KEY || '')); process.exitCode = 1; });

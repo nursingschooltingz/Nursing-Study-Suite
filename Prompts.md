@@ -1,6 +1,6 @@
 # Nursing Study Suite — Prompt Library
 
-The full prompts behind the Course Analyzer, Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, the item-quality auditor, the NCLEX to Anki image reader, and the Import to Gizmo chunk formatter, **extracted verbatim from the shipped v21.10 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
+The full prompts behind the Course Analyzer, Knowledge Base builder, flashcard transcriber, Anki Generator, Priority Analyzer, NCLEX Extractor, NCLEX Generator, Case Study Generator, the item-quality auditor, the NCLEX to Anki image reader, and the Import to Gizmo chunk formatter, **extracted verbatim from the shipped v21.11 file** (spliced programmatically, not retyped — byte-identical to what the app sends).
 
 > **Coverage.** All 25 named prompt constants are represented from live HTML bytes. Thirteen are byte-frozen (with user-approved v21.0 updates to five constants recorded in `docs/history/PLATE-v21.0-frozen-prompts.diff`, user-approved v21.3 promotion of `GIZMO_DEFAULT_IMPORT_PROMPT` and `GIZMO_CONVERT_PROMPT` into `prompt-baseline.json`, and user-approved v21.5 `Look vs. Analyze` clarification in `docs/history/PLATE-v21.5-look-analyze-scales.diff`); `CARD_TRANSCRIBE_PROMPT` is deliberately tunable but requires two transcription runs per card after an edit. `I2A_TRANSCRIBE_PROMPT` and `I2A_ANSWER_PROMPT` (NCLEX to Anki, v17.9) are copied from img2anki.py and are not frozen. `PRIORITY_ORDER_RULES` (v18.1), `KB_SOURCE_ANCHOR_RULES` (v19.0), `KB_CONCEPT_CURRICULUM_RULES` (v19.2), `KB_EXAM_TRAP_RULES` (v19.2), `KB_PLATE_BRIDGE_RULES` (v21.0), `NCLEX_PLATE_TRAP_RULES` (v21.0), `CASE_SLOPE_SYNC_RULES` (v21.0), `CASE_NGN_TYPE_RULES` (v21.7), and `COURSE_ANALYZER_PROMPT` (v21.9) are not frozen; harness assertions keep them in step with their workflows. The generated appendix is maintained by `node tools/render-prompts.js --write` and checked by `node verify-repo.js`.
 
@@ -8,9 +8,9 @@ How to read them: text inside `${...}` is filled in at runtime by the app (your 
 
 ---
 
-## 1 · Knowledge Base Builder (`KB_EXTRACTION_PROMPT` 8,127 chars · `KB_VERIFY_PROMPT` 2,971 chars)
+## 1 · Knowledge Base Builder (`KB_EXTRACTION_PROMPT` 8,127 chars · `KB_VERIFY_PROMPT` 2,965 chars)
 
-This is the first tool in the suite and the one every other tool feeds from — the study guide, Anki cards, NCLEX questions and case studies are all generated from the Knowledge Base this pass produces, not from the source PDF directly.
+This is the core source-building tool (`02 · Knowledge Base`, fed optionally by `01 · Course Analyzer`) that every downstream tool reads from — the study guide, Anki cards, NCLEX questions and case studies are all generated from the Knowledge Base this pass produces, not from the source PDF directly.
 
 It runs as **two passes over each chunk**, with different risk profiles on purpose:
 
@@ -25,30 +25,45 @@ The asymmetry is deliberate and long-standing: pass 1 losing a real fact is wors
 
 ### Runtime assembly — pass 1
 
-````js
-KB_EXTRACTION_PROMPT.replace(
-  'ONE supplied source file',
-  'ONE supplied source chunk named "' + file.name + '" (' + chunk.label + ')'
-) + focusBlock
-````
+Since `v20.2` (with `KB_EXTRACTION_JSON_SCHEMA` added in `v21.10`), the static prompt and `focusBlock` stay untouched at token 0 in `systemInstruction` for Gemini implicit prefix caching, while per-chunk scope metadata and chunk text arrive in `contents`, streamed via SSE (`stream: true`):
 
-Note the `.replace()`: the first line of the shipped constant is **never** what the model actually receives. At runtime that phrase is rewritten to name the specific file and chunk, which is what lets every extracted fact carry a page-level source pointer.
+````js
+{
+  systemInstruction: { parts: [{ text: KB_EXTRACTION_PROMPT + focusBlock }] },
+  contents: [{ parts: [{
+    text: 'SOURCE CHUNK SCOPE: ONE supplied source chunk named "' + file.name + '" (' + chunk.label + ')\n' +
+      'SOURCE FILE: ' + file.name + '\nSOURCE RANGE: ' + chunk.label + '\n' + chunk.text
+  }]}],
+  generationConfig: {
+    responseMimeType: 'application/json',
+    responseJsonSchema: KB_EXTRACTION_JSON_SCHEMA,
+    thinkingConfig: { thinkingLevel: level }
+  }
+}
+````
 
 ### Runtime assembly — pass 2
 
-The audit call sends three parts, and the **prompt comes last**, after the evidence:
+The audit call places `KB_VERIFY_PROMPT + focusBlock` in `systemInstruction`, attaches `KB_VERIFY_JSON_SCHEMA`, streams via SSE (`stream: true`), and sends the two evidence parts in `contents`:
 
 ````js
-contents: [{ parts: [
-  { text: '(A) SOURCE CHUNK — ' + file.name + ' (' + chunk.label + ')\n' + chunk.text },
-  { text: '(B) FACTS ALREADY EXTRACTED FROM THIS CHUNK\n' + inventory },
-  { text: KB_VERIFY_PROMPT + focusBlock }
-]}]
+{
+  systemInstruction: { parts: [{ text: KB_VERIFY_PROMPT + focusBlock }] },
+  contents: [{ parts: [
+    { text: '(A) SOURCE CHUNK — ' + file.name + ' (' + chunk.label + ')\n' + chunk.text },
+    { text: '(B) FACTS ALREADY EXTRACTED FROM THIS CHUNK\n' + inventory }
+  ]}],
+  generationConfig: {
+    responseMimeType: 'application/json',
+    responseJsonSchema: KB_VERIFY_JSON_SCHEMA,
+    thinkingConfig: { thinkingLevel: auditCfg.level }
+  }
+}
 ````
 
-Each `inventory` line is `- [LATTE bucket] fact text`; since v18.4 a fact with a box or table label shows it after the bucket (`- [Tests] [Table 8.1] fact text`), so the audit can match each printed box and table against what was extracted.
+Each `inventory` line is `- [P-LATE bucket] fact text`; since v18.4 a fact with a box or table label shows it after the bucket (`- [Analyze] [Table 8.1] fact text`), so the audit can match each printed box and table against what was extracted.
 
-`focusBlock` is the same Outcomes / Points / Additional Context rendering the other tools use. Neither KB prompt contains any `${...}` interpolation — both are fixed text, and everything variable arrives in the parts above.
+`focusBlock` is the same Outcomes / Points / Additional Context (plus Concept Curriculum, Exam Traps, and RN/NP Bridge rules when enabled) rendering the other tools use (`kbBuildFocusBlock`, passing `isVerify: true` on Pass 2). Neither KB prompt contains any `${...}` interpolation — both are fixed text, and everything variable arrives in `contents` above.
 
 ### `KB_EXTRACTION_PROMPT`
 
@@ -843,14 +858,13 @@ Since v17.7, a harvest over 40,000 characters (`PA_SYNTH_PART_CHARS`) is sent to
 
 Also since v17.7, Stage 1's `## Content` is always whole fact lines. Each chunk opens with the Knowledge Base packet preamble and puts every fact under its own `## Condition` heading, so the rule "If the chunk has no heading, use [§ untitled]" no longer has a headingless chunk to fire on. A condition too large for one chunk continues under the same heading. Its harvests stay in one Stage 2 part, and the app combines `###` topics that share a heading across parts.
 
-### Stage 1 — harvest (`paBuildExtractPrompt`, 3,759 chars)
+### Stage 1 — harvest (`paBuildExtractPrompt`, 4,029 chars)
 
 ````js
 function paBuildExtractPrompt(chunk,idx,total,prevSummary){
   return `You are a nursing content analyst harvesting a priority inventory from one chunk of a FINISHED study guide.
-Chunk ${idx+1} of ${total}.
 
-${prevSummary?`## Items already harvested from previous chunks\n${prevSummary}\n---\n\n`:''}YOUR JOB: harvest, do NOT rank. Tiers are assigned later by a separate rule-based pass.
+YOUR JOB: harvest, do NOT rank. Tiers are assigned later by a separate rule-based pass.
 Assigning tiers here corrupts that pass. Do not write T1, T2, or T3 anywhere.
 
 For every discrete testable item in this chunk, output ONE line:
@@ -881,7 +895,9 @@ RULES
    ROUTINE-LAB .... abnormal but not critical — creatinine, BUN, Hgb 8–11, bicarb, elevated HCT,
                     elevated BNP, elevated Na
    UNSTABLE ....... acute; unexpected or changed finding; post-op <12h; general anesthesia <12h;
-                    newly admitted or diagnosed <24h; not ready for discharge; worsening
+                    newly admitted or diagnosed <24h; not ready for discharge; worsening;
+                    or deceptive "pseudo-improvement" (sudden loss of an acute sign signaling
+                    decompensation, such as a silent chest or abrupt pain relief on perforation)
    STABLE ......... chronic; expected/classic presentation; unchanged assessment; post-op >12h;
                     ready for discharge
    SAFETY ......... black-box warning, contraindication, antidote, hold parameter, allergy,
@@ -903,11 +919,12 @@ RULES
 5. Group items under the guide's own condition/topic headings. One line per item. Telegraphic.
 
 ## Content
-${chunk}`;
+Chunk ${idx+1} of ${total}.
+${prevSummary?`\n## Items already harvested from previous chunks\n${prevSummary}\n---\n\n`:'\n'}${chunk}`;
 }
 ````
 
-### Stage 2 — synthesis (`paBuildSynthPrompt`, 8,701 chars)
+### Stage 2 — synthesis (`paBuildSynthPrompt`, 8,986 chars)
 
 ````js
 function paBuildSynthPrompt(extractions,context){
@@ -917,10 +934,10 @@ study order. You are not adding knowledge — you are sorting what is already th
 and showing your work.
 
 ## INPUT
-A harvested inventory from ${extractions.length} chunks. Each line carries an item, its [§ Section]
+A harvested inventory from source chunks. Each line carries an item, its [§ Section]
 anchor, the source's own QUALIFIER, and objective FLAGS. No tiers were assigned. You assign them.
 
-${context?`## Exam context\n${context}\n\n`:''}## HARD RULES — violating any of these makes the output worthless
+## HARD RULES — violating any of these makes the output worthless
 
 G1. NO NEW CONTENT. Every item you output must trace to the inventory. Do not add conditions,
     values, drugs, or interventions from your own knowledge.
@@ -967,7 +984,7 @@ R3  PSYCH-SAFETY ... suicidal/homicidal ideation, self-harm, violence, elopement
                      it is T1 — no matter where Maslow would otherwise file it.
 R4  CRIT-LAB ....... critical-range value. → T1
 R5  UNSTABLE ....... acute; unexpected/changed finding; post-op <12h; newly admitted <24h;
-                     worsening. → T1
+                     worsening; deceptive pseudo-improvement (e.g., silent chest, abrupt pain relief on perforation). → T1
 R6  SAFETY / SCOPE . black-box warnings, contraindications, antidotes, hold parameters, allergies,
                      high-alert meds; delegation, assignment, scope limits, staff-management actions.
                      → T1 (safety-critical and heavily tested)
@@ -1063,7 +1080,8 @@ T1 items. No generic study advice.
 Then the audit footer, in the shape specified above, as the last line. Nothing after it.
 
 ## Harvested Inventory
-${combined}
+A harvested inventory from ${extractions.length} chunk(s).
+${context?`\n## Exam context\n${context}\n\n`:'\n'}${combined}
 
 Produce the ranked analysis now.`;
 }
@@ -1071,7 +1089,7 @@ Produce the ranked analysis now.`;
 
 ---
 
-## 4 · NCLEX Question Generator (`NCLEX_GEN_PROMPT`, v4.2, 24,083 chars)
+## 4 · NCLEX Question Generator (`NCLEX_GEN_PROMPT`, v4.2, 24,569 chars)
 
 **Runtime assembly** — each batch the app sends is:
 
@@ -1544,160 +1562,12 @@ Either way, the ANCHOR RULE is unchanged: every option must trace to verbatim so
 
 ---
 
-## 5 · Clinical Case Study Generator (`caseBuildPrompt`, 9,299 chars)
+## 5 · Clinical Case Study Generator (`caseBuildPrompt`, 116 chars)
 
 Returns JSON, not markdown — every field is re-validated in code against the real Knowledge Base after generation. The fact packet is appended by `caseRenderFactPacket`; the shared question rules come from `CASE_QUESTION_RULES`, and since v18.1 the shared priority order from `PRIORITY_ORDER_RULES` (both in the Appendix).
 
 ````js
-function caseBuildPrompt({conditionName,facts,difficulty,stages,questionsPerStage,includeTypes}){
-  const typeList=[];
-  if(includeTypes.mcq)typeList.push('MCQ (single best answer, 4 options A-D)');
-  if(includeTypes.sata)typeList.push('SATA — "(Select all that apply)" at the start of the stem, 5-6 options, 2-4 correct');
-  if(includeTypes.prioritization)typeList.push('Prioritization (which action/finding comes first)');
-  if(includeTypes.ordering)typeList.push('Ordered response — randomized steps to sequence (never list in correct order)');
-  if(includeTypes.calculation)typeList.push('Calculation — only when the supplied facts contain the needed numbers; show the required unit');
-  if(includeTypes.education)typeList.push('Client education (which teaching point is correct / indicates understanding)');
-  return `═══ CLINICAL CASE STUDY GENERATOR (strict, source-grounded, JSON output) ═══
-
-ROLE: You are a nursing clinical-judgment case author with expertise in the NCSBN Clinical
-Judgment Measurement Model (CJMM). You build UNFOLDING patient cases that test reasoning across
-stages, using ONLY the supplied Knowledge Base facts.
-
-Return ONLY a single valid JSON object. No markdown fence, no preamble, no commentary.
-
-═══ SOURCE BOUNDARY (the most important rule) ═══
-You may invent ONLY neutral narrative details that do NOT affect clinical reasoning:
-time of day, room number, whether a family member is present, the client's first name.
-You may NOT invent any of the following — every one must trace to a supplied fact ID:
-  diagnoses · comorbidities · allergies · home medications · medication doses ·
-  laboratory or vital-sign values · assessment findings · procedures · provider orders ·
-  contraindications · treatment responses · discharge restrictions · complications.
-A client age and sex may be chosen freely ONLY if they do not change the clinical reasoning
-(e.g. do not invent "72-year-old with CKD" unless CKD is a supplied fact).
-BODY WEIGHT is the one clinical value you may choose, and ONLY when a weight-based
-calculation requires it and no supplied fact states one. Choose a plainly ordinary adult
-weight, present it in the stage "data" array like any other datum with supportType
-"neutral-framing", and use that same number in every rationale that computes from it.
-Never choose a weight that changes the clinical picture (do not invent obesity or
-cachexia), and never invent any other laboratory or vital-sign value this way.
-Laboratory and vital-sign values must trace to a supplied fact EITHER verbatim OR as a
-bounded instantiation of a threshold that fact states — see supportType "instantiated"
-below. Presenting a concrete value rather than restating the rule is preferred, because a
-stem that quotes the decision rule hands the student the answer.
-
-TERMINOLOGY: use NCSBN Test Plan vocabulary in all learner-facing text — client (not
-patient), prescription for medications and order for other interventions, primary health
-care provider (not doctor/physician), UAP. Never use q.d., QOD, IU, a bare U for unit, a
-trailing zero (5.0 mg), or a decimal without a leading zero (.5 mg).
-This applies to text YOU write. Quoted source material keeps its own wording — never
-reword a verbatim quote to satisfy this rule.
-Every clinical datum, every correct answer, and every rationale MUST cite at least one supplied
-fact ID in its factIds array. If the facts cannot support a stage or question, produce fewer and
-say so in debrief.notes — NEVER fabricate to fill a quota.
-
-═══ PROSE FIELDS CARRY NO CLINICAL DATA ═══
-These fields are free text and cannot carry fact IDs, so they must contain NO clinical values:
-  title · patient.background · stage narrative · debrief.priorityProblem ·
-  debrief.keyDecisions · debrief.notes
-Put every finding, vital sign, lab, dose, and measurement in the structured "data" array, where
-it can be cited. Narrative may set the scene only.
-  ALLOWED in narrative:  "The nurse enters the room at 0800." · "A 72-year-old woman arrives
-                          with her daughter." · "The call light is within reach."
-  FORBIDDEN in narrative: "BP is 82/50." · "Potassium fell to 2.8 mEq/L." · "She takes
-                          furosemide 80 mg daily." · "Oxygen saturation dropped to 88%."
-This is checked automatically: any number carrying a clinical unit (mg, mcg, mL, mEq/L, mm Hg,
-bpm, %, units, cm, mm, kg, lb) or a time span (hours, minutes, days) or a blood-pressure pair
-found in these fields FAILS validation. Write elapsed time in words ("Two hours later") or put it
-in "data". Ages, room numbers, and clock times (0800, 1400) are fine.
-
-═══ SUPPORT TYPE (label honesty) ═══
-Each data item and rationale carries a supportType describing how it relates to the facts:
-  "direct"         — restates a single fact
-  "combined"       — merges two or more facts (list every id)
-  "inference"      — a valid clinical inference from several facts (e.g. "client is
-                     deteriorating" from falling SpO2 + new confusion); list every id
-  "instantiated"   — a specific client value generated from a cited THRESHOLD or RANGE
-                     fact (source says "urine output <30 mL/hr"; the case presents
-                     "22 mL/hr"). The cited fact MUST contain the threshold, and the
-                     value MUST fall on the side of it the case is claiming.
-                     Never use this to invent a value the facts do not bound.
-  "neutral-framing"— invented narrative detail with no clinical weight (factIds may be empty)
-Do not pretend an inference is a direct quote.
-This is checked in code: a value absent from its cited facts is an ERROR unless you declare
-it "instantiated" AND a cited fact states a bound the value actually satisfies.
-
-NUMERIC DISTRACTOR RATIONALES:
-Incorrect options may contain deliberately wrong quantities. Those option values are NOT
-source evidence for their rationales. Explain rejection using the actual cited rule;
-refer to "this option's interval/dose" instead of repeating an unsupported number.
-Never claim a rejected value belongs to another stage, condition or treatment unless
-the cited fact explicitly establishes that association. Do not relabel an unsupported
-distractor number "instantiated" merely to clear numeric validation.
-Example: source says "assess every 4 minutes" and a distractor says "every 12 minutes".
-Rationale: "This option does not match the cited assessment interval of 4 minutes."
-Before returning JSON, check the numbers and fact IDs in EVERY rationale, including
-incorrect options; each asserted value must have the same source support as a correct answer.
-
-═══ STAGE DEPENDENCY ═══
-Generate exactly ${stages} stages that unfold in clinical order. A question in a stage may only
-depend on data revealed in that stage or an earlier one. Never let a Stage 1 question hinge on a
-lab that is not revealed until Stage 2. Background pathophysiology may be marked availability
-"background"; client data that has been shown is availability "revealed".
-Stage arc for ${stages} stages:
-  Stage 1 — Initial presentation (BriefPatho + Look + baseline findings)
-  Stage 2 — Assessment & diagnostics (Assess + Tests)
-  Stage 3 — Intervention (Treatments: orders, meds, precautions)
-${stages>=4?'  Stage 4 — Discharge teaching OR deterioration (Educate, or a grounded complication)\n':''}${stages>=5?'  Stage 5 — Outcome evaluation (Evaluate response using revealed data)\n':''}
-═══ QUESTIONS ═══
-${caseDifficultyBlock(difficulty)}
-Produce ${questionsPerStage} question(s) per stage.
-Allowed question types (use a mix drawn from these; do not use a type the facts cannot support):
-  ${typeList.join('\n  ')}
-Tag exactly one CJMM skill per question from: Recognize Cues · Analyze Cues ·
-Prioritize Hypotheses · Generate Solutions · Take Action · Evaluate Outcomes.
-
-${CASE_QUESTION_RULES}
-
-${PRIORITY_ORDER_RULES}
-
-═══ JSON SHAPE (return EXACTLY this structure) ═══
-{
-  "title": "string",
-  "condition": "${conditionName}",
-  "difficulty": "${difficulty}",
-  "patient": { "age": 0, "sex": "string", "background": "neutral, source-safe context only" },
-  "stages": [
-    {
-      "stageNumber": 1,
-      "title": "string",
-      "narrative": "2-4 sentences of unfolding scenario",
-      "data": [
-        { "label": "e.g. Respiratory rate", "value": "e.g. 28/min", "supportType": "direct",
-          "availability": "revealed", "factIds": ["fact-104"] }
-      ],
-      "questions": [
-        {
-          "id": "s1q1",
-          "type": "MCQ|SATA|Prioritization|Ordering|Calculation|Education",
-          "stem": "string",
-          "options": [ { "label": "A", "text": "string" } ],
-          "correctAnswers": ["B"],
-          "rationales": [ { "option": "B", "text": "string", "supportType": "direct", "factIds": ["fact-104"] } ],
-          "cjmmSkill": "Recognize Cues"
-        }
-      ]
-    }
-  ],
-  "debrief": { "priorityProblem": "string", "keyDecisions": ["string"], "notes": "any shortfalls or facts you could not cover", "factIds": ["fact-104"] }
-}
-
-Generic disease descriptions do not establish this client's absence of findings or personal history.
-Preserve source qualifiers: an association does not justify an absolute diagnostic exclusion.
-Every question needs a rationale entry for EVERY option (correct and incorrect). Ordering-question
-correctAnswers list the step labels in correct sequence. Return ONLY the JSON object.
-
-${caseRenderFactPacket(conditionName,facts)}`;
-}
+function caseBuildPrompt({conditionName,facts,difficulty,stages,questionsPerStage,includeTypes,mixMode,scopeEntries}
 ````
 
 Difficulty is no longer a bare interpolation. Each level emits its own cognitive and distractor spec plus the same ceiling, and `caseDifficultySignals()` then checks the structural signatures in code:
@@ -1737,7 +1607,7 @@ regardless of how well it is written.
 
 ---
 
-## 6 · Item quality audit (`itemBuildAuditPrompt`, 3,014 chars)
+## 6 · Item quality audit (`itemBuildAuditPrompt`, 3,068 chars)
 
 The independent review pass. Used by both the Case Study Generator and the NCLEX Generator — one prompt, one profile row (`itemAudit`), because the payload is a rendered item and the criteria are the same regardless of which tool authored it.
 
@@ -1823,7 +1693,7 @@ from the facts or drop the question. Distractors are NOT exempt: a distractor th
 true but absent from the supplied facts makes the question unanswerable from the material.
 ````
 
-### `NCLEX_DISTRACTOR_RULES` (810 chars)
+### `NCLEX_DISTRACTOR_RULES` (1,108 chars)
 
 ````text
 DISTRACTOR RULES — every wrong answer must be ONE of these 4-Pillar clinical traps, built FROM THE SUPPLIED FACTS:
@@ -1858,7 +1728,7 @@ mid-rationale. If you cannot complete a question to this standard, produce fewer
 rather than truncating one.
 ````
 
-### `PRIORITY_ORDER_RULES` (2,541 chars, v18.1 / v21.2)
+### `PRIORITY_ORDER_RULES` (2,540 chars, v18.1 / v21.2)
 
 Unlike the four above, this one **is** sent to the NCLEX Generator (after the batch block) as well as to the Case Study Generator (after `CASE_QUESTION_RULES`). It is not sent to the case repair prompt or the item audit. It restates the Priority Analyzer's cascade R1–R8, `LOC vs. AIRWAY` precedence, `B1` Organ Hierarchy, and `B2` tiebreakers for choosing the key of a "what comes first" question; `tools/v18-1-alignment-tests.js` and `tools/plate-bridge-tests.js` fail if the lists drift apart.
 
@@ -2186,7 +2056,7 @@ Before emitting JSON, construct a synchronized stage-by-stage physiological time
 
 ### `CASE_NGN_TYPE_RULES` (4,770 source chars; tunable; v21.7 Next Generation NCLEX (Bowtie, Matrix, Cloze, Trend) format contract for CaseStudyGenerator)
 
-SHA-256 of the raw template-literal body: `03961fda77b756260cde8d0e0d30f43f5162d072643d94b82cf57f6e0094dd4a`
+SHA-256 of the raw template-literal body: `a105bf12a5ae566da66de3a46be01a0db0277c7d716d834de1b738158f42ddc2`
 
 ````js
 const CASE_NGN_TYPE_RULES=`═══ NEXT GENERATION NCLEX (NGN) ITEM FORMAT CONTRACTS (checked in code) ═══
@@ -2214,7 +2084,7 @@ When using Bowtie, Matrix, Cloze, or Trend among the allowed question types, obe
    - "rationales": one cited rationale object for EVERY option across all blanks, naming the 4-Pillar trap on every distractor.
 
 4. "type": "Trend" — NGN Multi-Timepoint Serial Trend:
-   - Include "trendTable": { "timepoints": ["0800","1000","1200"], "rows": [ { "label": "e.g. Heart rate", "values": ["88/min","106/min","124/min"], "supportType": "direct|combined|inference|instantiated", "factIds": ["fact-104"] } ] }:
+   - Include "trendTable": { "timepoints": ["0800","1000","1200"], "rows": [ { "label": "e.g. Heart rate", "values": ["88 bpm","106 bpm","124 bpm"], "supportType": "direct|combined|inference|instantiated", "factIds": ["fact-104"] } ] }:
      * "timepoints": 3-5 unique chronological labels.
      * "rows": 2-5 clinical parameters; each row's "values" array MUST match "timepoints" length and carry non-empty packet "factIds" plus an honest "supportType". Use "instantiated" ONLY when a cited factId states a parseable numeric bound/range in that exact unit; when a cited fact states only a qualitative shift (e.g. diminishing wheezes progressing to silent chest), record qualitative values with "direct" or "combined" — NEVER invent ungrounded numbers.
    - Populate "options" and "correctAnswers" as either single-best-answer (4 options A-D, 1 correct) OR multiple-response (start "stem" with "(Select all that apply)", 5-6 options A-F, 2-4 correct) testing T0 -> T1 -> T2 trajectory velocity, pseudo-improvement, therapy overshoot, or priority response, with one cited rationale per option.`;
@@ -2294,61 +2164,5 @@ OUTPUT FIELD RULES:
 The one-round repair preserves the source-only contract and source qualifiers. Unchanged items retain FAIL; accepted rewrites are not re-audited.
 
 ````js
-function caseBuildRepairPrompt({conditionName,facts,stageNumber,q,criterion,visibleContext}){
-  return `Generic disease descriptions do not establish this client's absence of findings or personal history. Preserve source qualifiers; associations do not justify absolute diagnostic exclusions.
-
-═══ REPAIR ONE CASE-STUDY ITEM ═══
-
-An independent reviewer failed the item below on this criterion:
-
-  FAILED: ${criterion}
-
-Rewrite ONLY this item so it no longer meets that disqualifying condition. Everything else
-about the case stays as it is.
-
-RULES
-- Keep the same question id ("${q.id||''}"), the same type (MCQ), and the same option
-  labels. Return the same number of options.
-- The item must still be answerable from the case data already shown to the student in the
-  stage context below. Do not depend on data the student has not seen.
-- Every option and every rationale must still cite supplied fact IDs, exactly as before.
-- Do not "fix" a length or integration problem by making the key the shortest option or by
-  padding the distractors. The target is options indistinguishable on surface features.
-- If you cannot repair it without breaking grounding, return the item unchanged and say so
-  in "repairNote".
-
-NUMERIC DISTRACTOR RATIONALES:
-Incorrect options may contain deliberately wrong quantities. Those option values are NOT
-source evidence for their rationales. Explain rejection using the actual cited rule;
-refer to "this option's interval/dose" instead of repeating an unsupported number.
-Never claim a rejected value belongs to another stage, condition or treatment unless
-the cited fact explicitly establishes that association. Do not relabel an unsupported
-distractor number "instantiated" merely to clear numeric validation.
-Example: source says "assess every 4 minutes" and a distractor says "every 12 minutes".
-Rationale: "This option does not match the cited assessment interval of 4 minutes."
-Before returning JSON, check the numbers and fact IDs in EVERY rationale, including
-incorrect options; each asserted value must have the same source support as a correct answer.
-
-${CASE_QUESTION_RULES}
-
-═══ STAGE CONTEXT ALREADY SHOWN TO THE STUDENT ═══
-${visibleContext}
-
-═══ THE FAILING ITEM (current JSON) ═══
-${JSON.stringify(q,null,2)}
-
-═══ RETURN EXACTLY THIS JSON, NOTHING ELSE ═══
-{
-  "id": "${q.id||''}",
-  "type": "MCQ",
-  "stem": "string",
-  "options": [ { "label": "A", "text": "string" } ],
-  "correctAnswers": ["B"],
-  "rationales": [ { "option": "B", "text": "string", "supportType": "direct", "factIds": ["fact-1"] } ],
-  "cjmmSkill": "${q.cjmmSkill||'Take Action'}",
-  "repairNote": "one sentence on what you changed, or why you could not"
-}
-
-${caseRenderFactPacket(conditionName,facts)}`;
-}
+function caseBuildRepairPrompt({conditionName,facts,q,criterion,visibleContext}
 ````

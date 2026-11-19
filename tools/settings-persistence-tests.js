@@ -41,12 +41,12 @@ function run(S,t){
   t('App hydrates every model setting from the validated snapshot',['hydrogenModel','neonModel','thinkingMode','hydrogenLevel','neonLevel'].every(key=>app.includes('useState(savedModels.'+key+')'))&&app.includes('loadModelSettings(localStorage)'));
   // v17.13 + v20.2 + v21.10: the student-facing slots are Hydrogen and Neon.
   t('the settings drawer and Anki checker name Hydrogen and Neon, not Pro',S.includes('Hydrogen model</label>')&&S.includes('Neon model</label>')&&S.includes('id="suite-hydrogen-model"')&&S.includes('id="suite-neon-model"')&&!S.includes('suite-pro-model')&&!S.includes('cfg.proModel')&&S.includes('<option value="hydrogen">Hydrogen</option>')&&S.includes('<option value="neon">Neon</option>')&&!S.includes('<option value="pro">')&&S.includes('.model-dot.neon,.model-dot.argon{'));
-  t('settings controls expose Hydrogen element IDs without legacy fast-slot hooks',S.includes('suite-hydrogen-model-error')&&S.includes('cfg.hydrogenModel')&&S.includes('cfg.setHydrogenModel')&&!('hydrogenModel' in {})&&!('proModel' in defaults));
+  t('settings controls expose Hydrogen element IDs without legacy fast-slot hooks',S.includes('suite-hydrogen-model-error')&&S.includes('cfg.hydrogenModel')&&S.includes('cfg.setHydrogenModel')&&!('flashModel' in defaults)&&!('flashLevel' in defaults)&&!S.includes('suite-flash-model')&&!('proModel' in defaults));
   t('App persists the five model settings together',app.includes('saveModelSettings(localStorage,{hydrogenModel,neonModel,thinkingMode,hydrogenLevel,neonLevel})'));
 
   // Profile rows: the same initializer extraction the Anki quality tests use.
   const defaultsTable=new Function(span(S,'const TOOL_PROFILE_DEFAULTS=','const PROFILE_ROWS=')+';return TOOL_PROFILE_DEFAULTS;')();
-  const initializer=span(S,'  const [profiles,setProfiles]=useState(',"  useEffect(()=>{try{localStorage.setItem('latte_auto_profile_v1'");
+  const initializer=span(S,'  const [profiles,setProfiles]=useState(',"  // v21.10 (Phase 4): skip redundant localStorage write-backs");
   const loadProfiles=stored=>new Function('TOOL_PROFILE_DEFAULTS','localStorage','useState',initializer+';return profiles;')(defaultsTable,{getItem:()=>stored},fn=>[fn(),()=>{}]);
   const loaded=loadProfiles(JSON.stringify({anki:{m:'pro',lv:'minimal'},cases:'hydrogen',nclex:{m:'hydrogen',lv:'xhigh'},priority:{m:'neon',lv:'xhigh'},unknownTool:{m:'pro',lv:'high'},casesAudit:{m:'pro',lv:'medium'}}));
   t('a saved row with an unrecognized level falls back to its recommended row',loaded.anki.m===defaultsTable.anki.m&&loaded.anki.lv===defaultsTable.anki.lv);

@@ -13,9 +13,9 @@ async function runTests(source,test=(name,ok)=>assert.ok(ok,name)){
   const pins=[...source.matchAll(/<script src="([^"]+)" integrity="([^"]+)"/g)];
   t('eight SRI script resources remain distinct from the worker pin',pins.length===8&&pins.every(p=>p[2].startsWith('sha384-')));
   t('both sanitizer CDNs use the verified current patch',pins.filter(p=>p[1].includes('purify')).every(p=>p[1].includes('3.4.16')&&p[2]===EXPECTED_PURIFY_HASH));
-  t('main CSP disables image/media fetch without a default-src migration',
-    source.includes("img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:")&&
-    !source.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)"/)[1].includes('default-src'));
+  t('main CSP locks fallback with default-src none while explicitly scoping active directives',
+    source.includes("default-src 'none';")&&
+    source.includes("img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:"));
   t('worker bootstrap has no unverified workerSrc assignment',!source.includes("GlobalWorkerOptions.workerSrc="));
   const policySource=extract(source,'const STUDY_OUTPUT_POLICY=','// navigator.clipboard requires');
   const nodes=[{tagName:'DIV',value:'pagebreak unwanted',classList:{contains:()=>true},

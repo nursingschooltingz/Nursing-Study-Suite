@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "purpose": "Test-retest fixture for the v15.6 casesAudit pass. Ten fixed MCQ items with reference classifications, run repeatedly under identical settings to measure whether one configuration scores an item the same way twice.",
+  "purpose": "Test-retest fixture for the itemAudit pass (introduced in v15.6). Ten fixed MCQ items with reference classifications, run repeatedly under identical settings to measure whether one configuration scores an item the same way twice.",
   "why": "No published figure establishes audit reliability for this build. The June 2026 reliability study (Simms, Hensel, Cavanaugh, Fox & Kumar, Nurse Educ Pract 94:104897) tested five OpenAI and two Anthropic configurations and zero Gemini, and lists intra-rater reliability as unmeasured while calling it a foundational property for operational use. Nothing here may be compared to any published ICC or accuracy figure.",
   "referenceStandardCaveat": "The reference classifications below were authored in-house, the same limitation the source papers acknowledge of themselves: the authors wrote the rubric, the items, and the reference classifications, so agreement measures alignment with one interpretive framework rather than an external standard. The 'sound' and 'borderline' labels are judgment calls. Only the two seeded items carry a defect that is mechanically unambiguous, which is why missed-defect rate is the metric to trust most and 'false fatal on a sound item' the one to trust second.",
   "bands": {
@@ -32,12 +32,12 @@
             "type": "MCQ",
             "stem": "Which action should the nurse take first?",
             "options": [
-              { "label": "A", "text": "Notify the primary health care provider" },
-              { "label": "B", "text": "Encourage additional oral fluids" },
+              { "label": "A", "text": "Encourage additional oral fluids" },
+              { "label": "B", "text": "Notify the primary health care provider" },
               { "label": "C", "text": "Reposition the client on the left side" },
               { "label": "D", "text": "Delay the morning medications" }
             ],
-            "correctAnswers": ["A"],
+            "correctAnswers": ["B"],
             "rationales": [],
             "cjmmSkill": "Take Action"
           }]
@@ -67,12 +67,12 @@
             "type": "MCQ",
             "stem": "Which intervention should the nurse implement?",
             "options": [
-              { "label": "A", "text": "Give 15 grams of oral carbohydrate" },
-              { "label": "B", "text": "Hold all oral intake for one hour" },
-              { "label": "C", "text": "Begin an insulin correction dose" },
+              { "label": "A", "text": "Hold all oral intake for one hour" },
+              { "label": "B", "text": "Begin an insulin correction dose" },
+              { "label": "C", "text": "Give 15 grams of oral carbohydrate" },
               { "label": "D", "text": "Request a repeat sample in four hours" }
             ],
-            "correctAnswers": ["A"],
+            "correctAnswers": ["C"],
             "rationales": [],
             "cjmmSkill": "Take Action"
           }]
@@ -135,12 +135,12 @@
             "type": "MCQ",
             "stem": "How should the nurse position the drainage system during the transfer?",
             "options": [
-              { "label": "A", "text": "Below the level of the client's chest" },
-              { "label": "B", "text": "At the same height as the client's chest" },
+              { "label": "A", "text": "At the same height as the client's chest" },
+              { "label": "B", "text": "Below the level of the client's chest" },
               { "label": "C", "text": "Above the level of the client's chest" },
               { "label": "D", "text": "Inside the client's bedside meal tray" }
             ],
-            "correctAnswers": ["A"],
+            "correctAnswers": ["B"],
             "rationales": [],
             "cjmmSkill": "Take Action"
           }]
@@ -169,12 +169,12 @@
             "type": "MCQ",
             "stem": "Which action should the nurse take?",
             "options": [
-              { "label": "A", "text": "Hold the dose and notify the primary health care provider of the apical rate before administering" },
-              { "label": "B", "text": "Give the dose as scheduled" },
-              { "label": "C", "text": "Give half the dose" },
-              { "label": "D", "text": "Recheck in one hour" }
+              { "label": "A", "text": "Give the dose as scheduled" },
+              { "label": "B", "text": "Give half the dose" },
+              { "label": "C", "text": "Recheck in one hour" },
+              { "label": "D", "text": "Hold the dose and notify the primary health care provider of the apical rate before administering" }
             ],
-            "correctAnswers": ["A"],
+            "correctAnswers": ["D"],
             "rationales": [],
             "cjmmSkill": "Take Action"
           }]
@@ -201,14 +201,14 @@
           "questions": [{
             "id": "s1q1",
             "type": "MCQ",
-            "stem": "Which laboratory value is most important for the nurse to monitor?",
+            "stem": "The client is started on a potassium-wasting loop diuretic. Which laboratory value is most important for the nurse to monitor?",
             "options": [
-              { "label": "A", "text": "Serum potassium" },
-              { "label": "B", "text": "Serum calcium" },
+              { "label": "A", "text": "Serum calcium" },
+              { "label": "B", "text": "Serum potassium" },
               { "label": "C", "text": "Serum albumin" },
               { "label": "D", "text": "Serum bilirubin" }
             ],
-            "correctAnswers": ["A"],
+            "correctAnswers": ["B"],
             "rationales": [],
             "cjmmSkill": "Analyze Cues"
           }]
@@ -271,12 +271,12 @@
             "type": "MCQ",
             "stem": "The nurse has gathered the teaching materials, closed the door, and confirmed that the client's family member is present and ready to listen. Which client statement indicates that teaching about the new prescription has been effective?",
             "options": [
-              { "label": "A", "text": "\"I will keep my appointments for blood tests.\"" },
-              { "label": "B", "text": "\"I will double the dose if I miss one.\"" },
-              { "label": "C", "text": "\"I will start taking daily aspirin as well.\"" },
-              { "label": "D", "text": "\"I will stop the medication once I feel better.\"" }
+              { "label": "A", "text": "\"I will double the dose if I miss one.\"" },
+              { "label": "B", "text": "\"I will start taking daily aspirin as well.\"" },
+              { "label": "C", "text": "\"I will stop the medication once I feel better.\"" },
+              { "label": "D", "text": "\"I will keep my appointments for blood tests.\"" }
             ],
-            "correctAnswers": ["A"],
+            "correctAnswers": ["D"],
             "rationales": [],
             "cjmmSkill": "Evaluate Outcomes"
           }]
@@ -305,12 +305,12 @@
             "type": "MCQ",
             "stem": "What does the nurse need before entering the room?",
             "options": [
-              { "label": "A", "text": "A fit-tested respirator" },
-              { "label": "B", "text": "Apply a surgical mask" },
-              { "label": "C", "text": "A clean pair of gloves only" },
+              { "label": "A", "text": "Apply a surgical mask" },
+              { "label": "B", "text": "A clean pair of gloves only" },
+              { "label": "C", "text": "A fit-tested respirator" },
               { "label": "D", "text": "Put on a sterile gown" }
             ],
-            "correctAnswers": ["A"],
+            "correctAnswers": ["C"],
             "rationales": [],
             "cjmmSkill": "Take Action"
           }]

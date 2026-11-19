@@ -156,7 +156,7 @@ module.exports = async function pdfTocSlicerTests(S, t) {
 
   const tocHelpersSpan = span('function kbMergePageRanges(', '\n// Markdown to plain text');
   const chunkHelpersSpan = span('function kbUnitLabel(', '\nfunction kbCompareOrder(');
-  const buildSpan = span('const build=async()=>{', '\n  const exportDiag=()=>{');
+  const buildSpan = span('const build=async()=>{', '\n  // v15.10: the diagnostics panel is a scroll box');
   const kbBuilderSpan = span('function KnowledgeBaseBuilder(){', '\n// ──── TOOL: Priority Analyzer ────');
 
   // Instantiate live HTML TOC helpers with controlled PDF stubs
@@ -580,7 +580,7 @@ module.exports = async function pdfTocSlicerTests(S, t) {
       { title: 'Answers & Rationales', dest: [{ p: 9 }, { name: 'Fit' }], items: [] },
     ]);
 
-    t('v21.8 Digital Library (concept sort) 15-resource & author catalog + 04 · NCLEX Extractor Split Q&A bookmark auto-detection: maps all 7 core texts/authors and all 8 Q-banks (keeping Appendices/Guidelines non-Q-bank) and extracts exact Question/Answer page spans from PDF bookmarks',
+    t('v21.8 Digital Library (concept sort) 15-resource & author catalog + 05 · NCLEX Extractor Split Q&A bookmark auto-detection: maps all 7 core texts/authors and all 8 Q-banks (keeping Appendices/Guidelines non-Q-bank) and extracts exact Question/Answer page spans from PDF bookmarks',
       klimekRole.roles[0] === 'rn' && klimekRole.badge.includes('NCLEX Lecture') &&
       norrisRole.roles[0] === 'patho-bridge' &&
       eckhardtRole.roles[0] === 'exam-bridge' &&
@@ -590,7 +590,7 @@ module.exports = async function pdfTocSlicerTests(S, t) {
       guidesStayReading &&
       qbankDropMeta.qbankFiles.length === 2 &&
       qbankDropMeta.concepts.join(',') === 'Gas Exchange' &&
-      kbBuilderSpan.includes('Q-Bank → 04 · NCLEX Extract') &&
+      kbBuilderSpan.includes('Q-Bank → 05 · NCLEX Extract') &&
       splitSaunders.split &&
       JSON.stringify(splitSaunders.split.qRanges) === '[{"start":1,"end":23}]' &&
       JSON.stringify(splitSaunders.split.aRanges) === '[{"start":24,"end":90}]' &&

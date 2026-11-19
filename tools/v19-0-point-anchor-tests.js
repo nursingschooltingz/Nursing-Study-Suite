@@ -335,7 +335,7 @@ module.exports = function runV190PointAnchorTests(S, t) {
     builtUnmatched[0].tags.includes('NeedsReview') &&
     splitCaseInsensitive[1] && splitCaseInsensitive[1].get('A').includes('option A is wrong.') &&
     splitCaseInsensitive[2] === 'Test-Taking Strategy: focus on airway.' &&
-    S.includes("i2aS(w.label).replace(/[.)]+$/,'').toUpperCase()") &&
+    S.includes("i2aS(w.label).toUpperCase().replace(/^\\(([^()]+)\\)$/,'$1').replace(/[.)]+$/,'')") &&
     void qidKey === undefined);
 
   const citedWithProv = H.formatFactCitation({
@@ -436,7 +436,7 @@ module.exports = function runV190PointAnchorTests(S, t) {
     noAiCards.warnings[0].includes('AI returned no answer for it') &&
     noAiWs.md.includes('No answer in the images; AI returned no answer for it.') &&
     S.includes("if(!window.Babel||!window.React||!window.ReactDOM||!window.marked||(!window.DOMPurify&&!window.__domPurifyReady)||!window.pdfjsLib||!window.JSZip){bootFail('One or more required CDN scripts failed to load.');return;}") &&
-    S.includes("{count!=null&&count!==''&&count!==false&&<span className=\"results-count\">{count}</span>}") &&
+    S.includes("count!=null&&count!==''&&count!==false&&h('span',{className:'results-count'},count)") &&
     S.includes('txAbortRef.current?.abort();if(busy)abortRef.current?.abort();'));
 
   // 15. Phase 5: cross-chunk pointAnchors union, kbBuildFocusBlock deduplication, Anki buildFocusBlock runtime, and ngFocusPlan batchCaps
@@ -472,8 +472,8 @@ module.exports = function runV190PointAnchorTests(S, t) {
     unclosedBold === '**unclosed and closed bold' &&
     wordFollowedBold === '**span1**a and span2' &&
     S.includes('const push=useCallback(entry=>setLogs(p=>{if(!(cap>0))return [];if(cap===1)return [entry];if(p.length<cap)return [...p,entry];const next=p.slice(1-cap);next.push(entry);return next;}),[cap]);') &&
-    S.includes("{n!=null&&n!==''&&n!==false&&<span className=\"sect-num\" aria-hidden=\"true\">{n}</span>}") &&
-    S.includes("<summary>{summary}{note!=null&&note!==''&&note!==false&&<span className=\"disclose-note\">{note}</span>}</summary>") &&
+    S.includes("n!=null&&n!==''&&n!==false&&h('span',{className:'sect-num','aria-hidden':'true'},n)") &&
+    S.includes("h('summary',null,summary,note!=null&&note!==''&&note!==false&&h('span',{className:'disclose-note'},note))") &&
     S.includes('const r=n2aPdfToWorksheetText(n2aPdfBlocks(await n2aReadPdfPages(f,ac.signal)),f.name);') &&
     S.includes("const removeFile=i=>{if(busy||reading)return;") &&
     S.includes("else if(!conditions.length&&conditionId)setConditionId('');"));

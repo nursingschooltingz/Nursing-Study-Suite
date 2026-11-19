@@ -88,9 +88,11 @@ module.exports = async function run(S, t) {
       declIdx > 0 && refSyncIdx > declIdx && pktDeclIdx > 0 && pktSyncIdx > pktDeclIdx && mountedWithoutTdz);
   }
 
-  // 3. Branding ([P] P-LATE Study Suite in-place), version 21.8+, and HESI®/ATI® trademark non-affiliation notice
-  t('v21.0 (Branding & legal notice): suiteVersion is 21.8, rail-brand renders [P] P-LATE Study Suite in-place, and rail-foot cites HESI® and ATI® non-affiliation',
-    suiteVersion() === '21.8' &&
+  // 3. Branding ([P] P-LATE Study Suite in-place), canonical suiteVersion agreement, and HESI®/ATI® trademark non-affiliation notice
+  const expectedSuiteVersion = (S.match(/<!-- v(\d+\.\d+) \(/) || [])[1] || '';
+  t('v21.0 (Branding & legal notice): suiteVersion matches release header, rail-brand renders [P] P-LATE Study Suite in-place, and rail-foot cites HESI® and ATI® non-affiliation',
+    Boolean(expectedSuiteVersion) &&
+    suiteVersion() === expectedSuiteVersion &&
     S.includes('<title>P-LATE Study Suite</title>') &&
     S.includes('<div className="rail-brand"><div className="rail-mark nav-logo" aria-hidden="true">P</div><div className="rail-word"><b>P-LATE</b><span>Study Suite</span></div></div>') &&
     S.includes('<span className="rail-stat">Built for your next step.</span>') &&

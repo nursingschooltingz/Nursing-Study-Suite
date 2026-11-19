@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 4108;
+const EXPECTED_ASSERTIONS = 4179;
 
 let file;
 try {
@@ -64,11 +64,11 @@ const NXO = new Function(spanFrom('const NCLEX_OPTION_GAP', 'options_repaired:tr
 // The two exports are closures over component state, so they are extracted with `filtered`
 // and their helpers injected as parameters. exportTxt ends inside downloadBlob, so the
 // capture stub firing is itself proof the span reached its tail.
+// v21.10 (Phase 5 M1): nclexFormatExportMd and nclexFormatExportTxt are standalone pure helpers hoisted out of text/babel.
 const nclexToMd = new Function('filtered', 'nclexSplitStemOptions', 'runSummary', 'nclexSummaryLine', // v17.4: exports read the run summary
-  spanFrom('const nclexToMd=()=>{', '    return out;\n  };') + ';return nclexToMd();');
+  spanFrom('function nclexFormatExportMd(', '\n  return out;\n}') + ';return nclexFormatExportMd(filtered,runSummary);');
 const nclexToTxt = new Function('filtered', 'nclexSplitStemOptions', 'runSummary', 'nclexSummaryLine',
-  'let CAP=null;const Blob=function(p){this.p=p;};const downloadBlob=(b)=>{CAP=b.p[0];};' +
-  spanFrom('const nclexQText=q=>', "'nclex_questions.txt');\n  };") + ';exportTxt();return CAP;');
+  spanFrom('function nclexFormatExportTxt(', '\n  return out;\n}') + ';return nclexFormatExportTxt(filtered,runSummary);');
 
 const KB_RE = extractAnchoredRegex(S, 'contraindicat|', '||/', '/i.test', 'i');
 const pptxSplit = new Function('text', spanFrom("const parts=String(text||'').split(/(?=--- SLIDE", 'text:t};});'));
@@ -209,19 +209,56 @@ t('v18.0: the app script asks Babel for the react preset only', S.split('type="t
   t('v18.0: a 64k-character case field of ranges parses at once, and a unit range still gives both endpoints',
     ms(() => cases(field)) < 1000 && tk.tokens.map(x => x.key).join(',') === '5mg,10mg');
 }
-// v18.0 (review M31): an export saved into the repository folder must never be committable. Every literal download
-// name in the app, plus an example of each computed name, is checked against .gitignore with git itself.
+// v18.0 (review M31) + v21.10 (Phase 2): an export saved into the repository folder must never be committable.
+// Scan full balanced downloadBlob/exportAs* calls and outName assignments (both complete literals and computed prefix/suffix templates)
+// plus explicit examples of every computed export name, and verify every one against .gitignore via `git check-ignore`.
 {
   const { spawnSync } = require('child_process');
-  const literal = [...S.matchAll(/(?:downloadBlob\([^;]{0,220}|exportAs(?:Md|Txt|Pdf)\([^;]{0,220}|outName=[^;]{0,120})/g)]
-    .flatMap(m => [...m[0].matchAll(/'([A-Za-z0-9][A-Za-z0-9_.-]*\.(?:txt|md|json|csv))'/g)].map(x => x[1]));
-  const computed = ['LATTE-Knowledge-Base-recovery-1.json', 'LATTE-Knowledge-Base-recovery-1-raw.txt', 'LATTE-Extraction-Diagnostics-2026-10-13.json', 'card-transcripts-2026-10-13.json',
-    'anki-source-report-complete.json', 'latte_anki_import.txt', 'latte_anki_import_tier1.txt', 'Exam1_anki.txt', 'gizmo_import.txt', 'latte_anki_gizmo.txt'];
-  const names = [...new Set([...literal, ...computed])];
+  const callSpans = [];
+  const callRe = /\b(?:downloadBlob|exportAs(?:Md|Txt))\s*\(/g;
+  let cm;
+  while ((cm = callRe.exec(S)) !== null) {
+    const before = S.slice(Math.max(0, cm.index - 12), cm.index);
+    if (/\bfunction\s+$/.test(before)) continue;
+    let depth = 0, i = cm.index + cm[0].length - 1, q = '';
+    for (; i < S.length && i < cm.index + 2400; i++) {
+      const ch = S[i];
+      if (q) { if (ch === '\\') { i++; continue; } if (ch === q) q = ''; continue; }
+      if (ch === "'" || ch === '"' || ch === '`') { q = ch; continue; }
+      if (ch === '(') depth++;
+      else if (ch === ')') { depth--; if (depth === 0) { i++; break; } }
+    }
+    callSpans.push(S.slice(cm.index, i));
+  }
+  for (const om of S.matchAll(/\boutName\s*=[^;\n]{0,200}/g)) callSpans.push(om[0]);
+  const literal = [];
+  const extractedComputed = [];
+  for (const spanText of callSpans) {
+    for (const m of spanText.matchAll(/'([A-Za-z0-9][A-Za-z0-9_.-]*\.(?:txt|md|json|csv))'/g)) literal.push(m[1]);
+    for (const m of spanText.matchAll(/'((?:[-_][A-Za-z0-9_.-]*|\.)\.(?:txt|md|json|csv)|[-_][A-Za-z0-9_.-]+\.(?:txt|md|json|csv))'/g)) {
+      const suffix = m[1];
+      const beforePart = spanText.slice(0, m.index);
+      const prefMatches = [...beforePart.matchAll(/'([A-Za-z0-9][A-Za-z0-9_.-]*[-_]?)'/g)];
+      const pref = prefMatches.length ? prefMatches[prefMatches.length - 1][1] : '';
+      extractedComputed.push(pref && !/^(?:text|application)\//.test(pref) ? pref + 'Sample' + suffix : 'Sample' + suffix);
+    }
+    for (const m of spanText.matchAll(/'([A-Za-z0-9][A-Za-z0-9_.-]*[-_])'\s*\+[^;)]*\+\s*'(\.(?:txt|md|json|csv))'/g)) {
+      extractedComputed.push(m[1] + 'Sample' + m[2]);
+    }
+  }
+  const computed = [
+    'LATTE-Knowledge-Base-recovery-1.json', 'LATTE-Knowledge-Base-recovery-1-raw.txt',
+    'LATTE-Extraction-Diagnostics-2026-10-13.json', 'card-transcripts-2026-10-13.json',
+    'anki-source-report-complete.json', 'latte_anki_import.txt', 'latte_anki_import_tier1.txt',
+    'Exam1_anki.txt', 'gizmo_import.txt', 'latte_anki_gizmo.txt',
+    'NURS_210-Exam_2-Course-Brief.md', 'LATTE-Case-Packet-4-Cases.md', 'LATTE-Case-Packet-4-Cases.json',
+    'LATTE-Case-Study.json', 'LATTE-Case-Study-Heart_Failure.json',
+  ];
+  const names = [...new Set([...literal, ...extractedComputed, ...computed])];
   const res = spawnSync('git', ['check-ignore', '--stdin', '--no-index'], { cwd: __dirname, input: names.join('\n') + '\n', encoding: 'utf8' });
   const ignoredSet = new Set(String(res.stdout || '').split(/\r?\n/).filter(Boolean));
   const exposed = res.error ? names : names.filter(n => !ignoredSet.has(n));
-  t('v18.0: every export name the app writes is ignored by git (' + names.length + ' names, ' + literal.length + ' found in the app)', literal.length >= 13 && exposed.length === 0);
+  t('v18.0: every export name the app writes is ignored by git (' + names.length + ' names, ' + literal.length + ' literal / ' + extractedComputed.length + ' template found in the app)', literal.length >= 13 && extractedComputed.length >= 4 && exposed.length === 0);
   if (exposed.length) console.log('      not ignored: ' + exposed.join(', '));
 }
 // v17.15 (review H4): a choice run 1..k may not swallow the question numbered k+1.
@@ -292,7 +329,7 @@ t('v18.0: the app script asks Babel for the react preset only', S.split('type="t
     const NA = new Function(spanFrom('function nclexKey', 'return allQ;\n}') + ';return {nclexAccumulate};')();
     const all = NA.nclexAccumulate(new Set(), [], [{ question: 'A client has chest pain. Which action is first?\nA. one\nB. two' }, { question: 'A client has chest pain. Which action is first?\nA. one\nB. two', correct_answer: 'B', rationale: 'Because two.' }]);
     t('v17.15: a later copy of an overlapping question fills the answer and rationale the first copy lacked', all.length === 1 && all[0].correct_answer === 'B' && all[0].rationale === 'Because two.');
-    const md = new Function('filtered', 'nclexSplitStemOptions', 'runSummary', 'nclexSummaryLine', spanFrom('  const nclexToMd=()=>{', '    return out;\n  };') + ';return nclexToMd();')(
+    const md = new Function('filtered', 'nclexSplitStemOptions', 'runSummary', 'nclexSummaryLine', spanFrom('function nclexFormatExportMd(', '\n  return out;\n}') + ';return nclexFormatExportMd(filtered,runSummary);')(
       [{ question: 'Q one?\nA. x\nB. y', correct_answer: 'A', rationale: 'R one.', answer_unmatched: true }, { question: 'Q two?\nA. x\nB. y' }], q => ({ stem: q.split('\n')[0], options: [] }), null, () => '');
     t('v17.15: a model-written answer is marked inside its rationale, and a missing answer prints "(not extracted)", never "undefined"',
       md.includes('**1.** A\n\nR one. ⚠ No answer for this question was found on the answer pages') && md.includes('**2.** (not extracted)') && !md.includes('undefined'));
@@ -301,7 +338,7 @@ t('v18.0: the app script asks Babel for the react preset only', S.split('type="t
   }
   // v17.15 (review M17, M7)
   {
-    const anki = spanFrom('function AnkiGenerator(){', '// ──── TOOL: NCLEX Extractor ────'), runAt = anki.indexOf('  const run=useCallback(async()=>{'), publishAt = anki.indexOf('setBatch(completed);setCards(deduped);setLedger(allLedg);', runAt), runEnd = anki.indexOf('},[cfg,model,toolLevel', runAt);
+    const anki = spanFrom('async function ankiRunWithEnv(', '// ── END ANKI RUNNERS ──'), runAt = anki.indexOf('  const run=async()=>{'), publishAt = anki.indexOf('setBatch(completed);setCards(deduped);setLedger(allLedg);', runAt), runEnd = anki.indexOf('  return run();', runAt);
     t('v17.15: Generate keeps the current deck, its review decisions and source check until the new deck is complete',
       runAt > 0 && publishAt > runAt && !anki.slice(runAt, publishAt).includes('setCards([])') && !anki.slice(runAt, publishAt).includes('setBatch(null)') && anki.slice(runAt, publishAt).includes('setSourceAudit(null);setInspectNote(null);') && anki.slice(publishAt, runEnd).includes('The previous deck, if any, is unchanged.'));
     t('v17.15: the invalid-case export writes the raw response unchanged',
@@ -436,8 +473,9 @@ const IDX = new Map([
   t('the same value undeclared → error naming the instantiated escape hatch', has(i, 'declare supportType "instantiated"', 'error')); }
 { const i = []; CASE.caseAuditDatumValues({ label: 'Position', value: 'High Fowler', factIds: ['fact-a'] }, IDX, 'Stage 1', i);
   t('datum without unit-bearing values → silent', i.length === 0); }
+// v21.10 (Phase 3, H16): unit-bearing clinical values with factIds: [] fail numeric entailment (non-numeric missing factIds remains warn-tier in validateCaseStudy).
 { const i = []; CASE.caseAuditDatumValues({ label: 'K+', value: '2.4 mEq/L', factIds: [] }, IDX, 'Stage 1', i);
-  t('no cited IDs → audit defers to the missing-ID warn', i.length === 0); }
+  t('unit-bearing datum with no cited IDs → entailment error (closes H16 fabrication bypass)', has(i, 'does not appear', 'error')); }
 
 /* ── 10. validator: v15.2 structural contracts ── */
 section('validateCaseStudy — new checks');
@@ -481,8 +519,8 @@ t('rationale fabricating "2.4 mEq/L" against a monitor-only fact → entailment 
   has(V({ stages: [stage(1, [q({ type: 'MCQ', options: [{ label: 'A' }], correctAnswers: ['A'], rationales: [{ option: 'A', text: 'Incorrect because potassium is 2.4 mEq/L.', supportType: 'direct', factIds: ['fact-a'] }] })])] }, 'HF'), 'does not appear', 'error'));
 t('rationale value supported by its cited fact → no entailment warn',
   !has(V({ stages: [stage(1, [q({ type: 'MCQ', options: [{ label: 'A' }], correctAnswers: ['A'], rationales: [{ option: 'A', text: 'Correct because the rate is 120 bpm.', supportType: 'direct', factIds: ['fact-b'] }] })])] }, 'HF'), 'does not appear'));
-t('caseAuditTextValues with no factIds → silent',
-  (() => { const i = []; CASE.caseAuditTextValues('K is 2.4 mEq/L', [], IDX, 'X', i); return i.length === 0; })());
+t('caseAuditTextValues with no factIds still flags fabricated unit-bearing clinical values (H16)',
+  (() => { const i = []; CASE.caseAuditTextValues('K is 2.4 mEq/L', [], IDX, 'X', i); return has(i, 'does not appear', 'error'); })());
 t('datum missing supportType → warn',
   has(V({ stages: [stage(1, [], [{ label: 'K+', value: '', availability: 'revealed', factIds: ['fact-a'] }])] }, 'HF'), 'missing supportType', 'warn'));
 t('datum missing availability → warn',
@@ -1138,7 +1176,8 @@ section('v15.6 — instantiated values');
   t('combined with an uncited value → error', has(audit('Potassium 2.4 mEq/L', ['t-none'], 'combined'), 'does not appear', 'error'));
   t('inference with an uncited value → error', has(audit('Potassium 2.4 mEq/L', ['t-none'], 'inference'), 'does not appear', 'error'));
   t('neutral-framing cannot exempt an arbitrary lab value', has(audit('Potassium 2.4 mEq/L', ['t-none'], 'neutral-framing'),'cannot exempt','error'));
-  t('no factIds → still silent', audit('Potassium 2.4 mEq/L', [], 'direct').length === 0);
+  // v21.10 (Phase 3 H16): unit-bearing uncited text no longer bypasses numeric entailment; non-numeric prose stays silent here (defers to warn-tier missing fact ID).
+  t('no factIds with unit-bearing value → error (H16)', has(audit('Potassium 2.4 mEq/L', [], 'direct'), 'does not appear', 'error') && audit('Clear breath sounds.', [], 'direct').length === 0);
   t('a value-unit prefix is not direct evidence for a different complete unit',
     has(audit('Report urine output below 30 mL', ['t-lt'], 'direct'),'does not appear','error'));
 
@@ -1592,7 +1631,8 @@ section('v15.6 — case audit pass');
   t('the audit pool is bounded and narrow', S.includes('const AUDIT_POOL_WIDTH=2') && S.includes('itemRunPool(eligible,AUDIT_POOL_WIDTH,'));
   t('audit calls get a retry budget big enough to ride out a rate limit', S.includes('AUDIT_RETRIES=3'));
   t('the audit stops early once quota is gone', S.includes("throw Object.assign(new Error('API quota exhausted'),{name:'QuotaStop'})"));
-  t('a QuotaStop is caught, not surfaced as a crash', (S.match(/if\(e\.name!=='QuotaStop'\)throw e;/g) || []).length === 2);
+  // v21.10 (Phase 4): 3 QuotaStop catches (NCLEX audit, Case audit, and Case repair circuit breaker).
+  t('a QuotaStop is caught, not surfaced as a crash', (S.match(/if\(e\.name!=='QuotaStop'\)throw e;/g) || []).length === 3);
   t('quota exhaustion is explained, not just logged as an error', S.includes('only the optional item review was cut short'));
   // v15.7, from a real case run: the panel showed "FAIL — DISTRACTOR LENGTH" for an item the
   // log had already reported as successfully repaired. The verdict described text that no
@@ -1688,7 +1728,7 @@ section('v15.6 — retest fixture');
     t('demotion denominators skip items with under two answered runs', R.includes('if (ok.length < 2) continue;'));
     t('verdict instability and label drift are distinguished', R.includes('const critRuns = new Map(), labelDrift = [];'));
     t('label drift is explicitly not a demotion trigger', require('./neia-retest').analyzeResults(['A','B'].map((criterion,run)=>({id:'x',run,band:'sound',status:'FAIL',criterion,warnCriteria:[],ms:1,tokensIn:1,tokensOut:1,tokensThought:0})),2).demotionCandidates.length===0);
-    t('429 and 5xx are retried with backoff', R.includes('(resp.status !== 429 && resp.status < 500) || attempt === 3') && R.includes('config.retryms * Math.pow(2, attempt)'));
+    t('429 and 5xx are retried with backoff', R.includes('(resp.status !== 429 && resp.status < 500) || attempt === 3') && R.includes('cliRetryDelayMs(errBody, resp.headers, config.retryms, attempt, rand)'));
   }
   t('retest reports are gitignored', /neia-retest-report/.test(fs.readFileSync('.gitignore', 'utf8')));
 }
@@ -2467,9 +2507,9 @@ section('generation input pins and bounded pilot');
   // v16.6/v19.0/v19.2/v21.0: approved exact canonical input tokens, [P#] stripping, numbered Points focus, Step 7 4-category P-LATE adapter, and concept-curriculum + exam-trap + RN/NP Bridge Anki roles/scopes/traps have deliberate pins.
   const inputs=[
     ['source packet','function kbForAnki(kb){','// ── KB source chunking','9cccabe86193d39a9be303b2d2db8546e1de47c5cc187f43f41fdba7244d4f9c'],
-    ['chunking','function splitOversizedConditionBlock(block,max){','function ankiParseCards(raw','4103527206fc71cf27beb31f3fc1ccd09a19a759a684be053662b2a261fa4514'],
+    ['chunking','function splitOversizedConditionBlock(block,max){','function ankiParseCards(raw','d64861a9741f22478a777b6a0417f0945ac92c09cd9104954315bb801936fec3'], // v21.10 (Phase 3 H17): CRLF normalization in ankiChunkText
     ['focus block','  function buildFocusBlock(){','  const run=useCallback(async()=>{','d776c964656230e3d8bc235fa08a0136c3b2e973300220df084630e76ba36db6'],
-    ['mapping adapter','        const kbAdapter=','        parts.push({text:ANKI_MASTER_PROMPT','7fd660724d2418bd426c6c5889f763d7fecb943b8cd731008048d3a23440ead7']
+    ['mapping adapter','        const kbAdapter=','        const sysPrompt=ANKI_MASTER_PROMPT','7fd660724d2418bd426c6c5889f763d7fecb943b8cd731008048d3a23440ead7']
   ];
   const {sha256}=require('./tools/repo-checks');
   for(const [name,start,end,hash] of inputs){const a=S.indexOf(start,name==='focus block'?S.indexOf('function AnkiGenerator()'):0),b=S.indexOf(end,a);t('generation input matches its approved pin: '+name,a>=0&&b>a&&sha256(S.slice(a,b).trim())===hash);}
@@ -2584,7 +2624,8 @@ section('v15.14 — tier 3');
   t('geminiRequest does not mutate the body it was handed',
     S.includes('body=Object.assign({},body,{safetySettings:SAFETY_SETTINGS});'));
   t('an all-thinking empty response is fatal, not retried',
-    S.includes("if(finish==='MAX_TOKENS'){const e=new Error('The model spent its whole output budget"));
+    S.includes("const isTrunc=finish==='MAX_TOKENS'||finish==='CONTINUATION';") &&
+    S.includes("if(isTrunc){const e=new Error('The model spent its whole output budget"));
   // T3.1 — the case generator stamped a failed artifact and refused to register it; the
   // worksheet, which is the sheet a student actually studies from, did neither.
   t('the printable worksheet carries a validation stamp',
@@ -2612,7 +2653,9 @@ section('v15.14 — tier 3');
   t('a CSP is present and pins where the page can send data',
     S.includes("connect-src 'self' blob: data: https://generativelanguage.googleapis.com"));
   t('the application CSP preserves Babel startup and explicitly limits workers to verified Blobs',
-    !/default-src/.test(S.match(/<meta http-equiv="Content-Security-Policy"[^>]*>/)[0]) && S.includes('worker-src blob:'));
+    /default-src 'none'/.test(S.match(/<meta http-equiv="Content-Security-Policy"[^>]*>/)[0]) &&
+    S.includes("script-src 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:;") &&
+    S.includes('worker-src blob:'));
   t('object-src, base-uri and form-action are locked, since none of them is used at all',
     S.includes("object-src 'none'; base-uri 'none'; form-action 'none'"));
   t('connect-src governs Gemini and the integrity-checked worker fetch', S.split('fetch(').length - 1 === 2 && S.includes('integrity:PDF_WORKER_INTEGRITY'));
@@ -2757,7 +2800,7 @@ section('v15.14 — clamps, backoff, storage');
   t('the second publish is inside the repair path, after the audit gate',
     S.indexOf('setCaseStudy(parsed);', S.indexOf('if(runAudit&&errCount===0){')) > 0);
   t('the repair rebuilds the case instead of writing into React state',
-    !S.includes('st.questions[ix]=fixed;') && S.includes('const candidate={...parsed,stages:parsed.stages.map(') && S.includes("revalidate(candidate).some(i=>i.sev==='error')") && S.includes('parsed=candidate;'));
+    !S.includes('st.questions[ix]=fixed;') && S.includes('const candidate={...parsed,stages:parsed.stages.map(') && S.includes('const nextIssues=revalidate(candidate);') && S.includes("nextIssues.some(i=>i.sev==='error')") && S.includes('parsed=candidate;'));
 
   {
     const im = await global.__imgChecks;
@@ -2953,6 +2996,24 @@ section('v15.14 — clamps, backoff, storage');
 
   section('v21.9 01 · Course Analyzer Tab (Syllabus & Lecture PPTX -> Knowledge Base 1-Click Sync)');
   await require('./tools/course-analyzer-tests')(S,t);
+
+  section('v21.10 Phase 1 Production Code-Review Remediation (C1–C6, H21.4, H23, M1, M2)');
+  await require('./tools/v21-10-phase1-remediation-tests')(S,t);
+
+  section('v21.10 Phase 2 High-Severity Security & DoS Remediation (H1–H4, H6–H9, H20, H22, M7, M16–M18)');
+  await require('./tools/v21-10-phase2-remediation-tests')(S,t);
+
+  section('v21.10 Phase 3 Clinical Correctness & Data-Loss Remediation (H10–H19, M8–M13)');
+  await require('./tools/v21-10-phase3-remediation-tests')(S,t);
+
+  section('v21.10 Phase 4 Memory, Performance, Context Split & UI Resilience Remediation (H5, H21, M3, M4, M14, M15)');
+  await require('./tools/v21-10-phase4-remediation-tests')(S,t);
+
+  section('v21.10 Phase 5 Architecture, Gemini API & Measurement Tooling Remediation (M1, M5, M6, M17, M18)');
+  await require('./tools/v21-10-phase5-remediation-tests')(S,t);
+
+  section('v21.10 Phase 6 Behavioral Coverage, Dead-Code Cleanup, Bug Fixes & Doc Sync (H24, M19, M20, L1–L8)');
+  await require('./tools/v21-10-phase6-remediation-tests')(S,t);
 
   console.log('\n════════════════════════════');
   const total = pass + fail;

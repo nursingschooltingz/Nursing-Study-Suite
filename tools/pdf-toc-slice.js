@@ -13,7 +13,12 @@ const path = require('path');
 const zlib = require('zlib');
 const { resolveSuiteFile } = require('./repo-checks');
 
+const MAX_PDF_FILE_BYTES = 150 * 1024 * 1024;
 const MAX_PDF_META_STREAM_BYTES = 32 * 1024 * 1024;
+const MAX_PDF_DEPTH = 64;
+const MAX_XREF_ENTRIES = 1000000;
+const MAX_OBJSTM_ENTRIES = 100000;
+const MAX_ALPHA_REPEAT = 20;
 const MAX_PREDICTOR_COLUMNS = 65536;
 const MAX_PREDICTOR_COLORS = 16;
 const MAX_PREDICTOR_BPC = 16;
@@ -22,9 +27,10 @@ const FALLBACK_SCAN_WINDOW_BYTES = 8 * 1024 * 1024;
 const FALLBACK_SCAN_OVERLAP_BYTES = 64;
 
 // ── Shared Range, Role, Tree & Topic-Matching Helpers (extracted from canonical HTML) ──
-
+// v21.10 (Phase 2): resolve suite HTML relative to repo root (not process.cwd()) and load lazily on first helper call so require() performs zero synchronous I/O.
+let _cachedTocHelpers = null;
 function loadSuiteTocHelpers() {
-  const src = fs.readFileSync(resolveSuiteFile(), 'utf8');
+  const src = fs.readFileSync(resolveSuiteFile({ rootDir: path.resolve(__dirname, '..') }), 'utf8');
   const startAnchor = 'function kbMergePageRanges(';
   const endAnchor = '\nfunction kbFormatTocSlicePlanMd(';
   const a = src.indexOf(startAnchor);
@@ -48,20 +54,23 @@ function loadSuiteTocHelpers() {
   )();
 }
 
-const {
-  mergePageRanges,
-  formatPageRanges,
-  countPagesInRanges,
-  parsePageRanges,
-  detectConceptSortQBank,
-  suggestTextbookRole,
-  mergeConceptInput,
-  inferUploadDropMeta,
-  classifyTocFeature,
-  buildTocTree,
-  matchTocNodes,
-  resolveSelectionRanges,
-} = loadSuiteTocHelpers();
+function getTocHelpers() {
+  if (!_cachedTocHelpers) _cachedTocHelpers = loadSuiteTocHelpers();
+  return _cachedTocHelpers;
+}
+
+const mergePageRanges = (...a) => getTocHelpers().mergePageRanges(...a);
+const formatPageRanges = (...a) => getTocHelpers().formatPageRanges(...a);
+const countPagesInRanges = (...a) => getTocHelpers().countPagesInRanges(...a);
+const parsePageRanges = (...a) => getTocHelpers().parsePageRanges(...a);
+const detectConceptSortQBank = (...a) => getTocHelpers().detectConceptSortQBank(...a);
+const suggestTextbookRole = (...a) => getTocHelpers().suggestTextbookRole(...a);
+const mergeConceptInput = (...a) => getTocHelpers().mergeConceptInput(...a);
+const inferUploadDropMeta = (...a) => getTocHelpers().inferUploadDropMeta(...a);
+const classifyTocFeature = (...a) => getTocHelpers().classifyTocFeature(...a);
+const buildTocTree = (...a) => getTocHelpers().buildTocTree(...a);
+const matchTocNodes = (...a) => getTocHelpers().matchTocNodes(...a);
+const resolveSelectionRanges = (...a) => getTocHelpers().resolveSelectionRanges(...a);
 
 // ── Pure-Node PDF 1.4–1.7 Outline / Page-Tree / PageLabel Reader ──
 
@@ -197,19 +206,21 @@ class PdfCursor {
     }
     return { kind: 'string', bytes, value: decodePdfBytes(bytes) };
   }
-  readArray() {
+  readArray(depth = 0) {
+    if (depth > MAX_PDF_DEPTH) throw new Error('PDF nesting depth exceeds safety limit');
     this.pos++; // skip '['
     const items = [];
     while (this.pos < this.end) {
       const pk = this.peek();
       if (pk < 0 || pk === 0x5D) { if (pk === 0x5D) this.pos++; break; }
-      const val = this.readObject();
+      const val = this.readObject(true, depth + 1);
       if (val === undefined) break;
       items.push(val);
     }
     return items;
   }
-  readDictOrStream(allowStream = true) {
+  readDictOrStream(allowStream = true, depth = 0) {
+    if (depth > MAX_PDF_DEPTH) throw new Error('PDF nesting depth exceeds safety limit');
     this.pos += 2; // skip '<<'
     const dict = Object.create(null);
     while (this.pos < this.end) {
@@ -220,12 +231,12 @@ class PdfCursor {
         break;
       }
       if (pk !== 0x2F) {
-        const junk = this.readObject();
+        const junk = this.readObject(true, depth + 1);
         if (junk === undefined) break;
         continue;
       }
       const key = this.readName().value;
-      const val = this.readObject();
+      const val = this.readObject(true, depth + 1);
       if (val !== undefined) dict[key] = val;
     }
     if (!allowStream) return { kind: 'dict', dict };
@@ -251,14 +262,15 @@ class PdfCursor {
     this.pos = saved;
     return { kind: 'dict', dict };
   }
-  readObject(allowStream = true) {
+  readObject(allowStream = true, depth = 0) {
+    if (depth > MAX_PDF_DEPTH) throw new Error('PDF nesting depth exceeds safety limit');
     const pk = this.peek();
     if (pk < 0) return undefined;
     if (pk === 0x2F) return this.readName();
     if (pk === 0x28) return this.readLiteralString();
-    if (pk === 0x5B) return this.readArray();
+    if (pk === 0x5B) return this.readArray(depth + 1);
     if (pk === 0x3C) {
-      if (this.pos + 1 < this.end && this.buf[this.pos + 1] === 0x3C) return this.readDictOrStream(allowStream);
+      if (this.pos + 1 < this.end && this.buf[this.pos + 1] === 0x3C) return this.readDictOrStream(allowStream, depth + 1);
       return this.readHexString();
     }
     const word = this.readWord();
@@ -322,6 +334,10 @@ function applyPdfPredictor(data, parms) {
   }
   if (predictor >= 10 && predictor <= 15) {
     const stride = rowBytes + 1;
+    // v21.10 (Phase 2): PNG predictors carry a 1-byte filter prefix per row, so verify full stride against data.length.
+    if (stride > data.length) {
+      throw new Error('PDF predictor row width exceeds stream bounds');
+    }
     const rows = Math.floor(data.length / stride);
     if (rows * rowBytes > MAX_PDF_META_STREAM_BYTES) {
       throw new Error('PDF predictor output exceeds safety ceiling');
@@ -366,14 +382,16 @@ class PdfReader {
   decompressStream(streamObj) {
     let data = streamObj.rawStream;
     const dict = streamObj.dict || {};
-    let filters = dict.Filter;
-    let parms = dict.DecodeParms;
+    let filters = this.deref(dict.Filter);
+    let parms = this.deref(dict.DecodeParms);
     if (!filters) return data;
     if (!Array.isArray(filters)) filters = [filters];
     if (!Array.isArray(parms)) parms = [parms];
     for (let i = 0; i < filters.length; i++) {
-      const fName = filters[i] && filters[i].kind === 'name' ? filters[i].value : '';
-      const p = (parms[i] && parms[i].kind === 'dict') ? parms[i].dict : null;
+      const fObj = this.deref(filters[i]);
+      const pObj = this.deref(parms[i]);
+      const fName = fObj && fObj.kind === 'name' ? fObj.value : '';
+      const p = (pObj && pObj.kind === 'dict') ? pObj.dict : null;
       if (fName === 'FlateDecode' || fName === 'Fl') {
         try {
           data = zlib.inflateSync(data, { maxOutputLength: MAX_PDF_META_STREAM_BYTES });
@@ -391,6 +409,9 @@ class PdfReader {
           }
         }
         if (p) data = applyPdfPredictor(data, p);
+      } else {
+        // v21.10 (Phase 2): reject unsupported stream filters explicitly instead of returning raw undecoded bytes.
+        throw new Error('Unsupported PDF stream filter: ' + (fName || 'unknown'));
       }
     }
     return data;
@@ -437,12 +458,16 @@ class PdfReader {
         const countWord = cur.readWord();
         if (!/^\d+$/.test(w) || !/^\d+$/.test(countWord)) { cur.pos = save; break; }
         const startNum = Number(w), count = Number(countWord);
+        // v21.10 (Phase 2): stop on EOF/malformed rows and cap total XRef entries to block crafted '0 2000000000' CPU/memory DoS.
         for (let i = 0; i < count; i++) {
+          if (cur.pos >= cur.end) break;
           const offStr = cur.readWord();
           const genStr = cur.readWord();
           const flag = cur.readWord();
+          if (!offStr || !genStr || !flag || !/^\d+$/.test(offStr) || !/^\d+$/.test(genStr)) break;
           const objNum = startNum + i;
           if (flag === 'n' && !this.xref.has(objNum)) {
+            if (this.xref.size >= MAX_XREF_ENTRIES) throw new Error('PDF XRef entry count exceeds safety limit');
             this.xref.set(objNum, { type: 1, offset: Number(offStr), gen: Number(genStr) });
           }
         }
@@ -465,6 +490,10 @@ class PdfReader {
       if (W.length === 3) {
         const [w0, w1, w2] = W;
         const entryLen = w0 + w1 + w2;
+        // v21.10 (Phase 2): validate /W field widths and require entryLen > 0 so /W [0 0 0] cannot spin indefinitely without advancing pos.
+        if (!W.every(wv => Number.isInteger(wv) && wv >= 0 && wv <= 6) || entryLen <= 0) {
+          throw new Error('Invalid PDF XRef /W field widths');
+        }
         const size = Number(d.Size) || 0;
         const indexArr = Array.isArray(d.Index) && d.Index.length >= 2 ? d.Index.map(Number) : [0, size];
         const raw = this.decompressStream(xrefObj);
@@ -477,12 +506,14 @@ class PdfReader {
         };
         for (let s = 0; s + 1 < indexArr.length; s += 2) {
           const firstObj = indexArr[s], count = indexArr[s + 1];
+          if (!Number.isInteger(firstObj) || !Number.isInteger(count) || count < 0) continue;
           for (let k = 0; k < count && pos + entryLen <= raw.length; k++) {
             const t = w0 === 0 ? 1 : readInt(w0);
             const f1 = w1 === 0 ? 0 : readInt(w1);
             const f2 = w2 === 0 ? 0 : readInt(w2);
             const objNum = firstObj + k;
             if (!this.xref.has(objNum)) {
+              if (this.xref.size >= MAX_XREF_ENTRIES) throw new Error('PDF XRef entry count exceeds safety limit');
               if (t === 1) this.xref.set(objNum, { type: 1, offset: f1, gen: f2 });
               else if (t === 2) this.xref.set(objNum, { type: 2, stmObj: f1, index: f2 });
             }
@@ -541,12 +572,23 @@ class PdfReader {
       if (stm && stm.kind === 'stream' && stm.dict) {
         const n = Number(stm.dict.N) || 0;
         const first = Number(stm.dict.First) || 0;
+        // v21.10 (Phase 2): cap /N and /First and break on header EOF to block crafted ObjStm DoS loops.
+        if (!Number.isInteger(n) || n < 0 || n > MAX_OBJSTM_ENTRIES) {
+          throw new Error('PDF object stream /N exceeds safety limit');
+        }
         const data = this.decompressStream(stm);
+        if (!Number.isInteger(first) || first < 0 || first > data.length) {
+          throw new Error('Invalid PDF object stream /First offset');
+        }
         const headerCur = new PdfCursor(data, 0, first);
         const pairs = [];
         for (let i = 0; i < n; i++) {
-          const onum = Number(headerCur.readWord());
-          const off = Number(headerCur.readWord());
+          if (headerCur.pos >= headerCur.end) break;
+          const w1 = headerCur.readWord();
+          const w2 = headerCur.readWord();
+          if (!/^\d+$/.test(w1) || !/^\d+$/.test(w2)) break;
+          const onum = Number(w1);
+          const off = Number(w2);
           if (Number.isFinite(onum) && Number.isFinite(off)) pairs.push({ onum, off: first + off, idx: i });
         }
         for (let i = 0; i < pairs.length; i++) {
@@ -603,14 +645,16 @@ function toRoman(num, lower = true) {
 function toAlphaLabel(num, lower = true) {
   const n = Math.max(1, Math.floor(Number(num)) || 1);
   const ch = String.fromCharCode(((n - 1) % 26) + (lower ? 97 : 65));
-  return ch.repeat(Math.floor((n - 1) / 26) + 1);
+  // v21.10 (Phase 2): cap repeat count so crafted huge PageLabels /St values cannot trigger RangeError or OOM.
+  return ch.repeat(Math.min(MAX_ALPHA_REPEAT, Math.floor((n - 1) / 26) + 1));
 }
 
 function buildPageMap(reader, catalogDict) {
   const pageObjToPageNum = new Map();
   let pageCount = 0;
   const visited = new Set();
-  const walk = refOrObj => {
+  const walk = (refOrObj, depth = 0) => {
+    if (depth > MAX_PDF_DEPTH) return;
     let refNum = null;
     if (refOrObj && refOrObj.kind === 'ref') {
       refNum = refOrObj.num;
@@ -623,18 +667,18 @@ function buildPageMap(reader, catalogDict) {
     const tp = d.Type && d.Type.kind === 'name' ? d.Type.value : '';
     const kids = reader.deref(d.Kids);
     if (tp === 'Pages' || Array.isArray(kids)) {
-      for (const k of Array.isArray(kids) ? kids : []) walk(k);
+      for (const k of Array.isArray(kids) ? kids : []) walk(k, depth + 1);
     } else if (tp === 'Page' || refNum !== null) {
       pageCount++;
       if (refNum !== null) pageObjToPageNum.set(refNum, pageCount);
     }
   };
-  if (catalogDict && catalogDict.Pages) walk(catalogDict.Pages);
+  if (catalogDict && catalogDict.Pages) walk(catalogDict.Pages, 0);
   return { pageObjToPageNum, numPages: Math.max(1, pageCount) };
 }
 
-function collectNumberTree(reader, nodeObj, out = [], visited = new Set()) {
-  if (!nodeObj) return out;
+function collectNumberTree(reader, nodeObj, out = [], visited = new Set(), depth = 0) {
+  if (!nodeObj || depth > MAX_PDF_DEPTH) return out;
   if (nodeObj.kind === 'ref') {
     if (visited.has(nodeObj.num)) return out;
     visited.add(nodeObj.num);
@@ -651,7 +695,7 @@ function collectNumberTree(reader, nodeObj, out = [], visited = new Set()) {
     }
   }
   const kids = reader.deref(d.Kids);
-  if (Array.isArray(kids)) for (const kid of kids) collectNumberTree(reader, kid, out, visited);
+  if (Array.isArray(kids)) for (const kid of kids) collectNumberTree(reader, kid, out, visited, depth + 1);
   return out;
 }
 
@@ -683,8 +727,8 @@ function buildPageLabels(reader, catalogDict, numPages) {
   return labels;
 }
 
-function collectNameTree(reader, nodeObj, map = new Map(), visited = new Set()) {
-  if (!nodeObj) return map;
+function collectNameTree(reader, nodeObj, map = new Map(), visited = new Set(), depth = 0) {
+  if (!nodeObj || depth > MAX_PDF_DEPTH) return map;
   if (nodeObj.kind === 'ref') {
     if (visited.has(nodeObj.num)) return map;
     visited.add(nodeObj.num);
@@ -701,7 +745,7 @@ function collectNameTree(reader, nodeObj, map = new Map(), visited = new Set()) 
     }
   }
   const kids = reader.deref(d.Kids);
-  if (Array.isArray(kids)) for (const kid of kids) collectNameTree(reader, kid, map, visited);
+  if (Array.isArray(kids)) for (const kid of kids) collectNameTree(reader, kid, map, visited, depth + 1);
   return map;
 }
 
@@ -813,8 +857,16 @@ function inspectPdfTocBuffer(buf, fileName = 'textbook.pdf') {
 
 function inspectPdfTocFile(filePath) {
   const resolved = path.resolve(filePath);
-  if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
+  if (!fs.existsSync(resolved)) {
     throw new Error('PDF file not found: ' + resolved);
+  }
+  const st = fs.statSync(resolved);
+  if (!st.isFile()) {
+    throw new Error('PDF file not found: ' + resolved);
+  }
+  // v21.10 (Phase 2): enforce the 150 MB safety cap before reading file bytes into RAM.
+  if (st.size > MAX_PDF_FILE_BYTES) {
+    throw new Error('PDF file exceeds 150 MB safety limit (' + (st.size / 1048576).toFixed(1) + ' MB)');
   }
   return inspectPdfTocBuffer(fs.readFileSync(resolved), path.basename(resolved));
 }
@@ -823,31 +875,44 @@ function inspectPdfTocFile(filePath) {
 
 function parseCli(argv) {
   const opts = { file: '', match: '', pad: 0, depth: 2, all: false, features: false, json: false, help: false };
+  let afterDoubleDash = false;
+  const seen = new Set();
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '-h' || a === '--help') { opts.help = true; continue; }
-    if (a === '--all') { opts.all = true; continue; }
-    if (a === '--features') { opts.features = true; continue; }
-    if (a === '--json') { opts.json = true; continue; }
-    if (a === '-m' || a === '--match') {
-      const next = argv[++i];
-      if (next === undefined) throw new Error('Missing value for ' + a);
-      opts.match = opts.match ? opts.match + ', ' + next : next;
-      continue;
+    if (!afterDoubleDash && a === '--') { afterDoubleDash = true; continue; }
+    if (!afterDoubleDash) {
+      if (a === '-h' || a === '--help') { opts.help = true; continue; }
+      if (a === '--all') { opts.all = true; continue; }
+      if (a === '--features') { opts.features = true; continue; }
+      if (a === '--json') { opts.json = true; continue; }
+      if (a === '-m' || a === '--match') {
+        const next = argv[++i];
+        if (next === undefined) throw new Error('Missing value for ' + a);
+        opts.match = opts.match ? opts.match + ', ' + next : next;
+        continue;
+      }
+      if (a === '--pad') {
+        if (seen.has('--pad')) throw new Error('Duplicate option: --pad');
+        seen.add('--pad');
+        const raw = argv[++i];
+        if (typeof raw !== 'string' || !/^\d+$/.test(raw)) throw new Error('--pad must be an integer 0..5');
+        const next = Number(raw);
+        if (!Number.isSafeInteger(next) || next < 0 || next > 5) throw new Error('--pad must be an integer 0..5');
+        opts.pad = next;
+        continue;
+      }
+      if (a === '--depth') {
+        if (seen.has('--depth')) throw new Error('Duplicate option: --depth');
+        seen.add('--depth');
+        const raw = argv[++i];
+        if (typeof raw !== 'string' || !/^\d+$/.test(raw)) throw new Error('--depth must be an integer 1..12');
+        const next = Number(raw);
+        if (!Number.isSafeInteger(next) || next < 1 || next > 12) throw new Error('--depth must be an integer 1..12');
+        opts.depth = next;
+        continue;
+      }
+      if (a.startsWith('-')) throw new Error('Unknown option: ' + a);
     }
-    if (a === '--pad') {
-      const next = Number(argv[++i]);
-      if (!Number.isFinite(next) || next < 0 || next > 5) throw new Error('--pad must be an integer 0..5');
-      opts.pad = Math.floor(next);
-      continue;
-    }
-    if (a === '--depth') {
-      const next = Number(argv[++i]);
-      if (!Number.isFinite(next) || next < 1 || next > 12) throw new Error('--depth must be an integer 1..12');
-      opts.depth = Math.floor(next);
-      continue;
-    }
-    if (a.startsWith('-')) throw new Error('Unknown option: ' + a);
     if (!opts.file) opts.file = a;
     else throw new Error('Unexpected positional argument: ' + a);
   }
@@ -906,12 +971,14 @@ function main() {
   if (opts.features) {
     if (opts.match && matchInfo.matchedIds.size > 0) {
       // Include high-yield feature sections belonging to any matched chapter/unit or matched section
+      // v21.10 (Phase 2): index report.flat by ID once so ancestor lookups stay O(1) instead of O(N^2).
+      const byId = new Map(report.flat.map(x => [x.id, x]));
       const matchedChapIds = new Set();
       for (const n of report.flat) {
         if (matchInfo.matchedIds.has(n.id)) {
           matchedChapIds.add(n.id);
           for (const aid of n.ancestorIds) {
-            const anc = report.flat.find(x => x.id === aid);
+            const anc = byId.get(aid);
             if (anc && anc.depth >= 1) matchedChapIds.add(aid);
           }
         }
@@ -1000,8 +1067,12 @@ if (require.main === module) {
 }
 
 module.exports = {
+  MAX_PDF_FILE_BYTES,
   MAX_PDF_META_STREAM_BYTES,
+  MAX_PDF_DEPTH,
   applyPdfPredictor,
+  toAlphaLabel,
+  parseCli,
   PdfReader,
   mergePageRanges,
   formatPageRanges,

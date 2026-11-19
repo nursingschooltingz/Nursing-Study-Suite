@@ -22,6 +22,7 @@ module.exports=function numericBoundaryTests(S,t){
   t('missing availability retains the established warning and default timing semantics',missing.some(i=>i.sev==='warn'&&i.msg.includes('missing availability')));
   t('present-invalid supportType still cannot donate rationale evidence',run({...datum,supportType:'Direct'}).some(i=>i.sev==='error'&&i.msg.includes('rationale')));
   const uncited=run({...datum,supportType:'direct',factIds:[]});
-  t('uncited datum warning stays separate from independently unsupported rationale content',uncited.some(i=>i.sev==='warn'&&i.msg.includes('has no fact ID'))&&uncited.some(i=>i.sev==='error'&&i.msg.includes('rationale'))&&!uncited.some(i=>i.sev==='error'&&i.msg.includes('datum')));
+  const uncitedNonNum=run({label:'Breath sounds',value:'Clear bilaterally',supportType:'direct',factIds:[]});
+  t('uncited unit-bearing datum triggers entailment error while non-numeric uncited datum stays warn-only (H16)',uncited.some(i=>i.sev==='warn'&&i.msg.includes('has no fact ID'))&&uncited.some(i=>i.sev==='error'&&i.msg.includes('rationale'))&&uncited.some(i=>i.sev==='error'&&i.msg.includes('datum'))&&uncitedNonNum.some(i=>i.sev==='warn'&&i.msg.includes('has no fact ID'))&&!uncitedNonNum.some(i=>i.sev==='error'&&i.msg.includes('datum')));
   t('numeric extraction retains a non-vacuous token parser tail',C.caseNumericTokens('5 mg·kg').unsupported[0]==='5 mg·kg');
 };

@@ -54,7 +54,7 @@ module.exports = async function run(S, t) {
 
   // 2. Step 01 per-source role selector (PDF/PPTX/card transcript chips) & zero-hallucination KB_PLATE_BRIDGE_RULES
   {
-    const kbBuilderSpan = span('function KnowledgeBaseBuilder(){', '\n// ──── TOOL: Priority Analyzer ────');
+    const kbBuilderSpan = span('function KnowledgeBaseBuilder(){', '\n// ──── TOOL: Priority Analyzer ────') + '\n' + span('async function kbBuildWithEnv(', '\n// ── BEGIN ANKI RUNNERS ──');
     const chipStart = kbBuilderSpan.indexOf('className="file-chip"');
     const chipEnd = kbBuilderSpan.indexOf('</div>;})}</div>}', chipStart);
     const chipJsx = kbBuilderSpan.slice(chipStart, chipEnd);

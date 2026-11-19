@@ -6,7 +6,7 @@ function extract(source){
   const H=new Function(span('function kbSlug(','// v15.14: the class kept ASCII')+normalizer+';return {kbNormalizeImported,KB_IMPORT_MAX_BYTES};')();
   H.persistence=new Function(span('function kbStoredRecord(','\nfunction validateLatteKnowledgeBase')+';return {kbCreateSaveQueue,kbStoredRecord,kbReconcileStored};')();
   H.empty=new Function(span('const EMPTY_LATTE_KB=','// Shared Fact Inspector state.')+';return EMPTY_LATTE_KB;')();
-  H.importSource=span('  const importJSON=async file=>{','  // v15.3 (Gemini\'s BUG-02');
+  H.importSource=span('  const importJSON=async file=>{','\n  return importJSON(file);');
   H.hydrateSource=span('    (async()=>{\n      try{\n        let durable=null,unavailable=false;',';return()=>{alive=false;mounted.current=false;};');
   H.saveEffect=span('  useEffect(()=>{\n    if(!hydrated||recoveryChoices.length||!saveRequest)return;','\n  const chooseRecovery=');
   H.recoverySource=span('  const chooseRecovery=useCallback(async index=>{','\n\n  // cfg.thinkingLevel');

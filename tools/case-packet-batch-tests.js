@@ -305,8 +305,8 @@ module.exports = async function run(S, t) {
   // 8. Live CaseStudyGenerator.run handler integration with batchOverrideRef
   {
     const CASE_VAL = loadCaseModule(S);
-    const start = S.indexOf('  const run=useCallback(async()=>{', S.indexOf('function CaseStudyGenerator(){'));
-    const end = S.indexOf('\n\n  // v15.6: audit verdicts', start);
+    const start = S.indexOf('  const run=async()=>{', S.indexOf('async function caseRunSingleWithEnv('));
+    const end = S.indexOf('\n  return run();', start);
     const opStart = S.indexOf('function createOperationSlot(){'), opEnd = S.indexOf('function cardCurrentEntries(', opStart);
     const createOperationSlot = new Function(S.slice(opStart, opEnd) + ';return createOperationSlot;')();
 

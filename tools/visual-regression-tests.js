@@ -31,9 +31,9 @@ module.exports=function visualRegressionTests(S,t){
   t('v17 keeps settings reachable from the rail and the workspace header at every width',
     S.includes('className="rail-settings" aria-label="Study settings"')&&S.includes('onClick={openSettings}>{apiKey?\'API key added\':\'Add API key\'}</button>'));
   t('v17 settings drawer is dismissable and leaves the workspace underneath usable',
-    S.includes("const onKey=e=>{if(e.key==='Escape'){e.preventDefault();onCloseRef.current();}};")
+    S.includes("if(e.key==='Escape'){e.preventDefault();onCloseRef.current();}")
     &&!S.includes('settings-scrim')
-    &&S.includes('<aside ref={panelRef} className="drawer config-drawer" id="suite-settings" aria-label="Study settings">'));
+    &&S.includes('<aside className="drawer config-drawer" id="suite-settings" aria-label="Study settings">'));
   t('v17 settings close restores the trigger and opening focuses the named API field',S.includes('settingsTrigger.current?.focus()')&&S.includes("document.getElementById('suite-api-key')?.focus()"));
   t('v17 API key is explicitly labelled, described and concealed',S.includes('htmlFor="suite-api-key">Gemini API key</label>')&&S.includes('id="suite-api-key" aria-describedby="suite-api-help" autoComplete="off" type="password"'));
   const fields={
@@ -48,14 +48,14 @@ module.exports=function visualRegressionTests(S,t){
   };
   for(const [name,ids] of Object.entries(fields))t('v17 '+name+' fields have explicit matching labels and unique ids',ids.every(id=>S.includes('htmlFor="'+id+'"')&&S.split('id="'+id+'"').length===2));
   t('v17 Anki table identifies its columns and editable fields',S.includes('<table aria-label="Editable Anki notes">')&&S.includes('<th scope="col">Text</th>')&&['Text for note ','Extra for note ','Tags for note ','Keep note ','Delete note '].every(label=>S.includes("aria-label={'"+label+"'+c.id}")));
-  t('v17 page ranges retain native removal buttons and announce invalid boundaries',S.includes("aria-label={'Remove '+sLabel+' range '+(i+1)}")&&S.includes('aria-invalid={r.start>r.end}')&&!S.includes('<span className="f-rm" onClick={()=>removeRange(i)}>'));
-  t('v17 review selection and answer disclosures are programmatically exposed',S.includes('role="group" aria-label="Anki review view"')&&S.includes('aria-pressed={view===v}')&&S.includes('aria-expanded={revealed}')&&S.includes('aria-expanded={!!kOpen}'));
+  t('v17 page ranges retain native removal buttons and announce invalid boundaries',S.includes("'aria-label':'Remove '+sLabel+' range '+(i+1)")&&S.includes("'aria-invalid':r.start>r.end")&&!S.includes('<span className="f-rm" onClick={()=>removeRange(i)}>'));
+  t('v17 review selection and answer disclosures are programmatically exposed',S.includes('role="group" aria-label="Anki review view"')&&S.includes('aria-pressed={view===v}')&&S.includes("'aria-expanded':revealed")&&S.includes('aria-expanded={!!kOpen}'));
   // One primitive emits every progress bar, so the role and bounds are proved once at the
   // definition and each of the five callers is proved by the label it passes.
   t('v17 the shared progress primitive is labelled, bounded and driven by real state',
     S.includes('function RunStatus({label,value,max=100,caption,detail,children}){')
     &&S.includes('const now=Math.max(0,Math.min(ceiling,Number(value)||0));')
-    &&S.includes('<div className="progress-bar" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={ceiling} aria-valuenow={now}><div className="progress-fill" style={{width:(now/ceiling*100)+\'%\'}}/></div>'));
+    &&S.includes("h('div',{className:'progress-bar',role:'progressbar','aria-label':label,'aria-valuemin':0,'aria-valuemax':ceiling,'aria-valuenow':now},h('div',{className:'progress-fill',style:{width:(now/ceiling*100)+'%'}}))"));
   t('v17 all five processing bars report labelled numeric progress',
     ['Knowledge Base extraction','Priority analysis','Anki generation','Question extraction','NCLEX question generation']
       .every(name=>S.includes('<RunStatus label="'+name+'"')||S.includes('role="progressbar" aria-label="'+name+'" aria-valuemin={0}')));

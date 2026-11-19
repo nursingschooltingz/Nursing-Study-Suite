@@ -323,8 +323,8 @@ module.exports = async function runV202ReviewRemediationTests(S, t) {
 
     // Deterministic packet commit inside CaseStudyGenerator.run without relying on useEffect
     const C = CASE_REMED.load(S);
-    const runStart = S.indexOf('  const run=useCallback(async()=>{', S.indexOf('function CaseStudyGenerator(){'));
-    const runEnd = S.indexOf('\n\n  // v15.6: audit verdicts', runStart);
+    const runStart = S.indexOf('  const run=async()=>{', S.indexOf('async function caseRunSingleWithEnv('));
+    const runEnd = S.indexOf('\n  return run();', runStart);
     const createOperationSlot = load(span('function createOperationSlot(){', 'function cardCurrentEntries('), ['createOperationSlot']).createOperationSlot;
     let packetState = [];
     const casePacketRef = { current: packetState };
@@ -754,7 +754,7 @@ module.exports = async function runV202ReviewRemediationTests(S, t) {
 
     let capturedNclexBody = null, capturedNclexOpts = null;
     const { nclexCallGemini } = load(
-      span('  async function nclexCallGemini(prompt,signal){', '\n\n  // v17.4: one admission path'),
+      span('  async function nclexCallGemini(prompt,signal){', '\n  return nclexCallGemini(prompt,signal);'),
       ['nclexCallGemini'],
       {
         toolLevel: 'low',
@@ -800,7 +800,7 @@ module.exports = async function runV202ReviewRemediationTests(S, t) {
         fetch: async () => {
           davisTry++;
           if (davisTry === 1) return { ok: false, status: 429 };
-          return { ok: true, status: 200, json: async () => ({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '{"face":"front","sections":[],"numerics":[]}' }] } }], usageMetadata: {} }) };
+          return { ok: true, status: 200, json: async () => ({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '{"face":"front","category":null,"cardNumber":null,"sections":[],"numerics":[],"overallLegibility":"clean"}' }] } }], usageMetadata: {} }) };
         }
       }
     );
@@ -1009,7 +1009,7 @@ module.exports = async function runV202ReviewRemediationTests(S, t) {
     const planned = FOCUS.ngFocusPlan(pool, { points: '', outcomes: '', batches: 2, perItem: 2, cap: 5 });
 
     const { buildFocusBlock } = load(
-      span('  function buildFocusBlock(){', '\n\n  function buildBatchBlock(', 'function NCLEXGenerator()'),
+      span('  function buildFocusBlock(){', '\n  return buildFocusBlock();', 'function ngBuildFocusBlockWithEnv('),
       ['buildFocusBlock'],
       {
         outcomes: '',

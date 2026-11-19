@@ -19,9 +19,6 @@ function page(){
   const sizeLimit='const ANKI_SOURCE_AUDIT_GROUP_CHARS=24000;';
   if(html.split(sizeLimit).length!==2)throw Error('Synthetic group-size anchor changed.');
   html=html.replace(sizeLimit,'const ANKI_SOURCE_AUDIT_GROUP_CHARS=2400;');
-  const fixtureCfg="const cfg=useMemo(()=>({apiKey:'synthetic-only',forTool:()=>({model:'synthetic-fixture',level:'low'}),autoProfile:true}),[]);";
-  if(html.split(fixtureCfg).length!==2)throw Error('Synthetic configuration anchor changed.');
-  html=html.replace(fixtureCfg,"const cfg=useMemo(()=>({apiKey:'synthetic-only',hydrogenModel:'synthetic-hydrogen',neonModel:'synthetic-neon',forTool:id=>({model:TOOL_PROFILE_DEFAULTS[id].m==='neon'?'synthetic-neon':'synthetic-hydrogen',level:TOOL_PROFILE_DEFAULTS[id].lv}),autoProfile:true}),[]);");
   const old='callGemini=async()=>{';
   if(html.split(old).length!==2)throw Error('Synthetic transport anchor changed.');
   html=html.replace(old,()=>validReceipt.toString()+String.raw`

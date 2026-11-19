@@ -196,7 +196,7 @@ module.exports = async function run(S, t) {
 
   // ── 4. KnowledgeBaseBuilder.build() end-to-end with Pass 1 + Pass 2 omission audit in concept mode ──
   {
-    const buildSpan = span('const build=async()=>{', '\n  const exportDiag=()=>{');
+    const buildSpan = span('const build=async()=>{', '\n  // v15.10: the diagnostics panel is a scroll box');
     const sourceText = 'Perfusion depends on cardiac output and systemic vascular resistance. Monitor capillary refill and peripheral pulses. Heart failure ventricular remodeling decreases stroke volume. Auscultate S3 gallop. Check BNP level.';
     const pass1Reply = {
       conditions: [

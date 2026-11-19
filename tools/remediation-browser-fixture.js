@@ -4,6 +4,8 @@
 // Test-only, real-App fixture. It never serves the repository or reads course files.
 // Use the companion Playwright runner for request interception across every frame,
 // popup, CSS resource, image and worker; a fetch stub alone cannot enforce that.
+// v21.10 (Phase 5 M1/M18): pure JS shim injects into a separate plain <script> tag before
+// text/babel (zero Babel size inflation) and intercepts geminiRequest alongside callGemini.
 const fs=require('fs'),http=require('http'),path=require('path');
 const {resolveSuiteFile}=require('./repo-checks');
 const root=path.join(__dirname,'..');
@@ -24,7 +26,7 @@ function syntheticKB(label='A'){
   }],sources:[],medications:[],diagnostics:[],scoringTools:[],formulas:[],contradictions:[]};
 }
 
-function fixtureScript(config){
+function fixturePlainShim(config){
   // JSON is embedded in a script element, not interpreted as HTML.
   const encoded=JSON.stringify(config).replace(/</g,'\\u003c');
   return 'const remediationConfig='+encoded+';\n'+String.raw`
@@ -109,23 +111,19 @@ window.fetch=(resource,...args)=>{
   }
   return remediationNative.fetch(resource,...args);
 };
-callGemini=async(...args)=>{
+async function remediationMockGemini(opts={}){
   const response=remediation.responseQueue.shift(),id='gemini:'+String(remediation.geminiCalls.length+1);
-  const opts=args[3]||{};
   const call={id,status:'waiting',text:response?.text,onUpdate:opts.onUpdate,onMeta:opts.onMeta,signal:opts.signal};remediation.geminiCalls.push(call);
   if(!response){const message='Unexpected Gemini operation without a queued synthetic response';remediation.errors.push(message);call.status='unexpected';throw new Error(message);}
   let abortListener;
   try{const text=response.defer?await new Promise((resolve,reject)=>{Object.assign(call,{resolve,reject});if(response.abortOnSignal&&opts.signal){abortListener=()=>reject(new DOMException('Synthetic request aborted','AbortError'));if(opts.signal.aborted)abortListener();else opts.signal.addEventListener('abort',abortListener,{once:true});}}):response.text;call.status='resolved';return text;}
   catch(e){call.status='rejected';throw e;}
   finally{if(abortListener)opts.signal.removeEventListener('abort',abortListener);}
-};
+}
+callGemini=async(...args)=>remediationMockGemini(args[3]||{});
+geminiRequest=async(...args)=>remediationMockGemini(args[3]||{});
 downloadBlob=async(blob,name)=>remediation.exports.push({name,text:await blob.text()});
 copyText=async text=>{remediation.copies.push(String(text));return true;};
-function RemediationProbe(){
-  const context=useContext(KnowledgeCtx);
-  useEffect(()=>{remediation.context=context;remediation.state={knowledgeBase:remediationClone(context.knowledgeBase),persistenceStatus:context.persistenceStatus,persistenceError:context.persistenceError,artifactRegistry:remediationClone(context.artifactRegistry),recovery:remediationClone(context.recoveryChoices)};},[context]);
-  return <div id="remediation-fixture-label" style={{position:'fixed',bottom:0,left:0,zIndex:99999,padding:'4px 10px',background:'#113322',color:'white',fontSize:11}}>Synthetic real-App fixture · isolated storage · mocked generation</div>;
-}
 window.__remediationSeedReady=(async()=>{
   sessionStorage.setItem('suite_key','synthetic-fixture-only');
   // Reload must exercise persisted bytes, rather than overwriting them with the seed.
@@ -141,10 +139,19 @@ window.__remediationSeedReady=(async()=>{
 `;
 }
 
+const PROBE_JSX=String.raw`
+function RemediationProbe(){
+  const context=useContext(KnowledgeCtx);
+  useEffect(()=>{remediation.context=context;remediation.state={knowledgeBase:remediationClone(context.knowledgeBase),persistenceStatus:context.persistenceStatus,persistenceError:context.persistenceError,artifactRegistry:remediationClone(context.artifactRegistry),recovery:remediationClone(context.recoveryChoices)};},[context]);
+  return <div id="remediation-fixture-label" style={{position:'fixed',bottom:0,left:0,zIndex:99999,padding:'4px 10px',background:'#113322',color:'white',fontSize:11}}>Synthetic real-App fixture · isolated storage · mocked generation</div>;
+}
+`;
+
 function page(config={}){
   let source=fs.readFileSync(resolveSuiteFile({rootDir:root}),'utf8');
   source=once(source,'      <FactInspectorDrawer/>','      <RemediationProbe/>\n      <FactInspectorDrawer/>');
-  source=once(source,'try{if(!window.React)throw new Error(',fixtureScript(config)+'\ntry{if(!window.React)throw new Error(');
+  source=once(source,'<script type="text/babel" data-presets="react">','<script>\n'+fixturePlainShim(config)+'\n</script>\n<script type="text/babel" data-presets="react">');
+  source=once(source,'try{if(!window.React)throw new Error(',PROBE_JSX+'\ntry{if(!window.React)throw new Error(');
   source=once(source,"ReactDOM.createRoot(document.getElementById('root')).render(<BootErrorBoundary><App/></BootErrorBoundary>);",
     "window.__remediationSeedReady.then(()=>{window.__remediationRoot=ReactDOM.createRoot(document.getElementById('root'));window.__remediationRoot.render(<BootErrorBoundary><App/></BootErrorBoundary>);}).catch(e=>{window.__remediation.errors.push(e.message);window.__latteBootFail?.(e.message);});");
   return source;

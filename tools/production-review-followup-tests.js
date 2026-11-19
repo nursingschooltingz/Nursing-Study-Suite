@@ -100,7 +100,7 @@ module.exports = async function productionReviewFollowupTests(S, t) {
   // v17.4: the block now merges through nclexMergePairs and its catch consults geminiHaltsBatch; the assertions
   // below keep the v16.9 answer-recovery invariants and add the union invariant that replaced replace-if-larger.
   const pairSource = span('        const aiResult=[...byNum.values()]', '      }catch(e){if(geminiHaltsBatch(e))throw e;track.notes.push(');
-  const nclexMergePairs = new Function(span('function nclexMergePairs(', 'function nclexBatchPairs(') + ';return nclexMergePairs;')();
+  const nclexMergePairs = new Function(span('function nclexStripStemPrefix(', 'function nclexRepairOptions(') + '\n' + span('function nclexMergePairs(', 'function nclexBatchPairs(') + ';return nclexMergePairs;')();
   const mergePairs = (pairs, recovered) => new Function('byNum', 'pairs', 'addLog', 'nclexMergePairs', pairSource + ';return pairs;')(
     new Map(recovered.map(r => [r.number, r])), pairs, () => { }, nclexMergePairs);
   const regexPairs = [1, 2, 3].map(n => ({ number: n, question: 'q' + n, answer: '', matched: false }));

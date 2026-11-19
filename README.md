@@ -8,7 +8,7 @@ Turn your lecture PDFs and PowerPoints into a complete, source-cited study syste
 
 The whole suite is **one HTML file**. There is nothing to install, no account to create, and no website collecting your data. You open the file in your web browser, paste in a free Google Gemini API key, upload your study materials, and go.
 
-**Published release: v21.10.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v21.10/Nursing-Study-Suite.v21.10.html) or open the [repository HTML](Nursing-Study-Suite%20v21.10.html). See the standalone [P-LATE, Tagging System & Exam Study Guide](docs/PLATE-Tagging-and-Exam-Study-Guide.md) for a quick-reference workflow and Anki filter cheatsheet.
+**Published release: v21.11.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v21.11/Nursing-Study-Suite.v21.11.html) or open the [repository HTML](Nursing-Study-Suite%20v21.11.html). See the standalone [P-LATE, Tagging System & Exam Study Guide](docs/PLATE-Tagging-and-Exam-Study-Guide.md) for a quick-reference workflow and Anki filter cheatsheet.
 
 The left rail lists the nine tools in the order you use them, grouped by stage. **Source:** *Course Analyzer* reads your syllabus and lecture PowerPoints to build conservative, exam-specific Focus inputs and syncs them (plus checked lecture decks) straight into *Knowledge Base*, which builds or imports the cited facts everything else reads from. **Plan:** *Priority* ranks those facts by clinical urgency into its own Tier 1/2/3. **Practice:** *Anki* for recall, *NCLEX Extract* for questions out of a review book you already own, *NCLEX Generate* for new ones written from your facts, *Case Studies* for unfolding cases, *NCLEX to Anki* to turn NCLEX questions into Anki cards, and *Import to Gizmo* to convert Anki decks into Gizmo.ai tab-separated flashcards.
 
@@ -29,7 +29,7 @@ Inside each tool, what you supply sits on the left and what it produced sits on 
 1. **[Download the suite file](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/latest)** — grab the `.html` file from the latest release and save it somewhere you can find it. Your Desktop or a "Nursing" folder is fine.
 2. **Double-click the file.** It opens in your web browser like a webpage. That's the whole "installation."
 3. **Get a free Gemini API key** (5 minutes, instructions in the next section), select **Add API key**, and paste it into **Gemini API key** in Settings. The key is like a library card that lets the app talk to Google's AI.
-4. **Go to the first tool ("Knowledge Base")**, add the PDF or PowerPoint for your *current exam only* — just the relevant chapters, not the whole textbook — and click **Build Knowledge Base**. Wait a few minutes while it reads your material and extracts every testable fact, each one stamped with where it came from.
+4. **Go to "02 · Knowledge Base"** (or start in **"01 · Course Analyzer"** if you want the suite to turn your syllabus and lecture slides into exam-specific Focus inputs first), add the PDF or PowerPoint for your *current exam only* — just the relevant chapters, not the whole textbook — and click **Build Knowledge Base**. Wait a few minutes while it reads your material and extracts every testable fact, each one stamped with where it came from.
 5. **Use the other tools.** Once the Knowledge Base exists, every other tool feeds from it: generate a prioritized study guide, Anki flashcards, practice questions, or a full clinical case study — all built from *your* lectures, not generic internet content.
 
 That's genuinely it. Everything below is detail.
@@ -79,23 +79,29 @@ Open **Settings** from the bottom of the left rail. The panel that slides in fro
 
 **Auto profile (recommended — the default).** Toggle showing **✋ Manual / Auto profile**. In Auto mode, each tool uses a tuned model + "thinking level" combination — fast models for bulk extraction, more thinking for rule-heavy work like priority synthesis. There's a **Reset to recommended** button if you experiment and want the defaults back. If you don't know what to pick: leave Auto on and never think about this again.
 
-**Manual.** Flip the toggle and you get one global switch — **⚡ Hydrogen** or **🧠 Argon** — plus **Thinking Level** pills (`low` / `medium` / `high` / `xhigh`, with `xhigh` enabled on Hydrogen). Every tool then uses whatever you set.
+**Manual.** Flip the toggle and you get one global switch — **⚡ Hydrogen** or **🧠 Neon** — plus **Thinking Level** pills (`low` / `medium` / `high` / `xhigh`, enabled on both Hydrogen and Neon). Every tool then uses whatever you set.
 
-**Hydrogen vs. Argon, practically:**
+**Hydrogen vs. Neon, practically:**
 
-- **Hydrogen** (`gemini-4-hydrogen` by default) — Google's fast Gemini 4 workhorse with a 1M context window, 65,536 output ceiling, and `low` / `medium` / `high` / `xhigh` thinking levels. It handles extraction, card OCR, Anki cards, Gizmo conversion, and Q&A parsing rapidly and economically.
-- **Argon** (`gemini-4-argon` by default; it replaced 3.1 Pro in v17.13) — flagship deep reasoning (`low` / `medium` / `high`), noticeably slower, paid-key tier. Auto uses it for Priority synthesis, NCLEX question generation, Case Studies and the item-quality audit; it is overkill for per-chunk extraction. Argon defaults to **high** thinking here. Each Argon request has 65,536 output tokens, the same as Hydrogen (32,768 before v18.2), and thinking counts against them.
-- **Thinking level** trades speed for care. `low` and `medium` keep bulk passes snappy; bump to `high` (or `xhigh` on Hydrogen) when output depth matters more than waiting.
+- **Hydrogen** (`gemini-4-hydrogen` by default) — Google's fast Gemini 4 workhorse with a 1M context window, 65,536 output ceiling, and `low` / `medium` / `high` / `xhigh` thinking levels. It handles course analysis, extraction, card OCR, Anki cards, Gizmo conversion, and Q&A parsing rapidly and economically.
+- **Neon** (`gemini-4-neon` by default; replaced Argon in v21.10) — flagship deep reasoning (`low` / `medium` / `high` / `xhigh`), noticeably slower, paid-key tier. Auto uses it for Priority synthesis, NCLEX question generation, Case Studies, and the item-quality audit; it is overkill for per-chunk extraction. Neon defaults to **high** thinking here. Each Neon request has 65,536 output tokens, the same as Hydrogen, and thinking counts against them.
+- **Thinking level** trades speed for care. `low` and `medium` keep bulk passes snappy; bump to `high` or `xhigh` when output depth matters more than waiting.
 
-The **Hydrogen model / Argon model** text boxes exist so the suite doesn't go stale: when Google ships new model names, type them in — no update to the file needed, and **Reset defaults** restores `gemini-4-hydrogen` and `gemini-4-argon`.
+The **Hydrogen model / Neon model** text boxes exist so the suite doesn't go stale: when Google ships new model names, type them in — no update to the file needed, and **Reset defaults** restores `gemini-4-hydrogen` and `gemini-4-neon`.
 
-**Auto profile defaults.** Four rows default to Argon: **Priority · synthesis** (medium), **NCLEX · generate** (high), **Case studies** (high) and **Item quality · audit** (high). Extraction, card reading, the Priority harvest, Anki, **NCLEX · extract**, and **Import to Gizmo** stay on Hydrogen (`low` or `medium`). Your browser keeps custom profile rows it already saved, so click **Reset to recommended** once under **Customize per-tool profiles** if you want the shipped table back. On a free-tier key, set the Argon rows back to Hydrogen.
+**Auto profile defaults.** Four rows default to Neon (`high`): **Priority · synthesis**, **NCLEX · generate**, **Case studies**, and **Item quality · audit**. **Course Analyzer**, Knowledge extraction/audit, card reading, Priority harvest, Anki, **NCLEX · extract**, and **Import to Gizmo** stay on Hydrogen (`low` or `medium`). Your browser keeps custom profile rows it already saved, so click **Reset to recommended** once under **Customize per-tool profiles** if you want the shipped table back. On a free-tier key, set the Neon rows back to Hydrogen.
 
 ---
 
 # The tools, in rail order
 
-## 01 · Source — P-LATE Knowledge Base
+## 01 · Source — Nursing Course Analyzer
+
+*Turn your syllabus, exam blueprint, and lecture PowerPoints into conservative, exam-specific Focus inputs.*
+
+Drop your course syllabus/blueprint PDFs alongside the lecture `.pptx` / `.pdf` decks for your upcoming exam and run **Analyze Course Materials** (`Hydrogen · medium` in Auto profile). Under a conservative-retention prompt (never pruning anatomy, secondary concepts, medications, labs, or bridge physiology), the tool extracts your **Course**, **Exam/unit**, **Overarching Giddens Concepts**, numbered **Outcomes**, grouped **Points**, and strictly additive **Additional Context**, then lets you click **Send to 02 · Knowledge Base** to populate Step 01 + Focus + checked lecture decks in one click (with **Prioritize**, **Keep safety/meds Tier 1**, **Concept Auto-detect**, and **Exam Traps** enabled automatically).
+
+## 02 · Source — P-LATE Knowledge Base
 
 *Extract once → reusable facts for every study output.*
 
@@ -110,7 +116,7 @@ The **focus box** helps here too — tell it things like *"Only Ch. 61–63 are 
 **How to use it:**
 
 1. Optionally fill in **Course** and **Exam/unit** — these become organizational tags on your Anki cards later.
-2. Add your PDF/PPTX file(s) — or photos of flashcards (see below) — and check one or more **Source roles** (`RN Core` for lecture slides, *Giddens*, *Saunders / Silvestri*, *McCuistion*, *Mark Klimek*, and drug cards; `Patho Bridge` for *Porth / Norris* and *McCance*; `Exam / Diff Bridge` for *Jarvis & Eckhardt* and *Bates*; and `Pharm / GDMT Bridge` for *Lehne / Rosenthal & Burchum* and clinical guidelines, with an inline reference guide right next to each checkbox). Dropping files from a Giddens `concept sort` Digital Library automatically pre-checks Bridge roles for *Lehne*, *Porth*, and *Jarvis*, populates **Overarching concept(s)** from *Giddens* concept chapters or numbered concept folders, and flags `04 - Practice Questions` Q-bank PDFs (*Davis Success*, *Saunders Q&A 9e*, *LaCharity PDA*) so you can extract them cleanly in **04 · NCLEX Extract** instead. You can customize checkboxes per file when uploading separate chapters at once, or check multiple roles together for a combined study packet.
+2. Add your PDF/PPTX file(s) — or photos of flashcards (see below) — and check one or more **Source roles** (`RN Core` for lecture slides, *Giddens*, *Saunders / Silvestri*, *McCuistion*, *Mark Klimek*, and drug cards; `Patho Bridge` for *Porth / Norris* and *McCance*; `Exam / Diff Bridge` for *Jarvis & Eckhardt* and *Bates*; and `Pharm / GDMT Bridge` for *Lehne / Rosenthal & Burchum* and clinical guidelines, with an inline reference guide right next to each checkbox). Dropping files from a Giddens `concept sort` Digital Library automatically pre-checks Bridge roles for *Lehne*, *Porth*, and *Jarvis*, populates **Overarching concept(s)** from *Giddens* concept chapters or numbered concept folders, and flags `04 - Practice Questions` Q-bank PDFs (*Davis Success*, *Saunders Q&A 9e*, *LaCharity PDA*) so you can extract them cleanly in **05 · NCLEX Extract** instead. You can customize checkboxes per file when uploading separate chapters at once, or check multiple roles together for a combined study packet.
 3. Click **Build Knowledge Base**. Watch the log: it runs an extraction pass and then a second **audit pass** that re-reads each chunk hunting for facts the first pass missed. Recovered facts are only kept if their quoted text is actually found in your source — the suite verifies this in code, not on the AI's word.
 4. Browse the result: conditions on the left, followed by medication, diagnostic and scoring-tool entries (each labelled with its kind), and facts (with tiers, buckets, and source pointers) on the right. **⬇ Study View** exports the whole thing as a readable markdown study guide.
 
@@ -162,7 +168,7 @@ Import preserves full fact text, quotes and source strings. Invalid tier/categor
 
 **Rebuilding replaces.** Building or importing over an existing KB *replaces* it — the suite will show you exactly what you're about to lose ("3 conditions, 147 facts") and ask you to confirm. When in doubt: export first.
 
-## 02 · Plan — Pyramid Priority Analyzer
+## 03 · Plan — Pyramid Priority Analyzer
 
 *Triage study content into Tier 1/2/3 priorities.*
 
@@ -172,9 +178,9 @@ This tab answers the question every nursing student asks the night before an exa
 
 **How to use it:** optionally limit it to one condition or to certain Knowledge Base tiers, add **Extra Context** (e.g. "Exam is on cardiac meds only"), adjust **Chunk size / Overlap** only for a very large Knowledge Base (defaults are fine), and run. Export as **.md**, **.txt**, or **PDF**. Study Tier 1 until you're solid before touching Tier 2.
 
-**Large Knowledge Bases (v17.7).** One request has 65,536 output tokens on Hydrogen and Argon, shared between the model's thinking and the guide it writes. A whole exam's Knowledge Base can use that up in thinking before the guide is written; one 650-fact run stopped after two topics. When the harvest is large, the synthesis pass now runs in parts of about 10,000 input tokens each (on Argon too, since v18.2). The app merges them into one guide with the audit counts added together. Each part is one more request against your quota. The results and every export say how many parts were used. Each condition is kept whole inside one part, and topics that share a heading are combined into one section. If one part fails or is cut off, the notice names that part and the other parts are still shown. The harvest also reads your Knowledge Base whole facts at a time, always under their condition heading, so nothing is filed as "untitled". **Overlap** now only repeats facts within a condition too large for one chunk.
+**Large Knowledge Bases (v17.7).** One request has 65,536 output tokens on Hydrogen and Neon, shared between the model's thinking and the guide it writes. A whole exam's Knowledge Base can use that up in thinking before the guide is written; one 650-fact run stopped after two topics. When the harvest is large, the synthesis pass now runs in parts of about 10,000 input tokens each (on Neon too). The app merges them into one guide with the audit counts added together. Each part is one more request against your quota. The results and every export say how many parts were used. Each condition is kept whole inside one part, and topics that share a heading are combined into one section. If one part fails or is cut off, the notice names that part and the other parts are still shown. The harvest also reads your Knowledge Base whole facts at a time, always under their condition heading, so nothing is filed as "untitled". **Overlap** now only repeats facts within a condition too large for one chunk.
 
-## 03 · Practice — P-LATE Anki Generator
+## 04 · Practice — P-LATE Anki Generator
 
 *Anki cloze cards with P-LATE tagging + tiers.*
 
@@ -257,7 +263,7 @@ Practical plays: five days out, build a **filtered deck** on `Tier::1` and clear
 3. **⬇ Export .txt**, then in Anki: **File → Import**, pick the file. With the header on, separator (Pipe), HTML, note type (**Cloze**), and the tags column are set automatically — just confirm and import.
 4. New to Anki itself? It's a free flashcard app (`apps.ankiweb.net`) built on spaced repetition — it schedules each card right before you'd forget it. Turn on the built-in **FSRS** scheduler in Anki's settings; it's the modern algorithm and works beautifully with these cards.
 
-## 04 · Practice — NCLEX Question Extractor
+## 05 · Practice — NCLEX Question Extractor
 
 *Extract practice questions from review PDFs.*
 
@@ -272,7 +278,7 @@ Every export — **.md**, **.txt**, **Copy** and **PDF** — puts all the questi
 
 You can **Abort** mid-run and keep everything extracted so far. Results appear as browsable cards with a filter, plus **Copy** and text export.
 
-## 05 · Practice — NCLEX Question Generator
+## 06 · Practice — NCLEX Question Generator
 
 *Generate NEW NCLEX questions from your P-LATE guide.*
 
@@ -304,7 +310,7 @@ Replacing the KB cancels pending worksheet/case generation from the old source. 
 
 Cancelling an item audit keeps the completed worksheet and any finished verdicts. Non-MCQ questions show **N/A**, and a rejected repair keeps the previous item. Case JSON Copy retains the case fields and adds `_suiteReview` with source/audit notices and validation findings.
 
-## 06 · Practice — Clinical Case Study Generator
+## 07 · Practice — Clinical Case Study Generator
 
 *Source-grounded unfolding nursing cases.*
 
@@ -331,7 +337,7 @@ The **Review appendix** follows the answer key and retains every validation find
 
 A validation panel reports the results: **errors** mean the case broke the rules (it's still viewable/exportable, but it's excluded from the trusted fact-link registry and stamped as failed); **amber warnings** are advisories worth a glance — sometimes they flag a real fabrication, sometimes just a legitimately derived value. Either way, you can see exactly why.
 
-## 07 · Practice — NCLEX to Anki
+## 08 · Practice — NCLEX to Anki
 
 *Convert NCLEX exports or question images into an Anki import file.*
 
@@ -350,13 +356,13 @@ Anything the converter could not confirm — an answer that isn't one of the cho
 
 Image transcripts are kept while the page is open, so a run stopped by a quota limit picks up where it stopped. **Save transcripts** keeps them for another day; **Load transcripts** also accepts img2anki.py's `_transcripts.json`.
 
-## 08 · Practice — Import to Gizmo
+## 09 · Practice — Import to Gizmo
 
 *Convert Anki decks into Gizmo.ai tab-separated flashcards in chunks.*
 
-Replaces the standalone Python `Gizmo Converter` script with an AI-driven, chunked converter that turns either your live **03 · Anki** deck or an uploaded/pasted `.txt` / `.tsv` / `.csv` Anki export into clean, single-line `Front <TAB> Back` flashcards for Gizmo.ai.
+Replaces the standalone Python `Gizmo Converter` script with an AI-driven, chunked converter that turns either your live **04 · Anki** deck or an uploaded/pasted `.txt` / `.tsv` / `.csv` Anki export into clean, single-line `Front <TAB> Back` flashcards for Gizmo.ai.
 
-- **Deck sources.** Pull kept cards directly from **03 · Anki** (filtered by all tiers or Tier 1 / 2 / 3, with an optional source file/page pointer appended to Back), or switch to **Upload / Paste** for exported `.txt`, `.tsv`, or `.csv` Anki files (including `#separator:Pipe`, `#html:true` quoted multi-line exports, UTF-16 BOM files, `Concept::`/`Scope::`/`Trap::` v19 tags, and 4-column `NCLEX to Anki` exports).
+- **Deck sources.** Pull kept cards directly from **04 · Anki** (filtered by all tiers or Tier 1 / 2 / 3, with an optional source file/page pointer appended to Back), or switch to **Upload / Paste** for exported `.txt`, `.tsv`, or `.csv` Anki files (including `#separator:Pipe`, `#html:true` quoted multi-line exports, UTF-16 BOM files, `Concept::`/`Scope::`/`Trap::` v19 tags, and 4-column `NCLEX to Anki` exports).
 - **Editable, saveable Gizmo Import Instructions.** The top panel holds the 4-rule Gizmo.ai import instructions box preloaded with one-card-per-line, `[green bracket]` blank, verbatim Back, and zero-rephrasing rules. Edit it anytime, click **Save** (stored in browser `localStorage` with a **Reset default** button), and click **Copy** to paste into Gizmo.ai before importing cards.
 - **Chunked AI conversion with strict verbatim verification.** Cards are sent to Gemini in small batches (`25` cards per request by default; `Hydrogen · low` in Auto profile) under `GIZMO_CONVERT_PROMPT`, then checked card-by-card in code: every `{{c1::ans}}` / `{{c2::ans}}` stays on the same card as `[ans]`, cloze hints `{{c1::ans::hint}}` become `[ans] (hint)`, leading `[Topic]` labels become `Topic: `, non-cloze square brackets become `(parentheses)` so Gizmo never blanks non-target words, empty Anki `Extra` fields stay strictly empty (`""` — never hallucinated), and any numeric, bracket, or card-count drift is repaired deterministically.
 - **Three copy modes.** Group converted cards into virtual textbook PDF pages (~18 cards / ~2,500 chars per page) and choose:
@@ -382,7 +388,7 @@ Use it as your reflexive "wait, is that true?" button. One honest limitation: th
 
 **The page is blank when I open the file.** The suite loads its libraries from the internet on startup — check your connection and reload. If you ever see a message saying the app *stopped because its security component failed to load*, that's deliberate self-protection; reload when you're back online.
 
-**"Rate limit" / 429 errors mid-generation.** You've hit the free tier's speed limit. Wait a minute, use smaller batches, or generate at a less busy time. Hydrogen has far more generous limits than Argon.
+**"Rate limit" / 429 errors mid-generation.** You've hit the free tier's speed limit. Wait a minute, use smaller batches, or generate at a less busy time. Hydrogen has far more generous limits than Neon.
 
 **It forgot my API key.** By design — the key lives only in the browser session. Re-paste it (password manager recommended).
 

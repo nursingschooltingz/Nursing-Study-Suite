@@ -3,6 +3,9 @@
 
 // Local-only synthetic browser acceptance fixture. Serves only /, never the repository
 // directory or course files. Uses the shipped JSX, live generator, and harness mini-KB.
+// v21.10 (Phase 5 M1/M18): pure JS shim lives in a separate plain <script> tag before text/babel
+// (never inflating Babel compilation), cfg/K expose full v21.10 fields, and the local server enforces
+// GET-only, nosniff, and validated integer ports.
 const fs=require('fs'),http=require('http'),path=require('path');
 const {resolveSuiteFile}=require('./repo-checks');
 const root=path.join(__dirname,'..');
@@ -13,7 +16,7 @@ function page(){
   const start=harness.indexOf('function ankiSyntheticFixture(){'),end=harness.indexOf('\nconst ankiHelperSource=',start);
   if(start<0||end<0)throw Error('Synthetic fixture extraction anchor moved');
   const fixture=harness.slice(start,end);
-  const script=fixture+String.raw`
+  const plainShim=fixture+String.raw`
 // All generation and export operations remain in this fixture's memory.
 const fixtureData=ankiSyntheticFixture();
 let fixtureDelay=false,fixtureEmpty=false,fixturePending=[],fixtureExport=()=>{};
@@ -33,12 +36,16 @@ callGemini=async()=>{
   return response;
 };
 downloadBlob=async blob=>fixtureExport(await blob.text());
+`;
+  const jsxApp=String.raw`
 function SyntheticAnkiApp(){
-  const [kb,setKB]=useState(fixtureData.kb),[registry,setRegistry]=useState({...EMPTY_ARTIFACT_REGISTRY,nclexQuestions:[{id:'synthetic-nclex',factIds:['fact-1']}],caseStudies:[{id:'synthetic-case',factIds:['fact-2']}]}),[exported,setExported]=useState(''),[publications,setPublications]=useState(0);
+  const [kb,setKB]=useState(fixtureData.kb),[registry,setRegistry]=useState({...EMPTY_ARTIFACT_REGISTRY,nclexQuestions:[{id:'synthetic-nclex',factIds:['fact-1']}],caseStudies:[{id:'synthetic-case',factIds:['fact-2']}]}),[exported,setExported]=useState(''),[publications,setPublications]=useState(0),[profiles,setProfiles]=useState(()=>({...TOOL_PROFILE_DEFAULTS}));
   fixtureExport=setExported;
   const registerArtifact=useCallback((kind,entries)=>{setRegistry(r=>({...r,[kind]:entries}));setPublications(n=>n+1);},[]);
-  const K=useMemo(()=>({knowledgeBase:kb,registerArtifact,artifactRegistry:registry,factIndex:buildFactIndex(kb)}),[kb,registry,registerArtifact]);
-  const cfg=useMemo(()=>({apiKey:'synthetic-only',forTool:()=>({model:'synthetic-fixture',level:'low'}),autoProfile:true}),[]);
+  const setProfile=useCallback((id,patch)=>setProfiles(p=>({...p,[id]:{...(p[id]||{}),...patch}})),[]);
+  const publishAnkiDeck=useCallback(()=>{},[]);
+  const K=useMemo(()=>({knowledgeBase:kb,registerArtifact,artifactRegistry:registry,factIndex:buildFactIndex(kb),isCurrentSource:s=>s===kb,publishAnkiDeck}),[kb,registry,registerArtifact,publishAnkiDeck]);
+  const cfg=useMemo(()=>({apiKey:'synthetic-only',hydrogenModel:'synthetic-hydrogen',neonModel:'synthetic-neon',profiles,setProfile,forTool:id=>({model:(profiles[id]?.m||TOOL_PROFILE_DEFAULTS[id]?.m)==='neon'?'synthetic-neon':'synthetic-hydrogen',level:profiles[id]?.lv||TOOL_PROFILE_DEFAULTS[id]?.lv||'low'}),autoProfile:true}),[profiles,setProfile]);
   return <ConfigCtx.Provider value={cfg}><KnowledgeCtx.Provider value={K}><FactInspectorCtx.Provider value={{openFactInspector:()=>{}}}>
     <div style={{maxWidth:1300,margin:'0 auto',padding:20}}>
       <h1>Synthetic Anki acceptance fixture</h1><p>No clinical material, API credentials, or live requests.</p>
@@ -56,16 +63,20 @@ function SyntheticAnkiApp(){
   </FactInspectorCtx.Provider></KnowledgeCtx.Provider></ConfigCtx.Provider>;
 }
 `;
-  source=once(source,'try{if(!window.React)throw new Error(',script+'\ntry{if(!window.React)throw new Error(');
+  source=once(source,'<script type="text/babel" data-presets="react">','<script>\n'+plainShim+'\n</script>\n<script type="text/babel" data-presets="react">');
+  source=once(source,'try{if(!window.React)throw new Error(',jsxApp+'\ntry{if(!window.React)throw new Error(');
   source=once(source,'<BootErrorBoundary><App/></BootErrorBoundary>','<BootErrorBoundary><SyntheticAnkiApp/></BootErrorBoundary>');
   return source;
 }
 if(require.main===module){
-  const port=Number(process.argv[2]||4173);
-  http.createServer((req,res)=>{
-    if(req.url!=='/'){res.writeHead(404);res.end('Not found');return;}
-    try{res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});res.end(page());}
-    catch(error){res.writeHead(500);res.end(error.message);}
-  }).listen(port,'127.0.0.1',()=>console.log('Synthetic Anki fixture: http://127.0.0.1:'+port+'/'));
+  const port=process.argv[2]===undefined?4173:Number(process.argv[2]);
+  if(!Number.isInteger(port)||port<0||port>65535){console.error('Port must be an integer from 0 through 65535.');process.exitCode=1;}
+  else{
+    http.createServer((req,res)=>{
+      if(req.method!=='GET'||req.url!=='/'){res.writeHead(404,{'Content-Type':'text/plain','Cache-Control':'no-store'});res.end('Not found');return;}
+      try{res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(page());}
+      catch(error){res.writeHead(500,{'Content-Type':'text/plain','Cache-Control':'no-store'});res.end(error.message);}
+    }).listen(port,'127.0.0.1',()=>console.log('Synthetic Anki fixture: http://127.0.0.1:'+port+'/'));
+  }
 }
 module.exports={page};

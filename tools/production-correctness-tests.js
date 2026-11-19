@@ -53,11 +53,10 @@ async function runTests(source,t){
   const repaired=N.nclexRepairOptions({question:stem},question);
   t('split repair retains the sixth option verbatim',repaired.options_repaired&&N.nclexSplitStemOptions(repaired.question).options[5].text==='Choice 6');
   const filtered=[{question,correct_answer:'F',rationale:'Synthetic rationale.'}];
-  const md=new Function('filtered','nclexSplitStemOptions','runSummary','nclexSummaryLine',span('  const nclexToMd=()=>{','  const exportMd=')+';return nclexToMd();')(filtered,N.nclexSplitStemOptions,null,()=>''); // v17.4: exports read the run summary
+  const md=new Function('filtered','nclexSplitStemOptions','runSummary','nclexSummaryLine',span('function nclexFormatExportMd(','\n  return out;\n}')+'\n  return out;\n};return nclexFormatExportMd(filtered,runSummary);')(filtered,N.nclexSplitStemOptions,null,()=>''); // v17.4 + v21.10 (Phase 5 M1): standalone hoisted helper
   t('Markdown export has a separate sixth choice',md.includes('\nF. Choice 6\n')&&!md.includes('Choice 5 F.'));
-  let txt;
-  new Function('filtered','nclexQText','downloadBlob','Blob','runSummary','nclexSummaryLine',span('  const exportTxt=()=>{','\n\n  const nclexToMd=')+';exportTxt();')(filtered,q=>{const p=N.nclexSplitStemOptions(q.question);return p.stem+'\n'+p.options.map(o=>'   '+o.label+'. '+o.text).join('\n');},blob=>{txt=blob;},Blob,null,()=>'');
-  t('TXT export has a separate sixth choice',(await txt.text()).includes('\n   F. Choice 6\n'));
+  const txt=new Function('filtered','nclexSplitStemOptions','runSummary','nclexSummaryLine',span('function nclexFormatExportTxt(','\n  return out;\n}')+'\n  return out;\n};return nclexFormatExportTxt(filtered,runSummary);')(filtered,N.nclexSplitStemOptions,null,()=>'');
+  t('TXT export has a separate sixth choice',txt.includes('\n   F. Choice 6\n'));
 
   const file={name:'synthetic-card.png'},old={file:file.name,transcript:{face:'front',title:'Synthetic',category:'Synthetic',cardNumber:'1',sections:[],numerics:[],overallLegibility:'clean'},runs:[{kind:'old successful run'}],agreement:null,comparisonIncomplete:false};
   let transcripts={[file.name]:old},error='',calls=0;

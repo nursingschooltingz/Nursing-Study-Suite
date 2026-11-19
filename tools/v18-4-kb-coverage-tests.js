@@ -169,11 +169,11 @@ module.exports=async function run(S,t){
     const index=buildFactIndex(kb);
     t('v18.4: consumer — the fact index (inspector, chip count, NCLEX known IDs) resolves entry facts',[med,dx,tool].every(f=>index.get(f.id).fact===f)&&index.get(med.id).condition.name==='Mannitol');
     const md=R.renderKBMarkdown(view);
-    t('v18.4: consumer — the Study view renders entry facts under a heading naming the kind',[med,dx,tool].every(f=>md.includes(f.text))&&md.includes('## Mannitol (medication)')&&S.includes('md=useMemo(()=>renderKBMarkdown(view),[view])'));
+    t('v18.4: consumer — the Study view renders entry facts under a heading naming the kind',[med,dx,tool].every(f=>md.includes(f.text))&&md.includes('## Mannitol (medication)')&&S.includes('const buildExportMd=()=>renderKBMarkdown(view,'));
     t('v18.4: consumer — the Knowledge Base browser lists entries and selection accepts them',S.includes('{view.conditions.map(c=><button key={c.id} className="kb-condition"')&&S.includes('const conds=kbFactView(K.knowledgeBase).conditions;'));
     t('v18.4: consumer — the Anki packet carries medication, diagnostic and scoring-tool facts',hasAll(A.kbForAnki(V.kbFactView(kb,{boxTableFirst:true})))&&A.kbForAnki(view).includes('=== CONDITION: Mannitol ===')&&A.kbUsableFactCount(view)>A.kbUsableFactCount(kb));
     const snap=ankiSourceSnapshot(view);
-    t('v18.4: consumer — the Anki source snapshot (coverage and source checks) knows entry facts',[med,dx,tool].every(f=>!!snap.byId[f.id])&&S.includes('snapshot=ankiSourceSnapshot(kbFactView(sourceKB))')&&S.includes('ankiSourceSnapshot(kbFactView(K.knowledgeBase))'));
+    t('v18.4: consumer — the Anki source snapshot (coverage and source checks) knows entry facts',[med,dx,tool].every(f=>!!snap.byId[f.id])&&S.includes('snapshot=ankiSourceSnapshot(kbFactView(sourceKB))')&&S.includes('const kbView=useMemo(()=>kbFactView(K.knowledgeBase),[K.knowledgeBase]);')&&S.includes('ankiSourceSnapshot(kbView)'));
     const pool=ngBuildFactPool(V.kbFactView(kb,{boxTableFirst:true}));
     t('v18.4: consumer — the NCLEX Generator pool and packet carry entry facts',hasAll(JSON.stringify(pool))&&hasAll(A.kbForNCLEX(view))&&A.kbForNCLEX(view).includes('CONDITION: Synthetic Scale'));
     t('v18.4: consumer — the Priority packet carries entry facts',hasAll(kbForPriority(view))&&S.includes('const analysisText=kbForPriority(kbFactView(source.kb),'));

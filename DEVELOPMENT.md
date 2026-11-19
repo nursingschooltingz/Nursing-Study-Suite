@@ -4,16 +4,16 @@ This is the task map for maintainers and coding agents. `AGENTS.md` remains the 
 
 ## Repository shape
 
-- `Nursing-Study-Suite v21.10.html` is the complete application.
+- `Nursing-Study-Suite v21.11.html` is the complete application.
 - `latte-tests.js` is the deterministic regression harness and extracts live functions by anchor.
-- `verify-repo.js` is the only ordinary repository verification entry point.
+- `verify-repo.js` is the only ordinary repository verification entry point (checks single canonical LF-only HTML, 13 frozen prompt hashes, `Prompts.md` constants/builders/counts, `latte-tests.js`, Babel transform under the `500 KB` UTF-8 ceiling, AST free-identifier check across all inline script blocks, and V8 compile + top-level eval + render-smoke of `App` and all 9 `TOOL_COMPONENTS`).
 - `prompt-baseline.json` stores the 13 frozen prompt hashes.
-- `tools/repo-checks.js` owns suite-file resolution and raw prompt extraction.
+- `tools/repo-checks.js` owns suite-file resolution, shared `extractSpan`, CLI arg parsing, secret redaction, atomic report writing (`writePrivateReport`), and raw prompt extraction.
 - `tools/check-prompts.js` enforces the frozen hashes.
-- `tools/render-prompts.js` checks or regenerates the generated prompt appendix.
+- `tools/render-prompts.js` checks or regenerates the generated prompt appendix, the 5 dynamic builder blocks, and heading character counts in `Prompts.md`.
 - `neia-retest.js` and `davis-transcribe-test.js` are explicitly authorized, live-API measurement tools.
 - The remediation regression modules under `tools/` are imported by `latte-tests.js` and exercise extracted shipped functions using synthetic data. Their assertions contribute to the enforced harness total.
-- The 2026-09-18 integrity regression modules add source/build, import/restore, transform, lifecycle and evidence checks to that harness. The separate `audit-anki-*` and `reaudit-anki-*` scripts remain historical audit artifacts; their captured defect expectations and semantic-limit failures are not ordinary repository gates and must not be rewritten to manufacture a green audit.
+- The 2026-09-18 integrity regression modules add source/build, import/restore, transform, lifecycle and evidence checks to that harness. The separate historical `audit-anki-*` and `reaudit-anki-*` scripts are archived under `docs/history/anki-audit-scripts/`; their captured v16.x defect expectations are not ordinary repository gates and must not be rewritten to manufacture a green audit.
 - `docs/history/` preserves historical prompt diffs and the dormant v16 design/benchmark. These are reference records, not current implementation instructions.
 
 ## Safe workflow
@@ -34,7 +34,7 @@ This is the task map for maintainers and coding agents. `AGENTS.md` remains the 
 - The approved v16.2 structured-KB adapter change is recorded in `docs/history/ANKI-v16.2-adapter.diff`; its harness pin is deliberately updated separately from the unchanged frozen baseline.
 - The approved v16.3 dynamic source-check suggestion constraints are recorded in `docs/history/ANKI-v16.3-audit-builder.diff`; generation prompts and baseline are unchanged.
 - The approved v16.4 dynamic source-check contract uses a source-first token inventory, exact note/source addresses and role-separated references. Its exact builder diff is `docs/history/ANKI-v16.4-audit-builder.diff`; the frozen constants and generation adapter remain unchanged. The legacy parser remains strict for historical regression checks; the new decoder validates independent records before retaining them.
-- `Prompts.md` also documents dynamic prompt builders; the generated appendix and prompt-doc check guarantee that all 24 named constants appear verbatim.
+- `Prompts.md` documents all 25 named prompt constants and all 5 dynamic prompt builders (`paBuildExtractPrompt`, `paBuildSynthPrompt`, `caseBuildPrompt`, `itemBuildAuditPrompt`, `caseBuildRepairPrompt`); `node tools/render-prompts.js --check` guarantees that every constant, builder block, and heading character count matches the shipped HTML verbatim.
 - The focused v16.1 Extra change is recorded in `docs/history/ANKI-v16.1-extra-default.diff`; the preceding source/retrieval change is in `docs/history/ANKI-source-retrieval-update.diff`. These approved diffs do not authorize further prompt changes. Empty Extra must retain the same two pipe separators and third-field Tags.
 
 The approved v18.4 change to `KB_EXTRACTION_PROMPT` and `KB_VERIFY_PROMPT` (schema 1.2 box and table provenance, one fact per table row and box bullet) is recorded in `docs/history/KB-v18.4-box-table-provenance.diff`; only those two baseline hashes changed.

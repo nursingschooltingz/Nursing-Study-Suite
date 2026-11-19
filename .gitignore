@@ -55,6 +55,11 @@ gizmo_import*.txt
 anki-source-*.json
 LATTE-Knowledge-Base-recovery-*.txt
 LATTE-Case-Study*.txt
+# v21.10 (Phase 2): Course Analyzer briefs, Case Packets, and Case Study JSON exports carry course/textbook content.
+*-Course-Brief.md
+LATTE-Case-Packet*.md
+LATTE-Case-Packet*.json
+LATTE-Case-Study*.json
 
 # ── Secrets ───────────────────────────────────────────────────────────
 # The suite never writes your API key to disk (it lives in sessionStorage

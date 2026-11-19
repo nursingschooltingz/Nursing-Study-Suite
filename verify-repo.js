@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
+const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -11,40 +12,72 @@ const { parseCliArgs, resolveSuiteFile, suiteVersionFromFilename } = require('./
 
 const REPO_ROOT = __dirname;
 const BABEL_VERSION = '7.23.9';
-const TEMP_TOOL_ROOT = path.join(os.tmpdir(), 'nursing-study-suite-verify');
-const TEMP_BABEL = path.join(TEMP_TOOL_ROOT, 'node_modules', '@babel', 'standalone', 'babel.js');
+// v21.10 (Phase 2): pin SHA-256 of @babel/standalone@7.23.9/babel.js, install into a user-private cache directory (0700 on POSIX), and avoid cmd.exe shell invocation on Windows.
+const BABEL_SHA256 = '190679c2d0d05cffc00b1a719278dcc85d78b1cca6b78d75c8fa432affce682f';
+const PRIVATE_TOOL_ROOT = process.platform === 'win32'
+  ? path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'nursing-study-suite-verify')
+  : path.join(os.homedir(), '.cache', 'nursing-study-suite-verify');
+const PRIVATE_BABEL = path.join(PRIVATE_TOOL_ROOT, 'node_modules', '@babel', 'standalone', 'babel.js');
+const LEGACY_TEMP_BABEL = path.join(os.tmpdir(), 'nursing-study-suite-verify', 'node_modules', '@babel', 'standalone', 'babel.js');
 
-function argValue(argv, name) {
-  const at = argv.indexOf('--' + name);
-  if (at < 0) return '';
-  const val = argv[at + 1];
-  if (!val || val.startsWith('--')) throw new Error('Missing value for --' + name);
-  return val;
+function verifyBabelIntegrity(filePath) {
+  const hash = crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+  if (hash !== BABEL_SHA256) {
+    throw new Error(
+      'Babel integrity check failed for ' + filePath + ' (expected SHA-256 ' + BABEL_SHA256 + ', got ' + hash +
+      '). Remove the untrusted cache and re-run `node verify-repo.js --setup-babel`.'
+    );
+  }
+  return hash;
 }
 
 function installBabel() {
+  fs.mkdirSync(PRIVATE_TOOL_ROOT, { recursive: true, mode: 0o700 });
+  if (process.platform !== 'win32') {
+    try { fs.chmodSync(PRIVATE_TOOL_ROOT, 0o700); } catch {}
+  }
   const npmArgs = [
-    'install', '--prefix', TEMP_TOOL_ROOT, '--no-save', '--package-lock=false', '--ignore-scripts',
+    'install', '--prefix', PRIVATE_TOOL_ROOT, '--no-save', '--package-lock=false', '--ignore-scripts',
     '@babel/standalone@' + BABEL_VERSION,
   ];
-  const npm = process.platform === 'win32' ? (process.env.ComSpec || 'cmd.exe') : 'npm';
-  const commandArgs = process.platform === 'win32'
-    ? ['/d', '/s', '/c', 'npm.cmd', ...npmArgs]
-    : npmArgs;
-  console.log('SETUP Installing @babel/standalone@' + BABEL_VERSION + ' under ' + TEMP_TOOL_ROOT);
-  const result = spawnSync(npm, commandArgs, { cwd: os.tmpdir(), stdio: 'inherit' });
+  console.log('SETUP Installing @babel/standalone@' + BABEL_VERSION + ' under ' + PRIVATE_TOOL_ROOT);
+  let result;
+  if (process.platform === 'win32') {
+    const npmCli = path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js');
+    if (!fs.existsSync(npmCli)) {
+      throw new Error('Could not locate npm-cli.js next to Node executable (' + npmCli + '); pass `--babel <path>` or install Node with npm.');
+    }
+    result = spawnSync(process.execPath, [npmCli, ...npmArgs], { cwd: PRIVATE_TOOL_ROOT, stdio: 'inherit', shell: false });
+  } else {
+    result = spawnSync('npm', npmArgs, { cwd: PRIVATE_TOOL_ROOT, stdio: 'inherit', shell: false });
+  }
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error('Babel scratch install exited with ' + result.status);
+  if (!fs.existsSync(PRIVATE_BABEL)) throw new Error('Babel install completed but ' + PRIVATE_BABEL + ' is missing');
+  verifyBabelIntegrity(PRIVATE_BABEL);
 }
 
 function loadBabel(argv) {
-  const requested = argValue(argv, 'babel') || process.env.NSS_BABEL_STANDALONE || '';
-  const candidate = requested ? path.resolve(requested) : TEMP_BABEL;
-  if (!fs.existsSync(candidate) && argv.includes('--setup-babel')) installBabel();
+  const cli = Array.isArray(argv)
+    ? parseCliArgs(argv, { flags: ['setup-babel'], options: ['html', 'babel'] })
+    : (argv || { flags: new Set(), values: {} });
+  const requested = cli.values.babel || process.env.NSS_BABEL_STANDALONE || '';
+  let candidate;
+  if (requested) {
+    candidate = path.resolve(requested);
+  } else if (fs.existsSync(PRIVATE_BABEL)) {
+    candidate = PRIVATE_BABEL;
+  } else if (fs.existsSync(LEGACY_TEMP_BABEL)) {
+    candidate = LEGACY_TEMP_BABEL;
+  } else {
+    candidate = PRIVATE_BABEL;
+    if (cli.flags.has('setup-babel')) installBabel();
+  }
   if (!fs.existsSync(candidate)) {
     throw new Error('Babel gate unavailable. Run `node verify-repo.js --setup-babel` once, or pass ' +
       '`--babel <path-to-@babel/standalone/babel.js>`. Scratch tooling stays outside the repo.');
   }
+  verifyBabelIntegrity(candidate);
   return { Babel: require(candidate), file: candidate };
 }
 
@@ -66,8 +99,9 @@ function extractBabelScript(source) {
   const end = source.indexOf('</script>', start);
   if (end < 0) throw new Error('Missing </script> after the Babel block');
   const script = source.slice(start, end);
-  if (script.length > MAX_BABEL_SCRIPT_CHARS) {
-    throw new Error('text/babel script is ' + script.length + ' chars (ceiling ' + MAX_BABEL_SCRIPT_CHARS + ' to prevent Babel 500KB deoptimization)');
+  const utf8Bytes = Buffer.byteLength(script, 'utf8');
+  if (script.length > MAX_BABEL_SCRIPT_CHARS || utf8Bytes > MAX_BABEL_SCRIPT_CHARS) {
+    throw new Error('text/babel script is ' + script.length + ' chars / ' + utf8Bytes + ' UTF-8 bytes (ceiling ' + MAX_BABEL_SCRIPT_CHARS + ' to prevent Babel 500KB deoptimization)');
   }
   return script;
 }
@@ -79,6 +113,10 @@ function preflightSuite(suiteFile) {
   if (!source.includes('<!-- v' + version + ' (')) {
     throw new Error('Filename version v' + version + ' has no matching release comment in the HTML');
   }
+  // v21.10 (Phase 1): keep runtime suiteVersion() locked to the filename version so footer and exported evidence never drift stale.
+  if (!source.includes("function suiteVersion(){return '" + version + "';}")) {
+    throw new Error('Filename version v' + version + ' does not match suiteVersion() in the HTML');
+  }
   const changelogFile = path.join(REPO_ROOT, 'CHANGELOG.md');
   if (path.dirname(path.resolve(suiteFile)) === REPO_ROOT && fs.existsSync(changelogFile)) {
     const changelog = fs.readFileSync(changelogFile, 'utf8');
@@ -89,12 +127,95 @@ function preflightSuite(suiteFile) {
   return source;
 }
 
+const AST_KNOWN_GLOBALS = new Set([
+  'window', 'document', 'navigator', 'location', 'history', 'localStorage', 'sessionStorage', 'indexedDB',
+  'console', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'requestAnimationFrame', 'cancelAnimationFrame',
+  'fetch', 'Headers', 'Request', 'Response', 'AbortController', 'AbortSignal', 'DOMException', 'DOMParser',
+  'URL', 'Blob', 'File', 'FileReader', 'FormData', 'TextEncoder', 'TextDecoder', 'Uint8Array', 'Uint16Array', 'Uint32Array',
+  'Int8Array', 'Int16Array', 'Int32Array', 'ArrayBuffer', 'DataView', 'Float32Array', 'Float64Array',
+  'Promise', 'Map', 'Set', 'WeakMap', 'WeakSet', 'Symbol', 'BigInt', 'Proxy', 'Reflect',
+  'Object', 'Array', 'String', 'Number', 'Boolean', 'RegExp', 'Date', 'Math', 'JSON', 'Error', 'TypeError', 'RangeError', 'SyntaxError', 'ReferenceError',
+  'Function', 'parseInt', 'parseFloat', 'isNaN', 'isFinite', 'Infinity', 'NaN', 'undefined', 'globalThis', 'self',
+  'encodeURIComponent', 'decodeURIComponent', 'encodeURI', 'decodeURI', 'atob', 'btoa',
+  'Worker', 'MessageChannel', 'createImageBitmap', 'Image', 'Audio', 'HTMLElement', 'Event', 'CustomEvent',
+  'alert', 'confirm', 'prompt', 'crypto', 'performance', 'structuredClone', 'queueMicrotask',
+  'React', 'ReactDOM', 'DOMPurify', 'marked', 'pdfjsLib', 'JSZip', 'Babel', 'arguments',
+]);
+
+// v21.10 (Phase 1): statically walk every inline <script> block (plain + Babel-transformed JSX) to catch undeclared
+// free identifiers inside event handlers, useEffect hooks, and hoisted *WithEnv runners that bootSmoke does not execute.
+function astFreeVarCheck(source, Babel) {
+  const blocks = [];
+  const re = /<script([^>]*)>([\s\S]*?)<\/script>/gi;
+  let m;
+  while ((m = re.exec(source)) !== null) {
+    const attrs = m[1];
+    if (/\bsrc\s*=/.test(attrs)) continue;
+    const before = source.slice(Math.max(0, m.index - 40), m.index);
+    if (before.includes('<template')) continue;
+    const startLine = source.slice(0, m.index).split('\n').length;
+    blocks.push({ isBabel: /text\/babel/.test(attrs), startLine, code: m[2] });
+  }
+  let fullCode = '';
+  const lineOffsets = [];
+  let curLine = 1;
+  for (const b of blocks) {
+    const transformed = b.isBabel
+      ? Babel.transform(b.code, { ...BROWSER_BABEL_OPTIONS, retainLines: true }).code
+      : b.code;
+    const lines = transformed.split('\n').length;
+    lineOffsets.push({ startCombined: curLine, startHtml: b.startLine, lines });
+    fullCode += transformed + '\n';
+    curLine += lines;
+  }
+  const mapLine = l => {
+    for (let i = lineOffsets.length - 1; i >= 0; i--) {
+      if (l >= lineOffsets[i].startCombined) return lineOffsets[i].startHtml + (l - lineOffsets[i].startCombined);
+    }
+    return l;
+  };
+  const undeclared = [];
+  const plugin = () => ({
+    visitor: {
+      Program: {
+        exit(p) {
+          p.traverse({
+            ReferencedIdentifier(idPath) {
+              const name = idPath.node.name;
+              if (AST_KNOWN_GLOBALS.has(name) || idPath.scope.hasBinding(name)) return;
+              if (idPath.parent.type === 'UnaryExpression' && idPath.parent.operator === 'typeof') return;
+              let fnName = '<top>';
+              let cur = idPath.parentPath;
+              while (cur) {
+                if (cur.node.type === 'FunctionDeclaration' && cur.node.id) { fnName = cur.node.id.name; break; }
+                if ((cur.node.type === 'FunctionExpression' || cur.node.type === 'ArrowFunctionExpression') &&
+                    cur.parent.type === 'VariableDeclarator' && cur.parent.id.type === 'Identifier') {
+                  fnName = cur.parent.id.name; break;
+                }
+                cur = cur.parentPath;
+              }
+              const line = idPath.node.loc ? mapLine(idPath.node.loc.start.line) : 0;
+              undeclared.push({ name, line, fn: fnName });
+            },
+          });
+        },
+      },
+    },
+  });
+  Babel.transform(fullCode, { plugins: [plugin], code: false, ast: false });
+  if (undeclared.length) {
+    const summary = undeclared.slice(0, 12).map(u => `${u.name} (L${u.line} in ${u.fn})`).join(', ');
+    throw new Error('AST free-identifier check found ' + undeclared.length + ' undeclared reference(s): ' + summary);
+  }
+  return { blocksChecked: blocks.length };
+}
+
 // v18.0 (review M29): the Babel parse alone could certify an app that cannot boot. Babel does not validate a regex
 // body (`/[z-a]/` passed every gate and threw at load in the browser), and nothing evaluated the top level, so a
 // constant read before its declaration also passed. V8 now compiles the transformed block and the plain head scripts,
 // and the block's top level runs once against inert stubs: no network, no DOM, no rendering.
-// v21.6: bootSmoke also executes a first-render component smoke pass across App, ConfigSidebar, FactInspectorDrawer,
-// and all 8 TOOL_COMPONENTS so TDZ ReferenceErrors or missing bindings inside lazy-mounted tabs cannot ship.
+// v21.6 + v21.10: bootSmoke also executes a first-render component smoke pass across App, ConfigSidebar, FactInspectorDrawer,
+// and every tool registered in TOOLS / TOOL_COMPONENTS so TDZ ReferenceErrors or missing bindings inside lazy-mounted tabs cannot ship.
 function bootSmoke(code, source) {
   const vm = require('vm');
   new vm.Script(code, { filename: 'suite-babel-block.js' });
@@ -132,7 +253,7 @@ function bootSmoke(code, source) {
     document: { getElementById: () => ({}), addEventListener: noop, removeEventListener: noop, createElement: () => ({ style: {}, setAttribute: noop, appendChild: noop }), body: { appendChild: noop, style: {} } },
     addEventListener: noop, removeEventListener: noop, stop: noop, localStorage: { getItem: () => null, setItem: noop, removeItem: noop }, sessionStorage: { getItem: () => null, setItem: noop, removeItem: noop },
     fetch: () => { throw new Error('no network in verify'); }, pdfjsLib: { GlobalWorkerOptions: {}, OPS: {}, getDocument: () => ({ promise: new Promise(noop), destroy: noop }) }, JSZip: function () {}, marked: { parse: x => x, use: noop },
-    DOMPurify: { sanitize: x => x, addHook: noop }, console, setTimeout: () => 0, clearTimeout: noop, TextEncoder, TextDecoder, URL, Blob, AbortController, DOMException,
+    DOMPurify: { sanitize: x => x, addHook: noop, isSupported: true }, console, setTimeout: () => 0, clearTimeout: noop, TextEncoder, TextDecoder, URL, Blob, AbortController, DOMException,
     crypto: globalThis.crypto, indexedDB: { open: () => ({}) } };
   g.window = g;
   const ctx = vm.createContext(g);
@@ -171,8 +292,12 @@ function bootSmoke(code, source) {
       walk(window.__rootElement);
       const saved = captured.map(([c, v]) => { const prev = c._currentValue; c._currentValue = v; return [c, prev]; });
       try {
-        const expectedTools = ['courseAnalyzer', 'knowledge', 'priority', 'anki', 'nclex', 'nclexgen', 'cases', 'nclex2anki', 'gizmo'];
-        for (const id of expectedTools) {
+        const toolIds = Array.isArray(TOOLS) ? TOOLS.map(t => t.id) : [];
+        const compIds = Object.keys(TOOL_COMPONENTS || {});
+        if (!toolIds.length || toolIds.length !== compIds.length || toolIds.some(id => !Object.prototype.hasOwnProperty.call(TOOL_COMPONENTS, id))) {
+          throw new Error('TOOLS and TOOL_COMPONENTS mismatch: ' + toolIds.join(',') + ' vs ' + compIds.join(','));
+        }
+        for (const id of toolIds) {
           const entry = TOOL_COMPONENTS[id];
           const fn = entry && entry.$$memo ? entry.type : entry;
           if (typeof fn !== 'function') throw new Error('Missing TOOL_COMPONENTS.' + id);
@@ -182,7 +307,7 @@ function bootSmoke(code, source) {
       } finally {
         for (let i = saved.length - 1; i >= 0; i--) saved[i][0]._currentValue = saved[i][1];
       }
-      const mustRender = ['App', 'CourseAnalyzer', 'KnowledgeBaseBuilder', 'PriorityAnalyzer', 'AnkiGenerator', 'NCLEXExtractor', 'NCLEXGenerator', 'CaseStudyGenerator', 'NCLEXToAnki', 'GizmoImporter', 'ConfigSidebar', 'FactInspectorDrawer'];
+      const mustRender = ['App', 'ConfigSidebar', 'FactInspectorDrawer', ...Object.values(TOOL_COMPONENTS).map(e => (e && e.$$memo ? e.type : e).name)];
       for (const name of mustRender) {
         if (!rendered.has(name)) throw new Error('bootSmoke did not render component: ' + name);
       }
@@ -204,10 +329,10 @@ function runHarness(suiteFile, babelFile) {
 
 function main() {
   const argv = process.argv.slice(2);
-  parseCliArgs(argv, { flags: ['setup-babel'], options: ['html', 'babel'] });
-  const suiteFile = resolveSuiteFile({ rootDir: REPO_ROOT, explicit: argValue(argv, 'html') });
+  const cli = parseCliArgs(argv, { flags: ['setup-babel'], options: ['html', 'babel'] });
+  const suiteFile = resolveSuiteFile({ rootDir: REPO_ROOT, explicit: cli.values.html || '' });
   const source = preflightSuite(suiteFile);
-  const babel = loadBabel(argv);
+  const babel = loadBabel(cli);
 
   console.log('VERIFY ' + path.basename(suiteFile));
   console.log('PASS  one canonical suite HTML; LF-only; filename and release comment agree');
@@ -220,8 +345,10 @@ function main() {
 
   const { code } = babel.Babel.transform(extractBabelScript(source), BROWSER_BABEL_OPTIONS);
   console.log('PASS  Babel parse with ' + babel.file);
+  const astCheck = astFreeVarCheck(source, babel.Babel);
+  console.log('PASS  AST free-identifier check across ' + astCheck.blocksChecked + ' inline script blocks (0 undeclared references)');
   bootSmoke(code, source);
-  console.log('PASS  V8 compiles the app and the head scripts, evaluates top level, and render-smokes App + all 9 tool components');
+  console.log('PASS  V8 compiles the app and the head scripts, evaluates top level, and render-smokes App + all registered tool components');
   console.log('\nALL REPOSITORY GATES PASSED');
 }
 
@@ -235,8 +362,13 @@ if (require.main === module) {
 }
 
 module.exports = {
+  BABEL_SHA256,
+  PRIVATE_TOOL_ROOT,
   BROWSER_BABEL_OPTIONS,
   MAX_BABEL_SCRIPT_CHARS,
+  verifyBabelIntegrity,
+  loadBabel,
   extractBabelScript,
+  astFreeVarCheck,
   bootSmoke,
 };

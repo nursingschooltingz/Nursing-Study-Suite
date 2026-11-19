@@ -226,7 +226,7 @@ module.exports = async function runV216ReviewRemediationTests(S, t) {
   // ── 3. Step 3 (ISSUE-05): ISO-BMFF HEIC/AVIF dimension probing, 512 KB slice, & single-read i2a buffer reuse ──
   {
     const imgSrc =
-      span('const CARD_MIME={', '/* ── END KB & CARD PURE HELPERS ── */') + '\n' +
+      span('const CARD_MIME=', '/* ── END KB & CARD PURE HELPERS ── */') + '\n' +
       'const I2A_MAX_RAW_BYTES=14*1024*1024;\n' +
       span('async function i2aFileKey(file){', 'const N2A_MODES=[');
     const IMG = new Function(
@@ -450,8 +450,9 @@ module.exports = async function runV216ReviewRemediationTests(S, t) {
       delayFromHeader >= 9000 &&
       neiaSrc.includes('AbortSignal.timeout(') &&
       davisSrc.includes('AbortSignal.timeout(') &&
-      neiaSrc.includes('mode: 0o600') &&
-      davisSrc.includes('mode: 0o600'));
+      neiaSrc.includes('writePrivateReport(') &&
+      davisSrc.includes('writePrivateReport(') &&
+      fs.readFileSync(path.join(__dirname, 'repo-checks.js'), 'utf8').includes('mode: 0o600'));
   }
 
   // ── 8. Step 8 & Step 9 (ISSUE-10, ISSUE-11, ISSUE-12, ISSUE-14, ISSUE-17): IndexedDB CAS fast-path, 2-lane split concurrency, live N2A reactivity, & single-slice useCappedLog ──

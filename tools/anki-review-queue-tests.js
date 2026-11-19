@@ -53,13 +53,14 @@ async function runAnkiReviewQueueTests({S,t,section}){
   const replaced=await H.ankiSourceAuditEvidence(run,()=>({...exportInputs,reviewRun:laterRun,reviewDecisions:[laterDecision]}));
   t('a later prepared audit cannot lend current decisions to an earlier exported run',replaced.metadata.preparedAt===run.preparedAt&&!replaced.reviewDecisions[0].current);
   t('partial status label is distinct from completion',H.ankiSourceAuditLabel(run).startsWith('Partial —')&&H.ankiSourceAuditLabel(run).includes('1/2 groups'));
-  t('visible footer and reports share the canonical release version',H.suiteVersion()==='21.8'&&S.includes('<span className="rail-stat">Version {suiteVersion()} · <a className="rail-license"')&&S.includes('Built for your next step.')&&evidence.metadata.suiteVersion==='21.8');
+  const expectedSuiteVersion=(S.match(/<!-- v(\d+\.\d+) \(/)||[])[1]||'';
+  t('visible footer and reports share the canonical release version',Boolean(expectedSuiteVersion)&&H.suiteVersion()===expectedSuiteVersion&&S.includes('<span className="rail-stat">Version {suiteVersion()} · <a className="rail-license"')&&S.includes('Built for your next step.')&&evidence.metadata.suiteVersion===expectedSuiteVersion);
   const normalized=await H.ankiSourceAuditEvidence({...run,results:[{...run.results[0],referenceRecoveries:[{method:'mixed-context-status',before:{status:'extra-only'},after:{status:'visible-only'}}]}]},inputs);
   t('reference normalization metadata survives partial evidence export independently of citations',normalized.status==='partial'&&normalized.metadata.referenceNormalizations===1&&normalized.metadata.recoveredCitations===1&&normalized.results[0].referenceRecoveries[0].before.status==='extra-only');
   t('receipt UI exposes normalization history and mixed Text Extra locations',S.includes('data-anki-reference-recoveries')&&S.includes("?' · Text and Extra':''"));
   t('queue rows are bounded and decisions stay separate from card state',S.includes('shown.slice(0,limit)')&&S.includes('setReviewDecisions(previous=>[...previous,decision])'));
   t('review UI labels manual fixed decisions without implying an AI pass',S.includes('Fixed — reviewed manually')&&S.includes('it does not mean an AI recheck passed'));
-  t('queue can inspect captured source facts even for findings with no note references',S.includes('<summary>Captured source facts ({item.factIds.length})</summary>')&&S.includes('snapshot={inputs.batch?.snapshot}'));
+  t('queue can inspect captured source facts even for findings with no note references',(S.includes('<summary>Captured source facts ({item.factIds.length})</summary>')||S.includes("h('summary',null,'Captured source facts (',item.factIds.length,')')"))&&(S.includes('snapshot={inputs.batch?.snapshot}')||S.includes('snapshot:inputs.batch?.snapshot')));
   t('source evidence exports no captured prompt duplicates or controller state',!Object.hasOwn(evidence,'prompts')&&!Object.hasOwn(evidence,'ctl')&&!Object.hasOwn(evidence,'reviewRun'));
   t('dynamic checker prompt constrains suggestions without changing generation constants',S.includes('Any proposed complete note must use at most three distinct cloze indices (c1, c2, c3).')&&S.includes('identify the surviving kept note and preserve the substantive target in the selected tier'));
 }

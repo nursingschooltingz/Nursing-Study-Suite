@@ -34,6 +34,128 @@ const APPENDIX_PROMPTS = [
   'GIZMO_CONVERT_PROMPT',
   'COURSE_ANALYZER_PROMPT',
 ];
+// v21.10 (Phase 6 M20): keep dynamic builder functions and heading char counts synced programmatically alongside the generated appendix.
+const DYNAMIC_BUILDERS = Object.freeze([
+  'paBuildExtractPrompt',
+  'paBuildSynthPrompt',
+  'caseBuildPrompt',
+  'itemBuildAuditPrompt',
+  'caseBuildRepairPrompt',
+]);
+const HEADING_CHAR_CONSTANTS = Object.freeze([
+  'KB_EXTRACTION_PROMPT',
+  'KB_VERIFY_PROMPT',
+  'ANKI_MASTER_PROMPT',
+  'NCLEX_GEN_PROMPT',
+  'NCLEX_ANCHOR_RULES',
+  'NCLEX_DISTRACTOR_RULES',
+  'NCLEX_RATIONALE_RULES',
+  'NCLEX_COMPLETENESS_RULES',
+  'PRIORITY_ORDER_RULES',
+]);
+
+function extractBuilderFunction(source, name) {
+  const anchor = 'function ' + name + '(';
+  const start = source.indexOf(anchor);
+  if (start < 0 || source.indexOf(anchor, start + 1) >= 0) {
+    throw new Error('Dynamic builder anchor must occur exactly once: ' + anchor);
+  }
+  const openBrace = source.indexOf('{', start + anchor.length);
+  if (openBrace < 0) throw new Error('Missing opening brace for builder: ' + name);
+  let i = openBrace + 1, depth = 1;
+  const tplBraceStack = [];
+  while (i < source.length && depth > 0) {
+    const ch = source[i], next = source[i + 1];
+    if (ch === '/' && next === '/') {
+      const nl = source.indexOf('\n', i + 2);
+      i = nl < 0 ? source.length : nl + 1;
+      continue;
+    }
+    if (ch === '/' && next === '*') {
+      const end = source.indexOf('*/', i + 2);
+      if (end < 0) throw new Error('Unterminated block comment in builder: ' + name);
+      i = end + 2;
+      continue;
+    }
+    if (ch === "'" || ch === '"') {
+      i++;
+      while (i < source.length && source[i] !== ch) {
+        if (source[i] === '\\') i += 2;
+        else i++;
+      }
+      i++;
+      continue;
+    }
+    if (ch === '`') {
+      i++;
+      let inTpl = true;
+      while (i < source.length && inTpl) {
+        if (source[i] === '\\') { i += 2; continue; }
+        if (source[i] === '`') { i++; inTpl = false; break; }
+        if (source[i] === '$' && source[i + 1] === '{') {
+          tplBraceStack.push(depth);
+          depth++;
+          i += 2;
+          inTpl = false;
+          break;
+        }
+        i++;
+      }
+      continue;
+    }
+    if (ch === '{') { depth++; i++; continue; }
+    if (ch === '}') {
+      depth--;
+      i++;
+      if (tplBraceStack.length && tplBraceStack[tplBraceStack.length - 1] === depth) {
+        tplBraceStack.pop();
+        while (i < source.length) {
+          if (source[i] === '\\') { i += 2; continue; }
+          if (source[i] === '`') { i++; break; }
+          if (source[i] === '$' && source[i + 1] === '{') {
+            tplBraceStack.push(depth);
+            depth++;
+            i += 2;
+            break;
+          }
+          i++;
+        }
+      }
+      continue;
+    }
+    i++;
+  }
+  if (depth !== 0) throw new Error('Unbalanced braces in builder: ' + name);
+  return source.slice(start, i);
+}
+
+function headingCharRegex(name) {
+  const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp('(^#+[^\\n]*`' + esc + '`(?:,\\s*v[\\d.]+,|\\s*\\(|,|\\s)\\s*)([\\d,]+)(\\s+chars)', 'm');
+}
+
+function syncBuilderBlock(doc, name, liveSource) {
+  const open = '````js\nfunction ' + name + '(';
+  const start = doc.indexOf(open);
+  if (start < 0 || doc.indexOf(open, start + 1) >= 0) {
+    throw new Error('Prompts.md must contain exactly one ````js block for ' + name);
+  }
+  const endFence = doc.indexOf('\n````', start + open.length);
+  if (endFence < 0) throw new Error('Unterminated ````js block for ' + name + ' in Prompts.md');
+  return doc.slice(0, start) + '````js\n' + liveSource + doc.slice(endFence);
+}
+
+function expectedHeadingCounts(source) {
+  const counts = [];
+  for (const name of HEADING_CHAR_CONSTANTS) {
+    counts.push([name, extractPromptLiteral(source, name).body.length]);
+  }
+  for (const name of DYNAMIC_BUILDERS) {
+    if (name === 'caseBuildRepairPrompt') continue;
+    counts.push([name, extractBuilderFunction(source, name).length]);
+  }
+  return counts;
+}
 
 function promptBlock(literal, status) {
   return [
@@ -114,6 +236,24 @@ function checkPromptDoc({ suiteFile, promptsFile = PROMPTS_FILE }) {
   });
   if (missing.length) throw new Error('Prompts.md is missing live prompt bytes for: ' + missing.join(', '));
 
+  const staleBuilders = DYNAMIC_BUILDERS.filter(name => !doc.includes('````js\n' + extractBuilderFunction(source, name) + '\n````'));
+  if (staleBuilders.length) {
+    throw new Error('Prompts.md dynamic builder blocks are stale (' + staleBuilders.join(', ') + '); run node tools/render-prompts.js --write');
+  }
+
+  const staleCounts = [];
+  for (const [name, expected] of expectedHeadingCounts(source)) {
+    const re = headingCharRegex(name);
+    const match = doc.match(re);
+    const formatted = expected.toLocaleString('en-US');
+    if (!match || match[2] !== formatted) {
+      staleCounts.push(name + ': expected ' + formatted + ', found ' + (match ? match[2] : 'missing'));
+    }
+  }
+  if (staleCounts.length) {
+    throw new Error('Prompts.md heading character counts are stale (' + staleCounts.join('; ') + '); run node tools/render-prompts.js --write');
+  }
+
   const version = suiteVersionFromFilename(suiteFile);
   if (!doc.includes('shipped v' + version + ' file')) {
     throw new Error('Prompts.md header does not name shipped v' + version);
@@ -131,6 +271,14 @@ function writePromptDoc({ suiteFile, promptsFile = PROMPTS_FILE }) {
     throw new Error('Prompts.md must name exactly one shipped vNN.N file in its header');
   }
   doc = doc.replace(/shipped v\d+\.\d+ file/, 'shipped v' + version + ' file');
+  for (const name of DYNAMIC_BUILDERS) {
+    doc = syncBuilderBlock(doc, name, extractBuilderFunction(source, name));
+  }
+  for (const [name, expected] of expectedHeadingCounts(source)) {
+    const re = headingCharRegex(name);
+    if (!re.test(doc)) throw new Error('Prompts.md heading char-count anchor missing for ' + name);
+    doc = doc.replace(re, (_, pre, _old, suf) => pre + expected.toLocaleString('en-US') + suf);
+  }
   if (doc.includes(START) || doc.includes(END)) {
     const span = generatedSpan(doc);
     doc = doc.slice(0, span.start) + expectedAppendix + doc.slice(span.end);
@@ -140,14 +288,6 @@ function writePromptDoc({ suiteFile, promptsFile = PROMPTS_FILE }) {
   fs.writeFileSync(promptsFile, doc, 'utf8');
 }
 
-function argValue(argv, name) {
-  const at = argv.indexOf('--' + name);
-  if (at < 0) return '';
-  const val = argv[at + 1];
-  if (!val || val.startsWith('--')) throw new Error('Missing value for --' + name);
-  return val;
-}
-
 if (require.main === module) {
   try {
     const argv = process.argv.slice(2);
@@ -155,13 +295,13 @@ if (require.main === module) {
     if (cli.flags.has('check') && cli.flags.has('write')) {
       throw new Error('Choose either --check or --write, not both');
     }
-    const suiteFile = resolveSuiteFile({ rootDir: REPO_ROOT, explicit: argValue(argv, 'html') });
-    if (argv.includes('--write')) {
+    const suiteFile = resolveSuiteFile({ rootDir: REPO_ROOT, explicit: cli.values.html || '' });
+    if (cli.flags.has('write')) {
       writePromptDoc({ suiteFile });
-      console.log('Updated Prompts.md generated appendix from ' + path.basename(suiteFile));
-    } else if (argv.includes('--check')) {
+      console.log('Updated Prompts.md generated appendix, dynamic builders, and heading counts from ' + path.basename(suiteFile));
+    } else if (cli.flags.has('check')) {
       const count = checkPromptDoc({ suiteFile });
-      console.log('PASS  Prompts.md contains live bytes for all ' + count + ' prompt constants');
+      console.log('PASS  Prompts.md contains live bytes for all ' + count + ' prompt constants and ' + DYNAMIC_BUILDERS.length + ' dynamic builders');
     } else {
       throw new Error('Usage: node tools/render-prompts.js --check|--write [--html <file>]');
     }
@@ -171,4 +311,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { END, START, buildGeneratedAppendix, checkPromptDoc, writePromptDoc };
+module.exports = { DYNAMIC_BUILDERS, END, START, buildGeneratedAppendix, checkPromptDoc, extractBuilderFunction, writePromptDoc };

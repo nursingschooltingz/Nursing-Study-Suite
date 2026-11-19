@@ -147,6 +147,23 @@ function suiteVersionFromFilename(file) {
   return match[1];
 }
 
+// v21.10 (Phase 6 L2): canonical span extractor shared across tests and tools, failing loudly on missing or ambiguous anchors.
+function extractSpan(source, startAnchor, endAnchor, { uniqueStart = true, inclusive = false, fromAnchor = '' } = {}) {
+  let base = 0;
+  if (fromAnchor) {
+    base = source.indexOf(fromAnchor);
+    if (base < 0) throw new Error('From-anchor missing: ' + fromAnchor);
+  }
+  const start = source.indexOf(startAnchor, base);
+  if (start < 0) throw new Error('Start anchor missing: ' + startAnchor);
+  if (uniqueStart && source.indexOf(startAnchor, start + 1) >= 0) {
+    throw new Error('Ambiguous start anchor: ' + startAnchor);
+  }
+  const end = source.indexOf(endAnchor, start + startAnchor.length);
+  if (end < 0) throw new Error('End anchor missing: ' + endAnchor + ' after ' + startAnchor);
+  return source.slice(start, inclusive ? end + endAnchor.length : end);
+}
+
 // Explicit diagnostics for the harness's live contraindication regex extraction.
 function extractAnchoredRegex(source, anchor, startMarker, endMarker, flags = '') {
   const at = source.indexOf(anchor);
@@ -225,11 +242,37 @@ function parseMeasurementArgs(argv, kind) {
   if (davis && !config.images.length && !config.help) throw new Error('Pass at least one image path');
   if (seen.has('--only') && !config.only.length) throw new Error('--only requires at least one item ID');
   if (config.out) {
-    const outResolved = path.resolve(config.out).toLowerCase();
-    const collidesWithInput = config.images.some(img => path.resolve(img).toLowerCase() === outResolved) ||
-      (config.suite && path.resolve(config.suite).toLowerCase() === outResolved);
-    const isProtectedFile = /\.(?:html?|m?js|md)$/i.test(config.out) ||
-      /^(?:neia-fixture|prompt-baseline)\.json$/i.test(path.basename(config.out));
+    // v21.10 (Phase 2): resolve nearest existing parent symlink, preserve POSIX case sensitivity, and block overwrites of tracked repo subdirectories, dotfiles, LICENSE, source files, and protected JSON fixtures/manifests.
+    const resolveForCompare = target => {
+      const abs = path.resolve(target);
+      const parts = [];
+      let cur = abs;
+      while (!fs.existsSync(cur)) {
+        const parent = path.dirname(cur);
+        if (parent === cur) break;
+        parts.unshift(path.basename(cur));
+        cur = parent;
+      }
+      let base = cur;
+      try { base = fs.realpathSync(cur); } catch {}
+      const real = parts.length ? path.join(base, ...parts) : base;
+      return (process.platform === 'win32' || process.platform === 'darwin') ? real.toLowerCase() : real;
+    };
+    const outResolved = resolveForCompare(config.out);
+    const collidesWithInput = config.images.some(img => resolveForCompare(img) === outResolved) ||
+      (config.suite && resolveForCompare(config.suite) === outResolved);
+    const repoRoot = resolveForCompare(path.resolve(__dirname, '..'));
+    const relFromRepo = outResolved === repoRoot
+      ? ''
+      : (outResolved.startsWith(repoRoot + path.sep) ? outResolved.slice(repoRoot.length + 1) : '');
+    const topDir = relFromRepo ? relFromRepo.split(path.sep)[0].toLowerCase() : '';
+    const baseName = path.basename(config.out);
+    const isProtectedFile =
+      ['tools', 'docs', '.git'].includes(topDir) ||
+      /^\./.test(baseName) ||
+      /^license(?:\.[^.]*)?$/i.test(baseName) ||
+      /\.(?:html?|m?js|cjs|md)$/i.test(baseName) ||
+      /^(?:neia-fixture|prompt-baseline|package|package-lock|tsconfig)\.json$/i.test(baseName);
     if (collidesWithInput || isProtectedFile) {
       throw new Error('--out cannot overwrite an input or repository source file');
     }
@@ -317,7 +360,8 @@ function redactSecrets(text, apiKey) {
     const enc = encodeURIComponent(k);
     if (enc !== k) out = out.split(enc).join('[REDACTED]');
   }
-  return out.replace(/\bAIza[0-9A-Za-z_-]{20,60}\b/g, '[REDACTED_GEMINI_KEY]');
+  // v21.10 (Phase 2): replace \b with explicit ASCII boundaries so '_' prefixes (api_key_AIza...) and trailing '-' keys never escape redaction.
+  return out.replace(/(?<![A-Za-z0-9])AIza[0-9A-Za-z_-]{20,60}(?![A-Za-z0-9_-])/g, '[REDACTED_GEMINI_KEY]');
 }
 
 function cliRetryDelayMs(errBody, headers, baseMs, attempt, rand = Math.random) {
@@ -344,11 +388,32 @@ function cliRetryDelayMs(errBody, headers, baseMs, attempt, rand = Math.random) 
   return Math.min(600000, Math.max(exp, Number.isFinite(serverMs) ? serverMs : 0));
 }
 
+// v21.10 (Phase 5 M17): atomic report write with explicit POSIX 0o600 permission tightening (temp file + chmod + rename) so existing files cannot retain looser permissions or corrupt on crash.
+function writePrivateReport(outPath, content, writeFileFn) {
+  if (typeof writeFileFn === 'function' && writeFileFn !== fs.writeFileSync) {
+    writeFileFn(outPath, content, { encoding: 'utf8', mode: 0o600 });
+    return;
+  }
+  const dir = path.dirname(path.resolve(outPath));
+  const tmp = path.join(dir, '.' + path.basename(outPath) + '.tmp.' + process.pid + '.' + Date.now() + '.' + Math.random().toString(36).slice(2, 8));
+  try {
+    fs.writeFileSync(tmp, content, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+    if (process.platform !== 'win32') {
+      try { fs.chmodSync(tmp, 0o600); } catch {}
+    }
+    fs.renameSync(tmp, outPath);
+  } catch (err) {
+    try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch {}
+    throw err;
+  }
+}
+
 module.exports = {
   MEASUREMENT_SAFETY_SETTINGS,
   measurementOutputCap,
   redactSecrets,
   cliRetryDelayMs,
+  writePrivateReport,
   DOCUMENTED_PROMPTS,
   FROZEN_PROMPTS,
   NAME_CLASH_RE,
@@ -357,6 +422,7 @@ module.exports = {
   createMeasurementPacer,
   extractAnchoredRegex,
   extractPromptLiteral,
+  extractSpan,
   listSuiteFiles,
   resolveSuiteFile,
   measurementPlan,

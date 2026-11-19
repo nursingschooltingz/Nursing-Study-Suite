@@ -12,15 +12,19 @@ async function runAnkiSourceUiTests({ S, t, section }) {
     return S.slice(a, includeEnd ? b + end.length : b);
   };
   const helpers = span('function ankiParseCards(raw', '/* ── END ANKI PURE HELPERS ── */');
+  const redactSrc = span('function redactApiSecrets(', '\nasync function geminiRequest(');
+  const redactApiSecrets = new Function(redactSrc + ';return redactApiSecrets;')();
   const H = new Function('uid', helpers + ';return {ankiSourceAuditCurrent,ankiSourceAuditPending,ankiSourceAuditState,ankiAuditGroups,ankiBuildSourceAuditPrompt,ankiBuildSourceAuditPromptV4,ankiAuditPacket,ankiAuditSourceTokens,ankiParseSourceAudit,ankiParseSourceAuditV4,ankiMergeSourceAuditResult};')(() => 'synthetic-id');
+  const auditRunner = span('async function ankiRunSourceAuditWithEnv(', '\nasync function ankiRunWithEnv(');
   const callbacks = span('  const prepareSourceAudit=()=>{', '  const openNote=');
   const invalidation = span('  useEffect(()=>{\n    const run=auditRun.current;', '  },[cards,batch,tierFilter,current]);', true);
   const cleanup = '  useEffect(()=>()=>{auditRun.current?.ctl.abort();auditRun.current=null;},[]);';
   if (S.split(cleanup).length !== 2) throw new Error('Anki source-check unmount extraction anchor moved');
   const capture = new Function('state', 'services', `
     const {cards,batch,tierFilter,current,busy,auditBusy,sourceAudit,model,toolLevel,auditModel,auditLevel,cfg}=state;
-    const {auditRun,auditInputs,setSourceAudit,setAuditBusy,callGemini,ankiSourceAuditCurrent,ankiSourceAuditPending,ankiSourceAuditState,ankiAuditGroups,ankiBuildSourceAuditPrompt,ankiBuildSourceAuditPromptV4,ankiAuditPacket,ankiAuditSourceTokens,ankiParseSourceAudit,ankiParseSourceAuditV4,ankiMergeSourceAuditResult}=services;
+    const {auditRun,auditInputs,setSourceAudit,setAuditBusy,callGemini,redactApiSecrets,ankiSourceAuditCurrent,ankiSourceAuditPending,ankiSourceAuditState,ankiAuditGroups,ankiBuildSourceAuditPrompt,ankiBuildSourceAuditPromptV4,ankiAuditPacket,ankiAuditSourceTokens,ankiParseSourceAudit,ankiParseSourceAuditV4,ankiMergeSourceAuditResult}=services;
     const effects=[];const useEffect=fn=>effects.push(fn);
+    ${auditRunner}
     ${callbacks}
     ${invalidation}
     ${cleanup}
@@ -33,7 +37,7 @@ async function runAnkiSourceUiTests({ S, t, section }) {
     const state = { cards, batch: { snapshot: { facts }, chunkIds: [['fact-1'], ['fact-2']] }, tierFilter: 'all', current: true, busy: false, auditBusy: false, sourceAudit: null, model: 'synthetic-model', toolLevel: 'low', auditModel: 'synthetic-audit-model', auditLevel: 'medium', cfg: { apiKey: credential }, ...changes };
     const auditRun = { current: null }, auditInputs = { current: null }, calls = [], publications = [];
     const services = {
-      ...H, auditRun, auditInputs,
+      ...H, redactApiSecrets, auditRun, auditInputs,
       setSourceAudit(value) { state.sourceAudit = typeof value === 'function' ? value(state.sourceAudit) : value; publications.push(state.sourceAudit); },
       setAuditBusy(value) { state.auditBusy = value; },
       callGemini(...args) { calls.push(args); return transport(...args); }
@@ -213,7 +217,7 @@ async function runAnkiSourceUiTests({ S, t, section }) {
   await diagnostic.render().runSourceAudit();
   t('typed validation details survive quarantine and accepted citation recovery metadata survives publication', diagnostic.state.sourceAudit.failures[0].detail.path === 'factReviews[0].targets[0].sourceSpan' && diagnostic.state.sourceAudit.failures[0].detail.sourceSpan === 'Synthetic unmatched span' && diagnostic.state.sourceAudit.results[0].citationRecoveries[0].method === 'synthetic-test');
   const secretError = create(async()=>{throw Error('Synthetic request rejected '+credential);});await secretError.prepare().runSourceAudit();
-  t('transport error evidence redacts the captured credential instead of persisting it', !JSON.stringify(secretError.state.sourceAudit).includes(credential) && secretError.state.sourceAudit.failures[0].error.includes('[redacted]'));
+  t('transport error evidence redacts the captured credential instead of persisting it', !JSON.stringify(secretError.state.sourceAudit).includes(credential) && /\[redacted\]/i.test(secretError.state.sourceAudit.failures[0].error));
 
   // v16.4: a partial group is retained but cannot leave the pending queue merely
   // because it has a result object. A fresh attempt can resolve only its bad record.

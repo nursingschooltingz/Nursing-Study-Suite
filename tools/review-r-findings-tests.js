@@ -61,7 +61,7 @@ async function run(S,t){
   t('R02: hydration no longer takes a second capture',count(hydrateSource,'kbReadFallbackSnapshot()')===1&&!hydrateSource.includes('kbCaptureFallbacks'));
 
   /* ── R03: union of the regex pairing and the model pairing ── */
-  const merge=new Function(span(S,'function nclexMergePairs(','function nclexBatchPairs(')+';return nclexMergePairs;')();
+  const merge=new Function(span(S,'function nclexStripStemPrefix(','function nclexRepairOptions(')+'\n'+span(S,'function nclexMergePairs(','function nclexBatchPairs(')+';return nclexMergePairs;')();
   const P=(number,question,answer='')=>({number,question,answer,matched:!!answer});
   let m=merge([P(1,'Q one'),P(2,'Q two')],[P(2,'Q two','A two'),P(3,'Q three','A three'),P(4,'Q four')]);
   t('R03: partial overlap keeps every question from both passes',m.pairs.map(p=>p.number).join(',')==='1,2,3,4'&&m.added===2&&m.filled===1&&m.pairs[1].answer==='A two'&&m.pairs[1].matched===true&&m.pairs[3].matched===false);
@@ -95,7 +95,7 @@ async function run(S,t){
   /* ── R04/R05/R06 in the shipped inline runner ── */
   const NX=new Function(span(S,'function nclexKey(','const NCLEX_OPTION_GAP=')+';return {nclexKey,nclexAccumulate,nclexAdmitRecord,nclexNewTrack,nclexRunSummary,nclexSummaryLine};')();
   const chunker=new Function(span(S,'function nclexChunkText(','\n  return chunks;\n}')+'\n  return chunks;\n}\n;return nclexChunkText;')();
-  const inline=span(S,'  async function runInline(file,existingQ,signal,track){','\n  // ── Split Q&A mode runner ──');
+  const inline=span(S,'  async function runInline(file,existingQ,signal,track){','\n  return runInline(file,existingQ,signal,track);');
   const text=Array.from({length:12},(_,i)=>`Question ${i+1}. Synthetic stem number ${i+1} about a fictional marker. A. one B. two C. three D. four.`).join('\n\n');
   const chunks=chunker(text,300,0).length;
   async function driveInline(responses,{aborted=false}={}){
@@ -146,16 +146,16 @@ async function run(S,t){
   t('R06: a halted run is stopped and only the export line carries the provider reason',(()=>{const s=sum({attempted:2,succeeded:1,failed:[],stopped:'The provider requested a wait of 120 seconds.'});return s.status==='stopped'&&s.exportLine.includes('Reason: The provider requested a wait of 120 seconds.')&&!s.detail.includes('Reason:');})());
   t('R06: malformed records and notes are reported',(()=>{const s=sum({attempted:1,succeeded:1,failed:[],malformed:2,notes:['AI pairing failed: synthetic']});return s.detail.includes('2 malformed records skipped')&&s.detail.includes('AI pairing failed: synthetic');})());
   t('R06: no request at all is "Nothing extracted"',sum(NX.nclexNewTrack()).status==='empty'&&NX.nclexSummaryLine(sum(NX.nclexNewTrack())).startsWith('Extraction status: Nothing extracted')&&NX.nclexSummaryLine(null)==='');
-  const extractor=span(S,'function nclexRunSplitWithEnv(','\n  return runSplit(_file,_existingQ,_signal,_track);\n}')+span(S,'async function nclexRunMainWithEnv(','function ngAssembleWorksheet(')+span(S,'function NCLEXExtractor(){','// ──── TOOL: NCLEX Question Generator ────');
-  t('R06: the results view and both export builders carry the run summary',extractor.includes("{runSummary&&runSummary.status!=='complete'&&!isProcessing&&<div")&&count(extractor,'nclexSummaryLine(runSummary)')===2&&extractor.includes("if(e.name==='AbortError'){track.cancelled=true;setRunSummary(nclexRunSummary(track));")&&extractor.includes('track.stopped=e.message;setRunSummary(nclexRunSummary(track));'));
+  const extractor=span(S,'function nclexRunSplitWithEnv(','\n  return runSplit(_file,_existingQ,_signal,_track);\n}')+span(S,'async function nclexRunMainWithEnv(','function ngAssembleWorksheet(')+span(S,'function nclexFormatExportTxt(','async function n2aRunImagesWithEnv(')+span(S,'function NCLEXExtractor(){','// ──── TOOL: NCLEX Question Generator ────');
+  t('R06: the results view and both export builders carry the run summary',extractor.includes("{runSummary&&runSummary.status!=='complete'&&!isProcessing&&<div")&&count(extractor,'nclexSummaryLine(runSummary)')===2&&extractor.includes("if(e?.name==='AbortError'){track.cancelled=true;setRunSummary(nclexRunSummary(track));")&&extractor.includes('track.stopped=safeMsg;setRunSummary(nclexRunSummary(track));'));
   t('R06: split mode counts batches and notes a pairing failure or an empty page range',extractor.includes('track.failed.push(`Batch ${i+1}`)')&&extractor.includes("track.notes.push('AI pairing failed: '+e.message)")&&extractor.includes("track.notes.push('no numbered questions were detected in the page ranges')"));
 
   /* ── R07: a factless Knowledge Base is refused before the deck is cleared ── */
   const usable=new Function(span(S,'function kbUsableFactCount(','function kbForAnki(')+';return kbUsableFactCount;')();
   t('R07: usable facts are counted across conditions and blank facts are ignored',usable(null)===0&&usable({conditions:[]})===0&&usable({conditions:[{name:'Empty',facts:[]}]})===0&&usable({conditions:[{name:'A',facts:[{text:'  '},null,{text:'Real'}]},{name:'B',facts:[{text:'Also'}]}]})===2);
-  const anki=span(S,'function AnkiGenerator(){','// ──── TOOL: NCLEX Extractor ────');
+  const anki=span(S,'async function ankiRunWithEnv(','// ── END ANKI RUNNERS ──');
   // v18.4: the guard and the packet read kbFactView, so medication, diagnostic and scoring-tool facts count and convert.
-  const runStart=anki.indexOf('  const run=useCallback(async()=>{'),guard=anki.indexOf('if(!kbUsableFactCount(kbFactView(K.knowledgeBase))){log(',runStart),clear=anki.indexOf('setBatch(completed);setCards(deduped);',runStart),packet=anki.indexOf('kbForAnki(kbFactView(K.knowledgeBase,{boxTableFirst:true}))',runStart); // v17.15 (M17): the deck is replaced only on success
+  const runStart=anki.indexOf('  const run=async()=>{'),guard=anki.indexOf('if(!kbUsableFactCount(kbFactView(K.knowledgeBase))){log(',runStart),clear=anki.indexOf('setBatch(completed);setCards(deduped);',runStart),packet=anki.indexOf('kbForAnki(kbFactView(K.knowledgeBase,{boxTableFirst:true}))',runStart); // v17.15 (M17): the deck is replaced only on success
   t('R07: the Anki run refuses a factless Knowledge Base before clearing the deck or building a packet',runStart>=0&&guard>runStart&&clear>guard&&packet>guard&&anki.slice(guard,guard+400).includes('nothing was sent to the model'));
 
   /* ── R09: Priority keeps streamed text after a failure ── */

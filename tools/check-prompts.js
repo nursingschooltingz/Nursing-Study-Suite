@@ -36,19 +36,11 @@ function checkFrozenPrompts({ suiteFile, baselineFile = BASELINE_FILE }) {
   return FROZEN_PROMPTS.length;
 }
 
-function argValue(argv, name) {
-  const at = argv.indexOf('--' + name);
-  if (at < 0) return '';
-  const val = argv[at + 1];
-  if (!val || val.startsWith('--')) throw new Error('Missing value for --' + name);
-  return val;
-}
-
 if (require.main === module) {
   try {
     const argv = process.argv.slice(2);
-    parseCliArgs(argv, { options: ['html'] });
-    const suiteFile = resolveSuiteFile({ rootDir: REPO_ROOT, explicit: argValue(argv, 'html') });
+    const cli = parseCliArgs(argv, { options: ['html'] });
+    const suiteFile = resolveSuiteFile({ rootDir: REPO_ROOT, explicit: cli.values.html || '' });
     const count = checkFrozenPrompts({ suiteFile });
     console.log('PASS  ' + count + ' frozen prompt constants are byte-identical to prompt-baseline.json');
   } catch (error) {
