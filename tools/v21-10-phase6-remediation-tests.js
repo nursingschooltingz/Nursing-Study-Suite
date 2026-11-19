@@ -136,8 +136,10 @@ function nodeText(node) {
 }
 
 function loadBabelInstance() {
+  const { PRIVATE_TOOL_ROOT } = require('../verify-repo');
+  const priv = path.join(PRIVATE_TOOL_ROOT, 'node_modules', '@babel', 'standalone', 'babel.js');
   const babelPath = process.env.NSS_BABEL_STANDALONE ||
-    path.join(os.tmpdir(), 'nursing-study-suite-verify', 'node_modules', '@babel', 'standalone', 'babel.js');
+    (fs.existsSync(priv) ? priv : path.join(os.tmpdir(), 'nursing-study-suite-verify', 'node_modules', '@babel', 'standalone', 'babel.js'));
   return require(babelPath);
 }
 
@@ -274,6 +276,8 @@ module.exports = async function runPhase6RemediationTests(S, t) {
     Blob,
     TextEncoder,
     TextDecoder,
+    DecompressionStream,
+    ReadableStream,
     Uint8Array,
     Uint16Array,
     Uint32Array,
@@ -315,6 +319,7 @@ module.exports = async function runPhase6RemediationTests(S, t) {
     ankiBatchDiagnostics, ankiGenerationOutcome, ankiSourceAuditState, ankiStampConceptTags, ankiStampLayerTags,
     nclexChunkText, nclexRepairOptions, nclexMergePairs, n2aKeyFit, n2aRealignKey, x2aBuildCard,
     N2A_PDF_CHROME, n2aPdfChoiceLines, n2aPdfKeyLines, CASE_CLINICAL_TOKEN_RE,
+    _pptxParseZip, pptxReadXml, extractPptxText, PPTX_LIMITS,
   })`, ctx);
 
   // ── 1. H24 Batch 1: Live *WithEnv orchestrators (n2aConvertText, kbTranscribeCards, gizmoPrepareInput, gizmoRunAiConvert, caRunAnalysis) ──
@@ -898,7 +903,7 @@ module.exports = async function runPhase6RemediationTests(S, t) {
       const timers = [];
       const win = {
         DOMPurify: initialDomPurify,
-        Babel: {}, React: {}, ReactDOM: {}, marked: {}, pdfjsLib: {}, JSZip: {},
+        Babel: {}, React: {}, ReactDOM: {}, marked: {}, pdfjsLib: {},
         addEventListener() {},
       };
       const env = {
@@ -1645,5 +1650,52 @@ module.exports = async function runPhase6RemediationTests(S, t) {
       S.includes("function suiteVersion(){return '" + ver + "';}");
     t('v21.11 Option A (M7 — Zero external font hosts & native font stacks): Google Fonts links/CSP removed, inline styles use CSS font variables, and suiteVersion() matches canonical HTML filename',
       noGoogleFonts);
+
+    // ── 13. v21.11 Option B (M7 — Native Bounded ZIP Reader replacing JSZip): STORED + DEFLATE, ZIP64, encrypted, spoofed EOCD, forged bomb ──
+    const { makeZipBytes } = require('./production-resource-transport-tests');
+    const VmU8 = vm.runInContext('Uint8Array', ctx);
+    const toVmU8 = b => new VmU8(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength));
+    // STORED + DEFLATE round-trip
+    const storedZip = LIVE._pptxParseZip(toVmU8(makeZipBytes({ 'a.xml': 'Hello μg stored' }, { compress: false })));
+    const storedTxt = await LIVE.pptxReadXml(storedZip.files['a.xml'], { bytes: 0 });
+    const deflateZip = LIVE._pptxParseZip(toVmU8(makeZipBytes({ 'b.xml': 'Hello μg deflate '.repeat(200) }, { compress: true })));
+    const deflateTxt = await LIVE.pptxReadXml(deflateZip.files['b.xml'], { bytes: 0 });
+    // ZIP64 EOCD marker rejected
+    const zip64Bytes = toVmU8(makeZipBytes({ 'a.xml': 'x' }, { compress: false, eocdCountOverride: 0xFFFF }));
+    let zip64Err = '';
+    try { LIVE._pptxParseZip(zip64Bytes); } catch (e) { zip64Err = e.message; }
+    // Encrypted entry rejected
+    const encBytes = toVmU8(makeZipBytes({ 'a.xml': 'x' }, { compress: false, flags: 1 }));
+    let encErr = '';
+    try { LIVE._pptxParseZip(encBytes); } catch (e) { encErr = e.message; }
+    // Spoofed EOCD count (declares 1 while CD contains 10,001 entries) rejected
+    const floodEntries = Object.fromEntries(Array.from({ length: LIVE.PPTX_LIMITS.entries + 1 }, (_, i) => ['f' + i, '']));
+    let floodErr = '';
+    try { LIVE._pptxParseZip(toVmU8(makeZipBytes(floodEntries, { compress: false, eocdCountOverride: 1 }))); } catch (e) { floodErr = e.message; }
+    // Forged uncompSize=1 DEFLATE bomb (4 MiB + 1) rejected during streaming inflate
+    const bombArchive = LIVE._pptxParseZip(toVmU8(makeZipBytes({ 'bomb.xml': Buffer.alloc(LIVE.PPTX_LIMITS.xmlBytes + 1, 65) }, { compress: true, forgedUncompSize: { 'bomb.xml': 1 } })));
+    let bombErr = '';
+    try { await LIVE.pptxReadXml(bombArchive.files['bomb.xml'], { bytes: 0 }); } catch (e) { bombErr = e.message; }
+
+    t('v21.11 Option B (M7 — Native DecompressionStream ZIP reader): reads STORED & DEFLATE UTF-8 entries cleanly while rejecting ZIP64, encrypted archives, spoofed-EOCD CD floods, and forged-size DEFLATE bombs',
+      storedTxt === 'Hello μg stored' &&
+      deflateTxt === 'Hello μg deflate '.repeat(200) &&
+      /ZIP64/i.test(zip64Err) &&
+      /encrypted/i.test(encErr) &&
+      /too many ZIP entries/i.test(floodErr) &&
+      /expansion exceeds/i.test(bombErr));
+
+    // ── 14. v21.11 Option B (M7 — CDN Debloat & Patch Pin Verification): JSZip removed, Babel 7.29.14 + marked 18.2.1 pinned ──
+    const verifierSrc = fs.readFileSync(path.join(rootDir, 'verify-repo.js'), 'utf8');
+    const cndDebloatOk =
+      !/<script[^>]+jszip/i.test(S) &&
+      !/\bJSZip\b/.test(runtimeCode.replace(/\/\/[^\n]*/g, '')) &&
+      S.includes('babel-standalone/7.29.14/babel.min.js') &&
+      S.includes('marked/18.2.1/lib/marked.umd.min.js') &&
+      verifierSrc.includes("const BABEL_VERSION = '7.29.14';") &&
+      verifierSrc.includes("'DecompressionStream'") &&
+      !verifierSrc.includes("'JSZip'");
+    t('v21.11 Option B (M7 — CDN debloat & patch pins): JSZip script/references removed, @babel/standalone@7.29.14 and marked@18.2.1 pinned, and verify-repo.js synced',
+      cndDebloatOk);
   }
 };

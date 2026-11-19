@@ -523,7 +523,7 @@ module.exports = async function runV202ReviewRemediationTests(S, t) {
     }
 
     // 3) PPTX EOCD pre-check, XML DOCTYPE/ENTITY rejection, and zip.files hasOwnProperty guard
-    let domParserCalls = 0, jszipCalls = 0;
+    let domParserCalls = 0, fullReadCalls = 0;
     const PPTX = load(
       span('const _OOXML_A_NS =', '// Single core for ALL Gemini traffic:'),
       ['_pptxParseXml', '_pptxZipEocdEntries', 'extractPptxText'],
@@ -532,18 +532,6 @@ module.exports = async function runV202ReviewRemediationTests(S, t) {
           parseFromString() {
             domParserCalls++;
             return { getElementsByTagName: () => [], getElementsByTagNameNS: () => [{ firstElementChild: null, textContent: 'Clean slide text' }] };
-          }
-        },
-        JSZip: {
-          loadAsync: async () => {
-            jszipCalls++;
-            return {
-              files: {
-                'ppt/presentation.xml': { internalStream: () => ({ pause() {}, on(ev, fn) { if (ev === 'data') this._d = fn; if (ev === 'end') this._e = fn; return this; }, resume() { this._d(new TextEncoder().encode('<p:presentation/>')); this._e(); } }) },
-                'ppt/_rels/presentation.xml.rels': { internalStream: () => ({ pause() {}, on(ev, fn) { if (ev === 'data') this._d = fn; if (ev === 'end') this._e = fn; return this; }, resume() { this._d(new TextEncoder().encode('<Relationships/>')); this._e(); } }) },
-                'ppt/slides/slide1.xml': { internalStream: () => ({ pause() {}, on(ev, fn) { if (ev === 'data') this._d = fn; if (ev === 'end') this._e = fn; return this; }, resume() { this._d(new TextEncoder().encode('<p:sld><a:t>Clean</a:t></p:sld>')); this._e(); } }) }
-              }
-            };
           }
         }
       }
@@ -560,16 +548,17 @@ module.exports = async function runV202ReviewRemediationTests(S, t) {
       await PPTX.extractPptxText({
         name: 'flood.pptx',
         size: 22,
-        slice: () => ({ arrayBuffer: async () => eocdBomb.buffer })
+        slice: () => ({ arrayBuffer: async () => eocdBomb.buffer }),
+        arrayBuffer: async () => { fullReadCalls++; return eocdBomb.buffer; }
       });
     } catch (e) { eocdErr = e.message; }
 
-    t('v20.2 (Phase 5 — PPTX EOCD & XML entity guards): blocks <!DOCTYPE/<!ENTITY before DOMParser and blocks >10,000 EOCD entries before JSZip.loadAsync',
+    t('v20.2 (Phase 5 — PPTX EOCD & XML entity guards): blocks <!DOCTYPE/<!ENTITY before DOMParser and blocks >10,000 EOCD entries before reading full archive',
       /DOCTYPE or ENTITY/.test(xxeErr) &&
       domParserCalls === 0 &&
       PPTX._pptxZipEocdEntries(eocdBomb) === 10001 &&
       /too many ZIP entries/.test(eocdErr) &&
-      jszipCalls === 0 &&
+      fullReadCalls === 0 &&
       S.includes('Object.prototype.hasOwnProperty.call(zip.files,name)'));
 
     // 4) Prototype-pollution hardening on normalizeKbEntities & i2aEmptyCache/i2aMergeCache, 50 MB transcripts cap, and destroyPdfDoc wiring

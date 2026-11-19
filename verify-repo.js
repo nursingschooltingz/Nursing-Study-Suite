@@ -11,9 +11,9 @@ const { checkPromptDoc } = require('./tools/render-prompts');
 const { parseCliArgs, resolveSuiteFile, suiteVersionFromFilename } = require('./tools/repo-checks');
 
 const REPO_ROOT = __dirname;
-const BABEL_VERSION = '7.23.9';
-// v21.10 (Phase 2): pin SHA-256 of @babel/standalone@7.23.9/babel.js, install into a user-private cache directory (0700 on POSIX), and avoid cmd.exe shell invocation on Windows.
-const BABEL_SHA256 = '190679c2d0d05cffc00b1a719278dcc85d78b1cca6b78d75c8fa432affce682f';
+const BABEL_VERSION = '7.29.14';
+// v21.11 (Option B / M7): pin SHA-256 of @babel/standalone@7.29.14/babel.js, install into a user-private cache directory (0700 on POSIX), and avoid cmd.exe shell invocation on Windows.
+const BABEL_SHA256 = '8431a697b1111c992b7fd60126de2404c7d7fce3a34d3e3e57dd63d02efe13e8';
 const PRIVATE_TOOL_ROOT = process.platform === 'win32'
   ? path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'nursing-study-suite-verify')
   : path.join(os.homedir(), '.cache', 'nursing-study-suite-verify');
@@ -65,13 +65,15 @@ function loadBabel(argv) {
   let candidate;
   if (requested) {
     candidate = path.resolve(requested);
+  } else if (cli.flags.has('setup-babel')) {
+    installBabel();
+    candidate = PRIVATE_BABEL;
   } else if (fs.existsSync(PRIVATE_BABEL)) {
     candidate = PRIVATE_BABEL;
   } else if (fs.existsSync(LEGACY_TEMP_BABEL)) {
     candidate = LEGACY_TEMP_BABEL;
   } else {
     candidate = PRIVATE_BABEL;
-    if (cli.flags.has('setup-babel')) installBabel();
   }
   if (!fs.existsSync(candidate)) {
     throw new Error('Babel gate unavailable. Run `node verify-repo.js --setup-babel` once, or pass ' +
@@ -131,7 +133,7 @@ const AST_KNOWN_GLOBALS = new Set([
   'window', 'document', 'navigator', 'location', 'history', 'localStorage', 'sessionStorage', 'indexedDB',
   'console', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'requestAnimationFrame', 'cancelAnimationFrame',
   'fetch', 'Headers', 'Request', 'Response', 'AbortController', 'AbortSignal', 'DOMException', 'DOMParser',
-  'URL', 'Blob', 'File', 'FileReader', 'FormData', 'TextEncoder', 'TextDecoder', 'Uint8Array', 'Uint16Array', 'Uint32Array',
+  'URL', 'Blob', 'File', 'FileReader', 'FormData', 'TextEncoder', 'TextDecoder', 'DecompressionStream', 'ReadableStream', 'Uint8Array', 'Uint16Array', 'Uint32Array',
   'Int8Array', 'Int16Array', 'Int32Array', 'ArrayBuffer', 'DataView', 'Float32Array', 'Float64Array',
   'Promise', 'Map', 'Set', 'WeakMap', 'WeakSet', 'Symbol', 'BigInt', 'Proxy', 'Reflect',
   'Object', 'Array', 'String', 'Number', 'Boolean', 'RegExp', 'Date', 'Math', 'JSON', 'Error', 'TypeError', 'RangeError', 'SyntaxError', 'ReferenceError',
@@ -139,7 +141,7 @@ const AST_KNOWN_GLOBALS = new Set([
   'encodeURIComponent', 'decodeURIComponent', 'encodeURI', 'decodeURI', 'atob', 'btoa',
   'Worker', 'MessageChannel', 'createImageBitmap', 'Image', 'Audio', 'HTMLElement', 'Event', 'CustomEvent',
   'alert', 'confirm', 'prompt', 'crypto', 'performance', 'structuredClone', 'queueMicrotask',
-  'React', 'ReactDOM', 'DOMPurify', 'marked', 'pdfjsLib', 'JSZip', 'Babel', 'arguments',
+  'React', 'ReactDOM', 'DOMPurify', 'marked', 'pdfjsLib', 'Babel', 'arguments',
 ]);
 
 // v21.10 (Phase 1): statically walk every inline <script> block (plain + Babel-transformed JSX) to catch undeclared
@@ -252,8 +254,8 @@ function bootSmoke(code, source) {
   const g = { Babel: {}, React: R, ReactDOM: { createRoot: () => ({ render: el => { rootElement = el; } }) },
     document: { getElementById: () => ({}), addEventListener: noop, removeEventListener: noop, createElement: () => ({ style: {}, setAttribute: noop, appendChild: noop }), body: { appendChild: noop, style: {} } },
     addEventListener: noop, removeEventListener: noop, stop: noop, localStorage: { getItem: () => null, setItem: noop, removeItem: noop }, sessionStorage: { getItem: () => null, setItem: noop, removeItem: noop },
-    fetch: () => { throw new Error('no network in verify'); }, pdfjsLib: { GlobalWorkerOptions: {}, OPS: {}, getDocument: () => ({ promise: new Promise(noop), destroy: noop }) }, JSZip: function () {}, marked: { parse: x => x, use: noop },
-    DOMPurify: { sanitize: x => x, addHook: noop, isSupported: true }, console, setTimeout: () => 0, clearTimeout: noop, TextEncoder, TextDecoder, URL, Blob, AbortController, DOMException,
+    fetch: () => { throw new Error('no network in verify'); }, pdfjsLib: { GlobalWorkerOptions: {}, OPS: {}, getDocument: () => ({ promise: new Promise(noop), destroy: noop }) }, marked: { parse: x => x, use: noop },
+    DOMPurify: { sanitize: x => x, addHook: noop, isSupported: true }, console, setTimeout: () => 0, clearTimeout: noop, TextEncoder, TextDecoder, DecompressionStream, ReadableStream, URL, Blob, AbortController, DOMException,
     crypto: globalThis.crypto, indexedDB: { open: () => ({}) } };
   g.window = g;
   const ctx = vm.createContext(g);

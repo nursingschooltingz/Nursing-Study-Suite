@@ -11,7 +11,7 @@ async function runTests(source,test=(name,ok)=>assert.ok(ok,name)){
   let count=0;const t=(name,ok)=>{count++;test('resources: '+name,!!ok);};
   const rejected=async promise=>{try{await promise;return false;}catch{return true;}};
   const pins=[...source.matchAll(/<script src="([^"]+)" integrity="([^"]+)"/g)];
-  t('eight SRI script resources remain distinct from the worker pin',pins.length===8&&pins.every(p=>p[2].startsWith('sha384-')));
+  t('seven SRI script resources remain distinct from the worker pin',pins.length===7&&pins.every(p=>p[2].startsWith('sha384-')));
   t('both sanitizer CDNs use the verified current patch',pins.filter(p=>p[1].includes('purify')).every(p=>p[1].includes('3.4.16')&&p[2]===EXPECTED_PURIFY_HASH));
   t('main CSP locks fallback with default-src none while explicitly scoping active directives',
     source.includes("default-src 'none';")&&

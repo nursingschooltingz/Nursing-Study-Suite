@@ -101,6 +101,6 @@ Examples: `node davis-transcribe-test.js --dry-run --app-profile --runs 2 synthe
 - Update `suiteVersion()` so the visible sidebar and private report versions agree with the filename.
 - Add the Keep a Changelog entry.
 - Regenerate/check `Prompts.md`; frozen hashes must remain unchanged unless an edit was explicitly approved.
-- Re-hash all eight SRI-pinned script resources and both separately pinned worker CDN copies on any application version bump.
+- Re-hash all seven SRI-pinned script resources and both separately pinned worker CDN copies on any application version bump.
 - Run `node verify-repo.js`.
 - Run live-material checks only when the changed pipeline requires them and the user explicitly authorizes the API calls.

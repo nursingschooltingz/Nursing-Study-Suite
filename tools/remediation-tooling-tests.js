@@ -234,8 +234,8 @@ async function runTests({ source, test = (name, value) => assert.ok(value, name)
     throws(() => browserFixture.once('duplicate duplicate', 'duplicate', 'replacement'), /exactly once/) &&
     throws(() => browserFixture.once('missing', 'absent', 'replacement'), /exactly once/));
   const resources = browserTests.approvedResources(realAppFixtureHtml);
-  t('Browser fixture approvedResources accounts for all 8 pinned CDN scripts, 2 PDF workers, and 0 external stylesheets',
-    resources.scripts.size === 8 && resources.workers.size === 2 && resources.styles.size === 0);
+  t('Browser fixture approvedResources accounts for all 7 pinned CDN scripts, 2 PDF workers, and 0 external stylesheets',
+    resources.scripts.size === 7 && resources.workers.size === 2 && resources.styles.size === 0);
   t('All four Anki browser fixtures build cleanly against the live suite HTML without anchor drift',
     [ankiFixture, ankiSourceReviewBrowser, ankiGenQualityBrowser, ankiV166Browser].every(mod => {
       const html = mod.page();

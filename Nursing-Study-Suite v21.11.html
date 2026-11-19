@@ -15,12 +15,14 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline'; font-src 'none'">
 <title>P-LATE Study Suite</title>
 <!-- v21.11 (2026-11-19): Production Code-Review Remediation (Phases 1–6: C1–C6, H1–H24, M1–M20, L1–L8)
-     + Zero-External-Font Privacy Cleanup (Option A / M7).
+     + Phase 7 Options A & B (Zero-External-Font Privacy Cleanup, Native Bounded PPTX ZIP Reader Replacing JSZip, & CDN Patch Bumps).
      All 13 frozen prompt constants in prompt-baseline.json unchanged.
      (1) CRITICAL & SECURITY HARDENING (C1–C6, H1–H9, H20, H22–H23, M2, M7, M16–M18): Fixes NCLEXToAnki ReferenceError crash,
      NEIA alignment FAIL downgrade, clinical condition/drug merge collisions, NGN Bowtie pick wipe, DOMPurify boot/mount latch,
      IndexedDB/recovery deadlocks, 2 ReDoS vectors, HEIC/PDF DoS limits, .gitignore export leaks, API-key redaction everywhere,
-     TSV/HTML/prototype hardening, AST free-identifier verifier gate, and removes external Google Fonts links/CSP origins.
+     TSV/HTML/prototype hardening, AST free-identifier verifier gate, removes external Google Fonts links/CSP origins, replaces
+     unmaintained jszip@3.10.1 with a bounded native DecompressionStream('deflate-raw') ZIP central-directory reader (blocking
+     ZIP64/spoofed-EOCD/encrypted/bomb archives), and updates @babel/standalone (7.29.14) and marked (18.2.1) SRI pins.
      (2) CLINICAL CORRECTNESS, PERFORMANCE & API MODERNIZATION (H5, H10–H19, H21, M1, M3–M6, M8–M15): Fixes Argon xhigh clamp,
      card legibility, IV calculation units, NGN Trend/timing/grounding rules, Anki/Extractor/Converter data-loss bugs, image LRU OOM,
      React context re-render fan-out, quadratic hot loops, hoists ~112 KB out of text/babel (~388 KB / 500 KB ceiling), wires
@@ -262,8 +264,9 @@
      re-hashed from cdnjs on 2026-09-23. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js" integrity="sha384-ku9eM40vVDsFUiERorrdlHlF0LIhdfn716M7TntM72Uo98T7LWiogD3hNenPx8Q0" crossorigin="anonymous"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
+<!-- v21.11 (Option B / M7): bump @babel/standalone (7.29.14) and marked (18.2.1 UMD) with live-verified SHA-384 pins. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.29.14/babel.min.js" integrity="sha384-NFMPdlT9NRMyYGArFJIgafm5emdRea6aGKLXhUrnDhERRKmOn3QJsnCiZpc1+CD9" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/18.2.1/lib/marked.umd.min.js" integrity="sha384-NPhSwjiW07eKUoqQvJT/mDe0KCLUa6lpLjtt3abyNDpuXjTg/+iuV63FEw6cwQ2s" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.4.16/purify.min.js" integrity="sha384-a7SzOxErzJ3ZpQz0zJ32d67dSitNzPcbfybc/ykU9KJhMgZkwqfSxlhhdJRS+XGL" crossorigin="anonymous"></script>
 <template id="dompurify-fallback"><script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.16/dist/purify.min.js" integrity="sha384-a7SzOxErzJ3ZpQz0zJ32d67dSitNzPcbfybc/ykU9KJhMgZkwqfSxlhhdJRS+XGL" crossorigin="anonymous"></script></template>
 <script>
@@ -301,7 +304,7 @@ if(!_hasDomPurify()){
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" integrity="sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e" crossorigin="anonymous"></script>
 <!-- v15.17: worker code is loaded lazily through verified Blob bytes, never a raw workerSrc URL. -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
+<!-- v21.11 (Option B / M7): jszip@3.10.1 removed; PPTX archives now unzip via a bounded native DecompressionStream('deflate-raw') reader. -->
 <!-- v21.11 (Option A / M7): external Google Fonts stylesheet removed; native system font stacks avoid third-party font requests. -->
 <style>
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -914,8 +917,8 @@ input[aria-invalid="true"],textarea[aria-invalid="true"],select[aria-invalid="tr
   }
   window.__latteBootFail=bootFail;
   window.addEventListener('error',function(e){if(!window.__latteMounted&&!window.__latteBootFailed)bootFail(e.message||'A startup script failed.');});
-  // v19.0: surface missing synchronous CDN globals immediately instead of waiting 12 s when Babel is blocked.
-  if(!window.Babel||!window.React||!window.ReactDOM||!window.marked||(!window.DOMPurify&&!window.__domPurifyReady)||!window.pdfjsLib||!window.JSZip){bootFail('One or more required CDN scripts failed to load.');return;}
+  // v19.0 + v21.11 (Option B): surface missing synchronous CDN globals immediately instead of waiting 12 s when Babel is blocked (JSZip removed).
+  if(!window.Babel||!window.React||!window.ReactDOM||!window.marked||(!window.DOMPurify&&!window.__domPurifyReady)||!window.pdfjsLib){bootFail('One or more required CDN scripts failed to load.');return;}
   if(window.__domPurifyReady)window.__domPurifyReady.then(function(ok){if(!ok&&!window.__latteBootFailed)bootFail('The HTML sanitizer (DOMPurify 3.4.16) failed to load from both CDNs (cdnjs and jsDelivr).');});
   setTimeout(function(){if(!window.__latteMounted&&!window.__latteBootFailed)bootFail('Startup timed out. One or more CDN dependencies may have failed to load.');},12000);
 })();
@@ -1256,35 +1259,12 @@ function pptxAwait(promise,signal){
     if(signal.aborted)abort();else signal.addEventListener('abort',abort,{once:true});
   });
 }
-function pptxReadXml(entry,budget,signal){
-  pptxCheckAbort(signal);
-  // Count actual output bytes before decoding/DOM parsing; ZIP size headers are not trusted.
-  return new Promise((resolve,reject)=>{
-    const stream=entry.internalStream('uint8array'),chunks=[];let size=0,done=false;
-    const fail=error=>{if(done)return;done=true;stream.pause();chunks.length=0;signal?.removeEventListener('abort',abort);reject(error);};
-    const abort=()=>fail(new DOMException('Aborted','AbortError'));
-    stream.on('data',chunk=>{
-      // JSZip can finish its current inflate block after pause; retain none of those bytes.
-      if(done)return;
-      if(signal?.aborted){abort();return;}
-      if(chunk.length>PPTX_LIMITS.xmlBytes-size||chunk.length>PPTX_LIMITS.totalBytes-budget.bytes){fail(new Error('PPTX XML expansion exceeds the safe extraction limit. Split the deck or convert it to PDF.'));return;}
-      size+=chunk.length;budget.bytes+=chunk.length;chunks.push(chunk);
-    }).on('error',fail).on('end',()=>{
-      if(done)return;
-      if(signal?.aborted){abort();return;}
-      try{
-        const decoder=new TextDecoder('utf-8'),text=chunks.map(chunk=>decoder.decode(chunk,{stream:true}));text.push(decoder.decode());
-        const result=text.join('');done=true;chunks.length=0;signal?.removeEventListener('abort',abort);resolve(result);
-      }catch(error){fail(error);}
-    });
-    signal?.addEventListener('abort',abort,{once:true});
-    if(signal?.aborted)abort();else stream.resume();
-  });
-}
+// v21.11 (Option B / M7): native bounded ZIP Central-Directory parser + DecompressionStream('deflate-raw') reader replaces unmaintained jszip@3.10.1 and closes ZIP64/spoofed-EOCD gaps.
 function _pptxZipEocdEntries(bytes){
-  // v20.2: inspect the ZIP End-of-Central-Directory (EOCD) entry count in the file tail before JSZip.loadAsync allocates objects for central-directory floods.
+  // v20.2: inspect the ZIP End-of-Central-Directory (EOCD) entry count in the file tail before reading the full archive.
   if(!(bytes instanceof Uint8Array)||bytes.length<22)return 0;
-  for(let pos=bytes.length-22;pos>=0;pos--){
+  const minPos=Math.max(0,bytes.length-65557);
+  for(let pos=bytes.length-22;pos>=minPos;pos--){
     if(bytes[pos]===0x50&&bytes[pos+1]===0x4b&&bytes[pos+2]===0x05&&bytes[pos+3]===0x06){
       const commentLen=bytes[pos+20]|(bytes[pos+21]<<8);
       if(pos+22+commentLen===bytes.length)return bytes[pos+10]|(bytes[pos+11]<<8);
@@ -1292,20 +1272,126 @@ function _pptxZipEocdEntries(bytes){
   }
   return 0;
 }
+function _pptxParseZip(bytes){
+  if(!(bytes instanceof Uint8Array)||bytes.length<22)throw new Error('Invalid PPTX archive: missing ZIP end-of-central-directory record.');
+  const dv=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
+  let eocd=-1;
+  const minPos=Math.max(0,bytes.length-65557);
+  for(let pos=bytes.length-22;pos>=minPos;pos--){
+    if(dv.getUint32(pos,true)===0x06054b50){
+      const commentLen=dv.getUint16(pos+20,true);
+      if(pos+22+commentLen===bytes.length){eocd=pos;break;}
+    }
+  }
+  if(eocd<0)throw new Error('Invalid PPTX archive: missing ZIP end-of-central-directory record.');
+  const diskNum=dv.getUint16(eocd+4,true),cdDisk=dv.getUint16(eocd+6,true);
+  const diskEntries=dv.getUint16(eocd+8,true),totalEntries=dv.getUint16(eocd+10,true);
+  const cdSize=dv.getUint32(eocd+12,true),cdOffset=dv.getUint32(eocd+16,true);
+  if(diskNum===0xFFFF||cdDisk===0xFFFF||diskEntries===0xFFFF||totalEntries===0xFFFF||cdSize===0xFFFFFFFF||cdOffset===0xFFFFFFFF){
+    throw new Error('PPTX uses unsupported ZIP64 archive features. Split the deck or convert it to PDF.');
+  }
+  if(diskNum!==0||cdDisk!==0)throw new Error('PPTX uses unsupported multi-disk ZIP archives. Convert the deck to PDF.');
+  if(totalEntries>PPTX_LIMITS.entries||diskEntries>PPTX_LIMITS.entries)throw new Error('PPTX contains too many ZIP entries. Split the deck or convert it to PDF.');
+  if(cdOffset+cdSize>eocd)throw new Error('Invalid PPTX archive: ZIP central directory is truncated or corrupted.');
+  const files=Object.create(null),nameDecoder=new TextDecoder('utf-8'),cdEnd=cdOffset+cdSize;
+  let off=cdOffset,seen=0;
+  while(off<cdEnd){
+    if(++seen>PPTX_LIMITS.entries)throw new Error('PPTX contains too many ZIP entries. Split the deck or convert it to PDF.');
+    if(off+46>cdEnd||dv.getUint32(off,true)!==0x02014b50)throw new Error('Invalid PPTX archive: corrupted ZIP central directory entry.');
+    const flags=dv.getUint16(off+8,true),method=dv.getUint16(off+10,true);
+    const compSize=dv.getUint32(off+20,true),uncompSize=dv.getUint32(off+24,true);
+    const nameLen=dv.getUint16(off+28,true),extraLen=dv.getUint16(off+30,true),commentLen=dv.getUint16(off+32,true);
+    const localOffset=dv.getUint32(off+42,true);
+    if(flags&1)throw new Error('PPTX is password-protected or encrypted and cannot be read.');
+    if(compSize===0xFFFFFFFF||uncompSize===0xFFFFFFFF||localOffset===0xFFFFFFFF){
+      throw new Error('PPTX uses unsupported ZIP64 archive entries. Split the deck or convert it to PDF.');
+    }
+    const nextOff=off+46+nameLen+extraLen+commentLen;
+    if(nextOff>cdEnd)throw new Error('Invalid PPTX archive: truncated ZIP central directory entry.');
+    const name=nameDecoder.decode(bytes.subarray(off+46,off+46+nameLen));
+    if(name&&!name.endsWith('/'))files[name]={name,method,compSize,uncompSize,localOffset,bytes};
+    off=nextOff;
+  }
+  return {files,count:seen};
+}
+async function pptxReadXml(entry,budget,signal){
+  pptxCheckAbort(signal);
+  if(!entry||!(entry.bytes instanceof Uint8Array))throw new Error('Invalid PPTX archive entry.');
+  const bytes=entry.bytes,dv=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
+  if(entry.localOffset+30>bytes.length||dv.getUint32(entry.localOffset,true)!==0x04034b50){
+    throw new Error('Invalid PPTX archive: corrupted local ZIP header.');
+  }
+  const lNameLen=dv.getUint16(entry.localOffset+26,true),lExtraLen=dv.getUint16(entry.localOffset+28,true);
+  const dataStart=entry.localOffset+30+lNameLen+lExtraLen,dataEnd=dataStart+entry.compSize;
+  if(dataEnd>bytes.length)throw new Error('Invalid PPTX archive: truncated ZIP member payload.');
+  const raw=bytes.subarray(dataStart,dataEnd);
+  // Count actual output bytes before decoding/DOM parsing; ZIP size headers are not trusted.
+  if(entry.method===0){
+    if(raw.length>PPTX_LIMITS.xmlBytes||raw.length>PPTX_LIMITS.totalBytes-budget.bytes){
+      throw new Error('PPTX XML expansion exceeds the safe extraction limit. Split the deck or convert it to PDF.');
+    }
+    budget.bytes+=raw.length;
+    return new TextDecoder('utf-8').decode(raw);
+  }
+  if(entry.method!==8){
+    throw new Error('PPTX uses an unsupported ZIP compression method ('+entry.method+'). Re-save the deck in PowerPoint or convert it to PDF.');
+  }
+  if(typeof DecompressionStream!=='function'||typeof ReadableStream!=='function'){
+    throw new Error('This browser lacks native ZIP decompression (DecompressionStream). Update your browser or convert the deck to PDF.');
+  }
+  const ds=new DecompressionStream('deflate-raw');
+  const src=new ReadableStream({start(c){c.enqueue(raw);c.close();}});
+  const reader=src.pipeThrough(ds).getReader();
+  const chunks=[];let size=0,aborted=false;
+  const onAbort=()=>{aborted=true;chunks.length=0;try{reader.cancel().catch(()=>{});}catch(e){}};
+  signal?.addEventListener('abort',onAbort,{once:true});
+  try{
+    for(;;){
+      if(aborted||signal?.aborted)throw new DOMException('Aborted','AbortError');
+      const step=await reader.read();
+      if(aborted||signal?.aborted)throw new DOMException('Aborted','AbortError');
+      if(step.done)break;
+      const chunk=step.value;
+      if(!chunk||!chunk.length)continue;
+      if(chunk.length>PPTX_LIMITS.xmlBytes-size||chunk.length>PPTX_LIMITS.totalBytes-budget.bytes){
+        chunks.length=0;
+        try{await reader.cancel();}catch(e){}
+        throw new Error('PPTX XML expansion exceeds the safe extraction limit. Split the deck or convert it to PDF.');
+      }
+      size+=chunk.length;budget.bytes+=chunk.length;chunks.push(chunk);
+    }
+    if(aborted||signal?.aborted)throw new DOMException('Aborted','AbortError');
+    const decoder=new TextDecoder('utf-8'),text=chunks.map(c=>decoder.decode(c,{stream:true}));
+    text.push(decoder.decode());
+    chunks.length=0;
+    return text.join('');
+  }catch(err){
+    chunks.length=0;
+    try{await reader.cancel();}catch(e){}
+    if(aborted||signal?.aborted)throw new DOMException('Aborted','AbortError');
+    throw err;
+  }finally{
+    signal?.removeEventListener('abort',onAbort);
+    try{reader.releaseLock();}catch(e){}
+  }
+}
 async function extractPptxText(file,{signal}={}) {
   pptxCheckAbort(signal);
-  if (typeof JSZip === 'undefined') throw new Error('JSZip failed to load — cannot read PPTX. Convert the deck to PDF and re-upload.');
   if(!Number.isFinite(file.size)||file.size>PPTX_LIMITS.fileBytes)throw new Error('PPTX exceeds the 64 MiB source limit. Split the deck or convert it to PDF.');
   if(typeof file.slice==='function'){
     const tailBlob=file.slice(Math.max(0,file.size-65557),file.size);
     if(tailBlob&&typeof tailBlob.arrayBuffer==='function'){
       const tailBuf=await pptxAwait(tailBlob.arrayBuffer(),signal);
       pptxCheckAbort(signal);
-      if(_pptxZipEocdEntries(new Uint8Array(tailBuf))>PPTX_LIMITS.entries)throw new Error('PPTX contains too many ZIP entries. Split the deck or convert it to PDF.');
+      const tailCount=_pptxZipEocdEntries(new Uint8Array(tailBuf));
+      if(tailCount===0xFFFF)throw new Error('PPTX uses unsupported ZIP64 archive features. Split the deck or convert it to PDF.');
+      if(tailCount>PPTX_LIMITS.entries)throw new Error('PPTX contains too many ZIP entries. Split the deck or convert it to PDF.');
     }
   }
-  // JSZip metadata parsing is not interruptible; its input is bounded first, then entries are capped.
-  const zip = await pptxAwait(JSZip.loadAsync(file),signal);
+  const ab=await pptxAwait(file.arrayBuffer(),signal);
+  pptxCheckAbort(signal);
+  if(!ab||ab.byteLength>PPTX_LIMITS.fileBytes)throw new Error('PPTX exceeds the 64 MiB source limit. Split the deck or convert it to PDF.');
+  const zip=_pptxParseZip(new Uint8Array(ab));
   pptxCheckAbort(signal);
   const entries=Object.keys(zip.files),budget={bytes:0};
   if(entries.length>PPTX_LIMITS.entries)throw new Error('PPTX contains too many ZIP entries. Split the deck or convert it to PDF.');

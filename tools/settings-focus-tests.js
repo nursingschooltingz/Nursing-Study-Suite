@@ -45,7 +45,9 @@ function createRuntime(context){
 }
 
 function loadDrawer(S,React,document){
-  const babelPath=process.env.NSS_BABEL_STANDALONE||path.join(os.tmpdir(),'nursing-study-suite-verify/node_modules/@babel/standalone/babel.js');
+  const {PRIVATE_TOOL_ROOT}=require('../verify-repo');
+  const priv=path.join(PRIVATE_TOOL_ROOT,'node_modules/@babel/standalone/babel.js');
+  const babelPath=process.env.NSS_BABEL_STANDALONE||(require('fs').existsSync(priv)?priv:path.join(os.tmpdir(),'nursing-study-suite-verify/node_modules/@babel/standalone/babel.js'));
   const Babel=require(babelPath);
   const constants=span(S,'const TOOL_PROFILE_DEFAULTS={','\n};')+'\n'+span(S,'const PROFILE_ROWS=[','\n];');
   const component=span(S,'function ConfigSidebar({onClose,activeTool}){','\n  );\n}\n');

@@ -311,7 +311,6 @@ module.exports = async function runV2110Phase1RemediationTests(S, t) {
         },
         marked: {},
         pdfjsLib: {},
-        JSZip: function () {},
         DOMPurify: initialPurify,
         App: () => null,
         BootErrorBoundary: () => null,

@@ -435,7 +435,7 @@ module.exports = function runV190PointAnchorTests(S, t) {
     splitPrefaced[1] instanceof Map && splitPrefaced[1].get('A').includes('wrong') && splitPrefaced[1].get('B').includes('right') &&
     noAiCards.warnings[0].includes('AI returned no answer for it') &&
     noAiWs.md.includes('No answer in the images; AI returned no answer for it.') &&
-    S.includes("if(!window.Babel||!window.React||!window.ReactDOM||!window.marked||(!window.DOMPurify&&!window.__domPurifyReady)||!window.pdfjsLib||!window.JSZip){bootFail('One or more required CDN scripts failed to load.');return;}") &&
+    S.includes("if(!window.Babel||!window.React||!window.ReactDOM||!window.marked||(!window.DOMPurify&&!window.__domPurifyReady)||!window.pdfjsLib){bootFail('One or more required CDN scripts failed to load.');return;}") &&
     S.includes("count!=null&&count!==''&&count!==false&&h('span',{className:'results-count'},count)") &&
     S.includes('txAbortRef.current?.abort();if(busy)abortRef.current?.abort();'));
 

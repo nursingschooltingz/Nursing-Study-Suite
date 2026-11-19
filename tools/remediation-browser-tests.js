@@ -38,7 +38,7 @@ async function selfTest(){
   assert(source.includes('<RemediationProbe/>'),'the state probe must be mounted inside the live contexts');
   assert.throws(()=>once('duplicate duplicate','duplicate','replacement'),/exactly once/);
   assert.throws(()=>once('missing','absent','replacement'),/exactly once/);
-  assert.equal(approvedResources(source).scripts.size,8,'every pinned CDN script, including sanitizer fallback, is accounted for');
+  assert.equal(approvedResources(source).scripts.size,7,'every pinned CDN script, including sanitizer fallback, is accounted for');
   assert(!fixturePage({label:'</script><script>bad</script>'}).includes('const remediationConfig={"label":"</script>'));
   const {server,url}=await createServer();
   try{
