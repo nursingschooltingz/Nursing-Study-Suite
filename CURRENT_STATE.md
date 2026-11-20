@@ -1,8 +1,16 @@
 # Current maintainer state
 
+## v22.2 Deterministic Export-Time Master Deck Alignment Tags in `04 · Anki Generator` (2026-11-20)
+
+The canonical application is `Nursing-Study-Suite v22.2.html`. All 13 frozen prompt constants match `prompt-baseline.json` unchanged.
+- **Export-time `Source::Suite::<Course>_<Exam>` and always-on `Layer::RNCore` checkboxes (`ankiSanitizeSourceTag`, `ankiDefaultSuiteSourceTag`, `ankiComposeExportTags`, `ankiExportText`, `AnkiGenerator`).** Adds optional export-only checkboxes (`#anki-include-source-tag` with inline `#anki-source-tag-input`, auto-derived from KB `Course` + `Exam` metadata, and `#anki-always-rncore`) that deterministically append `Source::Suite::<Tag>` and `Layer::RNCore` (preserving `Layer::NPBridge` on bridge-only notes and deduplicating case-insensitively) during `.txt` export without mutating editable `c.tags`, `lintAnkiCard`, `ankiNumericAudit`, `Check against KB`, or `GizmoImporter`. Leaving both checkboxes unchecked preserves byte-identical legacy export output.
+- **Verification.** `node verify-repo.js` passes **4,190 assertions (`0 failed`)** (8 new regression assertions in `tools/anki-tag-format-tests.js`), `0` AST undeclared references across all 4 inline script blocks, all 25 prompt constants + 5 dynamic builders in `Prompts.md`, and live SHA-384 verification of all 7 pinned CDN scripts + both `PDF_WORKER_URLS` copies (`9/9`, `0` mismatches). No live Gemini API calls were made.
+
+Verification: see the [release verification record](docs/reviews/v22.2-release.md).
+
 ## v22.1 Default Knowledge · extract Auto Profile to Hydrogen · high (2026-11-19)
 
-The canonical application is `Nursing-Study-Suite v22.1.html`. All 13 frozen prompt constants match `prompt-baseline.json` unchanged.
+The application was `Nursing-Study-Suite v22.1.html`. All 13 frozen prompt constants match `prompt-baseline.json` unchanged.
 - **Knowledge Base extraction Auto profile default (`TOOL_PROFILE_DEFAULTS.knowledge`).** Upgrades `knowledge` from `{m:'hydrogen',lv:'medium'}` to `{m:'hydrogen',lv:'high'}` for completeness-critical P-LATE extraction. Existing saved browser profile overrides remain preserved until **Reset to recommended** is clicked.
 - **Verification.** `node verify-repo.js` passes **4,182 assertions (`0 failed`)** (1 new regression assertion in `tools/settings-persistence-tests.js`), `0` AST undeclared references across all 4 inline script blocks, all 25 prompt constants + 5 dynamic builders in `Prompts.md`, and live SHA-384 verification of all 7 pinned CDN scripts + both `PDF_WORKER_URLS` copies (`9/9`, `0` mismatches). No live Gemini API calls were made.
 

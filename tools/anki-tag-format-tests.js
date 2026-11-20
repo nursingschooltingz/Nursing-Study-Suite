@@ -11,7 +11,7 @@ function runAnkiTagFormatTests({S,t,section}){
   };
   let ids=0;
   const source=extract('function ankiParseCards(raw','/* ── END ANKI PURE HELPERS ── */');
-  const H=new Function('uid',source+';return {ankiParseCards,ankiTagFormatIssues,lintAnkiCard,LINT_LABEL,ankiSelection,ankiExportText,ankiDedupeCards,ankiNormalizeConditionTags,ankiConditionTagCheck,ankiSourceSnapshot,ankiStyleWarnings,ankiReviewFilter,ankiAuditGroups,ankiAuditPacket};')(()=> 'synthetic-tag-'+(++ids));
+  const H=new Function('uid',source+';return {ankiParseCards,ankiTagFormatIssues,lintAnkiCard,LINT_LABEL,ankiSelection,ankiSanitizeSourceTag,ankiDefaultSuiteSourceTag,ankiComposeExportTags,ankiExportText,ankiDedupeCards,ankiNormalizeConditionTags,ankiConditionTagCheck,ankiSourceSnapshot,ankiStyleWarnings,ankiReviewFilter,ankiAuditGroups,ankiAuditPacket};')(()=> 'synthetic-tag-'+(++ids));
   const tags='Nursing::LATTE::BriefPatho Condition::PanicDisorder Tier::1';
   const row=tagText=>'[Synthetic] Finding: {{c1::answer}}.||'+tagText;
   const parse=(tagText=tags,contract='hierarchical-v1')=>H.ankiParseCards(row(tagText),1,contract).cards[0];
@@ -89,6 +89,38 @@ function runAnkiTagFormatTests({S,t,section}){
   const fallbackCards=new Function('run','groups',evidenceSource+';return cards;')({},auditGroups);
   t('private evidence fallback from captured groups preserves the scope',fallbackCards.every(c=>c.tagFormatContract==='hierarchical-v1'));
   t('scoped and ungoverned notes keep distinct contract evidence',new Function('run','groups',evidenceSource+';return cards;')({cards:[good,parse(tags,null)]},[]).map(c=>c.tagFormatContract).join(',')==='hierarchical-v1,');
+
+  // v22.2: deterministic export-time Master Deck alignment tags (Source::Suite::<Course>_<Exam> + always-on Layer::RNCore).
+  t('v22.2 ankiSanitizeSourceTag strips Source::Suite:: prefix, unsafe chars, and whitespace cleanly',
+    H.ankiSanitizeSourceTag('  Source::Suite::NUR 221 / Exam 1!!  ')==='NUR_221_Exam_1'&&H.ankiSanitizeSourceTag('NUR221_Exam-2')==='NUR221_Exam-2'&&H.ankiSanitizeSourceTag('   ')==='');
+  t('v22.2 ankiDefaultSuiteSourceTag compacts KB Course and Exam metadata into Course_Exam',
+    H.ankiDefaultSuiteSourceTag({metadata:{course:'NUR 221',exam:'Exam 1'}})==='NUR221_Exam1'&&H.ankiDefaultSuiteSourceTag({metadata:{course:'NURS-210',exam:''}})==='NURS-210'&&H.ankiDefaultSuiteSourceTag({metadata:{}})==='');
+  const rnOnlySnap=H.ankiSourceSnapshot({conditions:[{name:'Heart Failure',facts:[{id:'fact-1',text:'Monitor daily weight.',tier:1,latteBucket:'Treat',sources:[]}]}]});
+  const rnCard={...parse('Nursing::PLATE::Treat Condition::HeartFailure Tier::1'),factIds:['fact-1']};
+  const rnBefore=rnCard.tags;
+  const exportedAligned=H.ankiExportText([rnCard],{snapshot:rnOnlySnap},true,'all',false,false,false,{sourceTag:'NUR221_Exam1',alwaysRnCore:true});
+  t('v22.2 export-time alignment tags append Source::Suite::<Tag> and Layer::RNCore on plain RN KBs without mutating card.tags',
+    exportedAligned.endsWith('Nursing::PLATE::Treat Condition::HeartFailure Tier::1 Source::Suite::NUR221_Exam1 Layer::RNCore')&&rnCard.tags===rnBefore);
+  t('v22.2 export-time alignment tags deduplicate case-insensitively',
+    H.ankiComposeExportTags({...rnCard,tags:rnCard.tags+' source::suite::nur221_exam1 layer::rncore'},{snapshot:rnOnlySnap},true,{sourceTag:'NUR221_Exam1',alwaysRnCore:true})===rnCard.tags+' source::suite::nur221_exam1 layer::rncore');
+  const mixedSnap=H.ankiSourceSnapshot({conditions:[{name:'Heart Failure',facts:[
+    {id:'fact-rn',text:'Daily weights.',tier:1,latteBucket:'Treat',sources:[]},
+    {id:'fact-br',text:'Deep RAAS mechanism.',tier:2,latteBucket:'Patho',clinicalLayer:'bridge',sources:[]}
+  ]}]});
+  const bridgeOnlyCard={...parse('Nursing::PLATE::Patho Condition::HeartFailure Tier::2'),factIds:['fact-br']};
+  const mixedCard={...parse('Nursing::PLATE::Patho Condition::HeartFailure Tier::1'),factIds:['fact-rn','fact-br']};
+  t('v22.2 alwaysRnCore preserves Layer::NPBridge on bridge-only notes and stamps both layers on mixed notes',
+    (()=>{
+      const brOut=H.ankiComposeExportTags(bridgeOnlyCard,{snapshot:mixedSnap},true,{sourceTag:'NUR221_Exam1',alwaysRnCore:true});
+      const mxOut=H.ankiComposeExportTags(mixedCard,{snapshot:mixedSnap},true,{sourceTag:'NUR221_Exam1',alwaysRnCore:true});
+      return brOut.includes('Layer::NPBridge')&&!brOut.includes('Layer::RNCore')&&mxOut.includes('Layer::RNCore')&&mxOut.includes('Layer::NPBridge');
+    })());
+  t('v22.2 omitting or disabling exportTags keeps raw export byte-identical',
+    H.ankiExportText([rnCard],{snapshot:rnOnlySnap},true,'all',false,false,false,null)===H.ankiExportText([rnCard],{snapshot:rnOnlySnap},true,'all',false,false)&&H.ankiExportText([rnCard],{snapshot:rnOnlySnap},true,'all',false,false,false,{sourceTag:'',alwaysRnCore:false})===rnCard.text+'|'+rnCard.extra+'|'+rnCard.tags);
+  t('v22.2 composed export tags remain valid under hierarchical-v1 tag grammar',
+    H.lintAnkiCard({...rnCard,tags:H.ankiComposeExportTags(rnCard,{snapshot:rnOnlySnap},true,{sourceTag:'NUR221_Exam1',alwaysRnCore:true})}).length===0);
+  t('v22.2 AnkiGenerator wires optional Source::Suite:: checkbox, inline override input, and Always stamp Layer::RNCore checkbox',
+    S.includes('id="anki-include-source-tag"')&&S.includes('id="anki-source-tag-input"')&&S.includes('id="anki-always-rncore"')&&S.includes('const [includeSuiteSourceTag,setIncludeSuiteSourceTag]=useState(false);')&&S.includes('const [alwaysStampRnCore,setAlwaysStampRnCore]=useState(false);'));
 }
 
 module.exports={runAnkiTagFormatTests};

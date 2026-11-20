@@ -9,6 +9,27 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [22.2] — 2026-11-20
+
+Adds optional deterministic export-time **Master Deck alignment tags** (`Source::Suite::<Course>_<Exam>` and `Always stamp Layer::RNCore`) to **04 · Anki Generator**. All 13 byte-frozen prompt constants in `prompt-baseline.json` are unchanged.
+
+### Added
+
+- **Deterministic export-time Master Deck alignment tags (`ankiSanitizeSourceTag`, `ankiDefaultSuiteSourceTag`, `ankiComposeExportTags`, `ankiExportText`, `AnkiGenerator`).** Adds two opt-in export checkboxes beside **4-Pillar Trap Audit in Extra** in **04 · Anki Generator**:
+  - **`Source::Suite::<Tag>` (`#anki-include-source-tag` + inline `#anki-source-tag-input`):** Auto-derives `<Course>_<Exam>` from the loaded Knowledge Base metadata (e.g., `NUR 221` + `Exam 1` → `NUR221_Exam1`, customizable inline) and appends `Source::Suite::<Tag>` deterministically to every exported note.
+  - **`Always stamp Layer::RNCore` (`#anki-always-rncore`):** Deterministically appends `Layer::RNCore` to exported RN Core notes even on pure RN-Core Knowledge Bases (where generation-time `ankiStampLayerTags` intentionally no-ops), while preserving `Layer::NPBridge` on bridge-only notes and deduplicating existing tags case-insensitively.
+  - Neither checkbox mutates editable `c.tags`, `lintAnkiCard`, `ankiNumericAudit`, `Check against KB`, or `GizmoImporter`, and leaving both unchecked keeps raw exports 100% byte-identical.
+
+### Verification
+
+- **4,190 passed · 0 failed** in `node verify-repo.js` (8 new regression assertions in `tools/anki-tag-format-tests.js` covering tag sanitization, metadata defaults, plain-RN / bridge-only / mixed-layer export stamping, case-insensitive deduplication, non-mutation, disabled byte-identity, and `AnkiGenerator` UI wiring).
+- **Prompt bytes & docs.** All 13 frozen hashes in `prompt-baseline.json` pass unchanged; `Prompts.md` verified across all 25 prompt constants and 5 dynamic builders.
+- **CDN SRI pins.** All 7 pinned CDN script endpoints plus both `PDF_WORKER_URLS` copies re-verified live via SHA-384 digest match (`9/9`, `0` mismatches).
+
+See the [release verification record](docs/reviews/v22.2-release.md).
+
+---
+
 ## [22.1] — 2026-11-19
 
 Upgrades the default Auto profile for **Knowledge · extract** (`TOOL_PROFILE_DEFAULTS.knowledge`) from `Hydrogen · medium` to **`Hydrogen · high`**. All 13 byte-frozen prompt constants in `prompt-baseline.json` are unchanged.

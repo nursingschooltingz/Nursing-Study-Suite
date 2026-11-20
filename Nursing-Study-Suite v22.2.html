@@ -14,6 +14,13 @@
      The print preview (about:blank window or srcdoc frame) inherits this policy and uses only its own inline style block and system fonts. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline'; font-src 'none'">
 <title>P-LATE Study Suite</title>
+<!-- v22.2 (2026-11-20): Deterministic Export-Time Master Deck Alignment Tags in 04 · Anki Generator
+     (ankiSanitizeSourceTag, ankiDefaultSuiteSourceTag, ankiComposeExportTags, ankiExportText, AnkiGenerator).
+     All 13 frozen prompt constants in prompt-baseline.json unchanged.
+     Adds optional export-only checkboxes for Source::Suite::<Course>_<Exam> (auto-derived from KB Course/Exam
+     metadata with inline override) and Always stamp Layer::RNCore (stamping Layer::RNCore even on pure RN-Core
+     KBs while preserving Layer::NPBridge on bridge-only notes) without mutating editable c.tags, lintAnkiCard,
+     ankiNumericAudit, Check against KB, or GizmoImporter. -->
 <!-- v22.1 (2026-11-19): Default Knowledge · extract Auto profile to Hydrogen · high.
      All 13 frozen prompt constants in prompt-baseline.json unchanged.
      Upgrades TOOL_PROFILE_DEFAULTS.knowledge from Hydrogen · medium to Hydrogen · high for completeness-critical
@@ -7726,7 +7733,42 @@ function ankiCardTrapAudit(card,batch,current){
   const idx=ankiTrapAuditIndex(batch);
   return (idx&&idx.byCondition.get(conds[0]))||null;
 }
-function ankiExportText(cards,batch,current,tier,html,references,trapAudit=false){
+// v22.2: deterministic export-only Master Deck alignment tags (Source::Suite::<Course>_<Exam> + always-on Layer::RNCore).
+// Plain RN-Core KBs intentionally skip ankiStampLayerTags during generation and ankiExportText never stamped KB course/exam
+// metadata, forcing students to rely on LLM prompts or manual Anki import tags; composing them at export keeps editable c.tags,
+// lintAnkiCard, ankiNumericAudit, Check against KB, and GizmoImporter untouched while guaranteeing 100% deterministic tag coverage.
+function ankiSanitizeSourceTag(value){
+  return String(value||'').trim().replace(/^Source::Suite::/i,'').replace(/\s+/g,'_').replace(/[^A-Za-z0-9_-]/g,'').replace(/_+/g,'_').replace(/^_|_$/g,'');
+}
+function ankiDefaultSuiteSourceTag(kb){
+  const meta=kb&&kb.metadata&&typeof kb.metadata==='object'?kb.metadata:null;
+  const compact=v=>String(v||'').trim().replace(/\s+/g,'');
+  const parts=[compact(meta&&meta.course),compact(meta&&meta.exam)].filter(Boolean);
+  return ankiSanitizeSourceTag(parts.join('_'));
+}
+function ankiComposeExportTags(card,batch,current,exportTags){
+  const raw=String(card&&card.tags||'');
+  if(!exportTags||typeof exportTags!=='object')return raw;
+  const tokens=raw.match(/\S+/g)||[],lower=new Set(tokens.map(t=>t.toLowerCase())),added=[];
+  const add=tok=>{if(tok&&!lower.has(tok.toLowerCase())){lower.add(tok.toLowerCase());added.push(tok);}};
+  if(exportTags.sourceTag){
+    const clean=ankiSanitizeSourceTag(exportTags.sourceTag);
+    if(clean)add('Source::Suite::'+clean);
+  }
+  if(exportTags.alwaysRnCore){
+    const hasLayer=lower.has('layer::rncore')||lower.has('layer::npbridge');
+    if(!hasLayer){
+      const snap=current&&batch&&batch.snapshot&&batch.snapshot.byId?batch.snapshot.byId:null;
+      const mapped=snap?(card.factIds||[]).map(id=>Object.prototype.hasOwnProperty.call(snap,id)?snap[id]:null).filter(Boolean):[];
+      const hasBridge=mapped.some(f=>f.clinicalLayer==='bridge');
+      const hasRn=!mapped.length||mapped.some(f=>f.clinicalLayer!=='bridge');
+      if(hasRn)add('Layer::RNCore');
+      if(hasBridge)add('Layer::NPBridge');
+    }
+  }
+  return added.length?[raw.trim(),...added].filter(Boolean).join(' '):raw;
+}
+function ankiExportText(cards,batch,current,tier,html,references,trapAudit=false,exportTags=null){
   const kept=ankiSelection(cards,current,tier).kept;if(!kept.length)return '';
   const escape=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   // v16.9: lint rejects pipes and newlines in a field but not quotes. A field holding a quote
@@ -7751,7 +7793,8 @@ function ankiExportText(cards,batch,current,tier,html,references,trapAudit=false
       }
     }
     if(references){const source='Source: '+(ankiSourcePointers(c,batch,current).join('; ')||'unavailable');extra+=(extra?(html?'<br>':' — '):'')+(html?escape(source):source);}
-    return [html?escape(c.text):c.text,extra,c.tags].map(field).join('|');
+    const tags=exportTags&&typeof ankiComposeExportTags==='function'?ankiComposeExportTags(c,batch,current,exportTags):c.tags;
+    return [html?escape(c.text):c.text,extra,tags].map(field).join('|');
   }).join('\n');
   return (html?'#separator:Pipe\n#html:true\n#notetype:Cloze\n#tags column:3\n':'')+body;
 }
@@ -8433,7 +8476,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '22.1';}
+function suiteVersion(){return '22.2';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -19509,6 +19552,10 @@ function AnkiGenerator(){
   // v21.3: export-only 4-Pillar Trap Audit in Extra — enabled and always-open (<br>) by default, with collapsible (<details>) toggle.
   const [includeTrapAudit,setIncludeTrapAudit]=useState(true);
   const [trapAuditMode,setTrapAuditMode]=useState('open');
+  // v22.2: optional export-only Master Deck alignment tags (Source::Suite::<Course>_<Exam> + always-on Layer::RNCore).
+  const [includeSuiteSourceTag,setIncludeSuiteSourceTag]=useState(false);
+  const [suiteSourceTagOverride,setSuiteSourceTagOverride]=useState('');
+  const [alwaysStampRnCore,setAlwaysStampRnCore]=useState(false);
   const [abortCtl,setAbortCtl]=useState(null);
 
   const {model,level:toolLevel}=cfg.forTool('anki');
@@ -19531,6 +19578,8 @@ function AnkiGenerator(){
   const kbConceptNames=useMemo(()=>[...new Set((K.knowledgeBase.conditions||[]).map(c=>c.entryRole==='concept'?c.name:c.concept).filter(Boolean))],[K.knowledgeBase]);
   const kbHasTraps=useMemo(()=>Boolean(K.knowledgeBase.metadata?.examTraps)||(K.knowledgeBase.conditions||[]).some(c=>(c.facts||[]).some(f=>f&&f.trapRole)),[K.knowledgeBase]);
   const kbHasBridge=useMemo(()=>Boolean(K.knowledgeBase.metadata?.plateBridge)||kbView.conditions.some(c=>(c.facts||[]).some(f=>f&&f.clinicalLayer==='bridge')),[K.knowledgeBase,kbView]);
+  const defaultSuiteSourceTag=useMemo(()=>typeof ankiDefaultSuiteSourceTag==='function'?ankiDefaultSuiteSourceTag(batch?.sourceKB||K.knowledgeBase):'',[batch?.sourceKB,K.knowledgeBase]);
+  const effSuiteSourceTag=typeof ankiSanitizeSourceTag==='function'?ankiSanitizeSourceTag(suiteSourceTagOverride||defaultSuiteSourceTag):'';
   const notePageInfo=useMemo(()=>ankiPageRows(displayedCards,notePage),[displayedCards,notePage]);
   const pagedCards=notePageInfo.rows;
   const styleCount=useMemo(()=>filteredCards.filter(c=>styleWarnings(c).length>0).length,[filteredCards,styleWarnings]);
@@ -19626,10 +19675,11 @@ function AnkiGenerator(){
   })),[]);
 
   const exportTxt=useCallback(()=>{
-    // v15.17/v21.3: validate current fields and batch identity again at the export boundary; compose optional 4-Pillar Trap Audit at export.
-    const text=ankiExportText(cards,batch,current,tierFilter,ankiHeader,includeSources,includeTrapAudit?trapAuditMode:false);if(!text)return;
+    // v15.17/v21.3/v22.2: validate current fields and batch identity again at the export boundary; compose optional 4-Pillar Trap Audit and Master Deck alignment tags at export.
+    const exportTags=(includeSuiteSourceTag&&effSuiteSourceTag)||alwaysStampRnCore?{sourceTag:includeSuiteSourceTag?effSuiteSourceTag:'',alwaysRnCore:alwaysStampRnCore}:null;
+    const text=ankiExportText(cards,batch,current,tierFilter,ankiHeader,includeSources,includeTrapAudit?trapAuditMode:false,exportTags);if(!text)return;
     downloadBlob(new Blob([text],{type:'text/plain'}),'latte_anki_import'+(tierFilter!=='all'?'_tier'+tierFilter:'')+'.txt');
-  },[cards,batch,current,tierFilter,ankiHeader,includeSources,includeTrapAudit,trapAuditMode]);
+  },[cards,batch,current,tierFilter,ankiHeader,includeSources,includeTrapAudit,trapAuditMode,includeSuiteSourceTag,effSuiteSourceTag,alwaysStampRnCore]);
 
   const keptCount=selected.kept.length;
   const trapAuditCount=useMemo(()=>selected.kept.filter(c=>ankiCardTrapAudit(c,batch,current)).length,[selected.kept,batch,current]);
@@ -19726,7 +19776,14 @@ function AnkiGenerator(){
               <button type="button" className="btn-secondary" aria-pressed={trapAuditMode==='collapsible'} style={{padding:'2px 8px',fontSize:11,borderColor:trapAuditMode==='collapsible'?'var(--accent)':undefined,color:trapAuditMode==='collapsible'?'var(--accent)':undefined}} onClick={()=>{setTrapAuditMode('collapsible');if(!ankiHeader)setAnkiHeader(true);}}>Collapsible (&lt;details&gt;)</button>
             </span>}
             {includeTrapAudit&&trapAuditCount>0&&!ankiHeader&&<span style={{color:'var(--accent-warm)'}}>Check <b>Anki header</b> (#html:true) for multi-line iOS formatting (<button type="button" className="btn-ghost" style={{padding:'0 4px',fontSize:11,textDecoration:'underline'}} onClick={()=>setAnkiHeader(true)}>enable</button>).</span>}
-            <span>Export options apply to the .txt file (and Preview card backs); editable Extra cells stay unchanged.</span>
+            <label title="Appends Source::Suite::<Course>_<Exam> at export without editing Tags cells.">
+              <input id="anki-include-source-tag" type="checkbox" checked={includeSuiteSourceTag} onChange={e=>setIncludeSuiteSourceTag(e.target.checked)} style={{accentColor:'var(--accent)'}}/>Source::Suite::{effSuiteSourceTag||'tag'}
+            </label>
+            {includeSuiteSourceTag&&<input id="anki-source-tag-input" aria-label="Suite export source tag" type="text" value={suiteSourceTagOverride} onChange={e=>setSuiteSourceTagOverride(e.target.value)} placeholder={defaultSuiteSourceTag||'NUR221_Exam1'} style={{width:140,padding:'2px 6px',fontSize:11,fontFamily:'var(--font-mono)'}}/>}
+            <label title="Appends Layer::RNCore at export even on plain RN KBs (bridge-only notes keep Layer::NPBridge).">
+              <input id="anki-always-rncore" type="checkbox" checked={alwaysStampRnCore} onChange={e=>setAlwaysStampRnCore(e.target.checked)} style={{accentColor:'var(--accent)'}}/>Always stamp Layer::RNCore
+            </label>
+            <span>Export options apply to .txt (and Preview Trap Audit); editable Extra/Tags stay unchanged.</span>
       </div>
       {batch?.outcome&&<p role="status" style={{color:batch.outcome.level==='ok'?'var(--accent-green)':'var(--accent-warm)'}}>{batch.outcome.label}{batch.truncated?' · response truncated':''}{batch.chunkIssues?.length?' · '+batch.chunkIssues.length+' chunk(s) returned no note records':''}. Original responses remain in batch diagnostics.</p>}
       {batch&&!current&&<p role="alert" style={{color:'var(--accent-warm)'}}>These notes belong to an earlier Knowledge Base. Generate a new batch to restore source links, coverage, and export.</p>}
