@@ -58,7 +58,7 @@ function runAnkiReviewQualityTests({S,t,section}){
 
   const defaults=new Function(extract('const TOOL_PROFILE_DEFAULTS=','const PROFILE_ROWS=')+';return TOOL_PROFILE_DEFAULTS;')();
   t('Anki recommended Auto profile uses Hydrogen Medium',defaults.anki.m==='hydrogen'&&defaults.anki.lv==='medium');
-  const otherDefaults={courseAnalyzer:['hydrogen','medium'],knowledge:['hydrogen','medium'],knowledgeAudit:['hydrogen','medium'],cardTranscribe:['hydrogen','low'],priorityHarvest:['hydrogen','low'],priority:['neon','high'],nclex:['hydrogen','medium'],nclexgen:['neon','high'],cases:['neon','high'],itemAudit:['neon','high'],gizmo:['hydrogen','low']};
+  const otherDefaults={courseAnalyzer:['hydrogen','medium'],knowledge:['hydrogen','high'],knowledgeAudit:['hydrogen','medium'],cardTranscribe:['hydrogen','low'],priorityHarvest:['hydrogen','low'],priority:['neon','high'],nclex:['hydrogen','medium'],nclexgen:['neon','high'],cases:['neon','high'],itemAudit:['neon','high'],gizmo:['hydrogen','low']};
   t('Anki recommendation leaves every other tool default unchanged',Object.entries(otherDefaults).every(([id,[m,lv]])=>defaults[id].m===m&&defaults[id].lv===lv));
   const savedSource=extract('  const [profiles,setProfiles]=useState(','  // v21.10 (Phase 4): skip redundant localStorage write-backs');
   const loadProfiles=stored=>new Function('TOOL_PROFILE_DEFAULTS','localStorage','useState',savedSource+';return profiles;')(defaults,{getItem:()=>stored},fn=>[fn(),()=>{}]);

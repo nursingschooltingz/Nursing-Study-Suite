@@ -8,7 +8,7 @@ Turn your lecture PDFs and PowerPoints into a complete, source-cited study syste
 
 The whole suite is **one HTML file**. There is nothing to install, no account to create, and no website collecting your data. You open the file in your web browser, paste in a free Google Gemini API key, upload your study materials, and go.
 
-**Published release: v22.0.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v22.0/Nursing-Study-Suite.v22.0.html) or open the [repository HTML](Nursing-Study-Suite%20v22.0.html). See the standalone [P-LATE, Tagging System & Exam Study Guide](docs/PLATE-Tagging-and-Exam-Study-Guide.md) for a quick-reference workflow and Anki filter cheatsheet.
+**Published release: v22.1.** [Download the HTML](https://github.com/nursingschooltingz/Nursing-Study-Suite/releases/download/v22.1/Nursing-Study-Suite.v22.1.html) or open the [repository HTML](Nursing-Study-Suite%20v22.1.html). See the standalone [P-LATE, Tagging System & Exam Study Guide](docs/PLATE-Tagging-and-Exam-Study-Guide.md) for a quick-reference workflow and Anki filter cheatsheet.
 
 The left rail lists the nine tools in the order you use them, grouped by stage. **Source:** *Course Analyzer* reads your syllabus and lecture PowerPoints to build conservative, exam-specific Focus inputs and syncs them (plus checked lecture decks) straight into *Knowledge Base*, which builds or imports the cited facts everything else reads from. **Plan:** *Priority* ranks those facts by clinical urgency into its own Tier 1/2/3. **Practice:** *Anki* for recall, *NCLEX Extract* for questions out of a review book you already own, *NCLEX Generate* for new ones written from your facts, *Case Studies* for unfolding cases, *NCLEX to Anki* to turn NCLEX questions into Anki cards, and *Import to Gizmo* to convert Anki decks into Gizmo.ai tab-separated flashcards.
 
@@ -89,7 +89,7 @@ Open **Settings** from the bottom of the left rail. The panel that slides in fro
 
 The **Hydrogen model / Neon model** text boxes exist so the suite doesn't go stale: when Google ships new model names, type them in — no update to the file needed, and **Reset defaults** restores `gemini-4-hydrogen` and `gemini-4-neon`.
 
-**Auto profile defaults.** Four rows default to Neon (`high`): **Priority · synthesis**, **NCLEX · generate**, **Case studies**, and **Item quality · audit**. **Course Analyzer**, Knowledge extraction/audit, card reading, Priority harvest, Anki, **NCLEX · extract**, and **Import to Gizmo** stay on Hydrogen (`low` or `medium`). Your browser keeps custom profile rows it already saved, so click **Reset to recommended** once under **Customize per-tool profiles** if you want the shipped table back. On a free-tier key, set the Neon rows back to Hydrogen.
+**Auto profile defaults.** Four rows default to Neon (`high`): **Priority · synthesis**, **NCLEX · generate**, **Case studies**, and **Item quality · audit**. **Knowledge · extract** defaults to Hydrogen (`high`), while **Course Analyzer**, **Knowledge · audit**, card reading, Priority harvest, Anki, **NCLEX · extract**, and **Import to Gizmo** stay on Hydrogen (`low` or `medium`). Your browser keeps custom profile rows it already saved, so click **Reset to recommended** once under **Customize per-tool profiles** if you want the shipped table back. On a free-tier key, set the Neon rows back to Hydrogen.
 
 ---
 

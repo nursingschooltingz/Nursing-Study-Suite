@@ -9,6 +9,24 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [22.1] — 2026-11-19
+
+Upgrades the default Auto profile for **Knowledge · extract** (`TOOL_PROFILE_DEFAULTS.knowledge`) from `Hydrogen · medium` to **`Hydrogen · high`**. All 13 byte-frozen prompt constants in `prompt-baseline.json` are unchanged.
+
+### Changed
+
+- **Knowledge Base extraction Auto profile default (`TOOL_PROFILE_DEFAULTS.knowledge`).** Sets **Knowledge · extract** to `Hydrogen · high` (`{m:'hydrogen',lv:'high'}`) for completeness-critical P-LATE extraction. Saved browser profile overrides remain preserved until **Reset to recommended** is clicked.
+
+### Verification
+
+- **4,182 passed · 0 failed** in `node verify-repo.js` (1 new regression assertion in `tools/settings-persistence-tests.js` verifying `Hydrogen · high` default and saved override preservation).
+- **Prompt bytes & docs.** All 13 frozen hashes in `prompt-baseline.json` pass unchanged; `Prompts.md` verified across all 25 prompt constants and 5 dynamic builders.
+- **CDN SRI pins.** All 7 pinned CDN script endpoints plus both `PDF_WORKER_URLS` copies re-verified live via SHA-384 digest match (`9/9`, `0` mismatches).
+
+See the [release verification record](docs/reviews/v22.1-release.md).
+
+---
+
 ## [22.0] — 2026-11-19
 
 Completes the full 6-phase **Production Code-Review Remediation (`C1`–`C6`, `H1`–`H24`, `M1`–`M20`, `L1`–`L8`)** plus **Phase 7 Options A & B** (removing external Google Fonts links/CSP origins, replacing unmaintained `jszip@3.10.1` with a bounded native `DecompressionStream('deflate-raw')` ZIP reader, and updating `@babel/standalone` to `7.29.14` and `marked` to `18.2.1`). Reclaims **~110 KB** of `<script type="text/babel">` headroom (`387,772 / 500,000` UTF-8 bytes), adds an AST free-identifier verifier gate across all inline script blocks, expands deterministic regression coverage by **73 live assertions** (`4,181 passed · 0 failed`), and leaves all 13 byte-frozen prompt constants in `prompt-baseline.json` untouched.

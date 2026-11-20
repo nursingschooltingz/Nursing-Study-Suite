@@ -14,6 +14,10 @@
      The print preview (about:blank window or srcdoc frame) inherits this policy and uses only its own inline style block and system fonts. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline'; font-src 'none'">
 <title>P-LATE Study Suite</title>
+<!-- v22.1 (2026-11-19): Default Knowledge · extract Auto profile to Hydrogen · high.
+     All 13 frozen prompt constants in prompt-baseline.json unchanged.
+     Upgrades TOOL_PROFILE_DEFAULTS.knowledge from Hydrogen · medium to Hydrogen · high for completeness-critical
+     Knowledge Base extraction (existing saved browser profile overrides remain preserved until Reset to recommended). -->
 <!-- v22.0 (2026-11-19): Production Code-Review Remediation (Phases 1–6: C1–C6, H1–H24, M1–M20, L1–L8)
      + Phase 7 Options A & B (Zero-External-Font Privacy Cleanup, Native Bounded PPTX ZIP Reader Replacing JSZip, & CDN Patch Bumps).
      All 13 frozen prompt constants in prompt-baseline.json unchanged.
@@ -937,7 +941,8 @@ const {useState,useRef,useCallback,useEffect,useMemo,createContext,useContext}=w
 const TOOL_PROFILE_DEFAULTS={
   // v21.9: Syllabus + lecture slide inventory & exam-trap brief for 01 · Course Analyzer (grounded, non-pruning sweep).
   courseAnalyzer:{m:'hydrogen',lv:'medium'}, // syllabus + lecture slides -> conservative KB Focus brief
-  knowledge:{m:'hydrogen',lv:'medium'},      // extraction — completeness-critical; pending A/B
+  // v22.1: upgraded Knowledge · extract default from medium to high — extraction is completeness-critical and benefits from deeper reasoning; saved overrides still win until Reset to recommended.
+  knowledge:{m:'hydrogen',lv:'high'},        // extraction — completeness-critical
   knowledgeAudit:{m:'hydrogen',lv:'medium'}, // omission audit — comparison task
   // v15.12: reading printed text off a photograph is transcription, not reasoning. Low
   // thinking, and Hydrogen — the constraint is legibility, which more deliberation does not
@@ -8428,7 +8433,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '22.0';}
+function suiteVersion(){return '22.1';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
