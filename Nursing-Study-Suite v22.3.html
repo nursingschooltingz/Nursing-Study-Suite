@@ -12,8 +12,15 @@
      v21.11 (Option A / M7): removed external Google Fonts stylesheets; style-src allows inline styles/sanitized style
      attributes only and font-src is 'none' so the suite uses native system fonts with zero external font origins.
      The print preview (about:blank window or srcdoc frame) inherits this policy and uses only its own inline style block and system fonts. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline'; font-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://nclex-pro.rn-study-vault.workers.dev; style-src 'unsafe-inline'; font-src 'none'">
 <title>P-LATE Study Suite</title>
+<!-- v22.3 (2026-11-20): One-Click E2E-Encrypted Sync to Private Cloudflare NCLEX Pro Vault
+     (nclexProConvertWorksheet, nclexProConvertCaseStudy, nclexProConvertCasePacket, nclexProSyncToCloud,
+     NclexProSettingsField, NclexProSyncBanner, NgWorksheetPanel, NCLEXGenerator, CaseStudyGenerator, ConfigSidebar).
+     All 13 frozen prompt constants in prompt-baseline.json unchanged.
+     Adds session-only NCLEX Pro vault passphrase in Study Settings, allowlisted CSP connect-src origin,
+     and 1-click E2E AES-256-GCM sync + offline JSON export for generated NCLEX worksheets and unfolding
+     Case Studies / Packets (all 10 NGN/classic formats). -->
 <!-- v22.2 (2026-11-20): Deterministic Export-Time Master Deck Alignment Tags in 04 · Anki Generator
      (ankiSanitizeSourceTag, ankiDefaultSuiteSourceTag, ankiComposeExportTags, ankiExportText, AnkiGenerator).
      All 13 frozen prompt constants in prompt-baseline.json unchanged.
@@ -8476,7 +8483,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '22.2';}
+function suiteVersion(){return '22.3';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -18348,6 +18355,411 @@ function RunStatus({label,value,max=100,caption,detail,children}){
     children
   );
 }
+// v22.2: NCLEX Pro Cloudflare Vault E2E Sync & Deterministic Converters (pure non-JSX helpers kept out of text/babel)
+const NCLEX_PRO_DEFAULT_URL='https://nclex-pro.rn-study-vault.workers.dev';
+const NCLEX_PRO_ALLOWED_ORIGINS=new Set(['https://nclex-pro.rn-study-vault.workers.dev']);
+
+function nclexProHashId(str){
+  let h=2166136261;
+  const s=String(str||'');
+  for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}
+  return 'ai_'+(h>>>0).toString(16).padStart(8,'0');
+}
+function nclexProInferDomain(text){
+  const t=String(text||'').toLowerCase();
+  if(/\b(delegate|uap|lpn|priorit|triage|first\s+client|assess\s+first|ethics|informed\s+consent|advance\s+directive|hipaa|handoff|sbar)\b/.test(t))return 'management';
+  if(/\b(isolation|precaution|droplet|airborne|contact|fall\s+risk|restraint|fire|race|pass|infection\s+control|sterile|needle|error|incident)\b/.test(t))return 'safety';
+  if(/\b(medication|mg|mcg|units?|dose|infusion|ml\/hr|gtt|adverse\s+effect|side\s+effect|antidote|toxicity|contraindicat|beta[- ]blocker|diuretic|insulin|heparin|warfarin|digoxin|lithium|vancomycin|opioid|antibiotic)\b/.test(t))return 'pharmacology';
+  if(/\b(pregnant|prenatal|postpartum|newborn|neonate|pediatric|milestone|vaccine|immuniz|screen|aging|health\s+promotion|smoking\s+cessation)\b/.test(t))return 'health';
+  if(/\b(depress|suicid|schizophren|bipolar|anxiety|panic|grief|therapeutic\s+communication|delusion|hallucination|substance|withdrawal|abuse|coping)\b/.test(t))return 'psychosocial';
+  if(/\b(lab|abg|potassium|sodium|troponin|creatinine|bun|inr|aptt|ecg|ekg|telemetry|diagnostic|colonoscopy|biopsy|catheteriz|post[- ]?op|complication|hemorrhage)\b/.test(t))return 'reduction';
+  if(/\b(nutrition|mobility|crutch|cane|walker|sleep|hygiene|pain\s+scale|positioning|pressure\s+injury|ostomy|tube\s+feeding|foley)\b/.test(t))return 'basic';
+  return 'physio';
+}
+function nclexProKbTagLookup(kb,text,fallbackConcepts=[],fallbackConditions=[]){
+  const hay=String(text||'').toLowerCase();
+  const cOut=new Set((fallbackConcepts||[]).map(x=>String(x||'').trim()).filter(Boolean));
+  const kOut=new Set((fallbackConditions||[]).map(x=>String(x||'').trim()).filter(Boolean));
+  const conds=(kb&&Array.isArray(kb.conditions))?kb.conditions:[];
+  for(const c of conds){
+    if(!c||!c.name)continue;
+    const names=[c.name,...(c.aliases||[])].filter(Boolean);
+    if(names.some(n=>n.length>=3&&hay.includes(String(n).toLowerCase()))){
+      if(c.entryRole==='concept')cOut.add(String(c.name).trim());
+      else kOut.add(String(c.name).trim());
+      if(c.concept)cOut.add(String(c.concept).trim());
+    }
+  }
+  if(!cOut.size&&kb&&kb.metadata&&Array.isArray(kb.metadata.concepts)){
+    for(const cn of kb.metadata.concepts)if(cn)cOut.add(String(cn).trim());
+  }
+  return{conceptNames:[...cOut],conditionNames:[...kOut]};
+}
+function nclexProConvertWorksheet(ws,batches,kb,opts={}){
+  const metaCourse=String((kb&&kb.metadata&&kb.metadata.course)||'').trim();
+  const metaExam=String((kb&&kb.metadata&&kb.metadata.exam)||'').trim();
+  const defaultName=[metaCourse,metaExam].filter(Boolean).join(' · ')||'NCLEX Study Suite Worksheet';
+  const setName=String(opts.setName||defaultName).trim();
+  const createdAt=new Date().toISOString();
+  const setId='set_ws_'+nclexProHashId(setName+'|'+createdAt.slice(0,16)).slice(3);
+  const qBlocks=ngSplitNumbered((ws&&Array.isArray(ws.questions)?ws.questions:[]).join('\n\n'));
+  const aBlocks=ngSplitNumbered((ws&&Array.isArray(ws.answers)?ws.answers:[]).join('\n\n'));
+  const keyMap=new Map(aBlocks.map(b=>[b.num,ngParseKeyItem(b)]));
+  const fbConcepts=Array.isArray(opts.concepts)?opts.concepts:[];
+  const fbConditions=Array.isArray(opts.conditions)?opts.conditions:[];
+  const items=[];
+
+  for(const qb of qBlocks){
+    const parsed=ngParseItem(qb);
+    const key=keyMap.get(qb.num);
+    if(!parsed||!parsed.stem||!key)continue;
+    const stratM=String(key.raw||'').match(/^[ \t]*Strategy:[ \t]*([^\n]+)/im);
+    const tip=stratM?stratM[1].trim():'';
+    const ratLines=(key.rationales||[]).map(r=>`${r.kind==='correct'?'✓':'✗'} ${r.label}. ${ngRationaleText(r.text)}`);
+    const rat=ratLines.length?ratLines.join('\n'):ngRationaleText(key.answerBody||key.answer||'');
+    const tags=nclexProKbTagLookup(kb,parsed.stem+' '+rat+' '+String(key.raw||''),fbConcepts,fbConditions);
+    const isPri=/\b(first|priority|immediately|most important|delegate|assess first)\b/i.test(parsed.stem);
+    const baseB=key.tier===1?0.55:key.tier===2?0.2:key.tier===3?-0.2:0.25;
+    let t='mcq',optsArr=[],cor=0,unit='';
+
+    if(parsed.type==='MCQ'&&parsed.options.length>=2){
+      t='mcq';
+      optsArr=parsed.options.map(o=>o.text);
+      const labels=ngAnswerLabels(key.answer);
+      const ci=labels.length?parsed.options.findIndex(o=>o.label.toUpperCase()===labels[0]):-1;
+      if(ci<0)continue;
+      cor=ci;
+    }else if(parsed.type==='SATA'&&parsed.options.length>=2){
+      t='sata';
+      optsArr=parsed.options.map(o=>o.text);
+      const labels=ngAnswerLabels(key.answer);
+      const idxs=labels.map(lb=>parsed.options.findIndex(o=>o.label.toUpperCase()===lb)).filter(i=>i>=0);
+      if(!idxs.length)continue;
+      cor=[...new Set(idxs)].sort((a,b)=>a-b);
+    }else if(parsed.type==='Ordering'&&parsed.steps.length>=2){
+      t='ordering';
+      optsArr=parsed.steps.map(s=>s.text);
+      const ansLines=String(key.answerBody||'').split('\n').map(l=>l.replace(/^\s*\d+[.)]\s*/,'').trim()).filter(Boolean);
+      const order=[];
+      for(const al of ansLines){
+        const low=al.toLowerCase();
+        const found=optsArr.findIndex((txt,i)=>!order.includes(i)&&(txt.toLowerCase()===low||txt.toLowerCase().includes(low.slice(0,24))||low.includes(txt.toLowerCase().slice(0,24))));
+        if(found>=0)order.push(found);
+      }
+      cor=order.length===optsArr.length?order:optsArr.map((_,i)=>i);
+    }else if(parsed.type==='Calculation'){
+      t='fill_blank';
+      const ansClean=String(key.answer||'').replace(/\(Source:[^)]*\)/gi,'').trim();
+      const numM=ansClean.match(/(-?\d+(?:\.\d+)?(?:\s*(?:to|-|–)\s*\d+(?:\.\d+)?)?)\s*([a-zA-Z/%][a-zA-Z0-9/% .-]*)?/);
+      cor=numM?numM[1].trim():ansClean;
+      unit=numM&&numM[2]?numM[2].trim():'';
+      if(!cor)continue;
+    }else{
+      continue;
+    }
+
+    const diffB=Math.max(-1.8,Math.min(2.1,Math.round((baseB+(t==='sata'?0.35:t==='ordering'?0.4:0)+(isPri?0.25:0))*100)/100));
+    items.push({
+      aiId:nclexProHashId(setName+'|'+parsed.stem+'|'+optsArr.join('|')),
+      setId,setName,t,
+      d:nclexProInferDomain(parsed.stem+' '+rat),
+      b:diffB,
+      stem:parsed.stem,
+      opts:optsArr.length?optsArr:undefined,
+      cor,
+      unit:unit||undefined,
+      rat,tip,
+      ref:'✨ AI Study Suite · '+setName+' (Q'+qb.num+')',
+      cjs:key.cjmm||'',
+      pri:isPri,
+      conceptNames:tags.conceptNames,
+      conditionNames:tags.conditionNames,
+    });
+  }
+  return{set:{setId,name:setName,kind:'worksheet',createdAt,count:items.length},items};
+}
+
+function nclexProConvertCaseStudy(cs,kb,opts={}){
+  if(!cs||!Array.isArray(cs.stages))return{set:null,items:[]};
+  const title=String(cs.title||cs.condition||'AI Clinical Case Study').trim();
+  const condName=String(cs.condition||'').trim();
+  const metaCourse=String((kb&&kb.metadata&&kb.metadata.course)||'').trim();
+  const metaExam=String((kb&&kb.metadata&&kb.metadata.exam)||'').trim();
+  const setName=String(opts.setName||([metaCourse,metaExam,title].filter(Boolean).join(' · '))).trim();
+  const createdAt=new Date().toISOString();
+  const csId='AI-CS-'+nclexProHashId(title+'|'+condName).slice(3,9).toUpperCase();
+  const setId='set_cs_'+nclexProHashId(setName+'|'+createdAt.slice(0,16)).slice(3);
+  const p=cs.patient||{};
+  const clientLine=[p.age!=null&&String(p.age).trim()!==''?String(p.age)+' y/o':'',p.sex||'',p.background||''].filter(Boolean).join(', ');
+  const diffBase=String(cs.difficulty||'').toLowerCase().includes('hard')?0.95:String(cs.difficulty||'').toLowerCase().includes('easy')?-0.2:0.5;
+  const items=[];
+  const histAccum=clientLine?['Client: '+clientLine]:[];
+  const labsAccum=[],vitalsAccum=[];
+
+  for(const stage of cs.stages){
+    const sHdr=`Stage ${stage.stageNumber}: ${stage.title||''}`.trim();
+    if(stage.narrative)histAccum.push(sHdr+'\n'+stage.narrative);
+    for(const d of (stage.data||[])){
+      const line=(d.label?d.label+': ':'')+(d.value||'');
+      if(/\b(bp|blood pressure|hr|heart rate|rr|resp|temp|spo2|o2 sat|pulse|pain)\b/i.test(String(d.label||'')))vitalsAccum.push(`[S${stage.stageNumber}] ${line}`);
+      else if(/\b(lab|wbc|hgb|hct|plt|na|k\+|potassium|sodium|bun|creatinine|glucose|troponin|bnp|inr|ptt|abg|ph|paco2|hco3|lactate|ast|alt|bilirubin|ammonia|tsh|a1c)\b/i.test(String(d.label||'')))labsAccum.push(`[S${stage.stageNumber}] ${line}`);
+      else histAccum.push(`• ${line}`);
+    }
+    const baseCd={history:histAccum.join('\n\n')};
+    if(vitalsAccum.length)baseCd.vitals=vitalsAccum.join('\n');
+    if(labsAccum.length)baseCd.labs=labsAccum.join('\n');
+
+    (stage.questions||[]).forEach((q,qi)=>{
+      const qType=String(q.type||'MCQ').trim();
+      const ansRaw=(q.correctAnswers||[]).map(x=>String(x==null?'':x).trim()).filter(Boolean);
+      const qOpts=Array.isArray(q.options)?q.options:[];
+      const ratLines=(q.rationales||[]).map(r=>`${ansRaw.includes(String(r.option||'').trim())?'✓':'•'} ${r.option?r.option+': ':''}${r.text||''}`);
+      const rat=ratLines.join('\n');
+      const tags=nclexProKbTagLookup(kb,title+' '+condName+' '+(q.stem||'')+' '+rat,[],condName?[condName]:[]);
+      const cd={...baseCd};
+      if(qType==='Trend'&&q.trendTable&&Array.isArray(q.trendTable.timepoints)){
+        const tps=q.trendTable.timepoints;
+        const rows=(q.trendTable.rows||[]).map(tr=>'| '+(tr.label||'')+' | '+tps.map((_,ti)=>(tr.values||[])[ti]||'—').join(' | ')+' |');
+        cd.trend=['| Parameter | '+tps.join(' | ')+' |','| --- | '+tps.map(()=>'---').join(' | ')+' |',...rows].join('\n');
+      }
+
+      let item={
+        aiId:nclexProHashId(csId+'|S'+stage.stageNumber+'|Q'+(qi+1)+'|'+(q.stem||'')),
+        setId,setName,csId,csTitle:title,
+        d:nclexProInferDomain((q.stem||'')+' '+rat),
+        b:Math.max(-1.8,Math.min(2.2,Math.round((diffBase+(qType==='Bowtie'||qType==='Matrix'||qType==='Trend'?0.35:qType==='SATA'||qType==='Prioritization'?0.25:0))*100)/100)),
+        stem:q.stem||'',
+        cd,rat,tip:cs.debrief&&cs.debrief.priorityProblem?'Priority Focus: '+cs.debrief.priorityProblem:'',
+        ref:`✨ AI Case Study · ${title} (S${stage.stageNumber}.${qi+1})`,
+        cjs:q.cjmmSkill||'',
+        pri:qType==='Prioritization'||/\b(first|priority|immediately)\b/i.test(q.stem||''),
+        conceptNames:tags.conceptNames,
+        conditionNames:tags.conditionNames,
+      };
+
+      if(qType==='Bowtie'){
+        const act=qOpts.filter(o=>String(o.group||'').trim()==='actions');
+        const cnd=qOpts.filter(o=>String(o.group||'').trim()==='condition');
+        const prm=qOpts.filter(o=>String(o.group||'').trim()==='parameters');
+        const corA=ansRaw.map(a=>act.findIndex(o=>String(o.label||'').trim()===a)).filter(i=>i>=0);
+        const corC=ansRaw.map(a=>cnd.findIndex(o=>String(o.label||'').trim()===a)).find(i=>i>=0);
+        const corP=ansRaw.map(a=>prm.findIndex(o=>String(o.label||'').trim()===a)).filter(i=>i>=0);
+        if(!act.length||!cnd.length||!prm.length||corC===undefined)return;
+        item.t='ngn_bowtie';
+        item.bowtie={actions:act.map(o=>o.text||''),conditions:cnd.map(o=>o.text||''),parameters:prm.map(o=>o.text||'')};
+        item.cor={actions:corA,condition:corC,parameters:corP};
+      }else if(qType==='Matrix'&&q.matrix){
+        const cols=(q.matrix.columns||[]).map(c=>c.label||c.id||'');
+        const colIds=(q.matrix.columns||[]).map(c=>String(c.id||'').trim());
+        const rows=(q.matrix.rows||[]).map(r=>r.text||'');
+        const rowIds=(q.matrix.rows||[]).map(r=>String(r.id||'').trim());
+        const multi=q.matrix.mode==='multiple';
+        const cor=multi?rows.map(()=>[]):rows.map(()=>0);
+        for(const ca of ansRaw){
+          const m=ca.match(/^([^:]+):([^:]+)$/);
+          if(!m)continue;
+          const ri=rowIds.indexOf(m[1].trim()),ci=colIds.indexOf(m[2].trim());
+          if(ri<0||ci<0)continue;
+          if(multi){if(!cor[ri].includes(ci))cor[ri].push(ci);}
+          else cor[ri]=ci;
+        }
+        if(!cols.length||!rows.length)return;
+        item.t='ngn_matrix';
+        item.matrix={cols,rows,multi};
+        item.cor=cor;
+      }else if(qType==='Cloze'){
+        const blanks=[...new Set([...String(q.stem||'').matchAll(/\{\{(D\d+)\}\}/g)].map(m=>m[1]))];
+        const groups=blanks.length?blanks:[...new Set(qOpts.map(o=>String(o.group||'').trim()).filter(Boolean))];
+        const blankOpts=[],cor=[];
+        for(const g of groups){
+          const gOpts=qOpts.filter(o=>String(o.group||'').trim()===g);
+          const ci=ansRaw.map(a=>gOpts.findIndex(o=>String(o.label||'').trim()===a)).find(i=>i>=0);
+          blankOpts.push(gOpts.map(o=>o.text||''));
+          cor.push(ci!==undefined?ci:0);
+        }
+        if(!blankOpts.length)return;
+        item.t='ngn_cloze';
+        item.stem=String(q.stem||'').replace(/\{\{(D\d+)\}\}/g,'[Blank $1]');
+        item.cloze={blanks:blankOpts};
+        item.cor=cor;
+      }else if(qType==='Ordering'){
+        if(qOpts.length<2)return;
+        item.t='ordering';
+        item.opts=qOpts.map(o=>o.text||'');
+        const ord=ansRaw.map(a=>qOpts.findIndex(o=>String(o.label||'').trim()===a)).filter(i=>i>=0);
+        item.cor=ord.length===qOpts.length?ord:qOpts.map((_,i)=>i);
+      }else if(qType==='Calculation'&&!qOpts.length){
+        item.t='fill_blank';
+        const rawA=ansRaw[0]||'';
+        const nm=rawA.match(/(-?\d+(?:\.\d+)?)\s*([a-zA-Z/%][a-zA-Z0-9/% .-]*)?/);
+        item.cor=nm?nm[1]:rawA;
+        if(nm&&nm[2])item.unit=nm[2].trim();
+      }else if(qType==='SATA'||(ansRaw.length>1&&qOpts.length>=2)){
+        item.t='sata';
+        item.opts=qOpts.map(o=>o.text||'');
+        item.cor=ansRaw.map(a=>qOpts.findIndex(o=>String(o.label||'').trim()===a)).filter(i=>i>=0).sort((a,b)=>a-b);
+        if(!item.cor.length)return;
+      }else{
+        if(qOpts.length<2)return;
+        item.t='mcq';
+        item.opts=qOpts.map(o=>o.text||'');
+        const ci=ansRaw.length?qOpts.findIndex(o=>String(o.label||'').trim()===ansRaw[0]):-1;
+        if(ci<0)return;
+        item.cor=ci;
+      }
+      items.push(item);
+    });
+  }
+  return{set:{setId,name:setName,kind:'case_study',createdAt,count:items.length},items};
+}
+
+function nclexProConvertCasePacket(packet,kb,opts={}){
+  const sets=[],items=[];
+  for(const entry of (packet||[])){
+    if(!entry||!entry.caseStudy)continue;
+    const conv=nclexProConvertCaseStudy(entry.caseStudy,kb,opts);
+    if(conv.set&&conv.items.length){sets.push(conv.set);items.push(...conv.items);}
+  }
+  return{sets,items};
+}
+
+function nclexProBuildExportJson(payload){
+  const sets=Array.isArray(payload.sets)?payload.sets:(payload.set?[payload.set]:[]);
+  const items=Array.isArray(payload.items)?payload.items:[];
+  return JSON.stringify({version:'1.0',updatedAt:new Date().toISOString(),sets,items},null,2);
+}
+
+function nclexProFetch(url,opts){
+  const parsed=new URL(url);
+  if(!NCLEX_PRO_ALLOWED_ORIGINS.has(parsed.origin))throw new Error('Blocked untrusted NCLEX Pro sync origin: '+parsed.origin);
+  return fetch(url,opts);
+}
+
+async function nclexProSyncToCloud(payload,{url=NCLEX_PRO_DEFAULT_URL,passphrase='',onStatus}={}){
+  const pass=String(passphrase||'');
+  if(!pass)throw new Error('Enter your NCLEX Pro vault passphrase in Study Settings first.');
+  const base=String(url||NCLEX_PRO_DEFAULT_URL).replace(/\/+$/,'');
+  const sets=Array.isArray(payload.sets)?payload.sets:(payload.set?[payload.set]:[]);
+  const items=Array.isArray(payload.items)?payload.items:[];
+  if(!items.length)throw new Error('No convertible questions found to sync.');
+
+  const b64ToBytes=b64=>{const bin=atob(b64),arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return arr;};
+  const bytesToB64=u8=>{let bin='';for(let i=0;i<u8.length;i+=0x8000)bin+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(bin);};
+  const scrub=m=>{const s=String(m||'');return pass.length>=4?s.split(pass).join('[redacted]'):s;};
+
+  try{
+    onStatus?.('Connecting to NCLEX Pro vault…');
+    const metaRes=await nclexProFetch(base+'/api/meta',{cache:'no-store'});
+    if(!metaRes.ok)throw new Error('Could not reach NCLEX Pro vault ('+metaRes.status+').');
+    const meta=await metaRes.json();
+    if(!meta.configured)throw new Error('NCLEX Pro vault is not configured.');
+
+    onStatus?.('Deriving AES-256-GCM key…');
+    const baseKey=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveBits','deriveKey']);
+    const authBits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:b64ToBytes(meta.authSalt),iterations:meta.iterations||310000,hash:'SHA-256'},baseKey,256);
+    const token=bytesToB64(new Uint8Array(authBits));
+    const aesKey=await crypto.subtle.deriveKey({name:'PBKDF2',salt:b64ToBytes(meta.encSalt),iterations:meta.iterations||310000,hash:'SHA-256'},baseKey,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+
+    onStatus?.('Loading existing synced AI sets…');
+    const getRes=await nclexProFetch(base+'/api/ai-bank',{headers:{'X-Vault-Token':token},cache:'no-store'});
+    if(getRes.status===401)throw new Error('Incorrect NCLEX Pro vault passphrase.');
+    if(!getRes.ok)throw new Error('Failed to read AI bank ('+getRes.status+').');
+    const remoteRec=await getRes.json();
+    let existing={version:'1.0',sets:[],items:[],deletedSetIds:[]};
+    if(remoteRec&&remoteRec.payload){
+      const raw=b64ToBytes(remoteRec.payload);
+      const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:raw.slice(0,12)},aesKey,raw.slice(12));
+      existing=JSON.parse(new TextDecoder().decode(plain));
+    }
+
+    const itemMap=new Map((existing.items||[]).map(x=>[x.aiId,x]));
+    let added=0;
+    for(const it of items){if(!itemMap.has(it.aiId))added++;itemMap.set(it.aiId,it);}
+    const setMap=new Map((existing.sets||[]).map(s=>[s.setId,s]));
+    for(const s of sets)setMap.set(s.setId,s);
+    const merged={version:'1.0',updatedAt:new Date().toISOString(),deletedSetIds:existing.deletedSetIds||[],sets:[...setMap.values()],items:[...itemMap.values()]};
+
+    onStatus?.('Encrypting & uploading '+items.length+' question(s)…');
+    const iv=crypto.getRandomValues(new Uint8Array(12));
+    const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},aesKey,new TextEncoder().encode(JSON.stringify(merged)));
+    const combined=new Uint8Array(12+ct.byteLength);
+    combined.set(iv,0);combined.set(new Uint8Array(ct),12);
+    const putRes=await nclexProFetch(base+'/api/ai-bank',{
+      method:'PUT',
+      headers:{'Content-Type':'application/json','X-Vault-Token':token},
+      body:JSON.stringify({payload:bytesToB64(combined),itemCount:merged.items.length}),
+    });
+    if(!putRes.ok)throw new Error('Upload failed ('+putRes.status+').');
+    const saved=await putRes.json();
+    return{ok:true,syncedCount:items.length,addedCount:added,totalAiCount:merged.items.length,rev:saved.rev};
+  }catch(e){
+    throw new Error(scrub(e&&e.message?e.message:String(e)));
+  }
+}
+async function nclexProRunUiSync(buildPayload,passphrase,setSyncState,kindLabel){
+  const payload=buildPayload();
+  if(!(payload&&Array.isArray(payload.items)&&payload.items.length)){setSyncState({busy:false,msg:'',err:'No convertible questions found to sync.'});return;}
+  setSyncState({busy:true,msg:'Encrypting & syncing…',err:''});
+  try{
+    const res=await nclexProSyncToCloud(payload,{passphrase,onStatus:m=>setSyncState({busy:true,msg:m,err:''})});
+    setSyncState({busy:false,msg:`Synced ${res.syncedCount} ${kindLabel} to NCLEX Pro (${res.totalAiCount} total AI Qs in vault — toggle "Include AI" in NCLEX Pro).`,err:''});
+  }catch(e){setSyncState({busy:false,msg:'',err:e?.message||String(e)});}
+}
+function nclexProDownloadJson(payload,filename){
+  if(!(payload&&Array.isArray(payload.items)&&payload.items.length))return;
+  downloadBlob(new Blob([nclexProBuildExportJson(payload)],{type:'application/json'}),filename);
+}
+function NclexProSyncBanner({state}){
+  if(!state||(!state.msg&&!state.err))return null;
+  const h=React.createElement;
+  return h('div',{style:{marginTop:8,marginBottom:8,padding:'8px 12px',borderRadius:8,fontSize:12,border:'1px solid '+(state.err?'var(--error-border)':'var(--success-border)'),background:state.err?'var(--error-bg)':'var(--success-bg)',color:state.err?'var(--accent-red)':'var(--accent-green)'}},state.err?('⚠ '+state.err):('✓ '+state.msg));
+}
+function NclexProSettingsField({cfg}){
+  const h=React.createElement;
+  return h('div',{className:'sb-section'},
+    h('label',{className:'sb-label',htmlFor:'suite-nclex-pass'},'NCLEX Pro Vault Sync'),
+    h('div',{className:'sb-field'},
+      h('div',{style:{display:'flex',gap:6,alignItems:'center'}},
+        h('input',{id:'suite-nclex-pass','aria-describedby':'suite-nclex-pass-help',autoComplete:'off',type:'password','data-1p-ignore':'true','data-lpignore':'true','data-form-type':'other',value:cfg.nclexProPass||'',onChange:e=>cfg.setNclexProPass?.(e.target.value),placeholder:'NCLEX Pro passphrase…',spellCheck:false,style:{flex:1}}),
+        cfg.nclexProPass&&h('button',{type:'button',className:'btn-secondary','aria-label':'Clear NCLEX Pro passphrase',style:{padding:'4px 10px',fontSize:12,flexShrink:0},onClick:()=>cfg.setNclexProPass?.('')},'Clear')
+      ),
+      h('div',{className:'sb-hint',id:'suite-nclex-pass-help'},'Session-only passphrase for E2E-encrypted sync of generated NCLEX worksheets & unfolding Case Studies to your private Cloudflare NCLEX Pro app (AI items stay OFF by default in NCLEX Pro until you opt in).')
+    )
+  );
+}
+function NgWorksheetPanel({ws,totalConcepts,view,setView,wsMd,workMd,syncState,onSync,onExportJson}){
+  const h=React.createElement;
+  const preStyle={whiteSpace:'pre-wrap',fontFamily:'var(--font-mono)',fontSize:12,lineHeight:1.7,color:'var(--text)',background:'transparent',border:'none',padding:0,margin:0};
+  return h(React.Fragment,null,
+    h(ResultsHead,{title:'NCLEX worksheet',count:ws.count+' questions · '+totalConcepts+' concepts'},
+      h('button',{className:'btn-secondary'+(view==='worksheet'?' active':''),'aria-pressed':view==='worksheet',onClick:()=>setView('worksheet'),style:view==='worksheet'?{borderColor:'var(--accent)',color:'var(--accent)'}:{}},'📝 Worksheet'),
+      h('button',{className:'btn-secondary'+(view==='working'?' active':''),'aria-pressed':view==='working',onClick:()=>setView('working'),style:view==='working'?{borderColor:'var(--accent)',color:'var(--accent)'}:{}},'🔍 Audit Trail'),
+      h('button',{className:'btn-secondary',onClick:()=>copyText(view==='worksheet'?wsMd:workMd)},'📋 Copy'),
+      h('button',{className:'btn-secondary',onClick:()=>exportAsMd(view==='worksheet'?wsMd:workMd,view==='worksheet'?'NCLEX-Practice-Questions.md':'NCLEX-Audit-Trail.md')},'⬇ .md'),
+      h('button',{className:'btn-secondary',onClick:()=>exportAsTxt(view==='worksheet'?wsMd:workMd,view==='worksheet'?'NCLEX-Practice-Questions.txt':'NCLEX-Audit-Trail.txt')},'⬇ .txt'),
+      h('button',{className:'btn-secondary',onClick:()=>exportAsPdf(view==='worksheet'?wsMd:workMd,view==='worksheet'?'NCLEX Practice Questions':'NCLEX Audit Trail',ws.count+' questions')},'🖨 PDF'),
+      h('button',{className:'btn-secondary',disabled:syncState.busy,onClick:onSync},syncState.busy?'⟳ Syncing…':'☁ Sync to NCLEX Pro'),
+      h('button',{className:'btn-secondary',onClick:onExportJson},'⬇ NCLEX Pro .json')
+    ),
+    h(NclexProSyncBanner,{state:syncState}),
+    h('div',{className:'output-container'},
+      h('div',{className:'output-body'},
+        view==='worksheet'
+          ?h(React.Fragment,null,
+            h('h2',{style:{fontFamily:'var(--font-ui)',fontSize:18,color:'var(--text-bright)',marginBottom:12}},'Questions'),
+            h('pre',{style:preStyle},ws.questions.join('\n\n')),
+            h('hr',{style:{margin:'28px 0',border:'none',borderTop:'1px solid var(--border)'}}),
+            h('h2',{style:{fontFamily:'var(--font-ui)',fontSize:18,color:'var(--text-bright)',marginBottom:12}},'Answer Key'),
+            h('pre',{style:preStyle},ws.answers.join('\n\n'))
+          )
+          :h(React.Fragment,null,
+            h('div',{style:{fontSize:12,color:'var(--text-dim)',marginBottom:12,padding:10,background:'var(--bg-input)',borderRadius:6,border:'1px solid var(--border)'}},"The model's working: every concept it logged with its verbatim source anchor, and its grounding audit. Spot-check a few anchors against your PDF — if they're real quotes, the questions are grounded."),
+            h('pre',{style:{...preStyle,lineHeight:1.6}},workMd)
+          )
+      )
+    )
+  );
+}
 </script>
 <script type="text/babel" data-presets="react">
 
@@ -20301,6 +20713,8 @@ function NCLEXGenerator(){
   // AnkiGenerator — every completed allocation run threw ReferenceError and the ROOT
   // boundary replaced the whole app, discarding all six tools' unsaved state.
   const [showUncov,setShowUncov]=useState(false);
+  const [syncState,setSyncState]=useState({busy:false,msg:'',err:''});
+  const buildNclexProWs=()=>nclexProConvertWorksheet(ws,batches,K.knowledgeBase,{concepts:validKbConcepts,conditions:validKbCondIds.map(id=>(scopeFactView.conditions.find(c=>String(c.id)===String(id))||{}).name).filter(Boolean)});
 
   const log=useCallback((msg,t='')=>pushLog({msg,t}),[pushLog]); // v15.14: capped, like the KB builder
   const numBatches=Math.max(1,Math.ceil(targetCount/batchSize));
@@ -20525,32 +20939,7 @@ function NCLEXGenerator(){
           {coverage.uncovered.map(f=><div key={f.id} style={{fontSize:12,fontFamily:'var(--font-mono)',lineHeight:1.5,marginBottom:4,color:'var(--text-dim)',display:'flex',gap:6,alignItems:'baseline',flexWrap:'wrap'}}><FactTag factId={f.id}/><span>{f.condition} \u00b7 T{f.tier} \u00b7 {f.latteBucket} \u2014 {f.text}</span></div>)}
         </div>}
       </div>}
-    {ws.count>0&&<>
-      <ResultsHead title="NCLEX worksheet" count={<>{ws.count} questions · {totalConcepts} concepts</>}>
-            <button className={'btn-secondary'+(view==='worksheet'?' active':'')} aria-pressed={view==='worksheet'} onClick={()=>setView('worksheet')} style={view==='worksheet'?{borderColor:'var(--accent)',color:'var(--accent)'}:{}}>📝 Worksheet</button>
-            <button className={'btn-secondary'+(view==='working'?' active':'')} aria-pressed={view==='working'} onClick={()=>setView('working')} style={view==='working'?{borderColor:'var(--accent)',color:'var(--accent)'}:{}}>🔍 Audit Trail</button>
-            <button className="btn-secondary" onClick={()=>copyText(view==='worksheet'?wsMd:workMd)}>📋 Copy</button>
-            <button className="btn-secondary" onClick={()=>exportAsMd(view==='worksheet'?wsMd:workMd,view==='worksheet'?'NCLEX-Practice-Questions.md':'NCLEX-Audit-Trail.md')}>⬇ .md</button>
-            <button className="btn-secondary" onClick={()=>exportAsTxt(view==='worksheet'?wsMd:workMd,view==='worksheet'?'NCLEX-Practice-Questions.txt':'NCLEX-Audit-Trail.txt')}>⬇ .txt</button>
-            <button className="btn-secondary" onClick={()=>exportAsPdf(view==='worksheet'?wsMd:workMd,view==='worksheet'?'NCLEX Practice Questions':'NCLEX Audit Trail',ws.count+' questions')}>🖨 PDF</button>
-      </ResultsHead>
-      <div className="output-container">
-        <div className="output-body">
-          {view==='worksheet'?<>
-            <h2 style={{fontFamily:'var(--font-ui)',fontSize:18,color:'var(--text-bright)',marginBottom:12}}>Questions</h2>
-            <pre style={{whiteSpace:'pre-wrap',fontFamily:'var(--font-mono)',fontSize:12,lineHeight:1.7,color:'var(--text)',background:'transparent',border:'none',padding:0,margin:0}}>{ws.questions.join('\n\n')}</pre>
-            <hr style={{margin:'28px 0',border:'none',borderTop:'1px solid var(--border)'}}/>
-            <h2 style={{fontFamily:'var(--font-ui)',fontSize:18,color:'var(--text-bright)',marginBottom:12}}>Answer Key</h2>
-            <pre style={{whiteSpace:'pre-wrap',fontFamily:'var(--font-mono)',fontSize:12,lineHeight:1.7,color:'var(--text)',background:'transparent',border:'none',padding:0,margin:0}}>{ws.answers.join('\n\n')}</pre>
-          </>:<>
-            <div style={{fontSize:12,color:'var(--text-dim)',marginBottom:12,padding:10,background:'var(--bg-input)',borderRadius:6,border:'1px solid var(--border)'}}>
-              The model's working: every concept it logged with its verbatim source anchor, and its grounding audit. Spot-check a few anchors against your PDF — if they're real quotes, the questions are grounded.
-            </div>
-            <pre style={{whiteSpace:'pre-wrap',fontFamily:'var(--font-mono)',fontSize:12,lineHeight:1.6,color:'var(--text)',background:'transparent',border:'none',padding:0,margin:0}}>{workMd}</pre>
-          </>}
-        </div>
-      </div>
-    </>}
+    {ws.count>0&&<NgWorksheetPanel ws={ws} totalConcepts={totalConcepts} view={view} setView={setView} wsMd={wsMd} workMd={workMd} syncState={syncState} onSync={()=>nclexProRunUiSync(buildNclexProWs,cfg.nclexProPass,setSyncState,'Q(s)')} onExportJson={()=>nclexProDownloadJson(buildNclexProWs(),'NCLEX-Pro-Sync-Questions.json')}/>}
     {!ws.count&&!busy&&<EmptyState mark="✎" title="No questions generated yet" note="Every question is written from fact IDs in your Knowledge Base and checked back against them, so nothing appears that your sources do not support." steps={['Choose which conditions and tiers the questions may draw on.','Set how many questions you want and how large each batch is.','Generate — questions first, then one answer key, with the grounding evidence beside it.']}/>}
     </Workbench></ArtifactSourceCtx.Provider>
   );
@@ -20718,6 +21107,8 @@ function CaseStudyGenerator(){
     return{p,badge:pErrs||pFail?'⚠':pWarn?'⚑':'✓',badgeColor:pErrs||pFail?'var(--accent-red)':pWarn?'var(--accent-warm)':'var(--accent-green)',label:(p.caseStudy.condition||p.caseStudy.title||'Case')+(pStale?' (earlier KB)':'')};
   }),[casePacket,K.knowledgeBase]);
   const packetSubtitle=useMemo(()=>casePacket.map((p,i)=>(i+1)+'. '+(p.caseStudy?.condition||p.caseStudy?.title||'Case')).join(' · '),[casePacket]);
+  const [syncState,setSyncState]=useState({busy:false,msg:'',err:''});
+  const syncCaseToNclexPro=(u)=>nclexProRunUiSync(()=>u?nclexProConvertCasePacket(casePacket,K.knowledgeBase):nclexProConvertCaseStudy(caseStudy,K.knowledgeBase),cfg.nclexProPass,setSyncState,'case Q(s)');
   const thinBatchCount=useMemo(()=>batchPlan.targets.filter(t=>t.sufficiency.warnings.length>0).length,[batchPlan]);
   const estMcqPerCase=types.mcq?Math.max(1,Math.ceil(stages*questionsPerStage*0.5)):0;
   // Every checkbox can be unchecked, which would send the model an empty type list.
@@ -20918,6 +21309,7 @@ function CaseStudyGenerator(){
             <button type="button" className="btn-secondary" style={{padding:'3px 9px',fontSize:11.5}} onClick={()=>exportAsPdf(buildPacketPrintMd(),'Clinical Case Study Packet ('+casePacket.length+' Cases)',packetSubtitle)}>🖨 Packet PDF ({casePacket.length})</button>
             <button type="button" className="btn-secondary" style={{padding:'3px 9px',fontSize:11.5}} onClick={()=>exportAsMd(buildPacketMd(),'LATTE-Case-Packet-'+casePacket.length+'-Cases.md')}>⬇ Packet .md</button>
             <button type="button" className="btn-secondary" style={{padding:'3px 9px',fontSize:11.5}} onClick={()=>downloadBlob(new Blob([casePacketJsonExport(casePacket,K.knowledgeBase)],{type:'application/json'}),'LATTE-Case-Packet-'+casePacket.length+'-Cases.json')}>⬇ Packet .json</button>
+            <button type="button" className="btn-secondary" disabled={syncState.busy} style={{padding:'3px 9px',fontSize:11.5}} onClick={()=>syncCaseToNclexPro(true)}>{syncState.busy?'⟳ Syncing…':'☁ Sync Packet ('+casePacket.length+')'}</button>
           </>}
           <button type="button" className="btn-secondary" disabled={isBusy} style={{padding:'3px 9px',fontSize:11.5}} onClick={clearPacket}>Clear packet</button>
         </div>
@@ -20983,7 +21375,10 @@ function CaseStudyGenerator(){
             <button className="btn-secondary" onClick={()=>copyText(view==='json'?artifactJsonExport(caseStudy,exportNotice,issues,auditRows):buildCaseMd())}>📋 Copy</button>
             <button className="btn-secondary" onClick={()=>exportAsMd(buildCaseMd(),'LATTE-Case-Study.md')}>⬇ .md</button>
             <button className="btn-secondary" onClick={()=>exportAsPdf(buildCasePrintMd(),caseStudy.title||'Case Study',caseStudy.condition||'')}>🖨 PDF</button>
+            <button className="btn-secondary" disabled={syncState.busy} onClick={()=>syncCaseToNclexPro(false)}>{syncState.busy?'⟳ Syncing…':'☁ Sync to NCLEX Pro'}</button>
+            <button className="btn-secondary" onClick={()=>nclexProDownloadJson(nclexProConvertCaseStudy(caseStudy,K.knowledgeBase),'NCLEX-Pro-Sync-Case.json')}>⬇ NCLEX Pro .json</button>
       </ResultsHead>
+      <NclexProSyncBanner state={syncState}/>
       <div className="output-container">
         <div className="output-body">
           {/* v21.10 (Phase 4): hide CaseRenderer with display:none when viewing JSON instead of unmounting it so interactive Bowtie/Matrix/Cloze/Trend student picks survive Case <-> JSON toggles. */}
@@ -21492,6 +21887,7 @@ function ConfigSidebar({onClose,activeTool}){
           <div className="sb-hint" id="suite-api-help">Kept for this browser session. Sent only to Google’s API when you run a tool (with per-request prompt logging disabled via store: false; free-tier keys remain subject to Google AI Studio terms).</div>
         </div>
       </div>
+      {typeof NclexProSettingsField==='function'&&<NclexProSettingsField cfg={cfg}/>}
       <div className="sb-section">
         <div className="sb-label">Model Settings</div>
         <div className="toggle-row">
@@ -21596,6 +21992,7 @@ const NoopTool=()=>null; // v20.2: unvisited tabs render NoopTool on boot and st
 
 function App(){
   const [apiKey,setApiKey]=useState(()=>{try{return sessionStorage.getItem('suite_key')||'';}catch{return'';}});
+  const [nclexProPass,setNclexProPass]=useState(()=>{try{return sessionStorage.getItem('suite_nclex_pass')||'';}catch{return'';}});
   // v17.3: hydrate once from the validated snapshot; loadModelSettings holds the defaults and the validation.
   const [savedModels]=useState(()=>{try{return loadModelSettings(localStorage);}catch(e){return {...MODEL_SETTINGS_DEFAULTS};}});
   const [hydrogenModel,setHydrogenModel]=useState(savedModels.hydrogenModel); // v20.2: Gemini 4 Hydrogen (gemini-4-hydrogen) supports low/medium/high/xhigh thinking levels and a 65,536-token output ceiling.
@@ -21691,6 +22088,7 @@ function App(){
   const sendCourseBriefToKb=useCallback(brief=>{setKbHandoff({...brief,sentAt:Date.now()});selectTool('knowledge');},[selectTool]);
 
   useEffect(()=>{try{if(apiKey)sessionStorage.setItem('suite_key',apiKey);else sessionStorage.removeItem('suite_key');}catch{}},[apiKey]);
+  useEffect(()=>{try{if(nclexProPass)sessionStorage.setItem('suite_nclex_pass',nclexProPass);else sessionStorage.removeItem('suite_nclex_pass');}catch{}},[nclexProPass]);
   useEffect(()=>{
     mounted.current=true;let alive=true;const started=kbMutation.current;
     (async()=>{
@@ -21762,7 +22160,7 @@ function App(){
 
   // v17.3: activeTool left this context; it invalidated every mounted tool on each tab switch and only the settings drawer read it.
   const activeModel=thinkingMode?neonModel:hydrogenModel;
-  const cfg=useMemo(()=>({apiKey,setApiKey,hydrogenModel,setHydrogenModel,neonModel,setNeonModel,thinkingMode,setThinkingMode,hydrogenLevel,neonLevel,thinkingLevel:(geminiIsArgon(activeModel)&&(thinkingMode?neonLevel:hydrogenLevel)==='xhigh')?'high':(thinkingMode?neonLevel:hydrogenLevel),setThinkingLevel:thinkingMode?setNeonLevel:setHydrogenLevel,activeModel,autoProfile,setAutoProfile,profiles,setProfile,resetProfiles,forTool}),[apiKey,hydrogenModel,neonModel,thinkingMode,hydrogenLevel,neonLevel,activeModel,autoProfile,profiles,setProfile,resetProfiles,forTool]);
+  const cfg=useMemo(()=>({apiKey,setApiKey,nclexProPass,setNclexProPass,hydrogenModel,setHydrogenModel,neonModel,setNeonModel,thinkingMode,setThinkingMode,hydrogenLevel,neonLevel,thinkingLevel:(geminiIsArgon(activeModel)&&(thinkingMode?neonLevel:hydrogenLevel)==='xhigh')?'high':(thinkingMode?neonLevel:hydrogenLevel),setThinkingLevel:thinkingMode?setNeonLevel:setHydrogenLevel,activeModel,autoProfile,setAutoProfile,profiles,setProfile,resetProfiles,forTool}),[apiKey,nclexProPass,hydrogenModel,neonModel,thinkingMode,hydrogenLevel,neonLevel,activeModel,autoProfile,profiles,setProfile,resetProfiles,forTool]);
 
   // O(1) fact lookup, rebuilt only when the KB changes — powers FactTag and the drawer.
   const factIndex=useMemo(()=>buildFactIndex(knowledgeBase),[knowledgeBase]);

@@ -9,6 +9,24 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [22.3] — 2026-11-20
+
+Adds one-click **end-to-end encrypted (AES-256-GCM) sync** and offline `.json` export from **05 · NCLEX Generator** and **06 · Clinical Case Study Generator** to the private Cloudflare **NCLEX Pro** simulator. All 13 byte-frozen prompt constants in `prompt-baseline.json` are unchanged.
+
+### Added
+
+- **NCLEX Pro Vault Sync (`nclexProConvertWorksheet`, `nclexProConvertCaseStudy`, `nclexProConvertCasePacket`, `nclexProSyncToCloud`, `nclexProFetch`, `NclexProSettingsField`, `NclexProSyncBanner`, `NgWorksheetPanel`, `NCLEXGenerator`, `CaseStudyGenerator`, `ConfigSidebar`).**
+  - Adds a session-only **NCLEX Pro Vault Sync** passphrase field (`#suite-nclex-pass`, stored strictly in `sessionStorage` with password-manager ignore attributes and a **Clear** button, never written to `localStorage` or exports) in **Study settings**.
+  - Adds **☁ Sync to NCLEX Pro** and **⬇ NCLEX Pro .json** actions in **05 · NCLEX Generator** (converting MCQ, SATA, Ordering, and Calculation items with per-option rationales, Strategy tips, CJMM skills, and KB Concept/Condition tags) and **06 · Clinical Case Study Generator** (converting single unfolding Case Studies and multi-case **Case Packets** across all 10 formats including Bow-tie, Matrix single/multiple, Cloze, and Trend flowsheets).
+  - Encrypts all synced payloads client-side with PBKDF2-SHA256 + AES-256-GCM before `PUT /api/ai-bank`, restricts outbound sync strictly to the allowlisted origin (`https://nclex-pro.rn-study-vault.workers.dev`) in both CSP `connect-src` and `nclexProFetch`, scrubs the passphrase from any error text, and ignores `NCLEX-Pro-Sync*.json` in `.gitignore`.
+
+### Verification
+
+- **4,195 passed · 0 failed** in `node verify-repo.js` (5 new regression assertions in `tools/nclex-pro-sync-tests.js` covering worksheet conversion, 10-format unfolding case conversion, untrusted-origin refusal, E2E AES-256-GCM sync roundtrip, and passphrase scrubbing / `sessionStorage`-only persistence).
+- **Prompt bytes & Babel budget.** All 13 frozen hashes in `prompt-baseline.json` pass unchanged; `Prompts.md` verified across all 25 prompt constants; `<script type="text/babel">` stays below the 390 KB budget with `0` AST undeclared references.
+
+---
+
 ## [22.2] — 2026-11-20
 
 Adds optional deterministic export-time **Master Deck alignment tags** (`Source::Suite::<Course>_<Exam>` and `Always stamp Layer::RNCore`) to **04 · Anki Generator**. All 13 byte-frozen prompt constants in `prompt-baseline.json` are unchanged.

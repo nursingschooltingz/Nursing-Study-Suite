@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 4190;
+const EXPECTED_ASSERTIONS = 4195;
 
 let file;
 try {
@@ -2658,7 +2658,7 @@ section('v15.14 — tier 3');
     S.includes('worker-src blob:'));
   t('object-src, base-uri and form-action are locked, since none of them is used at all',
     S.includes("object-src 'none'; base-uri 'none'; form-action 'none'"));
-  t('connect-src governs Gemini and the integrity-checked worker fetch', S.split('fetch(').length - 1 === 2 && S.includes('integrity:PDF_WORKER_INTEGRITY'));
+  t('connect-src governs Gemini, the integrity-checked worker fetch, and allowlisted NCLEX Pro sync', S.split('fetch(').length - 1 === 3 && S.includes('integrity:PDF_WORKER_INTEGRITY') && S.includes('https://nclex-pro.rn-study-vault.workers.dev'));
   t('and still no form, object, embed or base tag to need the other three',
     !S.includes('<form') && !S.includes('<object') && !S.includes('<embed') && !S.includes('<base '));
   // T3.8 — the shared DOMPurify hash was an assumption; it is now a measurement.
@@ -3014,6 +3014,9 @@ section('v15.14 — clamps, backoff, storage');
 
   section('v21.10 Phase 6 Behavioral Coverage, Dead-Code Cleanup, Bug Fixes & Doc Sync (H24, M19, M20, L1–L8)');
   await require('./tools/v21-10-phase6-remediation-tests')(S,t);
+
+  section('v22.2 NCLEX Pro Cloudflare Vault E2E Sync & Deterministic Converters');
+  await require('./tools/nclex-pro-sync-tests')(S,t);
 
   console.log('\n════════════════════════════');
   const total = pass + fail;

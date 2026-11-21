@@ -1,5 +1,11 @@
 # Current maintainer state
 
+## v22.3 One-Click E2E-Encrypted Sync to Private Cloudflare NCLEX Pro Vault (2026-11-20)
+
+The canonical application is `Nursing-Study-Suite v22.3.html`. All 13 frozen prompt constants match `prompt-baseline.json` unchanged.
+- **NCLEX Pro Vault Sync (`nclexProConvertWorksheet`, `nclexProConvertCaseStudy`, `nclexProConvertCasePacket`, `nclexProSyncToCloud`, `nclexProFetch`, `NclexProSettingsField`, `NclexProSyncBanner`, `NgWorksheetPanel`).** Adds session-only passphrase storage (`sessionStorage` `suite_nclex_pass`), narrow CSP `connect-src` allowlisting (`https://nclex-pro.rn-study-vault.workers.dev`), deterministic converters for `05 · NCLEX Generator` worksheets and `06 · Clinical Case Study Generator` single cases / multi-case packets (all 10 formats including Bow-tie, Matrix single/multiple, Cloze, and Trend), E2E AES-256-GCM sync to `/api/ai-bank`, and offline `NCLEX-Pro-Sync*.json` exports (gitignored).
+- **Verification.** `node verify-repo.js` passes **4,195 assertions (`0 failed`)** (5 new regression assertions in `tools/nclex-pro-sync-tests.js`), `0` AST undeclared references across all 4 inline script blocks, `<script type="text/babel">` below 390 KB, and all 25 prompt constants in `Prompts.md`.
+
 ## v22.2 Deterministic Export-Time Master Deck Alignment Tags in `04 · Anki Generator` (2026-11-20)
 
 The canonical application is `Nursing-Study-Suite v22.2.html`. All 13 frozen prompt constants match `prompt-baseline.json` unchanged.

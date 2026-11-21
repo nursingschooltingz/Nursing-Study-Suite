@@ -60,6 +60,7 @@ LATTE-Case-Study*.txt
 LATTE-Case-Packet*.md
 LATTE-Case-Packet*.json
 LATTE-Case-Study*.json
+NCLEX-Pro-Sync*.json
 
 # ── Secrets ───────────────────────────────────────────────────────────
 # The suite never writes your API key to disk (it lives in sessionStorage
