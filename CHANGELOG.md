@@ -9,6 +9,35 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [22.4] — 2026-11-20
+
+Adds **persistent per-KB non-overlapping used-fact tracking**, **dynamic multi-wave combined/single Case Studies** (with bounded background-only context anchors when critical clinical buckets empty out), and **NCLEX Generator continuation beyond 200 questions** (primary **New Worksheet** keeping exclusions, secondary **+ Append** button, and raised ceiling up to `500` per run). All 13 byte-frozen prompt constants in `prompt-baseline.json` are unchanged.
+
+### Added
+
+- **Persistent Per-KB Used-Fact Ledger (`GEN_LEDGER_STORAGE_KEY`, `genLedgerKbKey`, `genLedgerLoad`, `genLedgerRecord`, `genLedgerReset`, `genLedgerExcludeSet`, `genLedgerScopeStats`, `genLedgerSubscribe`, `useGenLedger`, `GenLedgerControl`).**
+  - Tracks cited fact IDs per Knowledge Base fingerprint (`kbDigest`, LRU-capped to 10 KBs in `localStorage`) so follow-up runs and page reloads draw remaining unused facts instead of repeating earlier outputs.
+  - Keeps **05 · NCLEX Generator** and **06 · Clinical Case Study Generator** ledgers separate by default, with an opt-in **"Also exclude facts used in [Case Studies / NCLEX Generator]"** checkbox and an explicit **Reset history** button (separate from **Clear packet** in Case Studies so clearing the packet tray preserves exclusion history).
+- **Dynamic Multi-Wave Combined & Single-Condition Case Studies (`selectCaseFacts`, `selectCaseFactsMulti`, `caseRenderFactPacket`, `caseBuildPrompt`, `caseBuildBatchTargets`, `caseEstimateWavePlan`, `caseRunBatchWithEnv`, `caseRunSingleWithEnv`, `CaseWaveControl`, `CaseStudyGenerator`).**
+  - Adds a **Combined cases (waves)** selector (`1` default, `2`–`8`, or `Auto — slice all unused (max 8)`) under **Combine into mixed case(s)** and on large single conditions (`> 47` facts).
+  - Runs multi-wave cases sequentially in `caseRunBatchWithEnv`, dynamically slicing Wave `k+1` *after* Wave `k` commits its cited fact IDs (reclaiming any uncited facts from Wave `k`), passing prior case titles for scenario variety strictly after `caseSplitSystemPrompt`'s cut so Gemini `systemInstruction` prefix caching stays lossless, and stopping early once fresh facts drop below the minimum threshold.
+  - When exclusions empty a critical unfolding clinical bucket (`Look`, `Analyze`, or `Treat`) while fresh facts remain in other buckets, borrows up to **2** previously used facts tagged `[CONTEXT ANCHOR — ALREADY TESTED; BACKGROUND FRAMING ONLY]` so the unfolding EHR stays clinically coherent without re-testing prior questions; returns `[]` when zero fresh facts remain.
+  - In **Batch Queue: separate cases**, skips entries already exhausted by prior cases so clicking Generate again automatically rolls over to omitted entries (`9..16`, etc.).
+- **NCLEX Generator Continuation Beyond 200 (`MAX_NCLEX_TARGET = 500`, `ngBatchStart`, `ngFocusPlan`, `kbForNCLEX`, `ngRunGeneratorWithEnv`, `NgScopePicker`, `NgCoveragePanel`, `NCLEXGenerator`).**
+  - Raises `#nclex-total` from `200` to `500` with a 1-click **Fill (N)** button sized to remaining unused pool capacity (`unused ÷ factsPerQ`).
+  - Once a worksheet exists, the primary action starts a **New Worksheet** while preserving used-fact exclusions, and a new secondary **`+ Append N Qs`** button appends non-overlapping batches onto the active worksheet with contiguous batch numbering, cumulative renumbering, and Fact Inspector / NCLEX Pro sync parity.
+  - Commits each valid batch's cited facts and recent stems incrementally so cancelled or quota-stopped runs protect completed questions from future overlap, spaces continuation batches evenly over remaining unused facts (`pool._excludeIds` in `ngBatchStart` and `ngFocusPlan`), and filters excluded IDs in legacy non-allocation mode (`kbForNCLEX`).
+
+### Verification
+
+- **4,205 passed · 0 failed** in `node verify-repo.js` (10 new live behavioral assertions in `tools/multi-wave-ledger-tests.js` covering per-KB ledger isolation/cross-tab/reset/LRU, single & multi-entry case exclusions + bounded `<= 2` context anchors + exhaustion, prompt prefix-cache invariance, wave estimator & Batch Queue rollover, live dynamic sequential multi-wave execution, NCLEX remaining-fact spacing + New Worksheet vs. `+ Append` continuation + 0-call exhaustion guard, and UI defaults).
+- **Prompt bytes & Babel budget.** All 13 frozen hashes in `prompt-baseline.json` pass unchanged; `Prompts.md` verified across all 25 prompt constants and all 5 dynamic builders (`caseBuildPrompt` synced); `<script type="text/babel">` sits at `388,597` UTF-8 bytes (`< 390 KB` Phase 5 budget and `< 500 KB` ceiling) with `0` AST undeclared references across all 4 inline script blocks.
+- **CDN SRI pins.** All 7 pinned CDN `<script>` endpoints plus both `PDF_WORKER_URLS` copies verified live via SHA-384 digest match (`9/9`, `0` mismatches).
+
+See the [release verification record](docs/reviews/v22.4-release.md).
+
+---
+
 ## [22.3] — 2026-11-20
 
 Adds one-click **end-to-end encrypted (AES-256-GCM) sync** and offline `.json` export from **05 · NCLEX Generator** and **06 · Clinical Case Study Generator** to the private Cloudflare **NCLEX Pro** simulator. All 13 byte-frozen prompt constants in `prompt-baseline.json` are unchanged.

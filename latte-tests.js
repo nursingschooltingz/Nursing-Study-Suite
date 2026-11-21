@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 4195;
+const EXPECTED_ASSERTIONS = 4205;
 
 let file;
 try {
@@ -2718,9 +2718,10 @@ section('v15.14 — clamps, backoff, storage');
   t('the batch-size input is clamped at both ends, not just the floor',
     S.includes('setBatchSize(Math.max(2,Math.min(25,Math.floor(Number(e.target.value))||8)))'));
   // numBatches = ceil(targetCount/batchSize), so a floor-only clamp let one keystroke
-  // schedule ~99,999 generation calls.
+  // schedule ~99,999 generation calls. v22.4 raised the declared ceiling from 200 to MAX_NCLEX_TARGET (500).
   t('targetCount has the ceiling its own markup already declares',
-    S.includes('setTargetCount(Math.max(5,Math.min(200,parseInt(e.target.value)||50)))'));
+    S.includes('setTargetCount(Math.max(5,Math.min(MAX_NCLEX_TARGET,parseInt(e.target.value)||50)))') &&
+    S.includes('max={MAX_NCLEX_TARGET}'));
   // v18.4: an emptied field falls back to the shipped default constant (15,000), no longer a literal 30000.
   t('chunkChars has the ceiling its own markup already declares',
     S.includes('setChunkChars(Math.max(6000,Math.min(120000,Number(e.target.value)||KB_DEFAULT_CHUNK_CHARS)))'));
@@ -3017,6 +3018,9 @@ section('v15.14 — clamps, backoff, storage');
 
   section('v22.2 NCLEX Pro Cloudflare Vault E2E Sync & Deterministic Converters');
   await require('./tools/nclex-pro-sync-tests')(S,t);
+
+  section('v22.4 Multi-Wave Non-Overlapping Case Studies, Per-KB Used-Fact Ledger, & NCLEX Continuation');
+  await require('./tools/multi-wave-ledger-tests')(S,t);
 
   console.log('\n════════════════════════════');
   const total = pass + fail;
