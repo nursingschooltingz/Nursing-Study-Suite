@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 4205;
+const EXPECTED_ASSERTIONS = 4213;
 
 let file;
 try {
@@ -3021,6 +3021,9 @@ section('v15.14 — clamps, backoff, storage');
 
   section('v22.4 Multi-Wave Non-Overlapping Case Studies, Per-KB Used-Fact Ledger, & NCLEX Continuation');
   await require('./tools/multi-wave-ledger-tests')(S,t);
+
+  section('v22.5 Case Study MCQ/NGN Controls, Schema Alignment, Topic Spread, Export Layout & Anki Flashcard Sync');
+  await require('./tools/v22-5-suite-and-sync-tests')(S,t);
 
   console.log('\n════════════════════════════');
   const total = pass + fail;

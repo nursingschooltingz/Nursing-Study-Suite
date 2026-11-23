@@ -9,6 +9,37 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [22.5] — 2026-11-23
+
+Adds **strict MCQ/type enforcement and NGN + SATA presets** in Case Studies, fixes **NGN Matrix/Trend `responseJsonSchema` field mismatches** and replaces cryptic grounding-skip messages with plain-English diagnostics, introduces **full-KB 4-topic cluster rotation** across multi-wave "All topics" runs, surfaces **explicit fact-freshness indicators + strict zero-reuse mode**, adds **cited fact category summaries** in Case Answer Keys, consolidates **warnings, errors, and Review Appendices at the end** by default (with opt-in layout toggles), and ships **1-click E2E-encrypted Anki Cloze Flashcard sync + bidirectional remediation metadata** for NCLEX Pro. All 13 byte-frozen prompt constants in `prompt-baseline.json` are unchanged.
+
+### Added & Fixed
+
+- **Strict Case Study Question-Type Enforcement & Quick Presets (`CASE_TYPE_KEY_MAP`, `caseResolveEnabledTypeNames`, `buildCaseStudyJsonSchema`, `caseAttachRunTypeContract`, `caseDifficultyBlock`, `caseDifficultySignals`, `caseBuildPrompt`, `validateCaseStudy`, `CaseQuestionTypesGrid`).**
+  - Dynamically restricts the `responseJsonSchema` question `type` `enum` to checked types only, injects an explicit `STRICT MCQ PROHIBITION` directive (steering `Trend` items to `SATA`) when *Multiple choice* is unchecked, suppresses MCQ-specific difficulty demands/warnings when `mcq` is off, and rejects disallowed `q.type` values in `validateCaseStudy`.
+  - Clarifies single-best-answer labels (`Prioritization (1 best)`, `Patient education (1 best)`) and adds **All types**, **NGN + SATA only**, and **Classic only** preset buttons.
+- **NGN JSON Schema Field Alignment & Plain-English Grounding Diagnostics (`CASE_STUDY_JSON_SCHEMA`, `caseNormalizeParsedNgnFields`, `ngRunGeneratorWithEnv`, `caseRunSingleWithEnv`).**
+  - Aligns `CASE_STUDY_JSON_SCHEMA` (`matrix.columns` `{id,label}`, `matrix.rows` `{id,text}`, `trendTable.rows` `{label,values,factIds}`) with `validateCaseStudy` and `CaseRenderer` so NGN Matrix and Trend items no longer fail validation from schema drift, backed by defensive field-alias normalization (`caseNormalizeParsedNgnFields`).
+  - Replaces the cryptic *"fix grounding first — a rubric review of an ungrounded item..."* message in both **05 · NCLEX Generator** and **06 · Clinical Case Study Generator** with a clear plain-English explanation naming the first structural/fact-citation errors.
+- **Broad "All Topics" Multi-Wave Topic Spread (`CASE_BROAD_MIX_THRESHOLD = 5`, `CASE_BROAD_CLUSTER_SIZE = 4`, `caseSpreadIndices`, `caseSliceBroadMixedEntries`, `selectCaseFactsMulti`, `caseBuildBatchTargets`, `GEN_LEDGER_MAX_TITLES = 40`).**
+  - Slices broad mixed scopes (`> 5` entries) into coherent 4-condition clinical/concept clusters ordered by unused-fact ratio and binary-subdivision KB spread (`0%, 50%, 25%, 75%, ...`) and narrows each wave's prompt header to that wave's cluster so 16 sequential waves (2 batches of 8) span diverse topics across the entire Knowledge Base instead of repeating opening conditions.
+- **Fact-Reuse Clarity & Strict Zero-Reuse Toggle (`allowContextAnchors`, `GenLedgerControl`, `CaseValidationBanner`, `caseRunSingleWithEnv`, `CaseStudyGenerator`).**
+  - Adds a live pre-run freshness pill (`✓ 100% unused facts` vs `+N background context anchor(s)` vs `↺ N reused`), an **"Allow ≤2 background context anchors if Look/Analyze/Treat empties"** checkbox (uncheck for strict `0` reused facts), and post-run freshness badges on `CaseValidationBanner`, Case Packet pills, and generation logs.
+- **Case Answer Key Used-Fact Categories & Consolidated End-of-Document Diagnostics (`caseResolveUsedFactCategories`, `caseFormatUsedFactCategoriesMd`, `caseComposeSingleExportMd`, `casePacketToMarkdown`, `ngBuildWorksheetMd`, `CaseExportLayoutBar`, `CaseUsedCategoriesCard`, `NgWorksheetPanel`).**
+  - Lists cited `[fact-*]` IDs grouped by KB Topic/Condition and P-LATE bucket (`Patho`, `Look`, `Analyze`, `Treat`, `Educate`) at the **beginning** of the Answer Key when compact (`≤ 6` topics and `≤ 28` facts) or at the **end** when longer (`Auto` default, with `Beginning` / `End` / `Off` selector), and replaces noisy `Condition: ... (+293 more)` headers with actual cited conditions.
+  - Consolidates warnings, validation errors, provenance, and Review Appendices together at the **end** of single Case exports, Case Packets, and NCLEX Worksheets by default, with explicit UI toggles to restore classic inline placement.
+- **NCLEX Pro Anki Cloze Flashcard E2E Sync & Enriched Remediation Metadata (`nclexProKbMeta`, `nclexProConvertWorksheet`, `nclexProConvertCaseStudy`, `nclexProConvertAnkiDeck`, `nclexProBuildFlashcardsExportJson`, `nclexProSyncFlashcardsToCloud`, `AnkiNclexProSyncButtons`, `AnkiGenerator`).**
+  - Enriches synced NCLEX questions and unfolding Case items with `kbKey`, `course`, `exam`, `examKey`, `tier`, `factIds`, `plateBuckets`, and `trapRoles`, and preserves both `deletedSetIds` and `deletedCaseIds` tombstones when pushing new items to `/api/ai-bank`.
+  - Adds **☁ Sync to NCLEX Pro** (`/api/ai-flashcards`, AES-256-GCM E2E-encrypted, expanding `{{c1}}..{{c3}}` clozes into independent review cards with 4-Pillar Trap Audits and source pointers) and **⬇ NCLEX Pro .json** export inside **04 · Anki Generator** for bidirectional Question ↔ Flashcard remediation on NCLEX Pro.
+
+### Verification
+
+- **4,213 passed · 0 failed** in `node verify-repo.js` (8 new live behavioral assertion suites in `tools/v22-5-suite-and-sync-tests.js` covering `#1` MCQ schema/prompt/validator blocking, `#2` Matrix/Trend schema + alias normalization + plain-English audit diagnostics, `#4` strict 0-reuse toggle, `#5` Auto beginning/end fact-category placement + `(+293 more)` cleanup, `#6` consolidated trailing diagnostics across Case/Packet/NCLEX, `#7` 16-wave 48-condition full-KB topic spread, and `#8` enriched remediation metadata + E2E AES-256-GCM `/api/ai-flashcards` sync).
+- **Prompt bytes & Babel budget.** All 13 frozen hashes in `prompt-baseline.json` pass unchanged; `Prompts.md` verified across all 25 prompt constants and all 5 dynamic builders (`caseBuildPrompt` synced); `<script type="text/babel">` stays below the `390 KB` Phase 5 budget and `500 KB` ceiling with `0` AST undeclared references across all 4 inline script blocks.
+- **CDN SRI pins.** All 7 pinned CDN `<script>` endpoints plus both `PDF_WORKER_URLS` copies verified via SHA-384 digest match (`9/9`, `0` mismatches).
+
+---
+
 ## [22.4] — 2026-11-20
 
 Adds **persistent per-KB non-overlapping used-fact tracking**, **dynamic multi-wave combined/single Case Studies** (with bounded background-only context anchors when critical clinical buckets empty out), and **NCLEX Generator continuation beyond 200 questions** (primary **New Worksheet** keeping exclusions, secondary **+ Append** button, and raised ceiling up to `500` per run). All 13 byte-frozen prompt constants in `prompt-baseline.json` are unchanged.

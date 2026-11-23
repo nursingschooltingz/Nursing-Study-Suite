@@ -4,7 +4,7 @@ This is the task map for maintainers and coding agents. `AGENTS.md` remains the 
 
 ## Repository shape
 
-- `Nursing-Study-Suite v22.4.html` is the complete application.
+- `Nursing-Study-Suite v22.5.html` is the complete application.
 - `latte-tests.js` is the deterministic regression harness and extracts live functions by anchor.
 - `verify-repo.js` is the only ordinary repository verification entry point (checks single canonical LF-only HTML, 13 frozen prompt hashes, `Prompts.md` constants/builders/counts, `latte-tests.js`, Babel transform under the `500 KB` UTF-8 ceiling, AST free-identifier check across all inline script blocks, and V8 compile + top-level eval + render-smoke of `App` and all 9 `TOOL_COMPONENTS`).
 - `prompt-baseline.json` stores the 13 frozen prompt hashes.

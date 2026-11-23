@@ -14,6 +14,19 @@
      The print preview (about:blank window or srcdoc frame) inherits this policy and uses only its own inline style block and system fonts. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://nclex-pro.rn-study-vault.workers.dev; style-src 'unsafe-inline'; font-src 'none'">
 <title>P-LATE Study Suite</title>
+<!-- v22.5 (2026-11-23): Case Study MCQ/NGN Enforcement, NGN Schema Alignment, Broad-KB Topic Rotation,
+     Fact-Reuse Transparency, Answer Key Used-Fact Categories, Consolidated Diagnostics, & NCLEX Pro Anki Sync
+     (buildCaseStudyJsonSchema, caseResolveEnabledTypeNames, caseAttachRunTypeContract, caseNormalizeParsedNgnFields,
+     caseSpreadIndices, caseSliceBroadMixedEntries, caseResolveUsedFactCategories, caseFormatUsedFactCategoriesMd,
+     caseComposeSingleExportMd, casePacketToMarkdown, ngBuildWorksheetMd, nclexProKbMeta, nclexProConvertWorksheet,
+     nclexProConvertCaseStudy, nclexProConvertAnkiDeck, nclexProSyncFlashcardsToCloud, CaseQuestionTypesGrid,
+     CaseExportLayoutBar, CaseUsedCategoriesCard, AnkiNclexProSyncButtons, AnkiGenerator, NCLEXGenerator, CaseStudyGenerator).
+     All 13 frozen prompt constants in prompt-baseline.json unchanged.
+     Strictly blocks unchecked MCQ/format types in Case Studies (with All / NGN+SATA / Classic presets), aligns NGN Matrix/Trend
+     JSON Schema fields with validator expectations and plain-English audit diagnostics, rotates broad "All topics" multi-wave
+     runs across full-KB 4-topic clusters, adds explicit fact-freshness badges and strict 0-reuse anchor toggle, lists cited
+     fact categories in Case Answer Keys, consolidates warnings/errors/review appendices at the end by default (with toggle),
+     and adds E2E-encrypted Anki Cloze Flashcard sync + bidirectional fact/topic metadata for NCLEX Pro. -->
 <!-- v22.4 (2026-11-20): Non-Overlapping Multi-Wave Case Studies, Per-KB Used-Fact Ledger, & NCLEX Continuation Beyond 200
      (genLedgerKbKey, genLedgerLoad, genLedgerRecord, genLedgerReset, genLedgerExcludeSet, genLedgerScopeStats,
      GenLedgerControl, selectCaseFacts, selectCaseFactsMulti, caseRenderFactPacket, caseBuildPrompt,
@@ -8497,7 +8510,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '22.4';}
+function suiteVersion(){return '22.5';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -12648,8 +12661,103 @@ function selectCaseFacts(condition,{includeTier2=true,includeTier3=false,include
 // Giddens Concept with Mix ON, twin look-alikes, or Concept + Condition), distributes bucket caps round-robin across
 // entries and stamps `caseCondition` so `caseRenderFactPacket` attributes each fact to its exact condition/concept.
 // v22.4: optional excludeFactIds + allowContextAnchors enable non-overlapping multi-wave mixed cases with bounded background anchors.
-function selectCaseFactsMulti(selectedEntries,{includeTier2=true,includeTier3=false,includeCalculation=true,includeEducation=true,includeBridge=false,allConditions=null,excludeFactIds=null,allowContextAnchors=true}={}){
+// v22.5 (#7): deterministic bit-reversal / binary-subdivision index order (0%, 50%, 25%, 75%, ...) so multi-wave and
+// multi-batch "All topics" runs spread evenly across the full Knowledge Base instead of repeating Chapter 1 entries.
+function caseSpreadIndices(n){
+  const len=Math.max(0,Math.floor(Number(n)||0));
+  if(len<=2)return Array.from({length:len},(_,i)=>i);
+  const bits=Math.max(1,Math.ceil(Math.log2(len))),size=1<<bits,out=[];
+  for(let k=0;k<size;k++){
+    let rev=0,v=k;
+    for(let b=0;b<bits;b++){rev=(rev<<1)|(v&1);v>>=1;}
+    if(rev<len)out.push(rev);
+  }
+  return out;
+}
+// v22.5 (#7): when a mixed scope spans >5 entries (e.g., "Select visible" / All topics across dozens or hundreds of KB conditions),
+// group eligible entries into coherent 4-condition clinical/concept clusters and pick the highest-freshness cluster in KB-spread
+// order so Waves 1..16 (even across separate batches of 8) cover distinct topics across the entire KB rather than re-skimming entries[0..11].
+const CASE_BROAD_MIX_THRESHOLD=5,CASE_BROAD_CLUSTER_SIZE=4;
+function caseSliceBroadMixedEntries(selectedEntries,{includeTier2=true,includeTier3=false,includeBridge=false,excludeFactIds=null,clusterSize=CASE_BROAD_CLUSTER_SIZE}={}){
   const list=(Array.isArray(selectedEntries)?selectedEntries:[selectedEntries]).filter(Boolean);
+  if(list.length<=CASE_BROAD_MIX_THRESHOLD)return{entries:list,isBroadSlice:false,clusterCount:1};
+  const tierOk=f=>(includeBridge||f.clinicalLayer!=='bridge')&&(Number(f.tier)===1||(includeTier2&&Number(f.tier)===2)||(includeTier3&&Number(f.tier)===3));
+  const _exItems=excludeFactIds&&typeof excludeFactIds!=='string'&&typeof excludeFactIds[Symbol.iterator]==='function'?[...excludeFactIds]:[];
+  const exSet=_exItems.length?new Set(_exItems.map(x=>String(x||'').toLowerCase())):null;
+  const isEx=f=>!!(exSet&&f&&exSet.has(String(f.id||'').toLowerCase()));
+  const norm=s=>String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+  const overviewsByConcept=new Map();
+  for(const c of list)if(c&&c.entryRole==='concept'&&norm(c.name))overviewsByConcept.set(norm(c.name),c);
+  const nonOverviews=list.filter(c=>c&&c.entryRole!=='concept');
+  const basePool=nonOverviews.length?nonOverviews:list;
+  const stats=basePool.map((c,origIdx)=>{
+    const all=(c.facts||[]).filter(tierOk);
+    const unused=exSet?all.filter(f=>!isEx(f)):all;
+    const usedCnt=all.length-unused.length;
+    return{c,origIdx,total:all.length,unusedCnt:unused.length,usedCnt,untouched:all.length>0&&usedCnt===0,cKey:norm(c.entryRole==='concept'?c.name:c.concept)};
+  }).filter(s=>s.unusedCnt>0);
+  if(!stats.length)return{entries:[],isBroadSlice:true,clusterCount:0};
+  // Group into clinical clusters: concept-linked entries stay with same-concept peers (chunked by clusterSize); unlinked entries group in KB neighborhood order (substantial >=2-fact entries first, attaching 1-fact stubs).
+  const rawClusters=[],byConcept=new Map(),unlinkedRich=[],unlinkedStubs=[];
+  for(const st of stats){
+    if(st.cKey){(byConcept.get(st.cKey)||(byConcept.set(st.cKey,[]),byConcept.get(st.cKey))).push(st);}
+    else if(st.unusedCnt>=2)unlinkedRich.push(st);
+    else unlinkedStubs.push(st);
+  }
+  const sz=Math.max(2,Math.floor(Number(clusterSize)||CASE_BROAD_CLUSTER_SIZE));
+  const orderedGroups=[];
+  const seenC=new Set();
+  for(const st of stats){
+    if(st.cKey&&!seenC.has(st.cKey)){
+      seenC.add(st.cKey);
+      const grp=byConcept.get(st.cKey)||[];
+      for(let i=0;i<grp.length;i+=sz)orderedGroups.push({items:grp.slice(i,i+sz),cKey:st.cKey,anchorPos:grp[i].origIdx});
+    }
+  }
+  for(let i=0;i<unlinkedRich.length;i+=sz){
+    const slice=unlinkedRich.slice(i,i+sz);
+    orderedGroups.push({items:slice,cKey:'',anchorPos:slice[0].origIdx});
+  }
+  if(unlinkedStubs.length){
+    if(!orderedGroups.length){
+      for(let i=0;i<unlinkedStubs.length;i+=sz*2)orderedGroups.push({items:unlinkedStubs.slice(i,i+sz*2),cKey:'',anchorPos:unlinkedStubs[0].origIdx});
+    }else{
+      unlinkedStubs.forEach((st,idx)=>orderedGroups[idx%orderedGroups.length].items.push(st));
+    }
+  }
+  orderedGroups.sort((a,b)=>a.anchorPos-b.anchorPos);
+  for(const g of orderedGroups){
+    const items=g.items;
+    const unusedSum=items.reduce((s,x)=>s+x.unusedCnt,0),totalSum=items.reduce((s,x)=>s+x.total,0);
+    const untouchedCount=items.filter(x=>x.untouched).length;
+    rawClusters.push({items,cKey:g.cKey,unusedSum,totalSum,untouchedRatio:items.length?untouchedCount/items.length:0,freshRatio:totalSum?unusedSum/totalSum:0,substantial:unusedSum>=6?1:0});
+  }
+  const spreadOrder=caseSpreadIndices(rawClusters.length);
+  const spreadRank=new Map(spreadOrder.map((ci,rank)=>[ci,rank]));
+  const ranked=rawClusters.map((cl,ci)=>({cl,spread:spreadRank.get(ci)??ci})).sort((a,b)=>
+    (b.cl.substantial-a.cl.substantial)||
+    (Math.round(b.cl.untouchedRatio*100)-Math.round(a.cl.untouchedRatio*100))||
+    (Math.round(b.cl.freshRatio*20)-Math.round(a.cl.freshRatio*20))||
+    (a.spread-b.spread)
+  );
+  const chosen=ranked[0].cl;
+  const chosenEntries=chosen.items.map(x=>x.c);
+  if(chosen.cKey&&overviewsByConcept.has(chosen.cKey)){
+    const ov=overviewsByConcept.get(chosen.cKey);
+    if(!chosenEntries.includes(ov))chosenEntries.unshift(ov);
+  }
+  const entryNames=[...new Set(chosenEntries.filter(c=>c.entryRole!=='concept').map(c=>String(c.name||'').trim()).filter(Boolean))];
+  const namesForLabel=entryNames.length?entryNames:[...new Set(chosenEntries.map(c=>String(c.name||'').trim()).filter(Boolean))];
+  const label=namesForLabel.length<=3?namesForLabel.join(' + '):namesForLabel.slice(0,3).join(' + ')+' (+'+(namesForLabel.length-3)+' more)';
+  return{entries:chosenEntries,isBroadSlice:true,clusterCount:rawClusters.length,label,entryNames:namesForLabel};
+}
+function selectCaseFactsMulti(selectedEntries,{includeTier2=true,includeTier3=false,includeCalculation=true,includeEducation=true,includeBridge=false,allConditions=null,excludeFactIds=null,allowContextAnchors=true}={}){
+  const rawList=(Array.isArray(selectedEntries)?selectedEntries:[selectedEntries]).filter(Boolean);
+  if(!rawList.length)return[];
+  if(rawList.length===1)return selectCaseFacts(rawList[0],{includeTier2,includeTier3,includeCalculation,includeEducation,includeBridge,allConditions,excludeFactIds,allowContextAnchors});
+  // v22.5 (#7): slice >5-entry "All topics" pools into coherent KB-spread clusters so consecutive waves/batches never repeat Chapter 1 topics.
+  const sliced=rawList.length>CASE_BROAD_MIX_THRESHOLD?caseSliceBroadMixedEntries(rawList,{includeTier2,includeTier3,includeBridge,excludeFactIds}):{entries:rawList,isBroadSlice:false};
+  const list=sliced.entries;
   if(!list.length)return[];
   if(list.length===1)return selectCaseFacts(list[0],{includeTier2,includeTier3,includeCalculation,includeEducation,includeBridge,allConditions,excludeFactIds,allowContextAnchors});
   const tierOk=f=>(includeBridge||f.clinicalLayer!=='bridge')&&(Number(f.tier)===1||(includeTier2&&Number(f.tier)===2)||(includeTier3&&Number(f.tier)===3));
@@ -12865,8 +12973,10 @@ function caseRenderFactPacket(conditionName,facts){
 // ceiling is the governing constraint at every level and is emitted with every level.
 // The STRUCTURAL SIGNATURE lines mirror what caseDifficultySignals() checks in code. The
 // model is told the contract because a signature it cannot see is one it cannot satisfy.
-function caseDifficultyBlock(difficulty){
+function caseDifficultyBlock(difficulty,opts){
   // v21.10 (Phase 2): null-prototype LEVELS map prevents prototype keys (e.g. 'toString') from bypassing the LEVELS.exam fallback.
+  // v22.5 (#1): when Multiple Choice is unchecked (opts.mcqEnabled === false), do not command "at least one MCQ" in advanced difficulty.
+  const _mcqOk=!(opts&&opts.mcqEnabled===false);
   const LEVELS=Object.assign(Object.create(null),{
     foundational:{
       cog:'direct cue recognition and straightforward application of a single fact',
@@ -12881,7 +12991,7 @@ function caseDifficultyBlock(difficulty){
     advanced:{
       cog:'competing priorities, trend interpretation across stages, and reassessment after an intervention',
       dis:'multiple defensible actions, one clearly best only after integrating every revealed cue',
-      sig:'at least one "Prioritize Hypotheses" AND one "Evaluate Outcomes" question; at least\n  one question in stage 3 or later whose rationales cite revealed data first presented in\n  TWO DIFFERENT earlier stages; and at least one MCQ where most distractors trace to\n  Tier 1-2 or safety-critical facts (actions correct at some other moment)',
+      sig:'at least one "Prioritize Hypotheses" AND one "Evaluate Outcomes" question; at least\n  one question in stage 3 or later whose rationales cite revealed data first presented in\n  TWO DIFFERENT earlier stages; and '+(_mcqOk?'at least one MCQ where most distractors trace to':'at least one question where most unkeyed distractors trace to')+'\n  Tier 1-2 or safety-critical facts (actions correct at some other moment)',
     },
   });
   const L=LEVELS[String(difficulty||'').toLowerCase()]||LEVELS.exam;
@@ -12961,16 +13071,21 @@ When using Bowtie, Matrix, Cloze, or Trend among the allowed question types, obe
 function caseBuildPrompt({conditionName,facts,difficulty,stages,questionsPerStage,includeTypes,mixMode,scopeEntries,priorTitles}){
   const typeList=[],_it=includeTypes||{};
   const _hasNgn=!!(_it.bowtie||_it.matrix||_it.cloze||_it.trend);
-  if(_it.mcq)typeList.push('MCQ (single best answer, 4 options A-D)');
-  if(_it.sata)typeList.push('SATA — "(Select all that apply)" at the start of the stem, 5-6 options, 2-4 correct');
-  if(_it.prioritization)typeList.push('Prioritization (which action/finding comes first)');
-  if(_it.ordering)typeList.push('Ordered response — randomized steps to sequence (never list in correct order)');
-  if(_it.calculation)typeList.push('Calculation — only when the supplied facts contain the needed numbers; show the required unit');
-  if(_it.education)typeList.push('Client education (which teaching point is correct / indicates understanding)');
-  if(_it.bowtie)typeList.push('Bowtie — NGN Bow-Tie (3 option groups: 4-5 "actions" [2 correct], 4 "condition" [1 correct], 4-5 "parameters" [2 correct])');
-  if(_it.matrix)typeList.push('Matrix — NGN Matrix / Grid (2-4 columns × 3-6 rows; single or multiple column selections per row)');
-  if(_it.cloze)typeList.push('Cloze — NGN Drop-Down Cloze (2-4 inline {{D1}}..{{D4}} blanks in the stem, 3-5 options per blank, 1 correct per blank)');
-  if(_it.trend)typeList.push('Trend — NGN Serial Trend (3-5 timepoint grounded trendTable across 2-5 parameters + MCQ or SATA response)');
+  const _mcqOff=_it.mcq===false;
+  const _enabledNames=[];
+  if(_it.mcq){typeList.push('MCQ (single best answer, 4 options A-D)');_enabledNames.push('MCQ');}
+  if(_it.sata){typeList.push('SATA — "(Select all that apply)" at the start of the stem, 5-6 options, 2-4 correct');_enabledNames.push('SATA');}
+  if(_it.prioritization){typeList.push('Prioritization (which action/finding comes first)');_enabledNames.push('Prioritization');}
+  if(_it.ordering){typeList.push('Ordered response — randomized steps to sequence (never list in correct order)');_enabledNames.push('Ordering');}
+  if(_it.calculation){typeList.push('Calculation — only when the supplied facts contain the needed numbers; show the required unit');_enabledNames.push('Calculation');}
+  if(_it.education){typeList.push('Client education (which teaching point is correct / indicates understanding)');_enabledNames.push('Education');}
+  if(_it.bowtie){typeList.push('Bowtie — NGN Bow-Tie (3 option groups: 4-5 "actions" [2 correct], 4 "condition" [1 correct], 4-5 "parameters" [2 correct])');_enabledNames.push('Bowtie');}
+  if(_it.matrix){typeList.push('Matrix — NGN Matrix / Grid (2-4 columns × 3-6 rows; single or multiple column selections per row)');_enabledNames.push('Matrix');}
+  if(_it.cloze){typeList.push('Cloze — NGN Drop-Down Cloze (2-4 inline {{D1}}..{{D4}} blanks in the stem, 3-5 options per blank, 1 correct per blank)');_enabledNames.push('Cloze');}
+  if(_it.trend){typeList.push('Trend — NGN Serial Trend (3-5 timepoint grounded trendTable across 2-5 parameters + '+(_mcqOff&&_it.sata?'multiple-response "(Select all that apply)" 5-6 options':'MCQ or SATA response')+')');_enabledNames.push('Trend');}
+  // v22.5 (#1): keep legacy JSON SHAPE union byte-identical when MCQ is enabled; omit MCQ and add an explicit prohibition when MCQ is unchecked.
+  const _typeUnion=_mcqOff&&_enabledNames.length?_enabledNames.join('|'):(_hasNgn?'MCQ|SATA|Prioritization|Ordering|Calculation|Education|Bowtie|Matrix|Cloze|Trend':'MCQ|SATA|Prioritization|Ordering|Calculation|Education');
+  const _noMcqLine=_mcqOff?'\nSTRICT QUESTION-TYPE RESTRICTION: Multiple-choice ("MCQ") is UNCHECKED — NEVER emit "type": "MCQ". Every question MUST use one of the enabled types ('+(_enabledNames.join(', ')||'SATA')+').'+(_it.trend&&_it.sata&&!_it.prioritization&&!_it.education?' For Trend items, write multiple-response stems starting with "(Select all that apply)" (5-6 options, 2-4 correct) rather than 4-option single-best-answer.':'')+'\n':'';
   // v19.2: optional multi-condition / concept-mix framing when 2+ KB entries are selected; empty on single-entry runs so
   // single-condition prompts stay byte-identical. Uses plain string concatenation so standalone prompt-builder extractors keep working.
   const _entries=Array.isArray(scopeEntries)?scopeEntries.filter(Boolean):[];
@@ -12979,7 +13094,8 @@ function caseBuildPrompt({conditionName,facts,difficulty,stages,questionsPerStag
   const _mode=_rawMode==='differential'?'differential':_rawMode==='cascade'?'cascade':'comorbid';
   const _safeCond=String(conditionName||'').replace(/"/g,"'");
   // v22.4: optional multi-wave variety & background context-anchor instructions (omitted when inactive so legacy single-wave prompts stay byte-identical and systemInstruction prefix caching stays lossless).
-  const _priorList=Array.isArray(priorTitles)?priorTitles.map(s=>String(s||'').replace(/\s+/g,' ').trim()).filter(Boolean).slice(-12):[];
+  // v22.4 + v22.5 (#7): increase stored/prompted prior case title window so multi-batch runs (e.g. 16 cases = 2 batches of 8) avoid earlier scenarios.
+  const _priorList=Array.isArray(priorTitles)?priorTitles.map(s=>String(s||'').replace(/\s+/g,' ').trim()).filter(Boolean).slice(-20):[];
   const _hasAnchors=Array.isArray(facts)&&facts.some(f=>f&&f.contextAnchor);
   const waveBlock=(_priorList.length||_hasAnchors)?(
     '\n\n═══ MULTI-WAVE NON-OVERLAP & CONTEXT ANCHOR RULES ═══\n'+
@@ -13092,10 +13208,10 @@ Stage arc for ${stages} stages:
   Stage 3 — Intervention (Treat: orders, meds, hold rules, bedside actions)
 ${stages>=4?'  Stage 4 — Discharge teaching OR deterioration (Educate, or a grounded complication)\n':''}${stages>=5?'  Stage 5 — Outcome evaluation (Evaluate response using revealed data)\n':''}
 ═══ QUESTIONS ═══
-${caseDifficultyBlock(difficulty)}
+${caseDifficultyBlock(difficulty,_mcqOff?{mcqEnabled:false}:undefined)}
 Produce ${questionsPerStage} question(s) per stage.
 Allowed question types (use a mix drawn from these; do not use a type the facts cannot support):
-  ${typeList.join('\n  ')}
+  ${typeList.join('\n  ')}${_noMcqLine}
 Tag exactly one CJMM skill per question from: Recognize Cues · Analyze Cues ·
 Prioritize Hypotheses · Generate Solutions · Take Action · Evaluate Outcomes.
 
@@ -13117,7 +13233,7 @@ Prioritize Hypotheses · Generate Solutions · Take Action · Evaluate Outcomes.
       "questions": [
         {
           "id": "s1q1",
-          "type": "${_hasNgn?'MCQ|SATA|Prioritization|Ordering|Calculation|Education|Bowtie|Matrix|Cloze|Trend':'MCQ|SATA|Prioritization|Ordering|Calculation|Education'}",
+          "type": "${_typeUnion}",
           "stem": "string",
           "options": [ { "label": "A", "text": "string" } ],
           "correctAnswers": ["B"],
@@ -13604,9 +13720,11 @@ function itemHeuristics(q,issues,where){
 // and what tier the distractors' facts carry.
 // WARN tier. A difficulty shortfall is a quality signal for the author, not a broken
 // artifact — the case is still valid, it just is not as hard as it was asked to be.
-function caseDifficultySignals(caseStudy,factIndex){
+function caseDifficultySignals(caseStudy,factIndex,opts=null){
   const issues=[],level=String(caseStudy.difficulty||'').toLowerCase();
   if(level!=='exam'&&level!=='advanced')return issues; // foundational imposes no minimum
+  // v22.5 (#1): when MCQ was unchecked (opts.mcqEnabled === false or non-enumerable caseStudy._mcqDisabled), evaluate near-miss density across enabled non-MCQ formats rather than demanding an MCQ.
+  const mcqEnabled=opts&&typeof opts.mcqEnabled==='boolean'?opts.mcqEnabled:!(caseStudy&&caseStudy._mcqDisabled===true);
   const stages=caseStudy.stages||[];
   const skills=new Set();
   for(const st of stages)for(const q of st.questions||[])if(q.cjmmSkill)skills.add(String(q.cjmmSkill).trim());
@@ -13667,7 +13785,8 @@ function caseDifficultySignals(caseStudy,factIndex){
   // take at some other moment, rather than obviously-wrong filler.
   let nearMiss=false;
   for(const st of stages)for(const q of st.questions||[]){
-    if((q.type||'')!=='MCQ')continue;
+    const qt=String(q.type||'');
+    if(mcqEnabled?qt!=='MCQ':!['SATA','Prioritization','Education','Bowtie','Cloze','Trend'].includes(qt))continue;
     const keys=new Set((q.correctAnswers||[]).map(String));
     const distractors=(q.options||[]).filter(o=>o&&!keys.has(String(o.label)));
     if(!distractors.length)continue;
@@ -13683,7 +13802,7 @@ function caseDifficultySignals(caseStudy,factIndex){
     }
     if(strong>distractors.length/2){nearMiss=true;break;}
   }
-  if(!nearMiss)miss('no MCQ builds most of its distractors from Tier 1-2 or safety-critical facts (near-miss density)');
+  if(!nearMiss)miss(mcqEnabled?'no MCQ builds most of its distractors from Tier 1-2 or safety-critical facts (near-miss density)':'no question builds most of its distractors from Tier 1-2 or safety-critical facts (near-miss density)');
   return issues;
 }
 // Enums exactly as caseBuildPrompt defines them. Downstream logic string-matches these
@@ -13977,6 +14096,7 @@ function validateCaseStudy(caseStudy,factIndex,allowedFactIds,expectedCondition,
       if(!String(q.stem||'').trim())issues.push({sev:'error',msg:qn+': question stem is empty'});
       const labels=(q.options||[]).map(o=>String(o.label||'').trim()),answers=(q.correctAnswers||[]).map(ca=>String(ca??'').trim());
       if(!CASE_QUESTION_TYPES.includes(q.type))issues.push({sev:'error',msg:qn+': unsupported question type'});
+      else if(caseStudy._allowedTypes instanceof Set&&caseStudy._allowedTypes.size>0&&!caseStudy._allowedTypes.has(q.type))issues.push({sev:'error',msg:qn+': question type "'+q.type+'" was unchecked for this run'});
       if(q.type!=='Trend'&&q.trendTable!==undefined)issues.push({sev:'error',msg:qn+': only Trend questions may carry a trendTable'});
       if(q.type!=='Calculation'&&q.type!=='Matrix'&&!labels.length)issues.push({sev:'error',msg:qn+': question has no usable options'});
       else if(['MCQ','Prioritization','Education','Ordering'].includes(q.type)&&labels.length<2)issues.push({sev:'error',msg:qn+': '+q.type+' requires at least 2 options (got '+labels.length+')'});
@@ -14149,9 +14269,67 @@ function caseAllFactIds(caseStudy){
 // `worksheetFactIds:false` strips [fact-n] tags from the STUDENT-FACING half only. On screen a
 // fact tag is a clickable audit affordance; on paper it is noise a student cannot act on. The
 // answer key always keeps them, since that is the half being spot-checked against the source.
-function caseToMarkdown(cs,{worksheetFactIds=true,hardBreaks=true}={}){
+// v22.5 (#5): resolve cited [fact-*] IDs to their KB condition/topic categories and P-LATE clinical buckets, and
+// replace noisy "(+293 more)" multi-scope condition strings with the actual conditions cited in the case.
+function caseResolveUsedFactCategories(cs,factIndex){
+  if(!cs||!factIndex||typeof factIndex.get!=='function')return{totalFacts:0,categories:[],citedConditionNames:[],displayCondition:String((cs&&cs.condition)||'—')};
+  const ids=caseAllFactIds(cs);
+  const canonBucket=b=>b==='BriefPatho'?'Patho':(b==='Assess'||b==='Tests')?'Analyze':b==='Treatments'?'Treat':(b||'Other');
+  const bucketOrder=['Patho','Look','Analyze','Treat','Educate','Other'];
+  const byCat=new Map(),condNames=[],entityNames=[];
+  let totalFacts=0;
+  for(const rawId of ids){
+    const lo=String(rawId||'').toLowerCase();
+    const rec=factIndex.get(lo);
+    if(!rec||!rec.fact)continue;
+    totalFacts++;
+    const condObj=rec.condition&&typeof rec.condition==='object'?rec.condition:null;
+    const rawName=condObj?String(condObj.name||'').trim():String(rec.condition||'General').trim();
+    const kind=condObj&&condObj.entityKind?String(condObj.entityKind).trim():'';
+    const catName=rawName||'General';
+    const key=catName.toLowerCase();
+    if(!byCat.has(key))byCat.set(key,{name:catName,concept:condObj&&condObj.concept?String(condObj.concept).trim():'',entityKind:kind,total:0,bucketMap:new Map()});
+    const entry=byCat.get(key);
+    entry.total++;
+    const bk=canonBucket(rec.fact.latteBucket);
+    if(!entry.bucketMap.has(bk))entry.bucketMap.set(bk,[]);
+    const dispId=rec.fact.id||lo;
+    if(!entry.bucketMap.get(bk).includes(dispId))entry.bucketMap.get(bk).push(dispId);
+    if(kind){if(catName&&!entityNames.includes(catName))entityNames.push(catName);}
+    else if(catName&&!condNames.includes(catName))condNames.push(catName);
+  }
+  const categories=[...byCat.values()].map(c=>({
+    name:c.name,concept:c.concept,entityKind:c.entityKind,total:c.total,
+    buckets:bucketOrder.filter(b=>c.bucketMap.has(b)).map(b=>({bucket:b,factIds:c.bucketMap.get(b)}))
+  }));
+  const citedConditionNames=condNames.length?condNames:entityNames;
+  const rawCond=String(cs.condition||'—');
+  const displayCondition=/\(\+\d+\s+more\)/.test(rawCond)&&citedConditionNames.length
+    ?(citedConditionNames.length<=5?citedConditionNames.join(' + '):citedConditionNames.slice(0,5).join(' + ')+' (+'+(citedConditionNames.length-5)+' more)')
+    :rawCond;
+  return{totalFacts,categories,citedConditionNames,displayCondition};
+}
+function caseFormatUsedFactCategoriesMd(cs,factIndex,placement='auto'){
+  const mode=String(placement||'off').toLowerCase();
+  const resolved=caseResolveUsedFactCategories(cs,factIndex);
+  if(mode==='off'||!resolved.categories.length)return{startBlock:'',endBlock:'',resolved};
+  const escHtml=s=>String(s==null?'':s).replace(/<(?=[A-Za-z/!?])/g,'&lt;');
+  const itemLines=resolved.categories.map(c=>{
+    const sub=c.entityKind?' *['+escHtml(c.entityKind)+']*':(c.concept&&c.concept.toLowerCase()!==c.name.toLowerCase()?' *('+escHtml(c.concept)+')*':'');
+    const bStr=c.buckets.map(b=>escHtml(b.bucket)+' ['+b.factIds.map(escHtml).join(', ')+']').join(' · ');
+    return '- **'+escHtml(c.name)+'**'+sub+' ('+c.total+'): '+bStr;
+  });
+  const isCompact=resolved.categories.length<=6&&resolved.totalFacts<=28;
+  if(mode==='start'||(mode==='auto'&&isCompact)){
+    return{startBlock:'**Categories of Facts Used ('+resolved.totalFacts+' cited '+(resolved.totalFacts===1?'fact':'facts')+' across '+resolved.categories.length+' '+(resolved.categories.length===1?'category':'categories')+'):**\n'+itemLines.join('\n')+'\n\n',endBlock:'',resolved};
+  }
+  const topPreview=mode==='auto'?'**Topics Tested ('+resolved.categories.length+' categories, '+resolved.totalFacts+' cited facts):** '+resolved.categories.slice(0,5).map(c=>escHtml(c.name)+' ('+c.total+')').join(' · ')+(resolved.categories.length>5?' · +'+(resolved.categories.length-5)+' more':'')+' *(full category breakdown at end of Answer Key)*\n\n':'';
+  return{startBlock:topPreview,endBlock:'\n\n---\n\n### Categories of Facts Used ('+resolved.totalFacts+' cited facts)\n\n'+itemLines.join('\n'),resolved};
+}
+function caseToMarkdown(cs,{worksheetFactIds=true,hardBreaks=true,factIndex=null,factCategoryPlacement='off'}={}){
   // v21.10 (Phase 2 & Phase 6 L6): escape HTML tag openers (< followed by letter, /, !, or ?) across untrusted case fields while preserving clinical "< 90 mmHg" / "<30 mL/hr" comparators, numeric 0 (neonate age), and our own structural pagebreak div.
   const L=[],escHtml=s=>String(s==null?'':s).replace(/<(?=[A-Za-z/!?])/g,'&lt;'),esc=s=>escHtml(s).replace(/\|/g,'\\|').replace(/\r?\n/g,' ').trim();
+  const catInfo=factIndex?caseFormatUsedFactCategoriesMd(cs,factIndex,factCategoryPlacement):{startBlock:'',endBlock:'',resolved:{displayCondition:String((cs&&cs.condition)||'—')}};
   const fmtKey=q=>{
     // v21.10 (Phase 3): trim correctAnswers/groups/labels consistently with caseValidateNgnQuestion so padded tokens never vanish from Markdown keys or worksheets.
     const ans=(q.correctAnswers||[]).map(x=>String(x??'').trim());
@@ -14173,7 +14351,7 @@ function caseToMarkdown(cs,{worksheetFactIds=true,hardBreaks=true}={}){
   };
   L.push('# '+escHtml(cs.title||'Clinical Case Study'));
   const p=cs.patient||{};
-  L.push('**Condition:** '+escHtml(cs.condition||'—')+'  |  **Difficulty:** '+escHtml(cs.difficulty||'—'));
+  L.push('**Condition:** '+escHtml(factIndex?catInfo.resolved.displayCondition:(cs.condition||'—'))+'  |  **Difficulty:** '+escHtml(cs.difficulty||'—'));
   // v21.10 (Phase 6 L6): preserve neonate age 0 (p.age === 0) and use NCSBN "Client:" label.
   const hasAge=p.age!=null&&String(p.age).trim()!=='';
   if(hasAge||p.sex||p.background)L.push('**Client:** '+[hasAge&&escHtml(p.age)+' y/o',p.sex&&escHtml(p.sex),p.background&&escHtml(p.background)].filter(Boolean).join(', '));
@@ -14239,6 +14417,7 @@ function caseToMarkdown(cs,{worksheetFactIds=true,hardBreaks=true}={}){
   }
   // Hard page break so a printed worksheet never shows its answer key on the same sheet.
   L.push('\n<div class="pagebreak"></div>\n\n## Answer Key\n');
+  if(catInfo.startBlock)L.push(catInfo.startBlock.trimEnd()+'\n');
   for(const stage of cs.stages||[]){
     (stage.questions||[]).forEach((q,i)=>{
       L.push('**Q'+stage.stageNumber+'.'+(i+1)+'** — Answer: '+escHtml(fmtKey(q))+(q.cjmmSkill?'  ·  '+escHtml(q.cjmmSkill):''));
@@ -14253,6 +14432,7 @@ function caseToMarkdown(cs,{worksheetFactIds=true,hardBreaks=true}={}){
     for(const k of db.keyDecisions||[])L.push('- '+escHtml(k));
     if(db.notes)L.push('\n*'+escHtml(db.notes)+'*');
   }
+  if(catInfo.endBlock)L.push(catInfo.endBlock);
   return L.join('\n');
 }
 
@@ -14749,10 +14929,40 @@ function caseSplitMarkdown(cs,opts={}){
   const full=caseToMarkdown(cs,opts),marker='\n<div class="pagebreak"></div>\n\n',cut=full.lastIndexOf(marker);
   return cut>=0?{worksheet:full.slice(0,cut),keyAndDebrief:full.slice(cut+marker.length)}:{worksheet:full,keyAndDebrief:''};
 }
-function casePacketToMarkdown(entries,{activeKB=null,layout='booklet',worksheetFactIds=true,includeProvenance=false}={}){
+// v22.5 (#6): compose single-case Markdown/Print exports with configurable placement for warnings, validation errors, and Review Appendix
+// ('end' = consolidated together at the very end [new UI default]; 'top-of-key' = grouped at start of Answer Key; 'inline' = legacy).
+function caseComposeSingleExportMd({caseStudy,exportNotice='',issues=[],provenance=null,worksheetFactIds=true,includeProvenance=true,factIndex=null,factCategoryPlacement='auto',diagnosticsPlacement='inline',reviewAppendix=''}={}){
+  if(!caseStudy)return'';
+  const mode=String(diagnosticsPlacement||'inline').toLowerCase();
+  const stamp=caseValidationStamp(issues);
+  const prov=includeProvenance&&provenance?latteProvenanceStamp(provenance):'';
+  const mdOpts={worksheetFactIds,factIndex,factCategoryPlacement};
+  const hasCustomMdOpts=worksheetFactIds===false||!!factIndex||Boolean(factCategoryPlacement&&factCategoryPlacement!=='off');
+  if(mode==='end'){
+    const errs=(issues||[]).filter(x=>x.sev==='error');
+    const safetyHint=errs.length?'> **\u26a0 Unverified case ('+errs.length+' error'+(errs.length===1?'':'s')+')** \u2014 see **Warnings, Errors & Review Appendix** at the end of this document.\n\n':'';
+    const cleanRev=String(reviewAppendix||'').replace(/^\n---\n\n## Review appendix\n+/,'');
+    const diagBody=[exportNotice,stamp,prov,cleanRev].filter(Boolean).join('\n').trim();
+    return safetyHint+caseToMarkdown(caseStudy,mdOpts)+(diagBody?'\n\n---\n\n## Warnings, Errors & Review Appendix\n\n'+diagBody+'\n':'');
+  }
+  if(mode==='top-of-key'){
+    const errs=(issues||[]).filter(x=>x.sev==='error');
+    const safetyHint=errs.length?'> **\u26a0 Unverified case ('+errs.length+' error'+(errs.length===1?'':'s')+')** \u2014 see Answer Key diagnostics.\n\n':'';
+    const parts=caseSplitMarkdown(caseStudy,mdOpts);
+    const cleanRev=String(reviewAppendix||'').replace(/^\n---\n\n## Review appendix\n+/,'');
+    const keyDiag=[exportNotice,stamp,prov,cleanRev?'### Warnings & Review Summary\n\n'+cleanRev:''].filter(Boolean).join('\n').trim();
+    return safetyHint+parts.worksheet+'\n<div class="pagebreak"></div>\n\n'+(keyDiag?keyDiag+'\n\n---\n\n':'')+parts.keyAndDebrief;
+  }
+  if(!includeProvenance)provenance=null;
+  const baseBody=hasCustomMdOpts?caseValidationStamp(issues)+(provenance?latteProvenanceStamp(provenance):'')+caseToMarkdown(caseStudy,mdOpts):caseValidationStamp(issues)+(provenance?latteProvenanceStamp(provenance):'')+caseToMarkdown(caseStudy);
+  return exportNotice+baseBody+reviewAppendix;
+}
+function casePacketToMarkdown(entries,{activeKB=null,layout='booklet',worksheetFactIds=true,includeProvenance=false,factCategoryPlacement='auto',diagnosticsPlacement='inline'}={}){
   const valid=(entries||[]).filter(e=>e&&e.caseStudy);
   if(!valid.length)return'';
   const total=valid.length,escH=s=>String(s||'').replace(/<(?=[A-Za-z/!?])/g,'&lt;');
+  const diagMode=String(diagnosticsPlacement||'inline').toLowerCase();
+  const activeFactIndex=(activeKB&&Array.isArray(activeKB.conditions)&&activeKB.conditions.length&&typeof buildFactIndex==='function')?buildFactIndex(activeKB):null;
   const prepared=valid.map((entry,idx)=>{
     const num=idx+1,cs=entry.caseStudy,issues=entry.issues||[],errs=issues.filter(x=>x.sev==='error');
     const auditState=entry.auditState||'disabled',rows=caseReviewRows(cs,entry.audit,auditState);
@@ -14762,23 +14972,51 @@ function casePacketToMarkdown(entries,{activeKB=null,layout='booklet',worksheetF
     const stamp=caseValidationStamp(issues);
     const prov=(includeProvenance&&entry.provenance)?latteProvenanceStamp(entry.provenance):'';
     const appendix=caseReviewAppendix(cs,issues,rows);
-    const parts=caseSplitMarkdown(cs,{worksheetFactIds});
+    const entryFx=(entry.artifactSource&&entry.artifactSource.factIndex)||activeFactIndex||null;
+    const catRes=entryFx?caseResolveUsedFactCategories(cs,entryFx):null;
+    const dispCond=catRes?catRes.displayCondition:String(cs.condition||'—');
+    const parts=caseSplitMarkdown(cs,{worksheetFactIds,factIndex:entryFx,factCategoryPlacement});
     const title=escH(cs.title||'Clinical Case Study');
     const worksheet=parts.worksheet.replace(/^# [^\n]*/,()=>'# Case '+num+' of '+total+' — '+title);
-    const keyBlock='# Answer Key — Case '+num+' of '+total+': '+title+'\n**Condition:** '+escH(cs.condition||'—')+'  |  **Difficulty:** '+escH(cs.difficulty||'—')+'\n\n'+parts.keyAndDebrief;
-    return{num,cs,errs,actual,stale,notice,stamp,prov,appendix,worksheet,keyBlock};
+    const keyBlock='# Answer Key — Case '+num+' of '+total+': '+title+'\n**Condition:** '+escH(dispCond||'—')+'  |  **Difficulty:** '+escH(cs.difficulty||'—')+'\n\n'+parts.keyAndDebrief;
+    return{num,cs,dispCond,errs,issues,rows,actual,stale,notice,stamp,prov,appendix,worksheet,keyBlock};
   });
   const failedCases=prepared.filter(p=>p.errs.length>0);
   const head=[];
   if(failedCases.length){
-    head.push('> **\u26a0 PACKET CONTAINS UNVERIFIED CASE(S) \u2014 '+failedCases.map(f=>'Case '+f.num+' ('+escH(f.cs.title||f.cs.condition||'Untitled')+': '+f.errs.length+' error(s))').join('; ')+'**');
-    head.push('> One or more cases in this packet failed deterministic source-grounding checks. Do not use flagged cases as verified study content until corrected.');
+    head.push('> **\u26a0 PACKET CONTAINS UNVERIFIED CASE(S) \u2014 '+failedCases.map(f=>'Case '+f.num+' ('+escH(f.cs.title||f.dispCond||'Untitled')+': '+f.errs.length+' error(s))').join('; ')+'**');
+    head.push('> One or more cases in this packet failed deterministic source-grounding checks. Do not use flagged cases as verified study content until corrected.'+(diagMode==='end'?' Full error & warning details are grouped in the master appendix at the end of this packet.':''));
     head.push('');
   }
   head.push('**Case Packet ('+total+' '+(total===1?'case':'cases')+' \u00b7 '+(layout==='paired'?'Paired: each case followed by its answer key':'Booklet: all student worksheets first, answer keys at back')+'):**');
-  for(const p of prepared)head.push('- **Case '+p.num+':** '+escH(p.cs.title||'Clinical Case Study')+' \u2014 *'+escH(p.cs.condition||'—')+'* ('+escH(p.cs.difficulty||'—')+', '+p.actual+' Qs)'+(p.errs.length?' \u26a0 FAILED VALIDATION':'')+(p.stale?' \u00b7 earlier KB':''));
+  for(const p of prepared)head.push('- **Case '+p.num+':** '+escH(p.cs.title||'Clinical Case Study')+' \u2014 *'+escH(p.dispCond||'—')+'* ('+escH(p.cs.difficulty||'—')+', '+p.actual+' Qs)'+(p.errs.length?' \u26a0 FAILED VALIDATION':'')+(p.stale?' \u00b7 earlier KB':''));
   head.push('\n---\n');
   const pb='\n<div class="pagebreak"></div>\n\n';
+  if(diagMode==='end'){
+    const masterDiag='# Warnings, Errors & Review Appendix (All '+total+' '+(total===1?'Case':'Cases')+')\n\n'+prepared.map(p=>{
+      const cleanApp=String(p.appendix||'').replace(/^\n---\n\n## Review appendix\n+/,'').trim();
+      return '## Case '+p.num+' of '+total+': '+escH(p.cs.title||'Clinical Case Study')+'\n\n'+[p.notice,p.stamp,p.prov,cleanApp].filter(Boolean).join('\n').trim();
+    }).join('\n\n---\n\n')+'\n';
+    if(layout==='paired'){
+      return head.join('\n')+prepared.map((p,idx)=>(idx>0?pb:'')+(p.errs.length?'> **\u26a0 Case '+p.num+' failed validation ('+p.errs.length+' error(s))** \u2014 see master appendix at end.\n\n':'')+p.worksheet+pb+p.keyBlock).join('\n')+pb+masterDiag;
+    }
+    const worksheets=prepared.map((p,idx)=>(idx>0?pb:'')+(p.errs.length?'> **\u26a0 Case '+p.num+' failed validation ('+p.errs.length+' error(s))** \u2014 see master appendix at end.\n\n':'')+p.worksheet).join('\n');
+    const keys=prepared.map((p,idx)=>(idx>0?pb:'')+p.keyBlock).join('\n');
+    return head.join('\n')+worksheets+pb+keys+pb+masterDiag;
+  }
+  if(diagMode==='top-of-key'){
+    const fmtKeyWithDiag=p=>{
+      const cleanApp=String(p.appendix||'').replace(/^\n---\n\n## Review appendix\n+/,'').trim();
+      const topDiag=[p.notice,p.stamp,p.prov,cleanApp?'### Warnings & Review Summary\n\n'+cleanApp:''].filter(Boolean).join('\n').trim();
+      return (topDiag?topDiag+'\n\n---\n\n':'')+p.keyBlock;
+    };
+    if(layout==='paired'){
+      return head.join('\n')+prepared.map((p,idx)=>(idx>0?pb:'')+(p.errs.length?'> **\u26a0 Case '+p.num+' failed validation ('+p.errs.length+' error(s))** \u2014 see Answer Key diagnostics.\n\n':'')+p.worksheet+pb+fmtKeyWithDiag(p)).join('\n');
+    }
+    const worksheets=prepared.map((p,idx)=>(idx>0?pb:'')+(p.errs.length?'> **\u26a0 Case '+p.num+' failed validation ('+p.errs.length+' error(s))** \u2014 see Answer Key diagnostics.\n\n':'')+p.worksheet).join('\n');
+    const keys=prepared.map((p,idx)=>(idx>0?pb:'')+fmtKeyWithDiag(p)).join('\n');
+    return head.join('\n')+worksheets+pb+keys;
+  }
   if(layout==='paired'){
     // v21.10 (Phase 3): place provenance on the answer-key half in paired layout (matching booklet) so model metadata never leaks onto student worksheets.
     return head.join('\n')+prepared.map((p,idx)=>(idx>0?pb:'')+p.notice+p.stamp+p.worksheet+pb+p.stamp+p.prov+p.keyBlock+p.appendix).join('\n');
@@ -14845,10 +15083,21 @@ function caseBuildBatchTargets({conditions=[],resolvedConditions=[],concepts=[],
         continue;
       }
     }
-    eligible.push({condition:cond,facts,sufficiency:caseFactSufficiency(facts,stages*questionsPerStage,includeTypes)});
+    eligible.push({condition:cond,facts,freshCount:fresh.length,untouched:facts.length>0&&facts.every(f=>!f.contextAnchor)&&(!hasEx||((cond.isMixed?selectCaseFactsMulti(cond.conditions,{...fOpts,excludeFactIds:null}):selectCaseFacts(cond,{...fOpts,excludeFactIds:null})).length===fresh.length)),sufficiency:caseFactSufficiency(facts,stages*questionsPerStage,includeTypes)});
   }
-  const targets=eligible.slice(0,Math.max(1,maxBatch));
-  return{targets,skipped,overflowCount:Math.max(0,eligible.length-targets.length),totalEligible:eligible.length};
+  // v22.5 (#7): when queuing a broad selection (>2x maxBatch entries, e.g. All topics), order substantial untouched entries across the full KB breadth instead of always taking Chapter 1's first 8 sub-topics.
+  let orderedEligible=eligible;
+  if(eligible.length>maxBatch&&candidates.length>maxBatch*2&&typeof caseSpreadIndices==='function'){
+    const spread=caseSpreadIndices(eligible.length);
+    const spreadRank=new Map(spread.map((idx,r)=>[idx,r]));
+    orderedEligible=eligible.map((item,idx)=>({item,spread:spreadRank.get(idx)??idx})).sort((a,b)=>
+      ((b.item.freshCount>=6?1:0)-(a.item.freshCount>=6?1:0))||
+      ((b.item.untouched?1:0)-(a.item.untouched?1:0))||
+      (a.spread-b.spread)
+    ).map(x=>x.item);
+  }
+  const targets=orderedEligible.slice(0,Math.max(1,maxBatch));
+  return{targets,skipped,overflowCount:Math.max(0,orderedEligible.length-targets.length),totalEligible:orderedEligible.length};
 }
 // v22.4: dry-run multi-wave slicer for combined or large single-condition Case Studies so the UI can preview
 // how many non-overlapping waves the remaining unused facts support before launching a dynamic sequential run.
@@ -16164,7 +16413,8 @@ ${typeof NCLEX_PLATE_TRAP_RULES==='string'?NCLEX_PLATE_TRAP_RULES+'\n\n':''}`+ng
           }
           }
         }else if(runAudit&&wsErr){
-          owned_log('  Audit skipped for this batch: fix the '+wsErr+' structural error(s) first — auditing a broken worksheet spends quota to grade a known failure.','warn');
+          const _wsErrPreview=wsIssues.filter(x=>x.sev==='error').slice(0,2).map(x=>x.msg).join('; ');
+          owned_log('  ⓘ Optional AI rubric review skipped for this batch (saved API quota): deterministic check flagged '+wsErr+' structural/grounding error(s)'+(_wsErrPreview?' ('+_wsErrPreview+')':'')+'. Regenerate or check the Audit Trail tab if needed.','warn');
         }
 
         publishBatch();
@@ -16962,11 +17212,22 @@ function ngAssembleWorksheet(batches){
   }
   return{questions:qs,answers:ks,count:n-1};
 }
-function ngBuildWorksheetMd(ws,wsIssuesAll,exportNotice){
+function ngBuildWorksheetMd(ws,wsIssuesAll,exportNotice,opts=null){
   if(!ws.count)return'';
-  return exportNotice+caseValidationStamp(wsIssuesAll,'worksheet')
-    +'# NCLEX Practice Questions\n\n**'+ws.count+' questions** generated from source material.\n\n---\n\n## Questions\n\n'
+  const body='# NCLEX Practice Questions\n\n**'+ws.count+' questions** generated from source material.\n\n---\n\n## Questions\n\n'
     +ws.questions.map(ngMdLiteralNumbers).join('\n\n')+'\n\n<div class="pagebreak"></div>\n\n## Answer Key\n\n'+ws.answers.map(ngMdLiteralNumbers).join('\n\n');
+  if(!(opts&&opts.diagnosticsAtEnd))return exportNotice+caseValidationStamp(wsIssuesAll,'worksheet')+body;
+  // v22.5 (#6): optional consolidated Warnings, Errors & Review Appendix at the end of the exported worksheet (UI default on, toggleable).
+  const errs=(wsIssuesAll||[]).filter(x=>x.sev==='error');
+  const topSafety=errs.length?'> **\u26a0 Unverified worksheet ('+errs.length+' error'+(errs.length===1?'':'s')+')** \u2014 see **Warnings, Errors & Review Appendix** at the end of this document.\n\n':'';
+  const stamp=caseValidationStamp(wsIssuesAll,'worksheet');
+  const prov=opts.provenance?latteProvenanceStamp(opts.provenance):'';
+  const issueLines=(wsIssuesAll||[]).length?('### Deterministic Worksheet Checks\n\n'+(wsIssuesAll||[]).map(x=>'- '+x.sev.toUpperCase()+': '+x.msg).join('\n')):'### Deterministic Worksheet Checks\n\nValidation: no findings.';
+  const auditBatches=Array.isArray(opts.batches)?opts.batches:[];
+  const allAudit=auditBatches.flatMap(b=>(b.auditRows||[]).map(r=>({batch:b.n,...r})));
+  const auditLines=allAudit.length?('### Item Quality Review\n\n'+allAudit.map(r=>'- Batch '+r.batch+' Q'+r.num+': **'+r.status+'**'+(r.criterion?' \u2014 '+r.criterion:'')+(r.detail&&r.status!=='PASS'?' \u2014 '+r.detail:'')+(r.warns||[]).map(w=>'\n  - WARN '+w.criterion+': '+w.detail).join('')).join('\n')):'';
+  const diag=[exportNotice,stamp,prov,issueLines,auditLines].filter(Boolean).join('\n\n').trim();
+  return topSafety+body+'\n\n<div class="pagebreak"></div>\n\n## Warnings, Errors & Review Appendix\n\n'+diag+'\n';
 }
 function caseComputeAuditTotals(auditRows){
   const n=s=>auditRows.filter(r=>r.status===s).length;
@@ -16975,7 +17236,7 @@ function caseComputeAuditTotals(auditRows){
 }
 // v22.4: supports optional waveConfig for dynamic sequential multi-wave slicing across combined or large single-condition scopes,
 // committing each wave's cited fact IDs before slicing the next wave so uncited facts are reclaimed and waves never overlap.
-async function caseRunBatchWithEnv({cfg,batchPlan,waveConfig=null,initialPriorTitles=null,generatorSlot,batchBusy,K,batchCancelRef,setBatchBusy,setLogs,log,currentSourceKB,setBatchStatus,batchOverrideRef,run,caseStudyRef,casePacketRef,selectPacketEntry}){
+async function caseRunBatchWithEnv({cfg,batchPlan,waveConfig=null,initialPriorTitles=null,priorUsedFactIds=null,generatorSlot,batchBusy,K,batchCancelRef,setBatchBusy,setLogs,log,currentSourceKB,setBatchStatus,batchOverrideRef,run,caseStudyRef,casePacketRef,selectPacketEntry}){
   if(!cfg.apiKey){log('Enter your API key in the config sidebar.','err');return;}
   if(!waveConfig&&!batchPlan.targets.length){log('No queued entries have facts at the selected tiers. Include Tier 2/3 or adjust your selection.','err');return;}
   if(generatorSlot.current.active||batchBusy)return;
@@ -16990,13 +17251,16 @@ async function caseRunBatchWithEnv({cfg,batchPlan,waveConfig=null,initialPriorTi
       const st=waveConfig.stages||4,qps=waveConfig.questionsPerStage||3;
       const minFreshWave2=Math.min(8,Math.max(1,st*qps));
       const liveEx=new Set(waveConfig.initialExcludeIds&&typeof waveConfig.initialExcludeIds!=='string'&&typeof waveConfig.initialExcludeIds[Symbol.iterator]==='function'?[...waveConfig.initialExcludeIds].map(x=>String(x||'').toLowerCase()):[]);
-      const liveTitles=Array.isArray(waveConfig.initialPriorTitles)?waveConfig.initialPriorTitles.slice(-12):[];
+      const liveTitles=Array.isArray(waveConfig.initialPriorTitles)?waveConfig.initialPriorTitles.slice(-20):[];
       let completedCount=0,halted='';
       const isCancelled=()=>batchCancelRef.current||currentSourceKB.current!==startKB;
       try{
         for(let w=0;w<maxW;w++){
           if(isCancelled()){halted='abort';break;}
-          const waveFacts=cond.isMixed?selectCaseFactsMulti(entries,{...fOptsBase,excludeFactIds:liveEx}):selectCaseFacts(cond,{...fOptsBase,excludeFactIds:liveEx});
+          // v22.5 (#7): focus each wave on its distinct KB-spread topic cluster when >5 entries are selected ("All topics").
+          const waveSlice=cond.isMixed&&entries.length>CASE_BROAD_MIX_THRESHOLD&&typeof caseSliceBroadMixedEntries==='function'?caseSliceBroadMixedEntries(entries,{...fOptsBase,excludeFactIds:liveEx}):null;
+          const waveCond=waveSlice&&waveSlice.isBroadSlice&&waveSlice.label?{...cond,name:waveSlice.label,scopeEntries:waveSlice.entryNames,allowedNames:[...new Set([...(cond.allowedNames||[]),...(waveSlice.entryNames||[])])],conditions:waveSlice.entries}:cond;
+          const waveFacts=cond.isMixed?selectCaseFactsMulti(waveSlice?waveSlice.entries:entries,{...fOptsBase,excludeFactIds:liveEx}):selectCaseFacts(cond,{...fOptsBase,excludeFactIds:liveEx});
           const freshFacts=waveFacts.filter(f=>!f.contextAnchor);
           if(!freshFacts.length||(w>0&&freshFacts.length<minFreshWave2)){
             log((w>0?'\n':'')+'ⓘ Stopped before Wave '+(w+1)+': only '+freshFacts.length+' unused fact(s) remain (need at least '+(w>0?minFreshWave2:1)+') — stopping rather than repeating content.','warn');
@@ -17004,10 +17268,10 @@ async function caseRunBatchWithEnv({cfg,batchPlan,waveConfig=null,initialPriorTi
           }
           const waveSuff=caseFactSufficiency(waveFacts,st*qps,waveConfig.includeTypes||null);
           const anchorCnt=waveFacts.length-freshFacts.length;
-          const label=cond.name+' (Wave '+(w+1)+')';
+          const label=waveCond.name+' (Wave '+(w+1)+')';
           setBatchStatus({done:w,total:maxW,currentName:label});
-          log((w>0?'\n':'')+'═══ Multi-wave case '+(w+1)+' of up to '+maxW+': '+cond.name+' ('+freshFacts.length+' fresh'+(anchorCnt?' + '+anchorCnt+' context anchor':'')+' facts) ═══','warn');
-          const ovr={condition:cond,facts:waveFacts,sufficiency:waveSuff,priorTitles:liveTitles.slice(-12),waveIndex:w+1,keepLogs:true,packetId:'pkt-'+Date.now().toString(36)+'-w'+w+'-'+uid().slice(0,4),completed:false,halted:'',citedFactIds:[],errCount:0,caseTitle:''};
+          log((w>0?'\n':'')+'═══ Multi-wave case '+(w+1)+' of up to '+maxW+': '+waveCond.name+' ('+freshFacts.length+' fresh'+(anchorCnt?' + '+anchorCnt+' context anchor':'')+' facts) ═══','warn');
+          const ovr={condition:waveCond,facts:waveFacts,sufficiency:waveSuff,priorTitles:liveTitles.slice(-20),priorUsedIds:new Set(liveEx),waveIndex:w+1,keepLogs:true,packetId:'pkt-'+Date.now().toString(36)+'-w'+w+'-'+uid().slice(0,4),completed:false,halted:'',citedFactIds:[],errCount:0,caseTitle:''};
           batchOverrideRef.current=ovr;
           try{await run();}finally{batchOverrideRef.current=null;}
           if(ovr.completed){
@@ -17031,16 +17295,20 @@ async function caseRunBatchWithEnv({cfg,batchPlan,waveConfig=null,initialPriorTi
       if(halted==='abort')log('Multi-wave queue cancelled ('+completedCount+' case(s) completed and kept in packet).','warn');
       else if(!halted)log('═══ Multi-wave complete: '+completedCount+' non-overlapping case(s) generated in packet. ═══',completedCount>0?'ok':'warn');
     }else{
-      const batchTitles=Array.isArray(initialPriorTitles)?initialPriorTitles.slice(-12):[];
+      const batchTitles=Array.isArray(initialPriorTitles)?initialPriorTitles.slice(-20):[];
+      const batchPriorUsed=priorUsedFactIds instanceof Set?new Set([...priorUsedFactIds].map(x=>String(x).toLowerCase())):new Set();
       await caseRunBatchQueue({
         targets:batchPlan.targets,skipped:batchPlan.skipped,overflowCount:batchPlan.overflowCount,maxBatch:MAX_CASE_BATCH,
         isCancelled:()=>batchCancelRef.current||currentSourceKB.current!==startKB,
         log,onStatus:setBatchStatus,
         runOne:async(t,idx)=>{
-          const ovr={condition:t.condition,facts:t.facts,sufficiency:t.sufficiency,priorTitles:batchTitles.length?batchTitles.slice(-12):null,keepLogs:true,packetId:'pkt-'+Date.now().toString(36)+'-'+idx+'-'+uid().slice(0,4),completed:false,halted:'',citedFactIds:[],errCount:0,caseTitle:''};
+          const ovr={condition:t.condition,facts:t.facts,sufficiency:t.sufficiency,priorTitles:batchTitles.length?batchTitles.slice(-20):null,priorUsedIds:new Set(batchPriorUsed),keepLogs:true,packetId:'pkt-'+Date.now().toString(36)+'-'+idx+'-'+uid().slice(0,4),completed:false,halted:'',citedFactIds:[],errCount:0,caseTitle:''};
           batchOverrideRef.current=ovr;
           try{await run();}finally{batchOverrideRef.current=null;}
-          if(ovr.completed&&ovr.caseTitle)batchTitles.push(ovr.caseTitle);
+          if(ovr.completed){
+            if(ovr.caseTitle)batchTitles.push(ovr.caseTitle);
+            if(ovr.errCount===0&&Array.isArray(ovr.citedFactIds))for(const id of ovr.citedFactIds)batchPriorUsed.add(String(id||'').toLowerCase());
+          }
           return{completed:ovr.completed,halted:ovr.halted};
         }
       });
@@ -18115,16 +18383,78 @@ Scale every quota to ${size} questions:
 
   return buildBatchBlock(b,total,size);
 }
-// v21.10 (Phase 5 M6): standard JSON Schema for CaseStudyGenerator supporting all classic and v21.7 NGN question types (Bowtie, Matrix, Cloze, Trend).
-const CASE_STUDY_JSON_SCHEMA={type:'object',required:['title','condition','difficulty','patient','stages','debrief'],properties:{title:{type:'string'},condition:{type:'string'},difficulty:{type:'string'},patient:{type:'object',required:['age','sex','background'],properties:{age:{type:['number','string']},sex:{type:'string'},background:{type:'string'}}},stages:{type:'array',items:{type:'object',required:['stageNumber','title','narrative','data','questions'],properties:{stageNumber:{type:'integer'},title:{type:'string'},narrative:{type:'string'},data:{type:'array',items:{type:'object',required:['label','value','supportType','availability','factIds'],properties:{label:{type:'string'},value:{type:'string'},supportType:{type:'string'},availability:{type:'string'},factIds:{type:'array',items:{type:'string'}}}}},questions:{type:'array',items:{type:'object',required:['id','type','stem','rationales','cjmmSkill'],properties:{id:{type:'string'},type:{type:'string'},stem:{type:'string'},options:{type:'array',items:{type:'object',required:['label','text'],properties:{label:{type:'string'},text:{type:'string'},group:{type:'string'}}}},correctAnswers:{type:'array',items:{type:'string'}},matrix:{type:'object',properties:{mode:{type:'string',enum:['single','multiple']},columns:{type:'array',items:{type:'string'}},rows:{type:'array',items:{type:'object',required:['id','label','correctColumns'],properties:{id:{type:'string'},label:{type:'string'},correctColumns:{type:'array',items:{type:'string'}}}}}}},cloze:{type:'object',properties:{blanks:{type:'array',items:{type:'object',required:['id','options','correctAnswer'],properties:{id:{type:'string'},options:{type:'array',items:{type:'string'}},correctAnswer:{type:'string'}}}}}},trendTable:{type:'object',properties:{timepoints:{type:'array',items:{type:'string'}},rows:{type:'array',items:{type:'object',required:['parameter','values','factIds'],properties:{parameter:{type:'string'},values:{type:'array',items:{type:'string'}},supportType:{type:'string'},factIds:{type:'array',items:{type:'string'}}}}}}},rationales:{type:'array',items:{type:'object',required:['option','text','supportType','factIds'],properties:{option:{type:'string'},text:{type:'string'},supportType:{type:'string'},factIds:{type:'array',items:{type:'string'}}}}},cjmmSkill:{type:'string'}}}}}}},debrief:{type:'object',required:['priorityProblem','keyDecisions','notes'],properties:{priorityProblem:{type:'string'},keyDecisions:{type:'array',items:{type:'string'}},notes:{type:'string'},factIds:{type:'array',items:{type:'string'}}}}}};
+// v21.10 (Phase 5 M6) + v22.5 (#1, #2): standard JSON Schema for CaseStudyGenerator aligned 1-to-1 with CASE_NGN_TYPE_RULES & caseValidateNgnQuestion
+// (fixing matrix.columns {id,label}, matrix.rows {id,text}, and trendTable.rows {label,values,factIds}), plus dynamic per-run type enum enforcement.
+const CASE_TYPE_KEY_MAP=[['mcq','MCQ'],['sata','SATA'],['prioritization','Prioritization'],['ordering','Ordering'],['calculation','Calculation'],['education','Education'],['bowtie','Bowtie'],['matrix','Matrix'],['cloze','Cloze'],['trend','Trend']];
+const CASE_STUDY_JSON_SCHEMA={type:'object',required:['title','condition','difficulty','patient','stages','debrief'],properties:{title:{type:'string'},condition:{type:'string'},difficulty:{type:'string'},patient:{type:'object',required:['age','sex','background'],properties:{age:{type:['number','string']},sex:{type:'string'},background:{type:'string'}}},stages:{type:'array',items:{type:'object',required:['stageNumber','title','narrative','data','questions'],properties:{stageNumber:{type:'integer'},title:{type:'string'},narrative:{type:'string'},data:{type:'array',items:{type:'object',required:['label','value','supportType','availability','factIds'],properties:{label:{type:'string'},value:{type:'string'},supportType:{type:'string'},availability:{type:'string'},factIds:{type:'array',items:{type:'string'}}}}},questions:{type:'array',items:{type:'object',required:['id','type','stem','rationales','cjmmSkill'],properties:{id:{type:'string'},type:{type:'string',enum:['MCQ','SATA','Prioritization','Ordering','Calculation','Education','Bowtie','Matrix','Cloze','Trend']},stem:{type:'string'},options:{type:'array',items:{type:'object',required:['label','text'],properties:{label:{type:'string'},text:{type:'string'},group:{type:'string'}}}},correctAnswers:{type:'array',items:{type:'string'}},matrix:{type:'object',properties:{mode:{type:'string',enum:['single','multiple']},columns:{type:'array',items:{type:'object',required:['id','label'],properties:{id:{type:'string'},label:{type:'string'}}}},rows:{type:'array',items:{type:'object',required:['id','text'],properties:{id:{type:'string'},text:{type:'string'}}}}}},cloze:{type:'object',properties:{blanks:{type:'array',items:{type:'object',required:['id','options','correctAnswer'],properties:{id:{type:'string'},options:{type:'array',items:{type:'string'}},correctAnswer:{type:'string'}}}}}},trendTable:{type:'object',properties:{timepoints:{type:'array',items:{type:'string'}},rows:{type:'array',items:{type:'object',required:['label','values','factIds'],properties:{label:{type:'string'},values:{type:'array',items:{type:'string'}},supportType:{type:'string'},factIds:{type:'array',items:{type:'string'}}}}}}},rationales:{type:'array',items:{type:'object',required:['option','text','supportType','factIds'],properties:{option:{type:'string'},text:{type:'string'},supportType:{type:'string'},factIds:{type:'array',items:{type:'string'}}}}},cjmmSkill:{type:'string'}}}}}}},debrief:{type:'object',required:['priorityProblem','keyDecisions','notes'],properties:{priorityProblem:{type:'string'},keyDecisions:{type:'array',items:{type:'string'}},notes:{type:'string'},factIds:{type:'array',items:{type:'string'}}}}}};
+function caseResolveEnabledTypeNames(types){
+  if(!types||typeof types!=='object')return CASE_TYPE_KEY_MAP.map(([,nm])=>nm);
+  const hasExplicit=CASE_TYPE_KEY_MAP.some(([k])=>typeof types[k]==='boolean');
+  if(!hasExplicit)return CASE_TYPE_KEY_MAP.map(([,nm])=>nm);
+  const out=CASE_TYPE_KEY_MAP.filter(([k])=>Boolean(types[k])).map(([,nm])=>nm);
+  return out.length?out:CASE_TYPE_KEY_MAP.map(([,nm])=>nm);
+}
+function buildCaseStudyJsonSchema(types){
+  const enabled=caseResolveEnabledTypeNames(types);
+  const qItem=CASE_STUDY_JSON_SCHEMA.properties.stages.items.properties.questions.items;
+  const stItem=CASE_STUDY_JSON_SCHEMA.properties.stages.items;
+  return{
+    ...CASE_STUDY_JSON_SCHEMA,
+    properties:{
+      ...CASE_STUDY_JSON_SCHEMA.properties,
+      stages:{
+        ...CASE_STUDY_JSON_SCHEMA.properties.stages,
+        items:{
+          ...stItem,
+          properties:{
+            ...stItem.properties,
+            questions:{
+              ...stItem.properties.questions,
+              items:{...qItem,properties:{...qItem.properties,type:{type:'string',enum:enabled}}}
+            }
+          }
+        }
+      }
+    }
+  };
+}
+function caseNormalizeParsedNgnFields(cs){
+  if(!cs||typeof cs!=='object'||!Array.isArray(cs.stages))return cs;
+  for(const st of cs.stages){
+    if(!st||!Array.isArray(st.questions))continue;
+    for(const q of st.questions){
+      if(!q||typeof q!=='object')continue;
+      if(q.matrix&&typeof q.matrix==='object'&&!Array.isArray(q.matrix)){
+        if(Array.isArray(q.matrix.columns))q.matrix.columns=q.matrix.columns.map((c,i)=>typeof c==='string'?{id:'C'+(i+1),label:c}:c);
+        if(Array.isArray(q.matrix.rows))q.matrix.rows=q.matrix.rows.map(r=>r&&typeof r==='object'&&!Array.isArray(r)&&!r.text&&typeof r.label==='string'?{...r,text:r.label}:r);
+      }
+      if(q.trendTable&&typeof q.trendTable==='object'&&!Array.isArray(q.trendTable)&&Array.isArray(q.trendTable.rows)){
+        q.trendTable.rows=q.trendTable.rows.map(tr=>tr&&typeof tr==='object'&&!Array.isArray(tr)&&!tr.label&&typeof tr.parameter==='string'?{...tr,label:tr.parameter}:tr);
+      }
+    }
+  }
+  return cs;
+}
+function caseAttachRunTypeContract(cs,types){
+  if(!cs||typeof cs!=='object'||!types||typeof types!=='object')return cs;
+  const hasExplicit=CASE_TYPE_KEY_MAP.some(([k])=>typeof types[k]==='boolean');
+  if(!hasExplicit)return cs;
+  const enabled=caseResolveEnabledTypeNames(types);
+  Object.defineProperty(cs,'_mcqDisabled',{value:types.mcq===false,configurable:true,writable:true});
+  Object.defineProperty(cs,'_allowedTypes',{value:new Set(enabled),configurable:true,writable:true});
+  return cs;
+}
 async function caseRunSingleWithEnv(env){
-  const {batchOverrideRef,activeCondition,selectedFacts,sufficiency,cfg,log,generatorSlot,setActivePacketId,K,stages,questionsPerStage,runAudit,setArtifactSource,setAuditState,currentSourceKB,setBusy,setLogs,setCaseStudy,setIssues,setCoverage,setLiveKB,setAudit,setAuditPhase,setProvenance,setInvalidCaseRaw,setAbortCtl,difficulty,types,setCasePacket,casePacketRef,priorTitles,onRecordUsedFacts}=env;
+  const {batchOverrideRef,activeCondition,selectedFacts,sufficiency,cfg,log,generatorSlot,setActivePacketId,K,stages,questionsPerStage,runAudit,setArtifactSource,setAuditState,currentSourceKB,setBusy,setLogs,setCaseStudy,setIssues,setCoverage,setLiveKB,setAudit,setAuditPhase,setProvenance,setInvalidCaseRaw,setAbortCtl,difficulty,types,setCasePacket,casePacketRef,priorTitles,priorUsedFactIds,onRecordUsedFacts}=env;
   const run=async()=>{
     // v20.1: batchOverrideRef lets sequential batch runs reuse the full grounding/shuffle/audit/repair pipeline
     // without duplicating logic, while staying a transparent no-op in isolated single-case harnesses.
     const _ovr=(typeof batchOverrideRef!=='undefined'&&batchOverrideRef.current)||null;
-    const runCond=_ovr?_ovr.condition:activeCondition;
+    const _rawRunCond=_ovr?_ovr.condition:activeCondition;
     const runFacts=_ovr?_ovr.facts:selectedFacts;
+    // v22.5 (#7): when running a single-wave broad "All topics" selection (>5 entries), narrow runCond's label & scopeEntries to the actual cluster inside runFacts rather than echoing (+293 more).
+    const _factEntryNames=!_ovr&&_rawRunCond&&_rawRunCond.isMixed&&Array.isArray(_rawRunCond.conditions)&&_rawRunCond.conditions.length>(typeof CASE_BROAD_MIX_THRESHOLD==='number'?CASE_BROAD_MIX_THRESHOLD:5)?[...new Set((runFacts||[]).filter(f=>f&&!f.linkedEntity&&f.caseCondition).map(f=>String(f.caseCondition||'').replace(/\s*\[[^\]]+\]\s*$/,'').trim()).filter(Boolean))]:[];
+    const runCond=_factEntryNames.length?{..._rawRunCond,name:_factEntryNames.length<=3?_factEntryNames.join(' + '):_factEntryNames.slice(0,3).join(' + ')+' (+'+(_factEntryNames.length-3)+' more)',scopeEntries:_factEntryNames,allowedNames:[...new Set([...(_rawRunCond.allowedNames||[]),..._factEntryNames])]}:_rawRunCond;
     const runSuff=_ovr?_ovr.sufficiency:sufficiency;
     const _priorTitles=(_ovr&&_ovr.priorTitles)||(typeof priorTitles!=='undefined'?priorTitles:null);
     if(!cfg.apiKey){log('Enter your API key in the config sidebar.','err');return;}
@@ -18176,37 +18506,48 @@ async function caseRunSingleWithEnv(env){
         ...(_caseSplit.systemInstruction?{systemInstruction:_caseSplit.systemInstruction}:{}),
         onUpdate:t=>owned_setLiveKB(Math.round(t.length/102.4)/10),
         onMeta:m=>{if(m.truncated)owned_log('  ⚠ Output hit the '+(m.maxOutputTokens||65536).toLocaleString()+'-token ceiling — the case may be cut short. Reduce stages or questions per stage.','err');},
-        // v15 + v21.10 (Phase 5 M6): enforce bare JSON and attach CASE_STUDY_JSON_SCHEMA for constrained decoding across classic and NGN formats.
-        generationConfig:{responseMimeType:'application/json',...(typeof CASE_STUDY_JSON_SCHEMA==='object'?{responseJsonSchema:CASE_STUDY_JSON_SCHEMA}:{})}});
+        // v15 + v21.10 (Phase 5 M6) + v22.5 (#1, #2): enforce bare JSON and attach dynamic type-filtered schema (preserving CASE_STUDY_JSON_SCHEMA fallback).
+        generationConfig:{responseMimeType:'application/json',...(typeof buildCaseStudyJsonSchema==='function'?{responseJsonSchema:buildCaseStudyJsonSchema(types)}:typeof CASE_STUDY_JSON_SCHEMA==='object'?{responseJsonSchema:CASE_STUDY_JSON_SCHEMA}:{})}});
       }catch(e){
         if(!e||!e.truncated)throw e;
         owned_setInvalidCaseRaw(e.partialText||'');owned_setIssues([{sev:'error',msg:'Response stopped at the output ceiling before the JSON was complete.'}]);owned_log(e.message,'err');return;
       }
       let parsed;
       try{parsed=extractJSON(raw);}catch(e){owned_setInvalidCaseRaw(raw);owned_setIssues([{sev:'error',msg:'Response JSON could not be parsed.'}]);owned_log('Could not parse JSON from the model output: '+e.message,'err');return;}
+      if(typeof caseNormalizeParsedNgnFields==='function')caseNormalizeParsedNgnFields(parsed);
       const shapeIssues=caseShapeIssues(parsed);
       if(shapeIssues.length){owned_setInvalidCaseRaw(raw);owned_setIssues(shapeIssues);owned_log('Invalid case shape. Raw response is available for inspection.','err');return;}
+      if(typeof caseAttachRunTypeContract==='function')caseAttachRunTypeContract(parsed,types);
       // Deterministic validation against the real KB.
       // Validate against the PACKET, not the whole KB. A fact that exists somewhere in the
       // Knowledge Base but was never sent to this run is not grounding — it is coincidence.
       const allowedFactIds=new Set(runFacts.map(f=>String(f.id).toLowerCase()));
       const revalidate=cs=>{
+        if(typeof caseAttachRunTypeContract==='function')caseAttachRunTypeContract(cs,types);
         const s=runCond.allowedNames?validateCaseStudy(cs,source.factIndex,allowedFactIds,runCond.name,runCond.allowedNames):validateCaseStudy(cs,source.factIndex,allowedFactIds,runCond.name);
         return[...s,...validateStageTiming(cs),...caseCompletenessIssues(cs,caseContract),...caseShuffleIssues(cs)];
       };
       let allIssues=revalidate(parsed);
       // v17.1: shuffle once before publication/audit; malformed cases keep their original evidence.
       if(!allIssues.some(i=>i.sev==='error')){
-        parsed={...parsed,stages:parsed.stages.map(s=>({...s,questions:(s.questions||[]).map(q=>caseShuffleQuestion(q))}))};
+        const _shuf={...parsed,stages:parsed.stages.map(s=>({...s,questions:(s.questions||[]).map(q=>caseShuffleQuestion(q))}))};
+        parsed=typeof caseAttachRunTypeContract==='function'?caseAttachRunTypeContract(_shuf,types):_shuf;
         allIssues=revalidate(parsed);
       }
       owned_setIssues(allIssues);
       let errCount=allIssues.filter(x=>x.sev==='error').length;
+      // v22.5 (#4): snapshot pre-run anchor IDs and previously-used ledger IDs BEFORE committing this case's own facts so post-run coverage clearly reports fresh vs. anchor vs. reused facts.
+      const _runAnchorIds=new Set(runFacts.filter(f=>f&&f.contextAnchor&&f.id).map(f=>String(f.id).toLowerCase()));
+      const _prePriorIds=(_ovr&&_ovr.priorUsedIds instanceof Set)?_ovr.priorUsedIds:(typeof priorUsedFactIds!=='undefined'&&priorUsedFactIds instanceof Set?new Set([...priorUsedFactIds].map(x=>String(x).toLowerCase())):new Set());
       const computeCaseCoverage=cs=>{
         const cited=new Set(caseAllFactIds(cs));
         const usedSelected=new Set([...cited].filter(id=>allowedFactIds.has(id)));
         const outOfPacket=[...cited].filter(id=>!allowedFactIds.has(id));
-        return{cited,usedSelected,coverage:{selected:runFacts.length,used:usedSelected.size,outOfPacket,uncovered:runFacts.filter(f=>!usedSelected.has(String(f.id).toLowerCase()))}};
+        const anchorIds=[...usedSelected].filter(id=>_runAnchorIds.has(id));
+        const reusedIds=[...usedSelected].filter(id=>!_runAnchorIds.has(id)&&_prePriorIds.has(id));
+        const freshIds=[...usedSelected].filter(id=>!_runAnchorIds.has(id)&&!_prePriorIds.has(id));
+        const freshness={freshCount:freshIds.length,anchorCount:anchorIds.length,reusedCount:reusedIds.length,anchorIds,reusedIds};
+        return{cited,usedSelected,coverage:{selected:runFacts.length,used:usedSelected.size,outOfPacket,uncovered:runFacts.filter(f=>!usedSelected.has(String(f.id).toLowerCase())),freshness}};
       };
       registerValidatedCase=(parsed,cited)=>{
         if(!K.registerArtifact||registeredCaseId)return registeredCaseId;
@@ -18379,7 +18720,8 @@ async function caseRunSingleWithEnv(env){
           if(_ovr&&auditInterrupted)_ovr.halted='quota';
         }
       }else if(runAudit&&errCount){
-        owned_log('Audit skipped: the case has '+errCount+' structural error(s). Fix grounding first — a rubric review of an ungrounded item spends quota to grade a known failure.','warn');
+        const _errPreview=allIssues.filter(x=>x.sev==='error').slice(0,2).map(x=>x.msg).join('; ');
+        owned_log('ⓘ Optional AI rubric review skipped (saved API quota): deterministic check flagged '+errCount+' error(s)'+(_errPreview?' ('+_errPreview+')':'')+'. Review the Validation box below or regenerate this case.','warn');
       }
       // Coverage counts only the intersection with the packet, so it can never report more
       // facts grounded than were actually supplied.
@@ -18399,7 +18741,8 @@ async function caseRunSingleWithEnv(env){
         onRecordUsedFacts({factIds:[...usedSelected],titles:[parsed.title||runCond.name],caseDelta:1});
       }
       owned_log('✅ Case generated: '+parsed.stages.length+' stages, '+(parsed.stages||[]).reduce((n,s)=>n+((s.questions||[]).length),0)+' questions.','ok');
-      owned_log('Validation: '+errCount+' error(s), '+(allIssues.length-errCount)+' warning(s). Coverage: '+usedSelected.size+'/'+runFacts.length+' supplied facts grounded.',errCount?'err':'ok');
+      const _fr=finalCoverage.freshness;
+      owned_log('Validation: '+errCount+' error(s), '+(allIssues.length-errCount)+' warning(s). Coverage: '+usedSelected.size+'/'+runFacts.length+' supplied facts grounded'+(_fr?' ('+_fr.freshCount+' fresh unused'+(_fr.anchorCount?', '+_fr.anchorCount+' background anchor':'')+(_fr.reusedCount?', '+_fr.reusedCount+' reused from prior runs':'')+')':'')+'.',errCount?'err':'ok');
       if(outOfPacket.length)owned_log('⚠ '+outOfPacket.length+' cited fact ID(s) were never supplied to this run: '+outOfPacket.slice(0,6).join(', ')+(outOfPacket.length>6?'…':''),'err');
       if(errCount)owned_log('Case failed validation — it is shown and exportable, but was NOT linked into the Fact Inspector. Fix the errors or regenerate before using it as study content.','err');
       if(generatorSlot.current.current(operation))setAuditState(runAudit?(auditInterrupted?'interrupted':'complete'):'disabled');
@@ -18626,9 +18969,79 @@ function nclexProKbTagLookup(kb,text,fallbackConcepts=[],fallbackConditions=[]){
   }
   return{conceptNames:[...cOut],conditionNames:[...kOut]};
 }
+// v22.5 (#8): build a self-contained KB metadata & fact lookup so NCLEX Pro Question, Case Study, and Anki Flashcard
+// converters stamp identical kbKey, examKey, factIds, P-LATE buckets, and trap tags for bidirectional remediation on the site.
+function nclexProKbMeta(kb){
+  const course=String((kb&&kb.metadata&&kb.metadata.course)||'').trim();
+  const exam=String((kb&&kb.metadata&&kb.metadata.exam)||'').trim();
+  const examKey=[course,exam].filter(Boolean).join(' · ');
+  const canonBucket=b=>b==='BriefPatho'?'Patho':(b==='Assess'||b==='Tests')?'Analyze':b==='Treatments'?'Treat':(b||'');
+  const factMap=new Map(),condByNorm=new Map(),conceptByNorm=new Map();
+  const normSlug=s=>String(s||'').replace(/([a-z0-9])([A-Z])/g,'$1 $2').replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
+  const groups=[];
+  if(kb&&Array.isArray(kb.conditions))groups.push(...kb.conditions);
+  for(const col of ['medications','diagnostics','scoringTools']){
+    if(kb&&Array.isArray(kb[col]))for(const e of kb[col])if(e)groups.push(e);
+  }
+  let totalFacts=0,lastId='';
+  const sigParts=[];
+  for(const g of groups){
+    if(!g)continue;
+    const gName=String(g.name||'').trim();
+    const gConcept=String(g.entryRole==='concept'?g.name:(g.concept||'')).trim();
+    if(gName){
+      if(g.entryRole==='concept')conceptByNorm.set(normSlug(gName),gName);
+      else condByNorm.set(normSlug(gName),gName);
+    }
+    for(const al of (g.aliases||[]))if(al&&gName&&g.entryRole!=='concept')condByNorm.set(normSlug(al),gName);
+    if(gConcept)conceptByNorm.set(normSlug(gConcept),gConcept);
+    const ids=[];
+    for(const f of (g.facts||[])){
+      if(!f||!f.id)continue;
+      const fid=String(f.id).trim().toLowerCase();
+      ids.push(fid);
+      factMap.set(fid,{
+        id:fid,
+        tier:Number(f.tier)||1,
+        bucket:canonBucket(f.latteBucket),
+        trapRole:f.trapRole?String(f.trapRole).trim():'',
+        conditionName:g.entryRole==='concept'?'':gName,
+        conceptName:gConcept,
+      });
+    }
+    if(ids.length){
+      totalFacts+=ids.length;
+      lastId=ids[ids.length-1];
+      sigParts.push(String(g.id||gName||'').toLowerCase()+':'+ids.length+':'+ids[0]+':'+lastId);
+    }
+  }
+  if(kb&&kb.metadata&&Array.isArray(kb.metadata.concepts)){
+    for(const cn of kb.metadata.concepts)if(cn)conceptByNorm.set(normSlug(cn),String(cn).trim());
+  }
+  const kbKey=typeof genLedgerKbKey==='function'&&kb?genLedgerKbKey(kb):(totalFacts?nclexProHashId(sigParts.join('|')+'#'+totalFacts):'');
+  const resolveFactMeta=rawIds=>{
+    const fids=[],buckets=new Set(),traps=new Set(),conds=new Set(),concepts=new Set();
+    let bestTier=0;
+    for(const raw of (rawIds||[])){
+      const id=String(raw||'').trim().toLowerCase();
+      if(!id||fids.includes(id))continue;
+      fids.push(id);
+      const m=factMap.get(id);
+      if(m){
+        if(m.bucket)buckets.add(m.bucket);
+        if(m.trapRole)traps.add(m.trapRole);
+        if(m.conditionName)conds.add(m.conditionName);
+        if(m.conceptName)concepts.add(m.conceptName);
+        if(!bestTier||m.tier<bestTier)bestTier=m.tier;
+      }
+    }
+    return{factIds:fids,plateBuckets:[...buckets],trapRoles:[...traps],conditionNames:[...conds],conceptNames:[...concepts],tier:bestTier||0};
+  };
+  return{course,exam,examKey,kbKey,factMap,condByNorm,conceptByNorm,normSlug,resolveFactMeta};
+}
 function nclexProConvertWorksheet(ws,batches,kb,opts={}){
-  const metaCourse=String((kb&&kb.metadata&&kb.metadata.course)||'').trim();
-  const metaExam=String((kb&&kb.metadata&&kb.metadata.exam)||'').trim();
+  const km=nclexProKbMeta(kb);
+  const metaCourse=km.course,metaExam=km.exam;
   const defaultName=[metaCourse,metaExam].filter(Boolean).join(' · ')||'NCLEX Study Suite Worksheet';
   const setName=String(opts.setName||defaultName).trim();
   const createdAt=new Date().toISOString();
@@ -18638,6 +19051,33 @@ function nclexProConvertWorksheet(ws,batches,kb,opts={}){
   const keyMap=new Map(aBlocks.map(b=>[b.num,ngParseKeyItem(b)]));
   const fbConcepts=Array.isArray(opts.concepts)?opts.concepts:[];
   const fbConditions=Array.isArray(opts.conditions)?opts.conditions:[];
+  // v22.5 (#8): map worksheet batch question numbers + PART 1 C# concept rows to exact KB factIds so NCLEX Pro links questions <-> Anki flashcards 1-to-1.
+  const qFactMap=new Map();
+  let cumNum=0;
+  for(const b of (Array.isArray(batches)?batches:[])){
+    if(!b)continue;
+    const cMap=new Map();
+    for(const line of String(b.p1||'').split(/\r?\n/)){
+      const cm=line.match(/^\s*(C\d+)\b/i);
+      if(!cm)continue;
+      const fids=[...line.matchAll(/\bfact-\d+\b/gi)].map(m=>m[0].toLowerCase());
+      if(fids.length)cMap.set(cm[1].toUpperCase(),fids);
+    }
+    const bQs=ngSplitNumbered(b.p3||''),bKs=new Map(ngSplitNumbered(b.p4||'').map(x=>[x.num,x.text||'']));
+    const p2Lines=String(b.p2||'').split(/\r?\n/);
+    for(const bq of bQs){
+      cumNum++;
+      const kTxt=bKs.get(bq.num)||'';
+      const p2Hit=p2Lines.filter(l=>new RegExp('^\\s*Q?'+bq.num+'\\b','i').test(l)).join(' ');
+      const blob=bq.text+'\n'+kTxt+'\n'+p2Hit;
+      const ids=new Set([...blob.matchAll(/\bfact-\d+\b/gi)].map(m=>m[0].toLowerCase()));
+      for(const cm of blob.matchAll(/\bC(\d+)\b/gi)){
+        const mapped=cMap.get('C'+cm[1]);
+        if(mapped)for(const fid of mapped)ids.add(fid);
+      }
+      if(ids.size)qFactMap.set(cumNum,[...ids]);
+    }
+  }
   const items=[];
 
   for(const qb of qBlocks){
@@ -18648,9 +19088,12 @@ function nclexProConvertWorksheet(ws,batches,kb,opts={}){
     const tip=stratM?stratM[1].trim():'';
     const ratLines=(key.rationales||[]).map(r=>`${r.kind==='correct'?'✓':'✗'} ${r.label}. ${ngRationaleText(r.text)}`);
     const rat=ratLines.length?ratLines.join('\n'):ngRationaleText(key.answerBody||key.answer||'');
-    const tags=nclexProKbTagLookup(kb,parsed.stem+' '+rat+' '+String(key.raw||''),fbConcepts,fbConditions);
+    const inlineIds=[...(String(qb.text||'')+'\n'+String(key.raw||'')).matchAll(/\bfact-\d+\b/gi)].map(m=>m[0].toLowerCase());
+    const fm=km.resolveFactMeta([...(qFactMap.get(qb.num)||[]),...inlineIds]);
+    const tags=nclexProKbTagLookup(kb,parsed.stem+' '+rat+' '+String(key.raw||''),[...fbConcepts,...fm.conceptNames],[...fbConditions,...fm.conditionNames]);
     const isPri=/\b(first|priority|immediately|most important|delegate|assess first)\b/i.test(parsed.stem);
-    const baseB=key.tier===1?0.55:key.tier===2?0.2:key.tier===3?-0.2:0.25;
+    const itemTier=key.tier||fm.tier||1;
+    const baseB=itemTier===1?0.55:itemTier===2?0.2:itemTier===3?-0.2:0.25;
     let t='mcq',optsArr=[],cor=0,unit='';
 
     if(parsed.type==='MCQ'&&parsed.options.length>=2){
@@ -18695,6 +19138,7 @@ function nclexProConvertWorksheet(ws,batches,kb,opts={}){
       setId,setName,t,
       d:nclexProInferDomain(parsed.stem+' '+rat),
       b:diffB,
+      tier:itemTier,
       stem:parsed.stem,
       opts:optsArr.length?optsArr:undefined,
       cor,
@@ -18705,32 +19149,41 @@ function nclexProConvertWorksheet(ws,batches,kb,opts={}){
       pri:isPri,
       conceptNames:tags.conceptNames,
       conditionNames:tags.conditionNames,
+      kbKey:km.kbKey||undefined,
+      course:metaCourse||undefined,
+      exam:metaExam||undefined,
+      examKey:km.examKey||undefined,
+      factIds:fm.factIds.length?fm.factIds:undefined,
+      plateBuckets:fm.plateBuckets.length?fm.plateBuckets:undefined,
+      trapRoles:fm.trapRoles.length?fm.trapRoles:undefined,
     });
   }
-  return{set:{setId,name:setName,kind:'worksheet',createdAt,count:items.length},items};
+  return{set:{setId,name:setName,kind:'worksheet',createdAt,count:items.length,kbKey:km.kbKey||undefined,course:metaCourse||undefined,exam:metaExam||undefined,examKey:km.examKey||undefined},items};
 }
 
 function nclexProConvertCaseStudy(cs,kb,opts={}){
   if(!cs||!Array.isArray(cs.stages))return{set:null,items:[]};
+  const km=nclexProKbMeta(kb);
   const title=String(cs.title||cs.condition||'AI Clinical Case Study').trim();
-  const condName=String(cs.condition||'').trim();
-  const metaCourse=String((kb&&kb.metadata&&kb.metadata.course)||'').trim();
-  const metaExam=String((kb&&kb.metadata&&kb.metadata.exam)||'').trim();
+  const rawCondName=String(cs.condition||'').trim();
+  const cleanCondName=/\(\+\d+\s+more\)/.test(rawCondName)?'':rawCondName;
+  const metaCourse=km.course,metaExam=km.exam;
   const setName=String(opts.setName||([metaCourse,metaExam,title].filter(Boolean).join(' · '))).trim();
   const createdAt=new Date().toISOString();
-  const csId='AI-CS-'+nclexProHashId(title+'|'+condName).slice(3,9).toUpperCase();
+  const csId='AI-CS-'+nclexProHashId(title+'|'+rawCondName).slice(3,9).toUpperCase();
   const setId='set_cs_'+nclexProHashId(setName+'|'+createdAt.slice(0,16)).slice(3);
   const p=cs.patient||{};
   const clientLine=[p.age!=null&&String(p.age).trim()!==''?String(p.age)+' y/o':'',p.sex||'',p.background||''].filter(Boolean).join(', ');
-  const diffBase=String(cs.difficulty||'').toLowerCase().includes('hard')?0.95:String(cs.difficulty||'').toLowerCase().includes('easy')?-0.2:0.5;
+  const diffBase=String(cs.difficulty||'').toLowerCase().includes('hard')||String(cs.difficulty||'').toLowerCase().includes('advanced')?0.95:String(cs.difficulty||'').toLowerCase().includes('easy')||String(cs.difficulty||'').toLowerCase().includes('foundational')?-0.2:0.5;
   const items=[];
   const histAccum=clientLine?['Client: '+clientLine]:[];
-  const labsAccum=[],vitalsAccum=[];
+  const labsAccum=[],vitalsAccum=[],stageFactAccum=new Set();
 
   for(const stage of cs.stages){
     const sHdr=`Stage ${stage.stageNumber}: ${stage.title||''}`.trim();
     if(stage.narrative)histAccum.push(sHdr+'\n'+stage.narrative);
     for(const d of (stage.data||[])){
+      for(const fid of (d.factIds||[]))if(fid)stageFactAccum.add(String(fid).toLowerCase());
       const line=(d.label?d.label+': ':'')+(d.value||'');
       if(/\b(bp|blood pressure|hr|heart rate|rr|resp|temp|spo2|o2 sat|pulse|pain)\b/i.test(String(d.label||'')))vitalsAccum.push(`[S${stage.stageNumber}] ${line}`);
       else if(/\b(lab|wbc|hgb|hct|plt|na|k\+|potassium|sodium|bun|creatinine|glucose|troponin|bnp|inr|ptt|abg|ph|paco2|hco3|lactate|ast|alt|bilirubin|ammonia|tsh|a1c)\b/i.test(String(d.label||'')))labsAccum.push(`[S${stage.stageNumber}] ${line}`);
@@ -18746,7 +19199,9 @@ function nclexProConvertCaseStudy(cs,kb,opts={}){
       const qOpts=Array.isArray(q.options)?q.options:[];
       const ratLines=(q.rationales||[]).map(r=>`${ansRaw.includes(String(r.option||'').trim())?'✓':'•'} ${r.option?r.option+': ':''}${r.text||''}`);
       const rat=ratLines.join('\n');
-      const tags=nclexProKbTagLookup(kb,title+' '+condName+' '+(q.stem||'')+' '+rat,[],condName?[condName]:[]);
+      const qFactIds=[...(q.rationales||[]).flatMap(r=>r.factIds||[]),...(qType==='Trend'&&q.trendTable&&Array.isArray(q.trendTable.rows)?q.trendTable.rows.flatMap(tr=>tr.factIds||[]):[])];
+      const fm=km.resolveFactMeta(qFactIds.length?qFactIds:[...stageFactAccum]);
+      const tags=nclexProKbTagLookup(kb,title+' '+cleanCondName+' '+(q.stem||'')+' '+rat,fm.conceptNames,[...fm.conditionNames,...(cleanCondName?[cleanCondName]:[])]);
       const cd={...baseCd};
       if(qType==='Trend'&&q.trendTable&&Array.isArray(q.trendTable.timepoints)){
         const tps=q.trendTable.timepoints;
@@ -18759,6 +19214,7 @@ function nclexProConvertCaseStudy(cs,kb,opts={}){
         setId,setName,csId,csTitle:title,
         d:nclexProInferDomain((q.stem||'')+' '+rat),
         b:Math.max(-1.8,Math.min(2.2,Math.round((diffBase+(qType==='Bowtie'||qType==='Matrix'||qType==='Trend'?0.35:qType==='SATA'||qType==='Prioritization'?0.25:0))*100)/100)),
+        tier:fm.tier||1,
         stem:q.stem||'',
         cd,rat,tip:cs.debrief&&cs.debrief.priorityProblem?'Priority Focus: '+cs.debrief.priorityProblem:'',
         ref:`✨ AI Case Study · ${title} (S${stage.stageNumber}.${qi+1})`,
@@ -18766,6 +19222,13 @@ function nclexProConvertCaseStudy(cs,kb,opts={}){
         pri:qType==='Prioritization'||/\b(first|priority|immediately)\b/i.test(q.stem||''),
         conceptNames:tags.conceptNames,
         conditionNames:tags.conditionNames,
+        kbKey:km.kbKey||undefined,
+        course:metaCourse||undefined,
+        exam:metaExam||undefined,
+        examKey:km.examKey||undefined,
+        factIds:fm.factIds.length?fm.factIds:undefined,
+        plateBuckets:fm.plateBuckets.length?fm.plateBuckets:undefined,
+        trapRoles:fm.trapRoles.length?fm.trapRoles:undefined,
       };
 
       if(qType==='Bowtie'){
@@ -18841,7 +19304,101 @@ function nclexProConvertCaseStudy(cs,kb,opts={}){
       items.push(item);
     });
   }
-  return{set:{setId,name:setName,kind:'case_study',createdAt,count:items.length},items};
+  return{set:{setId,name:setName,kind:'case_study',createdAt,count:items.length,kbKey:km.kbKey||undefined,course:metaCourse||undefined,exam:metaExam||undefined,examKey:km.examKey||undefined},items};
+}
+
+// v22.5 (#8): deterministic Anki Cloze Deck -> NCLEX Pro Flashcard converter & E2E-encrypted /api/ai-flashcards sync.
+// Expands multi-cloze notes (c1..c3) into independent reviewable flashcards while preserving exact KB factIds,
+// P-LATE buckets, Exam Trap tags, 4-Pillar Trap Audits, and Giddens Concepts/Conditions for bidirectional question <-> card remediation.
+function nclexProConvertAnkiDeck(notes,batch,kb,opts={}){
+  const list=Array.isArray(notes)?notes:[];
+  const srcKb=(batch&&batch.sourceKB)||kb||null;
+  const km=nclexProKbMeta(srcKb);
+  const metaCourse=km.course,metaExam=km.exam;
+  const defaultDeck=[metaCourse,metaExam].filter(Boolean).join(' · ')||'P-LATE Study Suite Flashcards';
+  const deckName=String(opts.deckName||defaultDeck).trim();
+  const createdAt=new Date().toISOString();
+  const deckId='deck_'+nclexProHashId(deckName+'|'+(km.kbKey||createdAt.slice(0,10))).slice(3);
+  const uncamel=s=>String(s||'').replace(/([a-z0-9])([A-Z])/g,'$1 $2').replace(/([A-Z]+)([A-Z][a-z])/g,'$1 $2').replace(/[_-]+/g,' ').trim();
+  const cards=[];
+  let noteCount=0;
+
+  for(const n of list){
+    if(!n||!String(n.text||'').trim())continue;
+    const rawText=String(n.text||'').trim();
+    const clozeRe=/\{\{c(\d+)::([\s\S]*?)(?:::([\s\S]*?))?\}\}/g;
+    const spans=[];
+    let m;
+    while((m=clozeRe.exec(rawText))!==null){
+      const ord=parseInt(m[1],10);
+      if(ord>=1&&ord<=9&&String(m[2]||'').trim())spans.push({ord,answer:String(m[2]).trim(),hint:m[3]?String(m[3]).trim():''});
+    }
+    if(!spans.length)continue;
+    noteCount++;
+    const ords=[...new Set(spans.map(s=>s.ord))].sort((a,b)=>a-b);
+    const tagTokens=String(n.tags||'').split(/\s+/).filter(Boolean);
+    let tagTier=0,plateBucket='',plateSubtag='',scopeRole='',clinicalLayer='rn';
+    const tagConds=new Set(),tagConcepts=new Set(),trapTags=new Set();
+    for(const tok of tagTokens){
+      let tm;
+      if((tm=tok.match(/^Tier::([123])$/i)))tagTier=Number(tm[1]);
+      else if((tm=tok.match(/^(?:Nursing::)?(?:PLATE|LATTE)::([^:]+)(?:::(.+))?$/i))){
+        const bRaw=tm[1];
+        plateBucket=/^patho|briefpatho$/i.test(bRaw)?'Patho':/^look$/i.test(bRaw)?'Look':/^analyze|tests|assess$/i.test(bRaw)?'Analyze':/^treat|treatments$/i.test(bRaw)?'Treat':/^educate$/i.test(bRaw)?'Educate':bRaw;
+        if(tm[2])plateSubtag=tm[2];
+      }else if((tm=tok.match(/^Condition::(.+)$/i))){
+        const human=uncamel(tm[1]);
+        tagConds.add(km.condByNorm.get(km.normSlug(human))||human);
+      }else if((tm=tok.match(/^Concept::(.+)$/i))){
+        const human=uncamel(tm[1]);
+        tagConcepts.add(km.conceptByNorm.get(km.normSlug(human))||human);
+      }else if((tm=tok.match(/^Trap::(.+)$/i)))trapTags.add(tm[1]);
+      else if((tm=tok.match(/^Scope::(.+)$/i)))scopeRole=tm[1];
+      else if(/^Layer::NPBridge$/i.test(tok))clinicalLayer='bridge';
+    }
+    const fm=km.resolveFactMeta(Array.isArray(n.factIds)?n.factIds:[]);
+    for(const cn of fm.conditionNames)tagConds.add(cn);
+    for(const cn of fm.conceptNames)tagConcepts.add(cn);
+    for(const tr of fm.trapRoles)trapTags.add(tr);
+    const lookup=nclexProKbTagLookup(srcKb,rawText+' '+String(n.extra||''),[...tagConcepts],[...tagConds]);
+    const finalBucket=plateBucket||fm.plateBuckets[0]||'';
+    const finalTier=tagTier||fm.tier||1;
+    const extraText=String(n.extra||'').trim();
+    const trapAudit=typeof opts.getTrapAudit==='function'?String(opts.getTrapAudit(n)||'').trim():'';
+    const sourceRef=typeof opts.getSourceRef==='function'?String(opts.getSourceRef(n)||'').trim():'';
+    const noteId='fcn_'+nclexProHashId(deckName+'|'+rawText).slice(3);
+
+    for(const ord of ords){
+      const cardId='fc_'+nclexProHashId(deckName+'|'+rawText+'|c'+ord).slice(3);
+      cards.push({
+        cardId,noteId,deckId,deckName,ord,
+        text:rawText,
+        extra:extraText||undefined,
+        trapAudit:trapAudit||undefined,
+        sourceRef:sourceRef||undefined,
+        d:nclexProInferDomain(rawText+' '+extraText),
+        tier:finalTier,
+        plateBucket:finalBucket||undefined,
+        plateSubtag:plateSubtag||undefined,
+        scopeRole:scopeRole||undefined,
+        clinicalLayer,
+        conceptNames:lookup.conceptNames,
+        conditionNames:lookup.conditionNames,
+        trapTags:trapTags.size?[...trapTags]:undefined,
+        factIds:fm.factIds.length?fm.factIds:undefined,
+        kbKey:km.kbKey||undefined,
+        course:metaCourse||undefined,
+        exam:metaExam||undefined,
+        examKey:km.examKey||undefined,
+      });
+    }
+  }
+  return{deck:{deckId,name:deckName,noteCount,count:cards.length,createdAt,kbKey:km.kbKey||undefined,course:metaCourse||undefined,exam:metaExam||undefined,examKey:km.examKey||undefined},cards};
+}
+function nclexProBuildFlashcardsExportJson(payload){
+  const decks=Array.isArray(payload.decks)?payload.decks:(payload.deck?[payload.deck]:[]);
+  const cards=Array.isArray(payload.cards)?payload.cards:[];
+  return JSON.stringify({version:'1.0',kind:'flashcards',updatedAt:new Date().toISOString(),decks,cards},null,2);
 }
 
 function nclexProConvertCasePacket(packet,kb,opts={}){
@@ -18903,12 +19460,19 @@ async function nclexProSyncToCloud(payload,{url=NCLEX_PRO_DEFAULT_URL,passphrase
       existing=JSON.parse(new TextDecoder().decode(plain));
     }
 
-    const itemMap=new Map((existing.items||[]).map(x=>[x.aiId,x]));
+    // v22.5 (#3, #8): respect deletedSetIds AND deletedCaseIds tombstones for sets/cases deleted in NCLEX Pro while allowing an explicitly re-synced setId/csId to restore cleanly.
+    const pushedSetIds=new Set(sets.map(s=>s&&s.setId).filter(Boolean));
+    const pushedCaseIds=new Set(items.map(x=>x&&x.csId).filter(Boolean));
+    const delSet=new Set((existing.deletedSetIds||[]).filter(id=>!pushedSetIds.has(id)));
+    const delCs=new Set((existing.deletedCaseIds||[]).filter(id=>!pushedCaseIds.has(id)));
+    const itemMap=new Map((existing.items||[]).filter(x=>x&&!(x.setId&&delSet.has(x.setId))&&!(x.csId&&delCs.has(x.csId))).map(x=>[x.aiId,x]));
     let added=0;
     for(const it of items){if(!itemMap.has(it.aiId))added++;itemMap.set(it.aiId,it);}
-    const setMap=new Map((existing.sets||[]).map(s=>[s.setId,s]));
+    const countBySet={};
+    for(const it of itemMap.values())if(it&&it.setId)countBySet[it.setId]=(countBySet[it.setId]||0)+1;
+    const setMap=new Map((existing.sets||[]).filter(s=>s&&!delSet.has(s.setId)&&(countBySet[s.setId]||0)>0).map(s=>[s.setId,{...s,count:countBySet[s.setId]}]));
     for(const s of sets)setMap.set(s.setId,s);
-    const merged={version:'1.0',updatedAt:new Date().toISOString(),deletedSetIds:existing.deletedSetIds||[],sets:[...setMap.values()],items:[...itemMap.values()]};
+    const merged={version:'1.0',updatedAt:new Date().toISOString(),deletedSetIds:[...delSet],deletedCaseIds:[...delCs],sets:[...setMap.values()],items:[...itemMap.values()]};
 
     onStatus?.('Encrypting & uploading '+items.length+' question(s)…');
     const iv=crypto.getRandomValues(new Uint8Array(12));
@@ -18926,6 +19490,90 @@ async function nclexProSyncToCloud(payload,{url=NCLEX_PRO_DEFAULT_URL,passphrase
   }catch(e){
     throw new Error(scrub(e&&e.message?e.message:String(e)));
   }
+}
+async function nclexProSyncFlashcardsToCloud(payload,{url=NCLEX_PRO_DEFAULT_URL,passphrase='',onStatus}={}){
+  const pass=String(passphrase||'');
+  if(!pass)throw new Error('Enter your NCLEX Pro vault passphrase in Study Settings first.');
+  const base=String(url||NCLEX_PRO_DEFAULT_URL).replace(/\/+$/,'');
+  const decks=Array.isArray(payload.decks)?payload.decks:(payload.deck?[payload.deck]:[]);
+  const cards=Array.isArray(payload.cards)?payload.cards:[];
+  if(!cards.length)throw new Error('No kept cloze flashcards found to sync.');
+
+  const b64ToBytes=b64=>{const bin=atob(b64),arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return arr;};
+  const bytesToB64=u8=>{let bin='';for(let i=0;i<u8.length;i+=0x8000)bin+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(bin);};
+  const scrub=m=>{const s=String(m||'');return pass.length>=4?s.split(pass).join('[redacted]'):s;};
+
+  try{
+    onStatus?.('Connecting to NCLEX Pro vault…');
+    const metaRes=await nclexProFetch(base+'/api/meta',{cache:'no-store'});
+    if(!metaRes.ok)throw new Error('Could not reach NCLEX Pro vault ('+metaRes.status+').');
+    const meta=await metaRes.json();
+    if(!meta.configured)throw new Error('NCLEX Pro vault is not configured.');
+
+    onStatus?.('Deriving AES-256-GCM key…');
+    const baseKey=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveBits','deriveKey']);
+    const authBits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:b64ToBytes(meta.authSalt),iterations:meta.iterations||310000,hash:'SHA-256'},baseKey,256);
+    const token=bytesToB64(new Uint8Array(authBits));
+    const aesKey=await crypto.subtle.deriveKey({name:'PBKDF2',salt:b64ToBytes(meta.encSalt),iterations:meta.iterations||310000,hash:'SHA-256'},baseKey,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+
+    onStatus?.('Loading existing synced flashcard decks…');
+    const getRes=await nclexProFetch(base+'/api/ai-flashcards',{headers:{'X-Vault-Token':token},cache:'no-store'});
+    if(getRes.status===401)throw new Error('Incorrect NCLEX Pro vault passphrase.');
+    if(!getRes.ok)throw new Error('Failed to read AI flashcards ('+getRes.status+').');
+    const remoteRec=await getRes.json();
+    let existing={version:'1.0',decks:[],cards:[],deletedDeckIds:[]};
+    if(remoteRec&&remoteRec.payload){
+      const raw=b64ToBytes(remoteRec.payload);
+      const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:raw.slice(0,12)},aesKey,raw.slice(12));
+      existing=JSON.parse(new TextDecoder().decode(plain));
+    }
+
+    const pushedDeckIds=new Set(decks.map(d=>d&&d.deckId).filter(Boolean));
+    const delDecks=new Set((existing.deletedDeckIds||[]).filter(id=>!pushedDeckIds.has(id)));
+    const cardMap=new Map((existing.cards||[]).filter(c=>c&&!(c.deckId&&delDecks.has(c.deckId))&&!pushedDeckIds.has(c.deckId)).map(c=>[c.cardId,c]));
+    let added=0;
+    for(const c of cards){if(!cardMap.has(c.cardId))added++;cardMap.set(c.cardId,c);}
+    const deckMap=new Map((existing.decks||[]).filter(d=>d&&!delDecks.has(d.deckId)).map(d=>[d.deckId,d]));
+    for(const d of decks)deckMap.set(d.deckId,d);
+    const merged={version:'1.0',kind:'flashcards',updatedAt:new Date().toISOString(),deletedDeckIds:[...delDecks],decks:[...deckMap.values()],cards:[...cardMap.values()]};
+
+    onStatus?.('Encrypting & uploading '+cards.length+' flashcard(s)…');
+    const iv=crypto.getRandomValues(new Uint8Array(12));
+    const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},aesKey,new TextEncoder().encode(JSON.stringify(merged)));
+    const combined=new Uint8Array(12+ct.byteLength);
+    combined.set(iv,0);combined.set(new Uint8Array(ct),12);
+    const putRes=await nclexProFetch(base+'/api/ai-flashcards',{
+      method:'PUT',
+      headers:{'Content-Type':'application/json','X-Vault-Token':token},
+      body:JSON.stringify({payload:bytesToB64(combined),cardCount:merged.cards.length,deckCount:merged.decks.length}),
+    });
+    if(!putRes.ok)throw new Error('Flashcard upload failed ('+putRes.status+').');
+    const saved=await putRes.json();
+    return{ok:true,syncedCount:cards.length,addedCount:added,totalCardCount:merged.cards.length,totalDeckCount:merged.decks.length,rev:saved.rev};
+  }catch(e){
+    throw new Error(scrub(e&&e.message?e.message:String(e)));
+  }
+}
+async function nclexProRunFlashcardUiSync(buildPayload,passphrase,setSyncState){
+  const payload=buildPayload();
+  if(!(payload&&Array.isArray(payload.cards)&&payload.cards.length)){setSyncState({busy:false,msg:'',err:'No kept cloze flashcards found to sync.'});return;}
+  setSyncState({busy:true,msg:'Encrypting & syncing flashcards…',err:''});
+  try{
+    const res=await nclexProSyncFlashcardsToCloud(payload,{passphrase,onStatus:m=>setSyncState({busy:true,msg:m,err:''})});
+    setSyncState({busy:false,msg:`Synced ${res.syncedCount} review flashcard(s) to NCLEX Pro (${res.totalCardCount} total across ${res.totalDeckCount} deck(s) — linked by fact ID & topic for bidirectional Q ↔ Card remediation).`,err:''});
+  }catch(e){setSyncState({busy:false,msg:'',err:e?.message||String(e)});}
+}
+function nclexProDownloadFlashcardsJson(payload,filename){
+  if(!(payload&&Array.isArray(payload.cards)&&payload.cards.length))return;
+  downloadBlob(new Blob([nclexProBuildFlashcardsExportJson(payload)],{type:'application/json'}),filename);
+}
+function AnkiNclexProSyncButtons({kept,keptCount,batch,kb,includeTrapAudit,current,passphrase,syncState,setSyncState}){
+  const h=React.createElement;
+  const build=()=>nclexProConvertAnkiDeck(kept,batch,kb,{getTrapAudit:includeTrapAudit?c=>ankiCardTrapAudit(c,batch,current):null,getSourceRef:c=>ankiSourcePointers(c,batch,current).join('; ')});
+  return h(React.Fragment,null,
+    h('button',{type:'button',className:'btn-secondary',disabled:!keptCount||syncState.busy,onClick:()=>nclexProRunFlashcardUiSync(build,passphrase,setSyncState)},syncState.busy?'⟳ Syncing…':'☁ Sync to NCLEX Pro'),
+    h('button',{type:'button',className:'btn-secondary',disabled:!keptCount,onClick:()=>nclexProDownloadFlashcardsJson(build(),'NCLEX-Pro-Sync-Flashcards.json')},'⬇ NCLEX Pro .json')
+  );
 }
 async function nclexProRunUiSync(buildPayload,passphrase,setSyncState,kindLabel){
   const payload=buildPayload();
@@ -18954,11 +19602,11 @@ function NclexProSettingsField({cfg}){
         h('input',{id:'suite-nclex-pass','aria-describedby':'suite-nclex-pass-help',autoComplete:'off',type:'password','data-1p-ignore':'true','data-lpignore':'true','data-form-type':'other',value:cfg.nclexProPass||'',onChange:e=>cfg.setNclexProPass?.(e.target.value),placeholder:'NCLEX Pro passphrase…',spellCheck:false,style:{flex:1}}),
         cfg.nclexProPass&&h('button',{type:'button',className:'btn-secondary','aria-label':'Clear NCLEX Pro passphrase',style:{padding:'4px 10px',fontSize:12,flexShrink:0},onClick:()=>cfg.setNclexProPass?.('')},'Clear')
       ),
-      h('div',{className:'sb-hint',id:'suite-nclex-pass-help'},'Session-only passphrase for E2E-encrypted sync of generated NCLEX worksheets & unfolding Case Studies to your private Cloudflare NCLEX Pro app (AI items stay OFF by default in NCLEX Pro until you opt in).')
+      h('div',{className:'sb-hint',id:'suite-nclex-pass-help'},'Session-only passphrase for E2E-encrypted sync of Anki flashcards, NCLEX worksheets, & unfolding Case Studies to your private Cloudflare NCLEX Pro app (with bidirectional Question ↔ Flashcard remediation).')
     )
   );
 }
-function NgWorksheetPanel({ws,totalConcepts,view,setView,wsMd,workMd,syncState,onSync,onExportJson}){
+function NgWorksheetPanel({ws,totalConcepts,view,setView,wsMd,workMd,syncState,onSync,onExportJson,diagnosticsAtEnd=true,setDiagnosticsAtEnd}){
   const h=React.createElement;
   const preStyle={whiteSpace:'pre-wrap',fontFamily:'var(--font-mono)',fontSize:12,lineHeight:1.7,color:'var(--text)',background:'transparent',border:'none',padding:0,margin:0};
   return h(React.Fragment,null,
@@ -18971,6 +19619,12 @@ function NgWorksheetPanel({ws,totalConcepts,view,setView,wsMd,workMd,syncState,o
       h('button',{className:'btn-secondary',onClick:()=>exportAsPdf(view==='worksheet'?wsMd:workMd,view==='worksheet'?'NCLEX Practice Questions':'NCLEX Audit Trail',ws.count+' questions')},'🖨 PDF'),
       h('button',{className:'btn-secondary',disabled:syncState.busy,onClick:onSync},syncState.busy?'⟳ Syncing…':'☁ Sync to NCLEX Pro'),
       h('button',{className:'btn-secondary',onClick:onExportJson},'⬇ NCLEX Pro .json')
+    ),
+    typeof setDiagnosticsAtEnd==='function'&&view==='worksheet'&&h('div',{style:{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',marginTop:6,marginBottom:4,padding:'6px 10px',borderRadius:6,background:'var(--bg-input)',border:'1px solid var(--border)',fontSize:11.5,color:'var(--text-dim)'}},
+      h('label',{style:{display:'flex',alignItems:'center',gap:6,color:'var(--text)',cursor:'pointer'}},
+        h('input',{id:'nclex-diag-at-end',type:'checkbox',checked:diagnosticsAtEnd,onChange:e=>setDiagnosticsAtEnd(e.target.checked),style:{accentColor:'var(--accent)'}}),
+        h('span',null,'Place all warnings, errors & review appendix together at end of worksheet export')
+      )
     ),
     h(NclexProSyncBanner,{state:syncState}),
     h('div',{className:'output-container'},
@@ -18997,7 +19651,7 @@ function NgWorksheetPanel({ws,totalConcepts,view,setView,wsMd,workMd,syncState,o
 const GEN_LEDGER_STORAGE_KEY='latte_gen_fact_ledger_v1';
 const GEN_LEDGER_MAX_KBS=10;
 const GEN_LEDGER_MAX_STEMS=60;
-const GEN_LEDGER_MAX_TITLES=24;
+const GEN_LEDGER_MAX_TITLES=40;
 const MAX_NCLEX_TARGET=500;
 const _genLedgerListeners=new Set();
 function genLedgerSubscribe(fn){
@@ -19153,7 +19807,7 @@ function genLedgerScopeStats(factsOrGroups,excludeSet){
   }
   return{total:seen.size,excluded,remaining:Math.max(0,seen.size-excluded)};
 }
-function GenLedgerControl({idPrefix,primaryKind,ledger,scopeStats,excludeOwn,setExcludeOwn,excludeOther,setExcludeOther,onReset,disabled,resetHint}){
+function GenLedgerControl({idPrefix,primaryKind,ledger,scopeStats,excludeOwn,setExcludeOwn,excludeOther,setExcludeOther,allowContextAnchors,setAllowContextAnchors,freshnessPreview,onReset,disabled,resetHint}){
   const h=React.createElement;
   const isCases=primaryKind==='cases';
   const own=isCases?(ledger&&ledger.cases):(ledger&&ledger.nclex);
@@ -19164,13 +19818,37 @@ function GenLedgerControl({idPrefix,primaryKind,ledger,scopeStats,excludeOwn,set
   const otherLabel=isCases?'NCLEX Generator':'Case Studies';
   const ownLabel=isCases?'prior cases':'prior NCLEX runs';
   const hasAny=ownCount>0||otherCount>0;
+  // v22.5 (#4): explicit live status badge showing whether the next run uses 100% fresh facts, background anchors, or reused facts.
+  let pill=null;
+  if(freshnessPreview&&freshnessPreview.totalSelected>0){
+    const {freshCount,anchorCount,reusedCount,isBatch,batchCount,batchFreshOnlyCount}=freshnessPreview;
+    if(isBatch){
+      const allFresh=batchCount===batchFreshOnlyCount;
+      pill=h('div',{id:idPrefix+'-freshness-status',style:{marginTop:4,marginBottom:5,padding:'4px 8px',borderRadius:5,fontSize:11,fontWeight:600,background:allFresh?'var(--success-bg)':'var(--warning-bg)',border:'1px solid '+(allFresh?'var(--success-border)':'var(--warning-border)'),color:allFresh?'var(--accent-green)':'var(--accent-warm)'}},
+        allFresh?('✓ Batch fact check: all '+batchCount+' queued case(s) use 100% unused facts (0 previously used)'):('↺ Batch fact check: '+batchFreshOnlyCount+'/'+batchCount+' queued case(s) are 100% unused · '+(batchCount-batchFreshOnlyCount)+' include background anchors or reused facts')
+      );
+    }else if(reusedCount>0){
+      pill=h('div',{id:idPrefix+'-freshness-status',style:{marginTop:4,marginBottom:5,padding:'4px 8px',borderRadius:5,fontSize:11,fontWeight:600,background:'var(--warning-bg)',border:'1px solid var(--warning-border)',color:'var(--accent-warm)'}},
+        '↺ Reusing previously used facts: '+reusedCount+' of '+freshnessPreview.totalSelected+' selected fact(s) were already used in prior runs ('+freshCount+' unused).'
+      );
+    }else if(anchorCount>0){
+      pill=h('div',{id:idPrefix+'-freshness-status',style:{marginTop:4,marginBottom:5,padding:'4px 8px',borderRadius:5,fontSize:11,fontWeight:600,background:'var(--warning-bg)',border:'1px solid var(--warning-border)',color:'var(--accent-warm)'}},
+        'ⓘ '+freshCount+' unused fact(s) + '+anchorCount+' previously used background context anchor(s) (Look/Analyze/Treat bucket had 0 unused facts — uncheck anchors below for strict 0 reuse).'
+      );
+    }else{
+      pill=h('div',{id:idPrefix+'-freshness-status',style:{marginTop:4,marginBottom:5,padding:'4px 8px',borderRadius:5,fontSize:11,fontWeight:600,background:'var(--success-bg)',border:'1px solid var(--success-border)',color:'var(--accent-green)'}},
+        '✓ Using 100% unused facts ('+freshCount+' fresh · 0 previously used)'
+      );
+    }
+  }
   return h('div',{style:{marginTop:9,padding:'8px 10px',borderRadius:6,border:'1px solid var(--border)',background:'var(--bg-input)',fontSize:11.5}},
-    h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap',marginBottom:hasAny?5:0}},
+    h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap',marginBottom:(hasAny||pill)?5:0}},
       h('span',{style:{fontWeight:600,color:'var(--text-bright)'}},'Non-overlap fact tracking',
         scopeStats&&scopeStats.total>0&&h('span',{style:{fontWeight:400,color:scopeStats.remaining?'var(--text-dim)':'var(--accent-warm)',marginLeft:6}},'('+scopeStats.remaining+' of '+scopeStats.total+' in scope unused'+(scopeStats.excluded?' · '+scopeStats.excluded+' excluded':'')+')')
       ),
       ownCount>0&&h('button',{type:'button',id:idPrefix+'-reset-history',className:'btn-secondary',disabled,style:{padding:'2px 8px',fontSize:11},onClick:onReset},'Reset '+(isCases?'Case':'NCLEX')+' history')
     ),
+    pill,
     !hasAny
       ?h('div',{style:{color:'var(--text-dim)',marginTop:3,lineHeight:1.45}},'Tracks cited facts for this Knowledge Base across runs and reloads so follow-up '+(isCases?'cases/waves':'worksheets/appends')+' draw remaining unused facts automatically.')
       :h('div',{style:{display:'flex',flexDirection:'column',gap:4}},
@@ -19181,6 +19859,10 @@ function GenLedgerControl({idPrefix,primaryKind,ledger,scopeStats,excludeOwn,set
         h('label',{style:{display:'flex',alignItems:'center',gap:6,color:otherCount?'var(--text)':'var(--text-dim)',cursor:'pointer'}},
           h('input',{id:idPrefix+'-exclude-other',type:'checkbox',checked:excludeOther,onChange:e=>setExcludeOther(e.target.checked),style:{accentColor:'var(--accent)'}}),
           h('span',null,'Also exclude facts used in '+otherLabel+' (',h('b',null,otherCount),' fact'+(otherCount===1?'':'s'),') ',h('span',{className:'badge-opt'},'optional'))
+        ),
+        isCases&&(excludeOwn||(excludeOther&&otherCount>0))&&typeof setAllowContextAnchors==='function'&&h('label',{style:{display:'flex',alignItems:'center',gap:6,color:'var(--text)',cursor:'pointer'}},
+          h('input',{id:idPrefix+'-allow-anchors',type:'checkbox',checked:allowContextAnchors!==false,onChange:e=>setAllowContextAnchors(e.target.checked),style:{accentColor:'var(--accent)'}}),
+          h('span',null,'Allow ≤2 previously used background context anchors only if Look/Analyze/Treat has 0 unused facts ',h('span',{className:'badge-opt'},'uncheck = strict 0 reuse'))
         ),
         resetHint&&h('div',{style:{fontSize:11,color:'var(--text-dim)',marginTop:1}},resetHint)
       )
@@ -19282,10 +19964,16 @@ function NgCoveragePanel({coverage,showUncov,setShowUncov,FactTagComp}){
 }
 function CaseValidationBanner({errCount,issues,coverage}){
   const h=React.createElement;
+  const fr=coverage&&coverage.freshness;
   return h('div',{style:{marginTop:12,padding:'11px 13px',borderRadius:8,border:'1px solid '+(errCount?'var(--error-border)':issues.length?'var(--warning-border)':'var(--success-border)'),background:errCount?'var(--error-bg)':issues.length?'var(--warning-bg)':'var(--success-bg)'}},
     h('span',{style:{fontSize:12,fontWeight:600,color:errCount?'var(--accent-red)':issues.length?'var(--accent-warm)':'var(--accent-green)'}},
       (errCount?'⚠':issues.length?'⚑':'✓')+' Validation: '+errCount+' error(s), '+(issues.length-errCount)+' warning(s)',
-      coverage&&h('span',{style:{color:'var(--text-dim)',fontWeight:400}},' · '+coverage.used+'/'+coverage.selected+' selected facts grounded')
+      coverage&&h('span',{style:{color:'var(--text-dim)',fontWeight:400}},' · '+coverage.used+'/'+coverage.selected+' selected facts grounded'),
+      fr&&h('span',{style:{marginLeft:6,fontWeight:600,color:(fr.reusedCount||fr.anchorCount)?'var(--accent-warm)':'var(--accent-green)'}},
+        fr.reusedCount?('· ↺ '+fr.freshCount+' fresh + '+fr.reusedCount+' previously used ['+fr.reusedIds.slice(0,4).join(', ')+(fr.reusedIds.length>4?'…':'')+']')
+          :fr.anchorCount?('· ⓘ '+fr.freshCount+' fresh + '+fr.anchorCount+' background anchor ['+fr.anchorIds.join(', ')+']')
+          :('· ✓ 100% fresh facts ('+fr.freshCount+' unused, 0 reused)')
+      )
     ),
     h('div',{style:{fontSize:12,color:'var(--text-dim)',marginTop:5}},'Structural checks, unknown-fact-ID checks, and stage-timing all run in code against the current Knowledge Base — not on the model\'s word.'),
     issues.length>0&&h('div',{style:{marginTop:8,maxHeight:170,overflowY:'auto',background:'var(--bg-deep)',border:'1px solid var(--border)',borderRadius:6,padding:8}},
@@ -19294,6 +19982,44 @@ function CaseValidationBanner({errCount,issues,coverage}){
     coverage&&coverage.outOfPacket&&coverage.outOfPacket.length>0&&h('div',{style:{fontSize:12,color:'var(--accent-red)',marginTop:7,lineHeight:1.5}},coverage.outOfPacket.length+' cited fact ID(s) were never supplied to this run: '+coverage.outOfPacket.slice(0,8).join(', ')+(coverage.outOfPacket.length>8?'…':'')),
     coverage&&coverage.uncovered.length>0&&h('div',{style:{fontSize:12,color:'var(--text-dim)',marginTop:7,lineHeight:1.5}},coverage.uncovered.length+' supplied fact(s) were not referenced by the case — that is expected; uncited facts stay available for follow-up waves.'),
     errCount>0&&h('div',{style:{fontSize:12,color:'var(--accent-red)',marginTop:8,lineHeight:1.5,paddingTop:8,borderTop:'1px solid var(--border)'}},'This case was ',h('b',null,'not'),' linked into the Fact Inspector. Export is still available, and the exported file is stamped with these errors.')
+  );
+}
+// v22.5 (#5, #6): plain-script export layout controls & used-fact categories card so the JSX Babel block stays well under 390 KB.
+function CaseExportLayoutBar({factCategoryPlacement,setFactCategoryPlacement,diagnosticsPlacement,setDiagnosticsPlacement}){
+  const h=React.createElement;
+  return h('div',{style:{display:'flex',gap:12,alignItems:'center',flexWrap:'wrap',marginTop:6,marginBottom:8,padding:'6px 10px',borderRadius:6,border:'1px solid var(--border)',background:'var(--bg-input)',fontSize:11.5}},
+    h('label',{htmlFor:'case-fact-cat-pos',style:{display:'flex',alignItems:'center',gap:6,color:'var(--text)',margin:0}},
+      h('span',{style:{color:'var(--text-dim)'}},'Answer Key fact categories:'),
+      h('select',{id:'case-fact-cat-pos',value:factCategoryPlacement,onChange:e=>setFactCategoryPlacement(e.target.value),style:{width:'auto',padding:'2px 7px',fontSize:11.5}},
+        h('option',{value:'auto'},'Auto (start if ≤6 topics, end if longer)'),
+        h('option',{value:'start'},'Beginning of Answer Key'),
+        h('option',{value:'end'},'End of Answer Key'),
+        h('option',{value:'off'},'Off')
+      )
+    ),
+    h('label',{htmlFor:'case-diag-pos',style:{display:'flex',alignItems:'center',gap:6,color:'var(--text)',margin:0}},
+      h('span',{style:{color:'var(--text-dim)'}},'Warnings, errors & review appendix:'),
+      h('select',{id:'case-diag-pos',value:diagnosticsPlacement,onChange:e=>setDiagnosticsPlacement(e.target.value),style:{width:'auto',padding:'2px 7px',fontSize:11.5}},
+        h('option',{value:'end'},'Grouped together at end (default)'),
+        h('option',{value:'top-of-key'},'Grouped at start of Answer Key'),
+        h('option',{value:'inline'},'Per-case / top banner (classic)')
+      )
+    )
+  );
+}
+function CaseUsedCategoriesCard({caseStudy,factIndex,FactTagComp}){
+  const h=React.createElement;
+  const info=React.useMemo(()=>typeof caseResolveUsedFactCategories==='function'?caseResolveUsedFactCategories(caseStudy,factIndex):{totalFacts:0,categories:[]},[caseStudy,factIndex]);
+  if(!info.categories.length)return null;
+  return h('div',{style:{background:'var(--bg-card-alt)',borderRadius:8,padding:'10px 14px',marginTop:10,border:'1px solid var(--border)'}},
+    h('div',{style:{fontSize:12,fontWeight:600,textTransform:'uppercase',letterSpacing:.8,color:'var(--text-dim)',marginBottom:6}},'Categories of Facts Used ('+info.totalFacts+' cited across '+info.categories.length+' '+(info.categories.length===1?'topic':'topics')+')'),
+    info.categories.map(cat=>h('div',{key:cat.name,style:{fontSize:12.5,marginBottom:5,lineHeight:1.55,display:'flex',flexWrap:'wrap',gap:6,alignItems:'baseline'}},
+      h('span',null,h('b',{style:{color:'var(--text-bright)'}},cat.name),cat.entityKind?' ['+cat.entityKind+']':(cat.concept&&cat.concept.toLowerCase()!==cat.name.toLowerCase()?' ('+cat.concept+')':''),' ('+cat.total+'):'),
+      cat.buckets.map(b=>h('span',{key:b.bucket,style:{display:'inline-flex',flexWrap:'wrap',gap:4,alignItems:'baseline',marginRight:4}},
+        h('span',{style:{fontFamily:'var(--font-mono)',fontSize:11,color:'var(--accent)'}},b.bucket+':'),
+        b.factIds.map(fid=>FactTagComp?h(FactTagComp,{key:fid,factId:fid}):h('span',{key:fid,className:'fact-tag'},fid))
+      ))
+    ))
   );
 }
 function CaseRunAuditToggle({runAudit,setRunAudit}){
@@ -19310,11 +20036,55 @@ function CaseRunAuditToggle({runAudit,setRunAudit}){
     )
   );
 }
-function CaseQuestionTypesGrid({types,toggleType}){
+// v22.5: hoist CaseStudyGenerator's condition-mixer checklist box to plain script to keep the JSX Babel block comfortably under 390 KB.
+function CaseScopeMixerDropdown({caseCatalog,caseFilterText,setCaseFilterText,validCaseCondIds,singleCondition,toggleCaseCondId,setCaseExtraConditionIds}){
   const h=React.createElement;
-  const list=[['mcq','Multiple choice'],['sata','SATA'],['prioritization','Prioritization'],['ordering','Ordered response'],['calculation','Calculation (when sourced)'],['education','Patient education'],['bowtie','Bow-tie (NGN)'],['matrix','Matrix / grid (NGN)'],['cloze','Cloze drop-down (NGN)'],['trend','Trend (NGN)']];
+  const fq=caseFilterText.trim().toLowerCase();
+  const matchesFilter=c=>!fq||validCaseCondIds.includes(c.id)||String(c.name||'').toLowerCase().includes(fq)||String(c.concept||'').toLowerCase().includes(fq)||(c.aliases||[]).some(a=>String(a||'').toLowerCase().includes(fq));
+  const visGroups=caseCatalog.groups.map(g=>({...g,items:g.items.filter(matchesFilter)})).filter(g=>g.items.length);
+  const visIds=visGroups.flatMap(g=>g.items.map(c=>c.id));
+  const visSubstantialIds=visGroups.flatMap(g=>g.items.filter(c=>(c.facts||[]).length>=8).map(c=>c.id));
+  return h('div',{style:{marginTop:6,padding:8,borderRadius:6,border:'1px solid var(--border)',background:'var(--bg-input)',maxHeight:220,overflowY:'auto'}},
+    h('div',{style:{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap',marginBottom:6}},
+      h('input',{id:'case-mix-filter',type:'text','aria-label':'Filter conditions to mix',value:caseFilterText,onChange:e=>setCaseFilterText(e.target.value),placeholder:'Filter conditions, concepts, or meds…',style:{flex:'1 1 160px',padding:'4px 8px',fontSize:11.5}}),
+      singleCondition&&!validCaseCondIds.includes(singleCondition.id)&&h('button',{type:'button',className:'btn-secondary',style:{padding:'2px 7px',fontSize:11},onClick:()=>toggleCaseCondId(singleCondition.id)},'+ Current'),
+      visSubstantialIds.length>0&&h('button',{type:'button',className:'btn-secondary',title:'Check visible entries with at least 8 facts (skips thin stubs)',style:{padding:'2px 7px',fontSize:11},onClick:()=>setCaseExtraConditionIds(p=>[...new Set([...p,...visSubstantialIds])])},'Select ≥8 facts'),
+      visIds.length>0&&h('button',{type:'button',className:'btn-secondary',style:{padding:'2px 7px',fontSize:11},onClick:()=>setCaseExtraConditionIds(p=>[...new Set([...p,...visIds])])},'Select visible'),
+      validCaseCondIds.length>0&&h('button',{type:'button',className:'btn-secondary',style:{padding:'2px 7px',fontSize:11},onClick:()=>setCaseExtraConditionIds([])},'Uncheck all')
+    ),
+    visGroups.map(g=>h('div',{key:g.heading,style:{marginBottom:6}},
+      h('div',{style:{fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:'uppercase',color:'var(--text-dim)',marginBottom:3}},g.heading),
+      h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(190px,1fr))',gap:4}},
+        g.items.map(c=>{
+          const checked=validCaseCondIds.includes(c.id);
+          return h('label',{key:c.id,style:{display:'flex',alignItems:'center',gap:5,fontSize:11.5,color:checked?'var(--accent)':'var(--text)',cursor:'pointer'}},
+            h('input',{type:'checkbox',checked,onChange:()=>toggleCaseCondId(c.id),style:{accentColor:'var(--accent)'}}),
+            h('span',{style:{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'},title:c.name},(c.entryRole==='concept'?'◆ ':(!c.entityKind&&c.concept)?'↳ ':'')+c.name+(c.entityKind?' · '+c.entityKind:'')+' ('+(c.facts||[]).length+')')
+          );
+        })
+      )
+    )),
+    !visGroups.length&&h('div',{style:{fontSize:11.5,color:'var(--text-dim)'}},'No entries match "'+caseFilterText.trim()+'".')
+  );
+}
+function CaseQuestionTypesGrid({types,toggleType,setTypes}){
+  const h=React.createElement;
+  const list=[['mcq','Multiple choice'],['sata','SATA'],['prioritization','Prioritization (1 best)'],['ordering','Ordered response'],['calculation','Calculation (when sourced)'],['education','Patient education (1 best)'],['bowtie','Bow-tie (NGN)'],['matrix','Matrix / grid (NGN)'],['cloze','Cloze drop-down (NGN)'],['trend','Trend (NGN)']];
+  const applyPreset=mode=>{
+    if(typeof setTypes!=='function')return;
+    if(mode==='all')setTypes({mcq:true,sata:true,prioritization:true,ordering:true,calculation:true,education:true,bowtie:true,matrix:true,cloze:true,trend:true});
+    else if(mode==='ngn-sata')setTypes({mcq:false,sata:true,prioritization:false,ordering:true,calculation:true,education:false,bowtie:true,matrix:true,cloze:true,trend:true});
+    else if(mode==='classic')setTypes({mcq:true,sata:true,prioritization:true,ordering:true,calculation:true,education:true,bowtie:false,matrix:false,cloze:false,trend:false});
+  };
   return h(React.Fragment,null,
-    h('div',{style:{fontSize:12,fontWeight:600,textTransform:'uppercase',letterSpacing:1,color:'var(--text-dim)',marginBottom:8}},'Question types to include'),
+    h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6,flexWrap:'wrap',marginBottom:8}},
+      h('div',{style:{fontSize:12,fontWeight:600,textTransform:'uppercase',letterSpacing:1,color:'var(--text-dim)'}},'Question types to include'),
+      typeof setTypes==='function'&&h('div',{role:'group','aria-label':'Question type presets',style:{display:'inline-flex',gap:4,flexWrap:'wrap'}},
+        h('button',{type:'button',id:'case-preset-all',className:'btn-secondary',style:{padding:'1px 7px',fontSize:10.5},onClick:()=>applyPreset('all')},'All types'),
+        h('button',{type:'button',id:'case-preset-ngn-sata',className:'btn-secondary',title:'Disables Multiple choice and other 4-option single-answer formats; keeps SATA, Ordering, Calculation, and all 4 NGN formats',style:{padding:'1px 7px',fontSize:10.5},onClick:()=>applyPreset('ngn-sata')},'NGN + SATA only'),
+        h('button',{type:'button',id:'case-preset-classic',className:'btn-secondary',style:{padding:'1px 7px',fontSize:10.5},onClick:()=>applyPreset('classic')},'Classic only')
+      )
+    ),
     h('div',{style:{display:'flex',flexWrap:'wrap',gap:8}},
       list.map(([k,lbl])=>h('label',{key:k,style:{display:'flex',alignItems:'center',gap:5,fontSize:12,color:types[k]?'var(--text)':'var(--text-dim)',cursor:'pointer',userSelect:'none'}},
         h('input',{type:'checkbox',checked:types[k],onChange:()=>toggleType(k),style:{accentColor:'var(--accent)'}}),lbl
@@ -20530,6 +21300,7 @@ function AnkiGenerator(){
   const [includeSuiteSourceTag,setIncludeSuiteSourceTag]=useState(false);
   const [suiteSourceTagOverride,setSuiteSourceTagOverride]=useState('');
   const [alwaysStampRnCore,setAlwaysStampRnCore]=useState(false);
+  const [ankiSyncState,setAnkiSyncState]=useState({busy:false,msg:'',err:''});
   const [abortCtl,setAbortCtl]=useState(null);
 
   const {model,level:toolLevel}=cfg.forTool('anki');
@@ -20736,7 +21507,9 @@ function AnkiGenerator(){
               {['table','list','preview'].map(v=><button key={v} aria-pressed={view===v} onClick={()=>setView(v)} >{v==='table'?'Table':v==='list'?'List':'Preview'}</button>)}
             </div>
         <button className="btn-primary" onClick={exportTxt} disabled={!keptCount}>⬇ Export .txt</button>
+        {typeof AnkiNclexProSyncButtons==='function'&&<AnkiNclexProSyncButtons kept={selected.kept} keptCount={keptCount} batch={batch} kb={K.knowledgeBase} includeTrapAudit={includeTrapAudit} current={current} passphrase={cfg.nclexProPass} syncState={ankiSyncState} setSyncState={setAnkiSyncState}/>}
       </ResultsHead>
+      {typeof NclexProSyncBanner==='function'&&<NclexProSyncBanner state={ankiSyncState}/>}
       <div className="meta-row">
             <label title="Prepend #separator:Pipe / #notetype:Cloze / #tags column:3 and HTML-escape < > & so the file imports in one click. Leave off if your importer maps fields manually.">
               <input type="checkbox" checked={ankiHeader} onChange={e=>setAnkiHeader(e.target.checked)} style={{accentColor:'var(--accent)'}}/>Anki header
@@ -21276,6 +22049,8 @@ function NCLEXGenerator(){
   // boundary replaced the whole app, discarding all six tools' unsaved state.
   const [showUncov,setShowUncov]=useState(false);
   const [syncState,setSyncState]=useState({busy:false,msg:'',err:''});
+  // v22.5 (#6): default UI export layout to grouped warnings/errors/review appendix at end, with toggle in NgWorksheetPanel.
+  const [ngDiagnosticsAtEnd,setNgDiagnosticsAtEnd]=useState(true);
   // v22.4: persistent per-KB used-fact ledger (separate from Case Studies by default with opt-in cross-tab exclusion).
   const [ledger,setLedger]=useGenLedger(K.knowledgeBase);
   const [excludePriorNclex,setExcludePriorNclex]=useState(true);
@@ -21328,7 +22103,7 @@ function NCLEXGenerator(){
   const ws=useMemo(()=>ngAssembleWorksheet(batches),[batches]);
   const wsIssuesAll=useMemo(()=>batches.flatMap(b=>(b.wsIssues||[]).map(x=>({...x,msg:'Batch '+b.n+': '+x.msg}))),[batches]);
   const exportNotice=useMemo(()=>artifactExportNotice({source:artifactSource,activeKB:K.knowledgeBase,requested:artifactSource?.requested,actual:ws.count,auditRequested:artifactSource?.auditRequested,auditState,rows:batches.flatMap(b=>b.auditRows||[])}),[artifactSource,K.knowledgeBase,ws.count,auditState,batches]);
-  const wsMd=useMemo(()=>ngBuildWorksheetMd(ws,wsIssuesAll,exportNotice),[ws,wsIssuesAll,exportNotice]);
+  const wsMd=useMemo(()=>ngBuildWorksheetMd(ws,wsIssuesAll,exportNotice,{diagnosticsAtEnd:ngDiagnosticsAtEnd,provenance,batches}),[ws,wsIssuesAll,exportNotice,ngDiagnosticsAtEnd,provenance,batches]);
 
   // v15.7: the audit trail now carries the deterministic worksheet findings, the per-item
   // audit verdicts, and the provenance stamp. The printable worksheet stays clean.
@@ -21475,7 +22250,7 @@ function NCLEXGenerator(){
       </div>
     </Disclose>}
       <NgCoveragePanel coverage={coverage} showUncov={showUncov} setShowUncov={setShowUncov} FactTagComp={FactTag}/>
-    {ws.count>0&&<NgWorksheetPanel ws={ws} totalConcepts={totalConcepts} view={view} setView={setView} wsMd={wsMd} workMd={workMd} syncState={syncState} onSync={()=>nclexProRunUiSync(buildNclexProWs,cfg.nclexProPass,setSyncState,'Q(s)')} onExportJson={()=>nclexProDownloadJson(buildNclexProWs(),'NCLEX-Pro-Sync-Questions.json')}/>}
+    {ws.count>0&&<NgWorksheetPanel ws={ws} totalConcepts={totalConcepts} view={view} setView={setView} wsMd={wsMd} workMd={workMd} syncState={syncState} diagnosticsAtEnd={ngDiagnosticsAtEnd} setDiagnosticsAtEnd={setNgDiagnosticsAtEnd} onSync={()=>nclexProRunUiSync(buildNclexProWs,cfg.nclexProPass,setSyncState,'Q(s)')} onExportJson={()=>nclexProDownloadJson(buildNclexProWs(),'NCLEX-Pro-Sync-Questions.json')}/>}
     {!ws.count&&!busy&&<EmptyState mark="✎" title="No questions generated yet" note="Every question is written from fact IDs in your Knowledge Base and checked back against them, so nothing appears that your sources do not support." steps={['Choose which conditions and tiers the questions may draw on.','Set how many questions you want and how large each batch is.','Generate — questions first, then one answer key, with the grounding evidence beside it.']}/>}
     </Workbench></ArtifactSourceCtx.Provider>
   );
@@ -21535,6 +22310,9 @@ function CaseStudyGenerator(){
   const [ledger,setLedger]=useGenLedger(K.knowledgeBase);
   const [excludePriorCases,setExcludePriorCases]=useState(true);
   const [excludeNclexFacts,setExcludeNclexFacts]=useState(false);
+  const [allowContextAnchors,setAllowContextAnchors]=useState(true);
+  const [factCategoryPlacement,setFactCategoryPlacement]=useState('auto');
+  const [diagnosticsPlacement,setDiagnosticsPlacement]=useState('end');
   const caseHasBridge=useMemo(()=>Boolean(K.knowledgeBase.metadata?.plateBridge)||conditions.some(c=>(c.facts||[]).some(f=>f&&f.clinicalLayer==='bridge')),[K.knowledgeBase,conditions]);
   const singleCondition=conditions.find(c=>c.id===conditionId)||conditions[0]||null;
   // Auto-select the first condition once the KB is available or when a replaced KB no longer contains conditionId; clear conditionId if the KB has no conditions.
@@ -21568,6 +22346,7 @@ function CaseStudyGenerator(){
   const resetCaseHistory=useCallback(()=>setLedger(genLedgerReset(K.knowledgeBase,'cases')),[K.knowledgeBase]);
 
   const caseExcludeSet=useMemo(()=>genLedgerExcludeSet(ledger,'cases',{excludeOwn:excludePriorCases,excludeOther:excludeNclexFacts}),[ledger,excludePriorCases,excludeNclexFacts]);
+  const allPriorUsedSet=useMemo(()=>genLedgerExcludeSet(ledger,'cases',{excludeOwn:true,excludeOther:excludeNclexFacts}),[ledger,excludeNclexFacts]);
   const activeScopeGroups=useMemo(()=>{
     if(!activeCondition)return[];
     const list=activeCondition.isMixed?activeCondition.conditions:[activeCondition];
@@ -21575,10 +22354,11 @@ function CaseStudyGenerator(){
     return list.map(c=>({facts:(c&&c.facts||[]).filter(tierOk)}));
   },[activeCondition,includeTier2,includeTier3,caseIncludeBridge]);
   const caseScopeStats=useMemo(()=>genLedgerScopeStats(activeScopeGroups,caseExcludeSet),[activeScopeGroups,caseExcludeSet]);
-  const caseFactOpts=useMemo(()=>({includeTier2,includeTier3,includeCalculation:types.calculation,includeEducation:types.education,includeBridge:caseIncludeBridge,excludeFactIds:caseExcludeSet.size?caseExcludeSet:null,allowContextAnchors:true}),[includeTier2,includeTier3,types.calculation,types.education,caseIncludeBridge,caseExcludeSet]);
+  const caseFactOpts=useMemo(()=>({includeTier2,includeTier3,includeCalculation:types.calculation,includeEducation:types.education,includeBridge:caseIncludeBridge,excludeFactIds:caseExcludeSet.size?caseExcludeSet:null,allowContextAnchors}),[includeTier2,includeTier3,types.calculation,types.education,caseIncludeBridge,caseExcludeSet,allowContextAnchors]);
   const selectedFacts=useMemo(()=>activeCondition?(activeCondition.isMixed?selectCaseFactsMulti(activeCondition.conditions,{...caseFactOpts,allConditions:conditions}):selectCaseFacts(activeCondition,{...caseFactOpts,allConditions:conditions})):[],[activeCondition,conditions,caseFactOpts]);
-  const freshSelectedCount=useMemo(()=>selectedFacts.filter(f=>!f.contextAnchor).length,[selectedFacts]);
-  const anchorSelectedCount=selectedFacts.length-freshSelectedCount;
+  const freshSelectedCount=useMemo(()=>selectedFacts.filter(f=>!f.contextAnchor&&!allPriorUsedSet.has(String(f.id||'').toLowerCase())).length,[selectedFacts,allPriorUsedSet]);
+  const anchorSelectedCount=useMemo(()=>selectedFacts.filter(f=>f.contextAnchor).length,[selectedFacts]);
+  const reusedSelectedCount=selectedFacts.length-freshSelectedCount-anchorSelectedCount;
   // v15.8: the requested shape drives the sufficiency check, so the warning updates live as
   // stages/questions change rather than only describing the fact pool.
   const sufficiency=useMemo(()=>caseFactSufficiency(selectedFacts,stages*questionsPerStage,types),[selectedFacts,stages,questionsPerStage,types]);
@@ -21591,7 +22371,7 @@ function CaseStudyGenerator(){
   // v21.10 (Phase 4): also reset auditPhase and trip batchCancelRef when KB changes even between queued batch items.
   useEffect(()=>{const op=generatorSlot.current.active;if((op&&op.sourceKB!==K.knowledgeBase)||batchBusy){batchCancelRef.current=true;generatorSlot.current.cancel();setBusy(false);setBatchBusy(false);setBatchStatus(null);setAbortCtl(null);setLiveKB(0);setAuditPhase('');setAuditState(s=>s==='running'?'interrupted':s);}},[K.knowledgeBase]);
   useEffect(()=>()=>{batchCancelRef.current=true;generatorSlot.current.cancel();},[]);
-  const run=useCallback(async()=>{return caseRunSingleWithEnv({batchOverrideRef,activeCondition,selectedFacts,sufficiency,cfg,log,generatorSlot,setActivePacketId,K,stages,questionsPerStage,runAudit,setArtifactSource,setAuditState,currentSourceKB,setBusy,setLogs,setCaseStudy,setIssues,setCoverage,setLiveKB,setAudit,setAuditPhase,setProvenance,setInvalidCaseRaw,setAbortCtl,difficulty,types,setCasePacket,casePacketRef,priorTitles:excludePriorCases?ledger.cases.titles:null,onRecordUsedFacts:recordCaseUsed});},[cfg,activeCondition,selectedFacts,sufficiency,difficulty,stages,questionsPerStage,types,K,runAudit,excludePriorCases,ledger.cases.titles,recordCaseUsed]);
+  const run=useCallback(async()=>{return caseRunSingleWithEnv({batchOverrideRef,activeCondition,selectedFacts,sufficiency,cfg,log,generatorSlot,setActivePacketId,K,stages,questionsPerStage,runAudit,setArtifactSource,setAuditState,currentSourceKB,setBusy,setLogs,setCaseStudy,setIssues,setCoverage,setLiveKB,setAudit,setAuditPhase,setProvenance,setInvalidCaseRaw,setAbortCtl,difficulty,types,setCasePacket,casePacketRef,priorTitles:excludePriorCases?ledger.cases.titles:null,priorUsedFactIds:allPriorUsedSet,onRecordUsedFacts:recordCaseUsed});},[cfg,activeCondition,selectedFacts,sufficiency,difficulty,stages,questionsPerStage,types,K,runAudit,excludePriorCases,ledger.cases.titles,allPriorUsedSet,recordCaseUsed]);
 
   // v15.6: audit verdicts joined back to their items for display.
   // NOTE: deriving the rows does NOT by itself keep them fresh — the verdict map is written
@@ -21606,8 +22386,9 @@ function CaseStudyGenerator(){
   // The audit-trail view carries the provenance stamp; the printable student view does not.
   // v21.10 (Phase 4): build Markdown strings lazily on Copy/Export/PDF click instead of recomputing full case/packet serializations on every SSE or audit tick.
   const exportNotice=useMemo(()=>artifactExportNotice({source:artifactSource,activeKB:K.knowledgeBase,requested:artifactSource?.requested,actual:(caseStudy?.stages||[]).reduce((n,s)=>n+(s.questions||[]).length,0),auditRequested:artifactSource?.auditRequested,auditState,rows:auditRows}),[artifactSource,K.knowledgeBase,caseStudy,auditState,auditRows]);
-  const buildCaseMd=()=>caseStudy?exportNotice+caseValidationStamp(issues)+(provenance?latteProvenanceStamp(provenance):'')+caseToMarkdown(caseStudy)+caseReviewAppendix(caseStudy,issues,auditRows):'';
-  const buildCasePrintMd=()=>caseStudy?exportNotice+caseValidationStamp(issues)+caseToMarkdown(caseStudy,{worksheetFactIds:false})+caseReviewAppendix(caseStudy,issues,auditRows):'';
+  const activeFactIndex=useMemo(()=>(artifactSource&&artifactSource.factIndex)||K.factIndex||null,[artifactSource,K.factIndex]);
+  const buildCaseMd=()=>caseStudy?caseComposeSingleExportMd({caseStudy,exportNotice,issues,provenance,worksheetFactIds:true,includeProvenance:true,factIndex:activeFactIndex,factCategoryPlacement,diagnosticsPlacement,reviewAppendix:caseReviewAppendix(caseStudy,issues,auditRows)}):'';
+  const buildCasePrintMd=()=>caseStudy?caseComposeSingleExportMd({caseStudy,exportNotice,issues,provenance:null,worksheetFactIds:false,includeProvenance:false,factIndex:activeFactIndex,factCategoryPlacement,diagnosticsPlacement,reviewAppendix:caseReviewAppendix(caseStudy,issues,auditRows)}):'';
   // v20.1: synchronize the active Case Packet entry with live generation, NEIA audit verdicts, and 1-round repairs.
   useEffect(()=>{
     if(!activePacketId||!caseStudy)return;
@@ -21646,14 +22427,15 @@ function CaseStudyGenerator(){
     setAudit(null);setAuditState('disabled');setProvenance(null);setArtifactSource(null);setInvalidCaseRaw('');
   },[K]);
   const isBatchMode=hasCustomCaseScope&&resolvedCaseConditions.length>1&&caseRunMode==='batch';
-  const wavePlan=useMemo(()=>!isBatchMode&&activeCondition?caseEstimateWavePlan({condition:activeCondition,conditions,factOpts:{includeTier2,includeTier3,includeCalculation:types.calculation,includeEducation:types.education,includeBridge:caseIncludeBridge},includeTypes:types,stages,questionsPerStage,excludeFactIds:caseExcludeSet.size?caseExcludeSet:null,allowContextAnchors:true,requestedWaves:caseWaveCount,maxBatch:MAX_CASE_BATCH}):{waves:0,maxUsefulWaves:0,totalEligible:0,unusedBefore:0,freshCounts:[],exhausted:true},[isBatchMode,activeCondition,conditions,includeTier2,includeTier3,types,caseIncludeBridge,stages,questionsPerStage,caseExcludeSet,caseWaveCount]);
+  const wavePlan=useMemo(()=>!isBatchMode&&activeCondition?caseEstimateWavePlan({condition:activeCondition,conditions,factOpts:{includeTier2,includeTier3,includeCalculation:types.calculation,includeEducation:types.education,includeBridge:caseIncludeBridge},includeTypes:types,stages,questionsPerStage,excludeFactIds:caseExcludeSet.size?caseExcludeSet:null,allowContextAnchors,requestedWaves:caseWaveCount,maxBatch:MAX_CASE_BATCH}):{waves:0,maxUsefulWaves:0,totalEligible:0,unusedBefore:0,freshCounts:[],exhausted:true},[isBatchMode,activeCondition,conditions,includeTier2,includeTier3,types,caseIncludeBridge,stages,questionsPerStage,caseExcludeSet,allowContextAnchors,caseWaveCount]);
   const isWaveBatch=!isBatchMode&&!!activeCondition&&caseWaveCount!=='1'&&!wavePlan.exhausted;
   const batchPlan=useMemo(()=>isBatchMode?caseBuildBatchTargets({conditions,resolvedConditions:resolvedCaseConditions,concepts:validCaseConcepts,mixConceptExemplars:caseMixExemplars,includeRelated:caseIncludeRelated,mixMode:caseMixMode,batchUnit:(validCaseConcepts.length>0&&caseMixExemplars)?caseBatchUnit:'conditions',factOpts:caseFactOpts,includeTypes:types,stages,questionsPerStage,maxBatch:MAX_CASE_BATCH}):{targets:[],skipped:[],overflowCount:0,totalEligible:0},[isBatchMode,conditions,resolvedCaseConditions,validCaseConcepts,caseMixExemplars,caseIncludeRelated,caseMixMode,caseBatchUnit,caseFactOpts,types,stages,questionsPerStage]);
-  const runBatch=useCallback(()=>caseRunBatchWithEnv({cfg,batchPlan,initialPriorTitles:excludePriorCases?ledger.cases.titles:null,generatorSlot,batchBusy,K,batchCancelRef,setBatchBusy,setLogs,log,currentSourceKB,setBatchStatus,batchOverrideRef,run,caseStudyRef,casePacketRef,selectPacketEntry}),[cfg.apiKey,batchPlan,excludePriorCases,ledger.cases.titles,batchBusy,K.knowledgeBase,log,setLogs,run,selectPacketEntry]);
-  const runWaves=useCallback(()=>caseRunBatchWithEnv({cfg,batchPlan:{targets:[],skipped:[],overflowCount:0},waveConfig:{condition:activeCondition,conditions,factOpts:{includeTier2,includeTier3,includeCalculation:types.calculation,includeEducation:types.education,includeBridge:caseIncludeBridge},includeTypes:types,stages,questionsPerStage,requestedWaves:caseWaveCount,maxBatch:MAX_CASE_BATCH,initialExcludeIds:caseExcludeSet,initialPriorTitles:excludePriorCases?ledger.cases.titles:[],allowContextAnchors:true},generatorSlot,batchBusy,K,batchCancelRef,setBatchBusy,setLogs,log,currentSourceKB,setBatchStatus,batchOverrideRef,run,caseStudyRef,casePacketRef,selectPacketEntry}),[cfg.apiKey,activeCondition,conditions,includeTier2,includeTier3,types,caseIncludeBridge,stages,questionsPerStage,caseWaveCount,caseExcludeSet,excludePriorCases,ledger.cases.titles,batchBusy,K.knowledgeBase,log,setLogs,run,selectPacketEntry]);
+  const freshnessPreview=useMemo(()=>isBatchMode?{totalSelected:batchPlan.targets.length,isBatch:true,batchCount:batchPlan.targets.length,batchFreshOnlyCount:batchPlan.targets.filter(t=>t.facts.every(f=>!f.contextAnchor&&!allPriorUsedSet.has(String(f.id||'').toLowerCase()))).length}:{totalSelected:selectedFacts.length,isBatch:false,freshCount:freshSelectedCount,anchorCount:anchorSelectedCount,reusedCount:reusedSelectedCount},[isBatchMode,batchPlan,allPriorUsedSet,selectedFacts.length,freshSelectedCount,anchorSelectedCount,reusedSelectedCount]);
+  const runBatch=useCallback(()=>caseRunBatchWithEnv({cfg,batchPlan,initialPriorTitles:excludePriorCases?ledger.cases.titles:null,priorUsedFactIds:allPriorUsedSet,generatorSlot,batchBusy,K,batchCancelRef,setBatchBusy,setLogs,log,currentSourceKB,setBatchStatus,batchOverrideRef,run,caseStudyRef,casePacketRef,selectPacketEntry}),[cfg.apiKey,batchPlan,excludePriorCases,ledger.cases.titles,allPriorUsedSet,batchBusy,K.knowledgeBase,log,setLogs,run,selectPacketEntry]);
+  const runWaves=useCallback(()=>caseRunBatchWithEnv({cfg,batchPlan:{targets:[],skipped:[],overflowCount:0},waveConfig:{condition:activeCondition,conditions,factOpts:{includeTier2,includeTier3,includeCalculation:types.calculation,includeEducation:types.education,includeBridge:caseIncludeBridge},includeTypes:types,stages,questionsPerStage,requestedWaves:caseWaveCount,maxBatch:MAX_CASE_BATCH,initialExcludeIds:caseExcludeSet,initialPriorTitles:excludePriorCases?ledger.cases.titles:[],allowContextAnchors},generatorSlot,batchBusy,K,batchCancelRef,setBatchBusy,setLogs,log,currentSourceKB,setBatchStatus,batchOverrideRef,run,caseStudyRef,casePacketRef,selectPacketEntry}),[cfg.apiKey,activeCondition,conditions,includeTier2,includeTier3,types,caseIncludeBridge,stages,questionsPerStage,caseWaveCount,caseExcludeSet,excludePriorCases,ledger.cases.titles,allowContextAnchors,batchBusy,K.knowledgeBase,log,setLogs,run,selectPacketEntry]);
   const cancelCaseRun=useCallback(()=>{batchCancelRef.current=true;abortCtl?.abort();},[abortCtl]);
-  const buildPacketMd=()=>casePacket.length?casePacketToMarkdown(casePacket,{activeKB:K.knowledgeBase,layout:packetLayout,worksheetFactIds:true,includeProvenance:true}):'';
-  const buildPacketPrintMd=()=>casePacket.length?casePacketToMarkdown(casePacket,{activeKB:K.knowledgeBase,layout:packetLayout,worksheetFactIds:false,includeProvenance:false}):'';
+  const buildPacketMd=()=>casePacket.length?casePacketToMarkdown(casePacket,{activeKB:K.knowledgeBase,layout:packetLayout,worksheetFactIds:true,includeProvenance:true,factCategoryPlacement,diagnosticsPlacement}):'';
+  const buildPacketPrintMd=()=>casePacket.length?casePacketToMarkdown(casePacket,{activeKB:K.knowledgeBase,layout:packetLayout,worksheetFactIds:false,includeProvenance:false,factCategoryPlacement,diagnosticsPlacement}):'';
   // v21.10 (Phase 4): memoize per-packet badge summaries so caseReviewRows is not recomputed for every packet item on each 150ms SSE streaming tick.
   const packetMeta=useMemo(()=>casePacket.map(p=>{
     const pErrs=(p.issues||[]).filter(x=>x.sev==='error').length;
@@ -21661,8 +22443,12 @@ function CaseStudyGenerator(){
     const pFail=pRows.some(r=>r.status==='FAIL');
     const pWarn=(p.issues||[]).length>0||(p.auditState!=='complete'&&p.auditState!=='disabled')||pRows.some(r=>['PENDING','UNSCORED','ERROR','REVIEW','REPAIRED'].includes(r.status));
     const pStale=!!(p.artifactSource&&!artifactSourceCurrent(p.artifactSource,K.knowledgeBase));
-    return{p,badge:pErrs||pFail?'⚠':pWarn?'⚑':'✓',badgeColor:pErrs||pFail?'var(--accent-red)':pWarn?'var(--accent-warm)':'var(--accent-green)',label:(p.waveIndex?'W'+p.waveIndex+' · ':'')+(p.caseStudy.condition||p.caseStudy.title||'Case')+(pStale?' (earlier KB)':'')};
-  }),[casePacket,K.knowledgeBase]);
+    const pFr=p.coverage&&p.coverage.freshness;
+    const frNote=pFr?(pFr.reusedCount?' · ↺'+pFr.reusedCount+' reused':pFr.anchorCount?' · +'+pFr.anchorCount+' anchor':''):'';
+    const pFx=(p.artifactSource&&p.artifactSource.factIndex)||K.factIndex||null;
+    const pDispCond=pFx&&typeof caseResolveUsedFactCategories==='function'?caseResolveUsedFactCategories(p.caseStudy,pFx).displayCondition:(p.caseStudy.condition||'');
+    return{p,badge:pErrs||pFail?'⚠':pWarn?'⚑':'✓',badgeColor:pErrs||pFail?'var(--accent-red)':pWarn?'var(--accent-warm)':'var(--accent-green)',label:(p.waveIndex?'W'+p.waveIndex+' · ':'')+(pDispCond||p.caseStudy.title||'Case')+frNote+(pStale?' (earlier KB)':'')};
+  }),[casePacket,K.knowledgeBase,K.factIndex]);
   const packetSubtitle=useMemo(()=>casePacket.map((p,i)=>(i+1)+'. '+(p.caseStudy?.condition||p.caseStudy?.title||'Case')).join(' · '),[casePacket]);
   const [syncState,setSyncState]=useState({busy:false,msg:'',err:''});
   const syncCaseToNclexPro=(u)=>nclexProRunUiSync(()=>u?nclexProConvertCasePacket(casePacket,K.knowledgeBase):nclexProConvertCaseStudy(caseStudy,K.knowledgeBase),cfg.nclexProPass,setSyncState,'case Q(s)');
@@ -21719,35 +22505,7 @@ function CaseStudyGenerator(){
               </button>
               {hasCustomCaseScope&&<button type="button" className="btn-secondary" style={{padding:'3px 9px',fontSize:11.5}} onClick={resetCaseScope}>Reset to single condition</button>}
             </div>
-            {showCaseMixer&&(()=>{
-              const fq=caseFilterText.trim().toLowerCase();
-              const matchesFilter=c=>!fq||validCaseCondIds.includes(c.id)||String(c.name||'').toLowerCase().includes(fq)||String(c.concept||'').toLowerCase().includes(fq)||(c.aliases||[]).some(a=>String(a||'').toLowerCase().includes(fq));
-              const visGroups=caseCatalog.groups.map(g=>({...g,items:g.items.filter(matchesFilter)})).filter(g=>g.items.length);
-              const visIds=visGroups.flatMap(g=>g.items.map(c=>c.id));
-              const visSubstantialIds=visGroups.flatMap(g=>g.items.filter(c=>(c.facts||[]).length>=8).map(c=>c.id));
-              return <div style={{marginTop:6,padding:8,borderRadius:6,border:'1px solid var(--border)',background:'var(--bg-input)',maxHeight:220,overflowY:'auto'}}>
-                <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap',marginBottom:6}}>
-                  <input id="case-mix-filter" type="text" aria-label="Filter conditions to mix" value={caseFilterText} onChange={e=>setCaseFilterText(e.target.value)} placeholder="Filter conditions, concepts, or meds…" style={{flex:'1 1 160px',padding:'4px 8px',fontSize:11.5}}/>
-                  {singleCondition&&!validCaseCondIds.includes(singleCondition.id)&&<button type="button" className="btn-secondary" style={{padding:'2px 7px',fontSize:11}} onClick={()=>toggleCaseCondId(singleCondition.id)}>+ Current</button>}
-                  {visSubstantialIds.length>0&&<button type="button" className="btn-secondary" title="Check visible entries with at least 8 facts (skips thin stubs)" style={{padding:'2px 7px',fontSize:11}} onClick={()=>setCaseExtraConditionIds(p=>[...new Set([...p,...visSubstantialIds])])}>Select ≥8 facts</button>}
-                  {visIds.length>0&&<button type="button" className="btn-secondary" style={{padding:'2px 7px',fontSize:11}} onClick={()=>setCaseExtraConditionIds(p=>[...new Set([...p,...visIds])])}>Select visible</button>}
-                  {validCaseCondIds.length>0&&<button type="button" className="btn-secondary" style={{padding:'2px 7px',fontSize:11}} onClick={()=>setCaseExtraConditionIds([])}>Uncheck all</button>}
-                </div>
-                {visGroups.map(g=><div key={g.heading} style={{marginBottom:6}}>
-                  <div style={{fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:'uppercase',color:'var(--text-dim)',marginBottom:3}}>{g.heading}</div>
-                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(190px,1fr))',gap:4}}>
-                    {g.items.map(c=>{
-                      const checked=validCaseCondIds.includes(c.id);
-                      return <label key={c.id} style={{display:'flex',alignItems:'center',gap:5,fontSize:11.5,color:checked?'var(--accent)':'var(--text)',cursor:'pointer'}}>
-                        <input type="checkbox" checked={checked} onChange={()=>toggleCaseCondId(c.id)} style={{accentColor:'var(--accent)'}}/>
-                        <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={c.name}>{c.entryRole==='concept'?'◆ ':(!c.entityKind&&c.concept)?'↳ ':''}{c.name}{c.entityKind?' · '+c.entityKind:''} ({(c.facts||[]).length})</span>
-                      </label>;
-                    })}
-                  </div>
-                </div>)}
-                {!visGroups.length&&<div style={{fontSize:11.5,color:'var(--text-dim)'}}>No entries match "{caseFilterText.trim()}".</div>}
-              </div>;
-            })()}
+            {showCaseMixer&&<CaseScopeMixerDropdown caseCatalog={caseCatalog} caseFilterText={caseFilterText} setCaseFilterText={setCaseFilterText} validCaseCondIds={validCaseCondIds} singleCondition={singleCondition} toggleCaseCondId={toggleCaseCondId} setCaseExtraConditionIds={setCaseExtraConditionIds}/>}
           </div>}
           {hasCustomCaseScope&&!activeCondition&&<div className="tip-banner" style={{marginTop:8,marginBottom:0,fontSize:11.5,lineHeight:1.45,color:'var(--accent-warm)'}}>
             ⚠ No standalone Concept Overview entry exists for the selected concept(s) with exemplar mixing turned off. Enable <b>Mix conditions / exemplars</b> above or check specific conditions below.
@@ -21792,7 +22550,7 @@ function CaseStudyGenerator(){
           <button type="button" className={'tier-btn t3'+(includeTier3?' active':'')} aria-pressed={includeTier3} onClick={()=>setIncludeTier3(v=>!v)}><b>Tier 3</b> background</button>{/* v18.1: the label said "distractors", but distractors come from any tier (see the help text below) */}
         </div>
         {caseHasBridge&&<label style={{display:'flex',alignItems:'center',gap:6,fontSize:12,color:'var(--text)',cursor:'pointer',marginBottom:8}}><input id="case-include-bridge" type="checkbox" checked={caseIncludeBridge} onChange={e=>setCaseIncludeBridge(e.target.checked)} style={{accentColor:'var(--accent)'}}/><span>Include NP Bridge facts <span className="badge-opt">off = RN Core only</span></span></label>}
-        {conditions.length>0&&<GenLedgerControl idPrefix="case" primaryKind="cases" ledger={ledger} scopeStats={caseScopeStats} excludeOwn={excludePriorCases} setExcludeOwn={setExcludePriorCases} excludeOther={excludeNclexFacts} setExcludeOther={setExcludeNclexFacts} onReset={resetCaseHistory} disabled={isBusy} resetHint="Separate from Clear packet — clearing the packet tray keeps used-fact history so your next run continues from unused facts."/>}
+        {conditions.length>0&&<GenLedgerControl idPrefix="case" primaryKind="cases" ledger={ledger} scopeStats={caseScopeStats} excludeOwn={excludePriorCases} setExcludeOwn={setExcludePriorCases} excludeOther={excludeNclexFacts} setExcludeOther={setExcludeNclexFacts} allowContextAnchors={allowContextAnchors} setAllowContextAnchors={setAllowContextAnchors} freshnessPreview={freshnessPreview} onReset={resetCaseHistory} disabled={isBusy} resetHint="Separate from Clear packet — clearing the packet tray keeps used-fact history so your next run continues from unused facts."/>}
         {caseExhausted&&<div className="tip-banner" style={{marginTop:8,marginBottom:0,fontSize:12,lineHeight:1.45,color:'var(--accent-warm)'}}>⚠ All {caseScopeStats.total} fact(s) in this scope have already been used in prior cases. Click <b>Reset Case history</b>, uncheck exclusion, include Tier 2/3, or widen your scope.</div>}
         <div style={{fontSize:12,color:'var(--text-dim)',marginTop:8,lineHeight:1.5}}>Tier 1 facts drive the critical decisions. Tier 2 adds realistic context; Tier 3 adds lower-priority background detail. Distractors are built from contextually plausible near-misses at any tier, not from Tier 3. {isBatchMode?<>Queued cases select facts per entry independently.</>:<> <b style={{color:'var(--text)'}}>{freshSelectedCount}</b> fresh fact(s){anchorSelectedCount?<> + <b style={{color:'var(--text)'}}>{anchorSelectedCount}</b> background context anchor(s)</>:null} selected for {isWaveBatch?'Wave 1':'this case'}.</>}</div>
         {!isBatchMode&&sufficiency.warnings.length>0&&<div className="tip-banner" style={{marginTop:10,marginBottom:0,fontSize:12,lineHeight:1.5}}>⚠ {sufficiency.warnings.join(' · ')} The generator will not invent to fill these gaps.</div>}
@@ -21816,7 +22574,7 @@ function CaseStudyGenerator(){
               <option value={2}>2</option><option value={3}>3</option><option value={4}>4</option>
             </select></div>
         </div>
-        <CaseQuestionTypesGrid types={types} toggleType={toggleType}/>
+        <CaseQuestionTypesGrid types={types} toggleType={toggleType} setTypes={setTypes}/>
       </Step>
     </>}
     action={<>
@@ -21857,6 +22615,7 @@ function CaseStudyGenerator(){
           <button type="button" className="btn-secondary" disabled={isBusy} style={{padding:'3px 9px',fontSize:11.5}} onClick={clearPacket}>Clear packet</button>
         </div>
       </div>
+      {(casePacket.length>0||caseStudy)&&<CaseExportLayoutBar factCategoryPlacement={factCategoryPlacement} setFactCategoryPlacement={setFactCategoryPlacement} diagnosticsPlacement={diagnosticsPlacement} setDiagnosticsPlacement={setDiagnosticsPlacement}/>}
       <div role="group" aria-label="Session case packet" style={{display:'flex',gap:6,flexWrap:'wrap'}}>
         {packetMeta.map(({p,badge,badgeColor,label},idx)=>{
           const active=activePacketId===p.id;
@@ -21909,12 +22668,14 @@ function CaseStudyGenerator(){
             <button className="btn-secondary" disabled={syncState.busy} onClick={()=>syncCaseToNclexPro(false)}>{syncState.busy?'⟳ Syncing…':'☁ Sync to NCLEX Pro'}</button>
             <button className="btn-secondary" onClick={()=>nclexProDownloadJson(nclexProConvertCaseStudy(caseStudy,K.knowledgeBase),'NCLEX-Pro-Sync-Case.json')}>⬇ NCLEX Pro .json</button>
       </ResultsHead>
+      {!casePacket.length&&<CaseExportLayoutBar factCategoryPlacement={factCategoryPlacement} setFactCategoryPlacement={setFactCategoryPlacement} diagnosticsPlacement={diagnosticsPlacement} setDiagnosticsPlacement={setDiagnosticsPlacement}/>}
       <NclexProSyncBanner state={syncState}/>
       <div className="output-container">
         <div className="output-body">
           {/* v21.10 (Phase 4): hide CaseRenderer with display:none when viewing JSON instead of unmounting it so interactive Bowtie/Matrix/Cloze/Trend student picks survive Case <-> JSON toggles. */}
           {view==='json'&&<pre style={{whiteSpace:'pre-wrap',fontFamily:'var(--font-mono)',fontSize:12,lineHeight:1.55,color:'var(--text)',margin:0}}>{JSON.stringify(caseStudy,null,2)}</pre>}
           <div style={{display:view==='case'?'block':'none'}}><CaseRenderer key={activePacketId||'single'} caseStudy={caseStudy}/></div>
+          {view==='case'&&factCategoryPlacement!=='off'&&<CaseUsedCategoriesCard caseStudy={caseStudy} factIndex={activeFactIndex} FactTagComp={FactTag}/>}
         </div>
       </div>
     </>}
@@ -21926,6 +22687,7 @@ function CaseStudyGenerator(){
 // Renders a validated case with clickable fact tags on every datum and rationale, so each
 // clinical claim traces back through the Fact Inspector to its original source.
 function CaseRenderer({caseStudy:cs}){
+  const _crArt=typeof ArtifactSourceCtx!=='undefined'?useContext(ArtifactSourceCtx):null,_crKd=typeof useKnowledgeData==='function'?useKnowledgeData():null,factIndex=(_crArt&&_crArt.factIndex)||(_crKd&&_crKd.factIndex)||null;
   // v16.0: named controls, visible selection states, and reflowing groups replace inaccessible fixed layouts.
   // v21.7: interactive student selection state for Bowtie, Matrix, Cloze, and Trend items; resets per case via key={activePacketId||'single'}.
   const [showKey,setShowKey]=useState({}),[picks,setPicks]=useState({});
@@ -21934,8 +22696,9 @@ function CaseRenderer({caseStudy:cs}){
   const setClozePick=(qk,bid,val)=>setPicks(prev=>({...prev,[qk]:{...(prev[qk]||{}),[bid]:val}}));
   const setMatrixPick=(qk,rid,cid,multi)=>setPicks(prev=>{const cur=[...(prev[qk]||[])],tok=rid+':'+cid;return{...prev,[qk]:multi?(cur.includes(tok)?cur.filter(x=>x!==tok):[...cur,tok]):[...cur.filter(x=>!x.startsWith(rid+':')),...(cur.includes(tok)?[]:[tok])]};});
   const p=cs.patient||{};
+  const dispCond=factIndex&&typeof caseResolveUsedFactCategories==='function'?caseResolveUsedFactCategories(cs,factIndex).displayCondition:(cs.condition||'');
   return <div style={{fontSize:14,lineHeight:1.6}}>
-    <div style={{fontSize:14,color:'var(--text-dim)',marginBottom:4}}>{cs.condition} · {cs.difficulty}{(p.age||p.sex)?' · '+[p.age&&p.age+' y/o',p.sex].filter(Boolean).join(' '):''}</div>
+    <div style={{fontSize:14,color:'var(--text-dim)',marginBottom:4}}>{dispCond} · {cs.difficulty}{(p.age||p.sex)?' · '+[p.age&&p.age+' y/o',p.sex].filter(Boolean).join(' '):''}</div>
     {p.background&&<div style={{fontSize:14,color:'var(--text-dim)',marginBottom:14,fontStyle:'italic'}}>{p.background}</div>}
     {(cs.stages||[]).map((stage,si)=><div key={si} style={{marginBottom:22,paddingBottom:18,borderBottom:si<(cs.stages.length-1)?'1px solid var(--border)':'none'}}>
       <h3 style={{fontSize:14,color:'var(--accent)',marginBottom:6}}>Stage {stage.stageNumber} — {stage.title}</h3>
