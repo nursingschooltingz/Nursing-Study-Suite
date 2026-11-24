@@ -62,7 +62,7 @@ module.exports = async function runV232UpdatesTests(S, t) {
   inlineBlocks.forEach((code, idx) => vm.runInContext(code, ctx, { filename: 'v232-plain-' + (idx + 1) + '.js', timeout: 10000 }));
 
   const E = vm.runInContext(
-    '({suiteVersion,CASE_STUDY_JSON_SCHEMA,buildCaseStudyJsonSchema,caseNormalizeParsedNgnFields,validateCaseStudy,buildFactIndex,' +
+    '({suiteVersion,CASE_STUDY_JSON_SCHEMA,buildCaseStudyJsonSchema,caseNormalizeParsedNgnFields,caseParseThresholds,caseAuditTextValues,validateCaseStudy,buildFactIndex,' +
     'genLedgerTopicKey,genLedgerLoad,genLedgerRecord,genLedgerReset,genLedgerExcludeSet,genLedgerExcludeTopicSet,genLedgerTopicScopeStats,' +
     'caseCollectUnrecordedPacketTopics,GenLedgerControl,caseSliceBroadMixedEntries,selectCaseFactsMulti,caseBuildBatchTargets,caseEstimateWavePlan,' +
     'ngBuildFactPool,ngBatchStart,ngAllocateBatch,caseComposeSingleExportMd,casePacketToMarkdown,ngBuildWorksheetMd,n2aConvertText,' +
@@ -470,5 +470,38 @@ module.exports = async function runV232UpdatesTests(S, t) {
       Array.isArray(qRa.tags) && qRa.tags.includes('Layer::NPBridge') && qRa.tags.includes('Trap::HoldTriangle') &&
       Array.isArray(wsSync.items[0].tags) && wsSync.items[0].tags.includes('Condition::Osteoarthritis') && wsSync.items[0].clinicalLayer === 'rn' &&
       Array.isArray(ankiSync.cards[0].tags) && ankiSync.cards[0].tags.includes('Source::Suite::NURS_310_Exam_1'));
+  }
+
+  // 9. Threshold comparator phrasing ("more than", "exceeds", "up to", postfix "or more/greater/less") & non-empty stages/questions schema
+  {
+    const th = s => JSON.stringify(E.caseParseThresholds(s).map(x => [x.op, x.value, x.unit]));
+    const fx = new Map([
+      ['f-more', { fact: { text: 'An inter-arm systolic BP difference of more than 15 mm Hg suggests arterial occlusion.', sourceQuote: '' } }],
+      ['f-post', { fact: { text: 'An inter-arm systolic BP difference of 15 mm Hg or greater requires vascular workup.', sourceQuote: '' } }],
+      ['f-exc', { fact: { text: 'Refer when inter-arm systolic BP difference exceeds 15 mm Hg.', sourceQuote: '' } }],
+    ]);
+    const audit = (val, id) => { const out = []; E.caseAuditTextValues(val, [id], fx, 'Stage 1', out, 'instantiated'); return out; };
+    t('v23.2 (Threshold comparators): parses "more than", "fewer than", "exceeds/exceeding", "up to", and postfix "or more/greater/less" while keeping negated forms <=/>=',
+      th('Difference of more than 15 mm Hg') === '[[">",15,"mmhg"]]' &&
+      th('Difference exceeds 15 mm Hg') === '[[">",15,"mmhg"]]' &&
+      th('Difference exceeding 15 mm Hg') === '[[">",15,"mmhg"]]' &&
+      th('Difference of 15 mm Hg or greater') === '[[">=",15,"mmhg"]]' &&
+      th('Difference of 10 mm Hg or more') === '[[">=",10,"mmhg"]]' &&
+      th('Normal difference is 10 mm Hg or less') === '[["<=",10,"mmhg"]]' &&
+      th('Normal difference is up to 10 mm Hg') === '[["<=",10,"mmhg"]]' &&
+      th('Fewer than 12 breaths/min') === '[["<",12,"/min"]]' &&
+      th('Does not exceed 15 mm Hg') === '[["<=",15,"mmhg"]]' &&
+      th('No more than 15 mm Hg') === '[["<=",15,"mmhg"]]' &&
+      audit('16 mm Hg', 'f-more').length === 0 &&
+      audit('18 mm Hg', 'f-post').length === 0 &&
+      audit('19 mm Hg', 'f-exc').length === 0);
+
+    const baseStages = E.CASE_STUDY_JSON_SCHEMA.properties.stages;
+    const dynStages = E.buildCaseStudyJsonSchema({ mcq: false, matrix: true, bowtie: true }).properties.stages;
+    t('v23.2 (Case schema minItems): CASE_STUDY_JSON_SCHEMA and buildCaseStudyJsonSchema require minItems: 1 on both stages and questions',
+      baseStages.minItems === 1 &&
+      baseStages.items.properties.questions.minItems === 1 &&
+      dynStages.minItems === 1 &&
+      dynStages.items.properties.questions.minItems === 1);
   }
 };
