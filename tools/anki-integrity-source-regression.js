@@ -48,6 +48,43 @@ module.exports=async function ankiIntegritySourceRegression(S,t){
     const single=await build({pages:[p1],responses:[cut()]});
     t('a truncated chunk that cannot be split publishes nothing and reports the chunk failed',single.published.length===0&&!!single.diag&&single.diag.chunks.length===1&&single.diag.chunks[0].failed===true);
   }
+  // v23.1: RECITATION stops a chunk mid-stream; both Pass 1 extraction and Pass 2 omission audit halve and requeue via kbSplitChunk.
+  {
+    const p1='The synthetic signal lamp remains green during readiness.',p2='The indicator is observed before the synthetic procedure.';
+    const p3='The baseline telemetry gauge stays within normal calibration bounds.',p4='The restricted calibration excerpt triggers provider recitation.';
+    const recit=(partial='{"conditions":[{"name":"Signal"')=>Object.assign(Error('Response stopped by the provider: RECITATION'),{incomplete:true,isFatal:true,finishReason:'RECITATION',partialText:partial});
+    const split=await build({pages:[p1,p2],responses:[recit(),primary([fact({text:p1,sourceQuote:p1})]),primary([fact({text:p2,sourceQuote:p2})])]});
+    t('v23.1: a Pass 1 chunk stopped by RECITATION is split by page and both halves are published in order',split.requests===3&&split.published.length===1&&split.published[0].conditions[0].facts.map(f=>f.text).join('|')===[p1,p2].join('|')&&split.logs.some(l=>/stopped by RECITATION filter — splitting/.test(l.m)));
+    const isolated=await build({pages:[p1,p2,p3,p4],respond:body=>{
+      const txt=JSON.stringify(body);
+      if(txt.includes(p4))return recit('{"partial":"p4-recit"');
+      const hits=[p1,p2,p3].filter(p=>txt.includes(p));
+      return primary(hits.map(p=>fact({text:p,sourceQuote:p})));
+    }});
+    const isoTexts=(isolated.published[0]?.conditions?.[0]?.facts||[]).map(f=>f.text);
+    const failedChunk=isolated.diag?.chunks?.find(c=>c.failed);
+    t('v23.1: Pass 1 RECITATION splitting isolates a single flagged page while publishing the other three pages',isolated.published.length===1&&isoTexts.join('|')===[p1,p2,p3].join('|')&&!!failedChunk&&failedChunk.label==='page 4'&&failedChunk.primaryResponse?.text==='{"partial":"p4-recit"'&&isolated.warnings.some(w=>/page 4.*RECITATION \(cannot be split further\)/.test(w)));
+    const single=await build({pages:[p4],responses:[recit('{"partial":"single"')]});
+    t('v23.1: an indivisible Pass 1 chunk stopped by RECITATION fails cleanly and retains partialText diagnostics',single.published.length===0&&!!single.diag&&single.diag.chunks.length===1&&single.diag.chunks[0].failed===true&&single.diag.chunks[0].primaryResponse?.text==='{"partial":"single"'&&single.warnings.some(w=>/RECITATION \(cannot be split further\)/.test(w)));
+    const missedFact=(p)=>({conditionName:'Signal',text:p,sourceQuote:p,latteBucket:'Look',tier:1,factType:'other',safetyCritical:false});
+    const auditSplit=await build({pages:[p1,p2],verifyPass:true,respond:body=>{
+      const txt=JSON.stringify(body);
+      if(!txt.includes('FACTS ALREADY EXTRACTED'))return primary([]);
+      if(txt.includes('pages 1')||txt.includes(p1)&&txt.includes(p2))return recit('{"missed":[');
+      if(txt.includes(p1))return {missed:[missedFact(p1)]};
+      return {missed:[missedFact(p2)]};
+    }});
+    const auditFacts=auditSplit.published[0]?.conditions?.[0]?.facts||[];
+    t('v23.1: a Pass 2 omission audit stopped by RECITATION splits by page and recovers facts with per-page pointers',auditSplit.published.length===1&&auditFacts.length===2&&auditFacts.map(f=>f.sources[0].location).join(',')==='page 1,page 2'&&auditSplit.diag?.chunks?.[0]?.auditStatus==='complete'&&auditSplit.logs.some(l=>/audit for .* stopped by RECITATION filter — splitting/.test(l.m)));
+    const auditPartial=await build({pages:[p1,p4],verifyPass:true,respond:body=>{
+      const txt=JSON.stringify(body);
+      if(!txt.includes('FACTS ALREADY EXTRACTED'))return primary([fact({text:'Base extracted fact.',sourceQuote:p1})]);
+      if(txt.includes(p4))return recit('{"missed":["blocked"');
+      return {missed:[missedFact(p1)]};
+    }});
+    const partialFacts=auditPartial.published[0]?.conditions?.[0]?.facts||[];
+    t('v23.1: a Pass 2 audit split with one indivisible RECITATION page keeps surviving recovered facts and marks audit partial',auditPartial.published.length===1&&partialFacts.length===2&&partialFacts.some(f=>f.recovered&&f.text===p1)&&auditPartial.diag?.chunks?.[0]?.auditStatus==='partial'&&auditPartial.warnings.some(w=>/page 2.*\[audit\].*RECITATION/.test(w)));
+  }
   // v17.15 (review M3): a halting audit failure stops the omission audit for the remaining chunks; their facts are kept.
   {
     const pa='The synthetic signal lamp remains green during readiness.',pb='The indicator is observed before the synthetic procedure.';

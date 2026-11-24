@@ -1,5 +1,11 @@
 # Current maintainer state
 
+## v23.1 RECITATION Auto-Split Fallback in Knowledge Base Extraction & Omission Audit (2026-11-24)
+
+The canonical application is `Nursing-Study-Suite v23.1.html`. All 13 frozen prompt constants match `prompt-baseline.json` unchanged.
+- **Pass 1 & Pass 2 `RECITATION` chunk splitting (`KnowledgeBaseBuilder` `processJob`, `kbSplitChunk`).** Extends the existing `MAX_TOKENS` chunk-halving fallback to Gemini `FinishReason.RECITATION` stops in both Pass 1 extraction (requeuing split halves in original `order` with `role` preserved up to `depth < 4`, and retaining `partialText` diagnostics if indivisible) and Pass 2 omission audit (`auditQueue` halving sub-chunks with per-sub-chunk quote grounding, per-page `sourcePointer.location`, and `'partial'` audit status when a surviving half recovers facts alongside an indivisible flagged slice).
+- **Verification.** `node verify-repo.js` passes **4,233 assertions (`0 failed`)** (5 new live behavioral assertions in `tools/anki-integrity-source-regression.js`), `0` AST undeclared references across all 4 inline script blocks, `<script type="text/babel">` unchanged below `390 KB`, all 25 prompt constants + 5 dynamic builders in `Prompts.md`, and live SHA-384 verification of all 7 pinned CDN scripts + both `PDF_WORKER_URLS` copies (`9/9`, `0` mismatches). No live Gemini API calls were made.
+
 ## v22.6 Closed-Loop NCLEX Pro FSRS-5 Weak-Tag Prescription Bridge & Leech Fact Re-Angling (2026-11-23)
 
 The canonical application is `Nursing-Study-Suite v22.6.html`. All 13 frozen prompt constants match `prompt-baseline.json` unchanged.

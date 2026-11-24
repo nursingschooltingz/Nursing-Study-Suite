@@ -70,8 +70,9 @@ module.exports = async function runV226FsrsPrescriptionTests(S, t) {
   const rAtS = ctx.nclexProFsrsRetrievability(srTenDays, fixedNow);
   const rAtZero = ctx.nclexProFsrsRetrievability({ stability: 10, reps: 1, lastReviewTs: new Date(fixedNow).toISOString() }, fixedNow);
   const rFuture = ctx.nclexProFsrsRetrievability(srTenDays, fixedNow, 15);
-  t('v22.6 (FSRS-5 math & version): suiteVersion is 23.0 and nclexProFsrsRetrievability satisfies R(0,S)=1.0, R(S,S)=0.90, and monotonic decay',
-    ctx.suiteVersion() === '23.0' &&
+  const expectedVer = (S.match(/<!-- v(\d+\.\d+) \(/) || [])[1];
+  t('v22.6 (FSRS-5 math & version): suiteVersion matches release header and nclexProFsrsRetrievability satisfies R(0,S)=1.0, R(S,S)=0.90, and monotonic decay',
+    Boolean(expectedVer) && ctx.suiteVersion() === expectedVer &&
     Math.abs(rAtZero - 1.0) < 1e-9 &&
     Math.abs(rAtS - 0.90) < 1e-9 &&
     rFuture < rAtS && rFuture > 0.70);

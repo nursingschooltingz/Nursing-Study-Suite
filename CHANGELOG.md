@@ -9,6 +9,22 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [23.1] — 2026-11-24
+
+Adds automatic **`RECITATION` chunk-splitting fallback** in **02 · Knowledge Base** across both Pass 1 extraction and Pass 2 omission audit so a Gemini `FinishReason.RECITATION` stop no longer discards an entire multi-page chunk. All 13 byte-frozen prompt constants in `prompt-baseline.json` are unchanged.
+
+### Fixed & Improved
+
+- **Pass 1 `RECITATION` auto-split & retry (`KnowledgeBaseBuilder` `processJob`).** When Gemini stops primary KB extraction with `finishReason === 'RECITATION'`, the builder now preserves `e.partialText` diagnostics and halves/requeues the chunk via `kbSplitChunk` (by page/slide boundary first, then by paragraph/line break down to `depth < 4`, matching the `MAX_TOKENS` fallback) instead of failing the entire multi-page chunk with `0` facts. Surviving pages and halves merge in original source order while any still-indivisible flagged slice fails cleanly with `Response stopped by the provider: RECITATION (cannot be split further)`.
+- **Pass 2 omission-audit `RECITATION` auto-split (`KnowledgeBaseBuilder` `processJob`).** When the optional omission audit stops with `RECITATION`, `auditQueue` halves and retries sub-chunks against the Pass 1 inventory, grounding each recovered fact strictly against its sub-chunk's normalized text and per-page pointer (`sourcePointer.location`). If all split audit sub-chunks succeed, `auditStatus` is `'complete'`; if one indivisible slice still hits `RECITATION`, surviving recovered facts are kept and `auditStatus` is recorded as `'partial'` alongside the sub-chunk warning.
+
+### Verification
+
+- **4,233 passed · 0 failed** in `node verify-repo.js` (5 new live behavioral assertions in `tools/anki-integrity-source-regression.js` covering Pass 1 `RECITATION` page splitting, 4-page single-page failure isolation, indivisible Pass 1 failure diagnostics, Pass 2 audit `RECITATION` splitting with per-page pointers, and partial Pass 2 audit recovery).
+- **Prompt bytes & CDN SRI pins.** All 13 frozen hashes in `prompt-baseline.json` pass unchanged; `Prompts.md` regenerated for `v23.1` across all 25 prompt constants and all 5 dynamic builders; all 7 pinned CDN `<script>` resources plus both `PDF_WORKER_URLS` copies verified via SHA-384 (`9/9`, `0` mismatches).
+
+---
+
 ## [23.0] — 2026-11-23
 
 Production hardening release across **Gemini transport & implicit prefix caching**, **PDF export**, **NCLEX Pro E2E cloud sync & optimistic concurrency**, **fail-closed NGN converters**, **cross-KB FSRS leech isolation**, **Case Study FSRS focus injection**, and **CLI PDF parser DoS bounds**. All 13 byte-frozen prompt constants in `prompt-baseline.json` are unchanged.

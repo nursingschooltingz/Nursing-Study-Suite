@@ -15,6 +15,10 @@
      The print preview (about:blank window or srcdoc frame) inherits this policy and uses only its own inline style block and system fonts. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://*.workers.dev http://localhost:* http://127.0.0.1:*; style-src 'unsafe-inline'; font-src 'none'">
 <title>P-LATE Study Suite</title>
+<!-- v23.1 (2026-11-24): RECITATION Auto-Split Fallback in Knowledge Base Builder (Pass 1 Extraction & Pass 2 Omission Audit) —
+     halves and requeues chunks stopped by Gemini FinishReason.RECITATION via kbSplitChunk (bounded at depth < 4) so surrounding
+     pages and paragraphs are recovered instead of dropping an entire multi-page chunk. All 13 frozen prompt constants in
+     prompt-baseline.json unchanged. -->
 <!-- v23.0 (2026-11-23): Production Hardening — User-Configurable NCLEX Pro Vault URL, Optimistic-Concurrency E2E Sync
      (expectedRev + 409 Conflict retry + timestamped LWW tombstones), Foreign-KB Leech Isolation, Fail-Closed NGN Converters,
      Case Study FSRS Focus Injection, Gemini Prefix-Cache Hoisting & Stream Keep-Alives, Zero document.write() PDF Export,
@@ -8526,7 +8530,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '23.0';}
+function suiteVersion(){return '23.1';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -17791,8 +17795,8 @@ async function kbBuildWithEnv(env){
         // numbers were right and the label was wrong.
         const missDetail=[],missByReason={},discardByReason={};
         let dehyphSaved=0;
-        const noteMiss=(pass,f)=>{
-          const reason=kbClassifyQuoteMiss(f.sourceQuote,srcNorm,srcDehyph,srcToks,srcMarks);
+        const noteMiss=(pass,f,mNorm=srcNorm,mDehyph=srcDehyph,mToks=srcToks,mMarks=srcMarks)=>{
+          const reason=kbClassifyQuoteMiss(f.sourceQuote,mNorm,mDehyph,mToks,mMarks);
           if(!reason)return;
           const bucket=pass===1?missByReason:discardByReason;
           bucket[reason]=(bucket[reason]||0)+1;
@@ -17831,6 +17835,16 @@ async function kbBuildWithEnv(env){
               total+=passesPerChunk;queue.unshift(...halves.map((h,i)=>({file,chunk:h,role:jobRole,depth:job.depth+1,order:[...result.order,i]})));return;
             }
             e=new Error('output hit MAX_TOKENS and cannot be split further');
+          }else if(e&&e.finishReason==='RECITATION'){
+            // v23.1: Gemini RECITATION stops a whole multi-page chunk mid-stream; halving and requeuing via kbSplitChunk
+            // recovers surrounding pages and paragraphs while isolating any flagged slice instead of losing the full chunk.
+            primaryResponse={text:e.partialText||'',meta};
+            const halves=kbSplitChunk(chunk);
+            if(halves&&job.depth<4){
+              owned_addLog(`↯ ${tag} stopped by RECITATION filter — splitting into ${halves.map(h=>h.label).join(' + ')} and retrying`,'warn');
+              total+=passesPerChunk;queue.unshift(...halves.map((h,i)=>({file,chunk:h,role:jobRole,depth:job.depth+1,order:[...result.order,i]})));return;
+            }
+            e=new Error('Response stopped by the provider: RECITATION (cannot be split further)');
           }
           if(geminiHaltsBatch(e))throw e; // v17.4: a deferred retry, an exhausted quota or a permanent HTTP failure stops the build; kbRunLanes settles the other lane first
           const pe=safeErr(e);
@@ -17871,18 +17885,59 @@ async function kbBuildWithEnv(env){
           let vmeta=null;
           try{
             const inventory=(parsed.conditions||[]).map(c=>`# ${c.name}${c.entryRole==='concept'?' [CONCEPT OVERVIEW]':c.concept?' [Exemplar of '+c.concept+']':''}\n`+(c.facts||[]).map(f=>`- [${f.latteBucket}]${typeof f.sourceLabel==='string'&&f.sourceLabel.trim()?' ['+f.sourceLabel.trim()+']':''}${f.trapRole?' [trap:'+f.trapRole+']':''} ${f.text}`).join('\n')).join('\n\n')||'(nothing was extracted from this chunk)';
-            // v20.2: place static KB_VERIFY_PROMPT + focusBlock in systemInstruction and enable SSE keep-alive streaming (stream:true).
-            const vraw=await geminiRequest(cfg.apiKey,auditCfg.model,{systemInstruction:{parts:[{text:KB_VERIFY_PROMPT+focusBlock}]},contents:[{parts:[{text:'(A) SOURCE CHUNK — '+file.name+' ('+chunk.label+')\n'+chunk.text},{text:'(B) FACTS ALREADY EXTRACTED FROM THIS CHUNK\n'+inventory}]}],generationConfig:{responseMimeType:'application/json',...(typeof KB_VERIFY_JSON_SCHEMA==='object'?{responseJsonSchema:KB_VERIFY_JSON_SCHEMA}:{}),thinkingConfig:{thinkingLevel:auditCfg.level}}},{signal:laneSignal,retries:1,stream:true,onMeta:m=>{vmeta=m;}});
-            // v16.7: a missing/wrong-shaped omission inventory is unresolved evidence, not zero omissions.
-            auditResponse={text:vraw,meta:vmeta};
-            const vp=kbValidateExtractionEnvelope(extractJSON(vraw),true),missed=vp.missed;
-            if(missed.length){
+            // v23.1: auditQueue lets an omission audit stopped by RECITATION halve and retry sub-chunks instead of losing all audit recovery on the chunk.
+            const auditQueue=[{chunk,depth:job.depth}],allMissed=[],auditRawParts=[];
+            let auditFailedPartErr=null,lastRecitationPartial='';
+            while(auditQueue.length){
+              if(laneSignal.aborted)throw new DOMException('Aborted','AbortError');
+              const ac=auditQueue.shift();
+              try{
+                // v20.2: place static KB_VERIFY_PROMPT + focusBlock in systemInstruction and enable SSE keep-alive streaming (stream:true).
+                const vraw=await geminiRequest(cfg.apiKey,auditCfg.model,{systemInstruction:{parts:[{text:KB_VERIFY_PROMPT+focusBlock}]},contents:[{parts:[{text:'(A) SOURCE CHUNK — '+file.name+' ('+ac.chunk.label+')\n'+ac.chunk.text},{text:'(B) FACTS ALREADY EXTRACTED FROM THIS CHUNK\n'+inventory}]}],generationConfig:{responseMimeType:'application/json',...(typeof KB_VERIFY_JSON_SCHEMA==='object'?{responseJsonSchema:KB_VERIFY_JSON_SCHEMA}:{}),thinkingConfig:{thinkingLevel:auditCfg.level}}},{signal:laneSignal,retries:1,stream:true,onMeta:m=>{vmeta=m;}});
+                // v16.7: a missing/wrong-shaped omission inventory is unresolved evidence, not zero omissions.
+                auditResponse={text:auditRawParts.length?auditRawParts.concat([vraw]).join('\n'):vraw,meta:vmeta};
+                const vp=kbValidateExtractionEnvelope(extractJSON(vraw),true);
+                auditRawParts.push(vraw);
+                if(vp.missed.length){
+                  const sub=ac.chunk===chunk?null:(()=>{const norm=kbNormForMatch(ac.chunk.text);return{norm,dehyph:kbDehyphNormForMatch(ac.chunk.text),toks:new Set(norm.split(' ')),marks:{norm:kbNormForMatch(ac.chunk.text,true),dehyph:kbDehyphNormForMatch(ac.chunk.text,true)}};})();
+                  for(const f of vp.missed)allMissed.push({fact:f,label:ac.chunk.label,sub});
+                }
+              }catch(aeSub){
+                if(aeSub&&aeSub.name==='AbortError')throw aeSub;
+                if(aeSub&&aeSub.finishReason==='RECITATION'){
+                  lastRecitationPartial=aeSub.partialText||lastRecitationPartial;
+                  const aHalves=kbSplitChunk(ac.chunk);
+                  if(aHalves&&ac.depth<4){
+                    owned_addLog(`  ↯ audit for ${file.name} (${ac.chunk.label}) stopped by RECITATION filter — splitting into ${aHalves.map(h=>h.label).join(' + ')} and retrying`,'warn');
+                    auditQueue.unshift(...aHalves.map(h=>({chunk:h,depth:ac.depth+1})));
+                    continue;
+                  }
+                  const subErr=Object.assign(new Error('Response stopped by the provider: RECITATION (cannot be split further)'),{finishReason:'RECITATION',partialText:aeSub.partialText||''});
+                  if(ac.depth===job.depth&&!auditRawParts.length&&!auditQueue.length)throw subErr;
+                  auditFailedPartErr=subErr;
+                  problems.push(file.name+' ('+ac.chunk.label+') [audit]: '+safeErr(subErr));
+                  owned_addLog(`  ⚠ audit failed for ${file.name} (${ac.chunk.label}): ${safeErr(subErr)}`,'warn');
+                  continue;
+                }
+                if(ac.depth===job.depth&&!auditRawParts.length)throw aeSub;
+                const subMsg=safeErr(aeSub);
+                auditFailedPartErr=aeSub;
+                problems.push(file.name+' ('+ac.chunk.label+') [audit]: '+subMsg);
+                owned_addLog(`  ⚠ audit failed for ${file.name} (${ac.chunk.label}): ${subMsg}`,'warn');
+                if(geminiHaltsBatch(aeSub)){
+                  if(!auditHalt){auditHalt=subMsg;owned_addLog('  ⚠ The omission audit stopped: it was not sent for the remaining chunks, whose extracted facts are kept without an audit.','warn');problems.push('omission audit stopped after '+file.name+' ('+ac.chunk.label+'): '+auditHalt);}
+                  break;
+                }
+              }
+            }
+            if(allMissed.length){
               // Code-enforced grounding: a recovered fact survives only if its claimed
               // verbatim quote is actually present in this chunk. Additive content gets
               // the strict rule; the risk profile is inverted from pass 1.
               const byCond=new Map();
-              for(const f of missed){
+              for(const {fact:f,label:srcLabel,sub:acSub} of allMissed){
                 if(!String(f.text||'').trim())continue;
+                if(acSub&&!kbQuoteInSource(f.sourceQuote,acSub.norm,acSub.dehyph,acSub.marks)){discarded++;noteMiss(2,f,acSub.norm,acSub.dehyph,acSub.toks,acSub.marks);continue;}
                 if(!kbQuoteInSource(f.sourceQuote,srcNorm,srcDehyph,srcMarks)){discarded++;noteMiss(2,f);continue;}
                 if(!kbQuoteInSource(f.sourceQuote,srcNorm,null,srcMarks))dehyphSaved++;
                 if(!kbQuoteOperatorsAgree(f.sourceQuote,srcOpNorm,srcOpDehyph))noteOp(2,f);
@@ -17894,21 +17949,27 @@ async function kbBuildWithEnv(env){
                 if(fRole==='concept'||fRole==='exemplar')slot.entryRole=slot.entryRole==='concept'?'concept':fRole;
                 if(!slot.concept&&typeof fConcept==='string'&&fConcept.trim())slot.concept=fConcept.trim();
                 if(Array.isArray(fPartners))for(const cp of fPartners)if(typeof cp==='string'&&cp.trim())slot.contrastPartners.push(cp.trim());
-                slot.facts.push({...rest,recovered:true,sourcePointer:{filename:file.name,location:chunk.label}});
+                slot.facts.push({...rest,recovered:true,sourcePointer:{filename:file.name,location:srcLabel}});
                 recovered++;
               }
               if(recovered)result.parts.push({source:{filename:file.name,range:chunk.label+' (recovered)',...srcRoleMeta},conditions:[...byCond.entries()].map(([name,slot])=>({name,aliases:[],...(slot.entryRole?{entryRole:slot.entryRole}:{}),...(slot.concept&&slot.entryRole!=='concept'?{concept:slot.concept}:{}),...(slot.contrastPartners.length?{contrastPartners:[...new Set(slot.contrastPartners)]}:{}),facts:slot.facts}))});
             }
-            // v18.0 (review L12): a 'truncated' status and warning followed here, but since v17.13 geminiRequest rejects a
-            // JSON reply cut off at the ceiling (the catch below keeps its partial text), so a returned audit is complete.
-            auditStatus='complete';
-            owned_addLog(`  ↳ audit: +${recovered} recovered${discarded?`, ${discarded} discarded (quote not found in source)`:''}`,recovered?'ok':'');
+            if(auditFailedPartErr&&!auditRawParts.length){
+              auditStatus='failed';
+              auditResponse={text:lastRecitationPartial,meta:vmeta};
+            }else{
+              // v18.0 (review L12): a 'truncated' status and warning followed here, but since v17.13 geminiRequest rejects a
+              // JSON reply cut off at the ceiling (the catch below keeps its partial text), so a returned audit is complete.
+              auditStatus=auditFailedPartErr?'partial':'complete';
+              owned_addLog(`  ↳ audit${auditFailedPartErr?' (partial)':''}: +${recovered} recovered${discarded?`, ${discarded} discarded (quote not found in source)`:''}`,recovered?'ok':'');
+            }
           }catch(e){
             if(e.name==='AbortError')throw e;
             auditStatus='failed';
             // v17.13: a truncated audit reply is now rejected by geminiRequest before it reaches the line above that kept
             // it; its partial text stays as this chunk's audit evidence, as an unparseable reply's did.
             if(e&&e.truncated)auditResponse={text:e.partialText||'',meta:vmeta};
+            else if(e&&e.finishReason==='RECITATION')auditResponse={text:e.partialText||'',meta:vmeta};
             const ae=safeErr(e);
             problems.push(tag+' [audit]: '+ae);
             owned_addLog(`  ⚠ audit failed for ${tag}: ${ae}`,'warn');
