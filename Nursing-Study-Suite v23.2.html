@@ -15,6 +15,13 @@
      The print preview (about:blank window or srcdoc frame) inherits this policy and uses only its own inline style block and system fonts. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://*.workers.dev http://localhost:* http://127.0.0.1:*; style-src 'unsafe-inline'; font-src 'none'">
 <title>P-LATE Study Suite</title>
+<!-- v23.2 (2026-11-24): Default Parallel KB Lanes, NGN Matrix Schema & Normalizer Fix, Topic-Based Cross-Session
+     Progress Bar & Untouched-Topic Rotation (Case Studies + NCLEX Generator), End-of-Document Validation Banners, &
+     NCLEX Pro Tag Parity (laneCount=2, CASE_STUDY_JSON_SCHEMA, caseNormalizeParsedNgnFields, genLedgerTopicKey,
+     genLedgerExcludeTopicSet, genLedgerTopicScopeStats, GenLedgerControl, caseSliceBroadMixedEntries, caseBuildBatchTargets,
+     caseEstimateWavePlan, caseRunBatchWithEnv, ngBatchStart, ngAllocateBatch, ngRunGeneratorWithEnv, caseComposeSingleExportMd,
+     casePacketToMarkdown, ngBuildWorksheetMd, n2aConvertText, nclexProKbMeta, nclexProComposeTags, nclexProConvertWorksheet,
+     nclexProConvertCaseStudy, nclexProConvertAnkiDeck). All 13 frozen prompt constants in prompt-baseline.json unchanged. -->
 <!-- v23.1 (2026-11-24): RECITATION Auto-Split Fallback in Knowledge Base Builder (Pass 1 Extraction & Pass 2 Omission Audit) —
      halves and requeues chunks stopped by Gemini FinishReason.RECITATION via kbSplitChunk (bounded at depth < 4) so surrounding
      pages and paragraphs are recovered instead of dropping an entire multi-page chunk. All 13 frozen prompt constants in
@@ -8530,7 +8537,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '23.1';}
+function suiteVersion(){return '23.2';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -9628,8 +9635,12 @@ function n2aConvertText(text,sourceName,extraTags=[]){
   // v21.10 (Phase 3): when two worksheets are concatenated, truncate the first answer key at the second worksheet's Questions heading so the second exam's questions never append onto the last card.
   const kStart=keyHead.index+keyHead[0].length,kBound=keys.length>1?keys[1].index:text.length;
   const kRaw=text.slice(kStart,kBound),nextQ=keys.length>1?[...kRaw.matchAll(N2A_Q_HEAD)][0]:null;
-  const kText=nextQ?kRaw.slice(0,nextQ.index):kRaw;
-  const needsReview=/FAILED VALIDATION|Unresolved item findings remain/i.test(before);
+  const kFull=nextQ?kRaw.slice(0,nextQ.index):kRaw;
+  // v23.2 (#3/#4): when exported with diagnosticsAtEnd:true, FAILED VALIDATION lives inside the trailing Warnings, Errors & Review Appendix; scan it for NeedsReview and exclude it from key-block parsing.
+  const diagHeadM=kFull.match(/\n#{1,3}[ \t]+Warnings,\s*Errors\s*&\s*Review\s+Appendix\b/i);
+  const kText=diagHeadM?kFull.slice(0,diagHeadM.index):kFull;
+  const diagTail=diagHeadM?kFull.slice(diagHeadM.index):'';
+  const needsReview=/FAILED VALIDATION|Unresolved item findings remain/i.test(before)||/FAILED VALIDATION|Unresolved item findings remain/i.test(diagTail);
   if(needsReview)warnings.push(sourceName+': export is stamped FAILED VALIDATION / unresolved findings; every card is tagged NeedsReview.');
   const questions=new Map(n2aSplitBlocks(qText).map(([n,b])=>[n,n2aParseQuestion(n2aCleanBlock(b))]));
   const entries=n2aSplitBlocks(kText).map(([n,b,dup])=>({n,dup,key:n2aParseKey(n2aCleanBlock(b))}));
@@ -11418,7 +11429,17 @@ function ngPoolSize(groups){return groups.reduce((n,g)=>n+g.facts.length,0);}
 // the walk and count toward their group's perCondition in its first round, so a batch keeps the v18.5 shape. A first
 // round in which every group still holding facts was already full gets the second round the walk would have had.
 function ngAllocateBatch(groups,usedIds,{want,perCondition=4,neighborCap=2,start=0,first=[]}={}){
-  const targets=[],taken=new Set(),hitGroups=[],seenGroups=new Set(),n=groups.length,from=n?((Math.floor(Number(start))||0)%n+n)%n:0,order=groups.map((_,i)=>groups[(from+i)%n]);
+  const targets=[],taken=new Set(),hitGroups=[],seenGroups=new Set(),n=groups.length,from=n?((Math.floor(Number(start))||0)%n+n)%n:0;
+  let order=groups.map((_,i)=>groups[(from+i)%n]);
+  // v23.2 (#2): when prior-session topic history is active, walk untouched topics first so follow-up runs draw new topics before revisiting partially-used topics' leftover facts.
+  const _rawUsedT=groups&&groups._usedTopicKeys;
+  const _usedT=_rawUsedT&&typeof _rawUsedT.has==='function'&&_rawUsedT.size?_rawUsedT:null;
+  if(_usedT){
+    const _ngTk=g=>typeof genLedgerTopicKey==='function'?genLedgerTopicKey(g):(g?((String(g.condition||g.name||g.id||'').replace(/\s+/g,' ').trim().toLowerCase())+(g.entityKind?'::'+String(g.entityKind).trim().toLowerCase():'')):'');
+    const untouchedOrd=[],touchedOrd=[];
+    for(const g of order)(_usedT.has(_ngTk(g))?touchedOrd:untouchedOrd).push(g);
+    if(untouchedOrd.length)order=untouchedOrd.concat(touchedOrd);
+  }
   const markGroup=g=>{if(g&&!seenGroups.has(g)){seenGroups.add(g);hitGroups.push(g);}};
   const credit=new Map(),firstIds=new Set(Array.isArray(first)?first:[]);
   if(firstIds.size){
@@ -11557,11 +11578,32 @@ function ngAllocateBatch(groups,usedIds,{want,perCondition=4,neighborCap=2,start
 // v18.5: the group batch b of `total` starts from: the one holding pool fact floor((b-1)*poolSize/total), counting facts in
 // pool order. A run's batches are spread evenly through the Knowledge Base by fact count, so long conditions get
 // proportionally more batches than one-line entries; each batch still takes a few facts from neighbouring groups.
-// v22.4: optional excludeIds (or non-enumerable groups._excludeIds) spaces continuation batches evenly by remaining unused facts instead of clustering on depleted groups.
+// v22.4 + v23.2 (#2): optional excludeIds (pool._excludeIds) and pool._usedTopicKeys space continuation batches evenly across untouched topics first before falling back to remaining unused facts on previously-visited topics.
 function ngBatchStart(groups,b,total,excludeIds=null){
   const rawEx=excludeIds||(groups&&groups._excludeIds)||null;
   const ex=rawEx&&typeof rawEx.has==='function'&&rawEx.size?rawEx:null;
   const countOf=g=>ex?(g.facts||[]).filter(f=>!ex.has(f.id)&&!ex.has(String(f.id||'').toLowerCase())).length:(g.facts||[]).length;
+  const rawUsedT=groups&&groups._usedTopicKeys;
+  const usedT=rawUsedT&&typeof rawUsedT.has==='function'&&rawUsedT.size?rawUsedT:null;
+  const _ngTk=g=>typeof genLedgerTopicKey==='function'?genLedgerTopicKey(g):(g?((String(g.condition||g.name||g.id||'').replace(/\s+/g,' ').trim().toLowerCase())+(g.entityKind?'::'+String(g.entityKind).trim().toLowerCase():'')):'');
+  if(usedT){
+    let uSize=0,firstU=-1;
+    for(let i=0;i<groups.length;i++){
+      if(usedT.has(_ngTk(groups[i])))continue;
+      const c=countOf(groups[i]);
+      if(c>0){if(firstU<0)firstU=i;uSize+=c;}
+    }
+    if(uSize>0){
+      if(!(total>1))return firstU;
+      const at=Math.floor((Math.max(1,Math.floor(b))-1)%total*uSize/total);
+      for(let i=0,seen=0;i<groups.length;i++){
+        if(usedT.has(_ngTk(groups[i])))continue;
+        const c=countOf(groups[i]);if(!c)continue;
+        seen+=c;if(at<seen)return i;
+      }
+      return firstU;
+    }
+  }
   const size=groups.reduce((n,g)=>n+countOf(g),0);
   if(!size||!(total>1))return 0;
   const at=Math.floor((Math.max(1,Math.floor(b))-1)%total*size/total);
@@ -12698,30 +12740,36 @@ function caseSpreadIndices(n){
 // group eligible entries into coherent 4-condition clinical/concept clusters and pick the highest-freshness cluster in KB-spread
 // order so Waves 1..16 (even across separate batches of 8) cover distinct topics across the entire KB rather than re-skimming entries[0..11].
 const CASE_BROAD_MIX_THRESHOLD=5,CASE_BROAD_CLUSTER_SIZE=4;
-function caseSliceBroadMixedEntries(selectedEntries,{includeTier2=true,includeTier3=false,includeBridge=false,excludeFactIds=null,clusterSize=CASE_BROAD_CLUSTER_SIZE}={}){
+function caseSliceBroadMixedEntries(selectedEntries,{includeTier2=true,includeTier3=false,includeBridge=false,excludeFactIds=null,excludeTopicKeys=null,clusterSize=CASE_BROAD_CLUSTER_SIZE}={}){
   const list=(Array.isArray(selectedEntries)?selectedEntries:[selectedEntries]).filter(Boolean);
   if(list.length<=CASE_BROAD_MIX_THRESHOLD)return{entries:list,isBroadSlice:false,clusterCount:1};
   const tierOk=f=>(includeBridge||f.clinicalLayer!=='bridge')&&(Number(f.tier)===1||(includeTier2&&Number(f.tier)===2)||(includeTier3&&Number(f.tier)===3));
   const _exItems=excludeFactIds&&typeof excludeFactIds!=='string'&&typeof excludeFactIds[Symbol.iterator]==='function'?[...excludeFactIds]:[];
   const exSet=_exItems.length?new Set(_exItems.map(x=>String(x||'').toLowerCase())):null;
+  const _exTItems=excludeTopicKeys&&typeof excludeTopicKeys!=='string'&&typeof excludeTopicKeys[Symbol.iterator]==='function'?[...excludeTopicKeys]:[];
+  const exTopicSet=_exTItems.length?new Set(_exTItems.map(x=>String(x||'').trim().toLowerCase()).filter(Boolean)):null;
   const isEx=f=>!!(exSet&&f&&exSet.has(String(f.id||'').toLowerCase()));
   const norm=s=>String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+  const topicKey=c=>typeof genLedgerTopicKey==='function'?genLedgerTopicKey(c):(c?((norm(c.condition||c.name||c.id))+(c.entityKind?'::'+norm(c.entityKind):'')):'');
   const overviewsByConcept=new Map();
   for(const c of list)if(c&&c.entryRole==='concept'&&norm(c.name))overviewsByConcept.set(norm(c.name),c);
   const nonOverviews=list.filter(c=>c&&c.entryRole!=='concept');
   const basePool=nonOverviews.length?nonOverviews:list;
-  const stats=basePool.map((c,origIdx)=>{
+  const allStats=basePool.map((c,origIdx)=>{
     const all=(c.facts||[]).filter(tierOk);
     const unused=exSet?all.filter(f=>!isEx(f)):all;
     const usedCnt=all.length-unused.length;
-    return{c,origIdx,total:all.length,unusedCnt:unused.length,usedCnt,untouched:all.length>0&&usedCnt===0,cKey:norm(c.entryRole==='concept'?c.name:c.concept)};
-  }).filter(s=>s.unusedCnt>0);
-  if(!stats.length)return{entries:[],isBroadSlice:true,clusterCount:0};
-  // Group into clinical clusters: concept-linked entries stay with same-concept peers (chunked by clusterSize); unlinked entries group in KB neighborhood order (substantial >=2-fact entries first, attaching 1-fact stubs).
+    const tk=topicKey(c);
+    const topicUsed=usedCnt>0||!!(exTopicSet&&tk&&exTopicSet.has(tk));
+    return{c,origIdx,total:all.length,unusedCnt:unused.length,usedCnt,untouched:all.length>0&&!topicUsed,cKey:norm(c.entryRole==='concept'?c.name:c.concept)};
+  }).filter(s=>s.total>0);
+  if(!allStats.some(s=>s.unusedCnt>0))return{entries:[],isBroadSlice:true,clusterCount:0};
+  const stats=allStats;
+  // Group into clinical clusters using stable all-topic slots so binary-subdivision KB spread (0%, 50%, 25%, 75%, ...) stays anchored across waves and sessions.
   const rawClusters=[],byConcept=new Map(),unlinkedRich=[],unlinkedStubs=[];
   for(const st of stats){
     if(st.cKey){(byConcept.get(st.cKey)||(byConcept.set(st.cKey,[]),byConcept.get(st.cKey))).push(st);}
-    else if(st.unusedCnt>=2)unlinkedRich.push(st);
+    else if(st.total>=2)unlinkedRich.push(st);
     else unlinkedStubs.push(st);
   }
   const sz=Math.max(2,Math.floor(Number(clusterSize)||CASE_BROAD_CLUSTER_SIZE));
@@ -12747,21 +12795,25 @@ function caseSliceBroadMixedEntries(selectedEntries,{includeTier2=true,includeTi
   }
   orderedGroups.sort((a,b)=>a.anchorPos-b.anchorPos);
   for(const g of orderedGroups){
-    const items=g.items;
-    const unusedSum=items.reduce((s,x)=>s+x.unusedCnt,0),totalSum=items.reduce((s,x)=>s+x.total,0);
-    const untouchedCount=items.filter(x=>x.untouched).length;
-    rawClusters.push({items,cKey:g.cKey,unusedSum,totalSum,untouchedRatio:items.length?untouchedCount/items.length:0,freshRatio:totalSum?unusedSum/totalSum:0,substantial:unusedSum>=6?1:0});
+    const activeItems=g.items.filter(x=>x.unusedCnt>0);
+    const untouchedItems=activeItems.filter(x=>x.untouched);
+    const unusedSum=activeItems.reduce((s,x)=>s+x.unusedCnt,0),totalSum=g.items.reduce((s,x)=>s+x.total,0);
+    rawClusters.push({items:activeItems,untouchedItems,cKey:g.cKey,unusedSum,totalSum,untouchedCount:untouchedItems.length,untouchedRatio:g.items.length?untouchedItems.length/g.items.length:0,freshRatio:totalSum?unusedSum/totalSum:0,substantial:unusedSum>=6?1:0});
   }
+  const hasAnyUntouched=rawClusters.some(cl=>cl.untouchedCount>0);
   const spreadOrder=caseSpreadIndices(rawClusters.length);
   const spreadRank=new Map(spreadOrder.map((ci,rank)=>[ci,rank]));
-  const ranked=rawClusters.map((cl,ci)=>({cl,spread:spreadRank.get(ci)??ci})).sort((a,b)=>
+  const eligibleClusters=rawClusters.map((cl,ci)=>({cl,spread:spreadRank.get(ci)??ci})).filter(({cl})=>hasAnyUntouched?cl.untouchedCount>0:cl.unusedSum>0);
+  if(!eligibleClusters.length)return{entries:[],isBroadSlice:true,clusterCount:0};
+  const ranked=eligibleClusters.sort((a,b)=>
     (b.cl.substantial-a.cl.substantial)||
     (Math.round(b.cl.untouchedRatio*100)-Math.round(a.cl.untouchedRatio*100))||
     (Math.round(b.cl.freshRatio*20)-Math.round(a.cl.freshRatio*20))||
     (a.spread-b.spread)
   );
   const chosen=ranked[0].cl;
-  const chosenEntries=chosen.items.map(x=>x.c);
+  // v23.2 (#2): while untouched topics remain anywhere in scope, return only the cluster's untouched topics so previously-covered topics are never repeated until Pass 2.
+  const chosenEntries=(hasAnyUntouched&&chosen.untouchedItems.length?chosen.untouchedItems:chosen.items).map(x=>x.c);
   if(chosen.cKey&&overviewsByConcept.has(chosen.cKey)){
     const ov=overviewsByConcept.get(chosen.cKey);
     if(!chosenEntries.includes(ov))chosenEntries.unshift(ov);
@@ -12771,12 +12823,12 @@ function caseSliceBroadMixedEntries(selectedEntries,{includeTier2=true,includeTi
   const label=namesForLabel.length<=3?namesForLabel.join(' + '):namesForLabel.slice(0,3).join(' + ')+' (+'+(namesForLabel.length-3)+' more)';
   return{entries:chosenEntries,isBroadSlice:true,clusterCount:rawClusters.length,label,entryNames:namesForLabel};
 }
-function selectCaseFactsMulti(selectedEntries,{includeTier2=true,includeTier3=false,includeCalculation=true,includeEducation=true,includeBridge=false,allConditions=null,excludeFactIds=null,allowContextAnchors=true}={}){
+function selectCaseFactsMulti(selectedEntries,{includeTier2=true,includeTier3=false,includeCalculation=true,includeEducation=true,includeBridge=false,allConditions=null,excludeFactIds=null,excludeTopicKeys=null,allowContextAnchors=true}={}){
   const rawList=(Array.isArray(selectedEntries)?selectedEntries:[selectedEntries]).filter(Boolean);
   if(!rawList.length)return[];
   if(rawList.length===1)return selectCaseFacts(rawList[0],{includeTier2,includeTier3,includeCalculation,includeEducation,includeBridge,allConditions,excludeFactIds,allowContextAnchors});
-  // v22.5 (#7): slice >5-entry "All topics" pools into coherent KB-spread clusters so consecutive waves/batches never repeat Chapter 1 topics.
-  const sliced=rawList.length>CASE_BROAD_MIX_THRESHOLD?caseSliceBroadMixedEntries(rawList,{includeTier2,includeTier3,includeBridge,excludeFactIds}):{entries:rawList,isBroadSlice:false};
+  // v22.5 (#7) + v23.2 (#2): slice >5-entry "All topics" pools into untouched-first KB-spread clusters so consecutive waves/batches never repeat already-covered topics.
+  const sliced=rawList.length>CASE_BROAD_MIX_THRESHOLD?caseSliceBroadMixedEntries(rawList,{includeTier2,includeTier3,includeBridge,excludeFactIds,excludeTopicKeys}):{entries:rawList,isBroadSlice:false};
   const list=sliced.entries;
   if(!list.length)return[];
   if(list.length===1)return selectCaseFacts(list[0],{includeTier2,includeTier3,includeCalculation,includeEducation,includeBridge,allConditions,excludeFactIds,allowContextAnchors});
@@ -14966,11 +15018,10 @@ function caseComposeSingleExportMd({caseStudy,exportNotice='',issues=[],provenan
   const mdOpts={worksheetFactIds,factIndex,factCategoryPlacement};
   const hasCustomMdOpts=worksheetFactIds===false||!!factIndex||Boolean(factCategoryPlacement&&factCategoryPlacement!=='off');
   if(mode==='end'){
-    const errs=(issues||[]).filter(x=>x.sev==='error');
-    const safetyHint=errs.length?'> **\u26a0 Unverified case ('+errs.length+' error'+(errs.length===1?'':'s')+')** \u2014 see **Warnings, Errors & Review Appendix** at the end of this document.\n\n':'';
+    // v23.2 (#3/#4): keep student worksheet clean at the top when grouped at end; all red validation boxes live together after the Answer Key.
     const cleanRev=String(reviewAppendix||'').replace(/^\n---\n\n## Review appendix\n+/,'');
     const diagBody=[exportNotice,stamp,prov,cleanRev].filter(Boolean).join('\n').trim();
-    return safetyHint+caseToMarkdown(caseStudy,mdOpts)+(diagBody?'\n\n---\n\n## Warnings, Errors & Review Appendix\n\n'+diagBody+'\n':'');
+    return caseToMarkdown(caseStudy,mdOpts)+(diagBody?'\n\n---\n\n## Warnings, Errors & Review Appendix\n\n'+diagBody+'\n':'');
   }
   if(mode==='top-of-key'){
     const errs=(issues||[]).filter(x=>x.sev==='error');
@@ -15009,25 +15060,29 @@ function casePacketToMarkdown(entries,{activeKB=null,layout='booklet',worksheetF
     return{num,cs,dispCond,errs,issues,rows,actual,stale,notice,stamp,prov,appendix,worksheet,keyBlock};
   });
   const failedCases=prepared.filter(p=>p.errs.length>0);
+  const packetFailBanner=failedCases.length?[
+    '> **\u26a0 PACKET CONTAINS UNVERIFIED CASE(S) \u2014 '+failedCases.map(f=>'Case '+f.num+' ('+escH(f.cs.title||f.dispCond||'Untitled')+': '+f.errs.length+' error(s))').join('; ')+'**',
+    '> One or more cases in this packet failed deterministic source-grounding checks. Do not use flagged cases as verified study content until corrected.',
+    ''
+  ].join('\n'):'';
   const head=[];
-  if(failedCases.length){
-    head.push('> **\u26a0 PACKET CONTAINS UNVERIFIED CASE(S) \u2014 '+failedCases.map(f=>'Case '+f.num+' ('+escH(f.cs.title||f.dispCond||'Untitled')+': '+f.errs.length+' error(s))').join('; ')+'**');
-    head.push('> One or more cases in this packet failed deterministic source-grounding checks. Do not use flagged cases as verified study content until corrected.'+(diagMode==='end'?' Full error & warning details are grouped in the master appendix at the end of this packet.':''));
-    head.push('');
+  // v23.2 (#3/#4): when grouped at end (default), move the packet-level red unverified banner, per-case worksheet red banners, and TOC FAILED VALIDATION flags into the trailing master appendix after the Answer Keys so student worksheets and cover page stay clean.
+  if(failedCases.length&&diagMode!=='end'){
+    head.push(packetFailBanner);
   }
   head.push('**Case Packet ('+total+' '+(total===1?'case':'cases')+' \u00b7 '+(layout==='paired'?'Paired: each case followed by its answer key':'Booklet: all student worksheets first, answer keys at back')+'):**');
-  for(const p of prepared)head.push('- **Case '+p.num+':** '+escH(p.cs.title||'Clinical Case Study')+' \u2014 *'+escH(p.dispCond||'—')+'* ('+escH(p.cs.difficulty||'—')+', '+p.actual+' Qs)'+(p.errs.length?' \u26a0 FAILED VALIDATION':'')+(p.stale?' \u00b7 earlier KB':''));
+  for(const p of prepared)head.push('- **Case '+p.num+':** '+escH(p.cs.title||'Clinical Case Study')+' \u2014 *'+escH(p.dispCond||'—')+'* ('+escH(p.cs.difficulty||'—')+', '+p.actual+' Qs)'+(p.errs.length&&diagMode!=='end'?' \u26a0 FAILED VALIDATION':'')+(p.stale?' \u00b7 earlier KB':''));
   head.push('\n---\n');
   const pb='\n<div class="pagebreak"></div>\n\n';
   if(diagMode==='end'){
-    const masterDiag='# Warnings, Errors & Review Appendix (All '+total+' '+(total===1?'Case':'Cases')+')\n\n'+prepared.map(p=>{
+    const masterDiag='# Warnings, Errors & Review Appendix (All '+total+' '+(total===1?'Case':'Cases')+')\n\n'+(packetFailBanner?packetFailBanner+'\n':'')+prepared.map(p=>{
       const cleanApp=String(p.appendix||'').replace(/^\n---\n\n## Review appendix\n+/,'').trim();
       return '## Case '+p.num+' of '+total+': '+escH(p.cs.title||'Clinical Case Study')+'\n\n'+[p.notice,p.stamp,p.prov,cleanApp].filter(Boolean).join('\n').trim();
     }).join('\n\n---\n\n')+'\n';
     if(layout==='paired'){
-      return head.join('\n')+prepared.map((p,idx)=>(idx>0?pb:'')+(p.errs.length?'> **\u26a0 Case '+p.num+' failed validation ('+p.errs.length+' error(s))** \u2014 see master appendix at end.\n\n':'')+p.worksheet+pb+p.keyBlock).join('\n')+pb+masterDiag;
+      return head.join('\n')+prepared.map((p,idx)=>(idx>0?pb:'')+p.worksheet+pb+p.keyBlock).join('\n')+pb+masterDiag;
     }
-    const worksheets=prepared.map((p,idx)=>(idx>0?pb:'')+(p.errs.length?'> **\u26a0 Case '+p.num+' failed validation ('+p.errs.length+' error(s))** \u2014 see master appendix at end.\n\n':'')+p.worksheet).join('\n');
+    const worksheets=prepared.map((p,idx)=>(idx>0?pb:'')+p.worksheet).join('\n');
     const keys=prepared.map((p,idx)=>(idx>0?pb:'')+p.keyBlock).join('\n');
     return head.join('\n')+worksheets+pb+keys+pb+masterDiag;
   }
@@ -15092,43 +15147,51 @@ function caseBuildBatchTargets({conditions=[],resolvedConditions=[],concepts=[],
   const eligible=[],skipped=[],fOpts={...factOpts,allConditions:conditions};
   const exRaw=fOpts.excludeFactIds;
   const hasEx=!!(exRaw&&typeof exRaw!=='string'&&(typeof exRaw.size==='number'?exRaw.size>0:Array.isArray(exRaw)&&exRaw.length>0));
+  const exTRaw=fOpts.excludeTopicKeys;
+  const exTSet=exTRaw&&typeof exTRaw!=='string'&&typeof exTRaw[Symbol.iterator]==='function'?new Set([...exTRaw].map(x=>String(x||'').trim().toLowerCase()).filter(Boolean)):null;
+  const hasTopicEx=!!(exTSet&&exTSet.size>0);
+  const _tk=c=>typeof genLedgerTopicKey==='function'?genLedgerTopicKey(c):(c?((String(c.condition||c.name||c.id||'').replace(/\s+/g,' ').trim().toLowerCase())+(c.entityKind?'::'+String(c.entityKind).trim().toLowerCase():'')):'');
   const minFreshAfterEx=Math.min(6,Math.max(1,stages*questionsPerStage));
   for(const cond of candidates){
     const facts=cond.isMixed?selectCaseFactsMulti(cond.conditions,fOpts):selectCaseFacts(cond,fOpts);
     const fresh=facts.filter(f=>!f.contextAnchor);
     if(!facts.length||!fresh.length){
       if(hasEx){
-        const rawFacts=cond.isMixed?selectCaseFactsMulti(cond.conditions,{...fOpts,excludeFactIds:null}):selectCaseFacts(cond,{...fOpts,excludeFactIds:null});
+        const rawFacts=cond.isMixed?selectCaseFactsMulti(cond.conditions,{...fOpts,excludeFactIds:null,excludeTopicKeys:null}):selectCaseFacts(cond,{...fOpts,excludeFactIds:null});
         skipped.push({condition:cond,reason:rawFacts.length?'all facts already used in prior cases':'no facts at selected tiers'});
       }else skipped.push({condition:cond,reason:'no facts at selected tiers'});
       continue;
     }
     if(hasEx&&fresh.length<minFreshAfterEx){
-      const rawFacts=cond.isMixed?selectCaseFactsMulti(cond.conditions,{...fOpts,excludeFactIds:null}):selectCaseFacts(cond,{...fOpts,excludeFactIds:null});
+      const rawFacts=cond.isMixed?selectCaseFactsMulti(cond.conditions,{...fOpts,excludeFactIds:null,excludeTopicKeys:null}):selectCaseFacts(cond,{...fOpts,excludeFactIds:null});
       if(rawFacts.length>fresh.length){
         skipped.push({condition:cond,reason:'already covered in prior cases ('+fresh.length+' unused fact(s) left)'});
         continue;
       }
     }
-    eligible.push({condition:cond,facts,freshCount:fresh.length,untouched:facts.length>0&&facts.every(f=>!f.contextAnchor)&&(!hasEx||((cond.isMixed?selectCaseFactsMulti(cond.conditions,{...fOpts,excludeFactIds:null}):selectCaseFacts(cond,{...fOpts,excludeFactIds:null})).length===fresh.length)),sufficiency:caseFactSufficiency(facts,stages*questionsPerStage,includeTypes)});
+    const topicHit=hasTopicEx&&(cond.isMixed?(cond.conditions||[]).some(c=>exTSet.has(_tk(c))):exTSet.has(_tk(cond)));
+    const untouched=!topicHit&&facts.length>0&&facts.every(f=>!f.contextAnchor)&&(!hasEx||((cond.isMixed?selectCaseFactsMulti(cond.conditions,{...fOpts,excludeFactIds:null,excludeTopicKeys:null}):selectCaseFacts(cond,{...fOpts,excludeFactIds:null})).length===fresh.length));
+    eligible.push({condition:cond,facts,freshCount:fresh.length,untouched,sufficiency:caseFactSufficiency(facts,stages*questionsPerStage,includeTypes)});
   }
-  // v22.5 (#7): when queuing a broad selection (>2x maxBatch entries, e.g. All topics), order substantial untouched entries across the full KB breadth instead of always taking Chapter 1's first 8 sub-topics.
+  // v22.5 (#7) + v23.2 (#2): always prioritize untouched topics ahead of previously-covered topics when history exclusions are active, and spread broad queues across the full KB breadth.
   let orderedEligible=eligible;
   if(eligible.length>maxBatch&&candidates.length>maxBatch*2&&typeof caseSpreadIndices==='function'){
     const spread=caseSpreadIndices(eligible.length);
     const spreadRank=new Map(spread.map((idx,r)=>[idx,r]));
     orderedEligible=eligible.map((item,idx)=>({item,spread:spreadRank.get(idx)??idx})).sort((a,b)=>
-      ((b.item.freshCount>=6?1:0)-(a.item.freshCount>=6?1:0))||
       ((b.item.untouched?1:0)-(a.item.untouched?1:0))||
+      ((b.item.freshCount>=6?1:0)-(a.item.freshCount>=6?1:0))||
       (a.spread-b.spread)
     ).map(x=>x.item);
+  }else if((hasEx||hasTopicEx)&&eligible.some(x=>x.untouched)&&eligible.some(x=>!x.untouched)){
+    orderedEligible=eligible.map((item,idx)=>({item,idx})).sort((a,b)=>((b.item.untouched?1:0)-(a.item.untouched?1:0))||(a.idx-b.idx)).map(x=>x.item);
   }
   const targets=orderedEligible.slice(0,Math.max(1,maxBatch));
   return{targets,skipped,overflowCount:Math.max(0,orderedEligible.length-targets.length),totalEligible:orderedEligible.length};
 }
 // v22.4: dry-run multi-wave slicer for combined or large single-condition Case Studies so the UI can preview
 // how many non-overlapping waves the remaining unused facts support before launching a dynamic sequential run.
-function caseEstimateWavePlan({condition=null,conditions=[],factOpts={},includeTypes=null,stages=4,questionsPerStage=3,excludeFactIds=null,allowContextAnchors=true,requestedWaves=1,maxBatch=MAX_CASE_BATCH}={}){
+function caseEstimateWavePlan({condition=null,conditions=[],factOpts={},includeTypes=null,stages=4,questionsPerStage=3,excludeFactIds=null,excludeTopicKeys=null,allowContextAnchors=true,requestedWaves=1,maxBatch=MAX_CASE_BATCH}={}){
   if(!condition)return{waves:0,maxUsefulWaves:0,totalEligible:0,unusedBefore:0,freshCounts:[],exhausted:true};
   const {includeTier2=true,includeTier3=false,includeBridge=false}=factOpts||{};
   const tierOk=f=>(includeBridge||f.clinicalLayer!=='bridge')&&(Number(f.tier)===1||(includeTier2&&Number(f.tier)===2)||(includeTier3&&Number(f.tier)===3));
@@ -15136,17 +15199,21 @@ function caseEstimateWavePlan({condition=null,conditions=[],factOpts={},includeT
   const allScopeIds=new Set();
   for(const e of entries)for(const f of (e&&e.facts)||[])if(tierOk(f)&&f.id)allScopeIds.add(String(f.id).toLowerCase());
   const simEx=new Set(excludeFactIds&&typeof excludeFactIds!=='string'&&typeof excludeFactIds[Symbol.iterator]==='function'?[...excludeFactIds].map(x=>String(x||'').toLowerCase()):[]);
+  const simTopics=new Set(excludeTopicKeys&&typeof excludeTopicKeys!=='string'&&typeof excludeTopicKeys[Symbol.iterator]==='function'?[...excludeTopicKeys].map(x=>String(x||'').trim().toLowerCase()).filter(Boolean):[]);
+  const _tk=c=>typeof genLedgerTopicKey==='function'?genLedgerTopicKey(c):(c?((String(c.condition||c.name||c.id||'').replace(/\s+/g,' ').trim().toLowerCase())+(c.entityKind?'::'+String(c.entityKind).trim().toLowerCase():'')):'');
   let unusedBefore=0;for(const id of allScopeIds)if(!simEx.has(id))unusedBefore++;
   const cap=Math.max(1,Math.min(maxBatch,requestedWaves==='auto'?maxBatch:(Math.floor(Number(requestedWaves))||1)));
   const minFreshWave2=Math.min(8,Math.max(1,stages*questionsPerStage));
   const freshCounts=[];
   const fOptsBase={...factOpts,allConditions:conditions,allowContextAnchors};
   for(let w=0;w<maxBatch;w++){
-    const sel=condition.isMixed?selectCaseFactsMulti(entries,{...fOptsBase,excludeFactIds:simEx}):selectCaseFacts(condition,{...fOptsBase,excludeFactIds:simEx});
+    const waveSlice=condition.isMixed&&entries.length>CASE_BROAD_MIX_THRESHOLD&&typeof caseSliceBroadMixedEntries==='function'?caseSliceBroadMixedEntries(entries,{...fOptsBase,excludeFactIds:simEx,excludeTopicKeys:simTopics}):null;
+    const sel=condition.isMixed?selectCaseFactsMulti(waveSlice?waveSlice.entries:entries,{...fOptsBase,excludeFactIds:simEx,excludeTopicKeys:simTopics}):selectCaseFacts(condition,{...fOptsBase,excludeFactIds:simEx});
     const fresh=sel.filter(f=>!f.contextAnchor);
     if(!fresh.length||(w>0&&fresh.length<minFreshWave2))break;
     freshCounts.push(fresh.length);
     for(const f of fresh)simEx.add(String(f.id||'').toLowerCase());
+    if(waveSlice&&Array.isArray(waveSlice.entries))for(const e of waveSlice.entries){const tk=_tk(e);if(tk)simTopics.add(tk);}
   }
   const maxUsefulWaves=freshCounts.length;
   const waves=requestedWaves==='auto'?maxUsefulWaves:Math.min(cap,maxUsefulWaves);
@@ -16106,7 +16173,7 @@ function ngFormatWorkMd(exportNotice,provenance,batches){
 }
 // v22.4: supports cross-run used-fact exclusion (excludeFactIds/priorStems), incremental ledger commits (onRecordUsedFacts),
 // and optional appendMode to continue an active worksheet past 200 questions without overlap.
-async function ngRunGeneratorWithEnv({cfg,log,K,generatorSlot,setArtifactSource,targetCount,runAudit,setAuditState,currentSourceKB,setBusy,setProg,setLogs,setBatches,setCoverage,setShowUncov,setAbortCtl,setProvenance,setTrackers,setLiveKB,numBatches,batchSize,hasStructuredScope,nclexScope,kbIncludeBridge,kbTiers,kbConditionFilter,allocMode,factsPerQ,points,outcomes,buildBatchBlock,buildFocusBlock,appendMode=false,existingBatches=null,prevRequested=0,excludeFactIds=null,priorStems=null,onRecordUsedFacts=null}){
+async function ngRunGeneratorWithEnv({cfg,log,K,generatorSlot,setArtifactSource,targetCount,runAudit,setAuditState,currentSourceKB,setBusy,setProg,setLogs,setBatches,setCoverage,setShowUncov,setAbortCtl,setProvenance,setTrackers,setLiveKB,numBatches,batchSize,hasStructuredScope,nclexScope,kbIncludeBridge,kbTiers,kbConditionFilter,allocMode,factsPerQ,points,outcomes,buildBatchBlock,buildFocusBlock,appendMode=false,existingBatches=null,prevRequested=0,excludeFactIds=null,excludeTopicKeys=null,priorStems=null,onRecordUsedFacts=null}){
     if(!cfg.apiKey){log('Enter your API key in the config sidebar.','err');return;}
     if(!(K.knowledgeBase.conditions||[]).length){log('Build the LATTE Knowledge Base first.','err');return;}
     if(generatorSlot.current.active)return;
@@ -16157,10 +16224,16 @@ async function ngRunGeneratorWithEnv({cfg,log,K,generatorSlot,setArtifactSource,
       if(appendMode)for(const pb of prevBatches)for(const id of (pb&&pb.factIds)||[])if(id)preExLower.add(String(id).toLowerCase());
       const preExcludedPoolIds=new Set();
       let preExcludedInPool=0;
+      const preUsedTopicKeys=new Set(excludeTopicKeys&&typeof excludeTopicKeys!=='string'&&typeof excludeTopicKeys[Symbol.iterator]==='function'?[...excludeTopicKeys].map(x=>typeof genLedgerTopicKey==='function'?genLedgerTopicKey(x):String(x||'').trim().toLowerCase()).filter(Boolean):[]);
+      const _ngPoolTk=g=>typeof genLedgerTopicKey==='function'?genLedgerTopicKey(g):(g?((String(g.condition||g.name||g.id||'').replace(/\s+/g,' ').trim().toLowerCase())+(g.entityKind?'::'+String(g.entityKind).trim().toLowerCase():'')):'');
       if(preExLower.size){
-        for(const g of pool)for(const f of g.facts||[]){
-          const lo=String(f.id||'').toLowerCase();
-          if(preExLower.has(lo)){preExcludedPoolIds.add(f.id);preExcludedPoolIds.add(lo);preExcludedInPool++;}
+        for(const g of pool){
+          let gHit=false;
+          for(const f of g.facts||[]){
+            const lo=String(f.id||'').toLowerCase();
+            if(preExLower.has(lo)){preExcludedPoolIds.add(f.id);preExcludedPoolIds.add(lo);preExcludedInPool++;gHit=true;}
+          }
+          if(gHit){const tk=_ngPoolTk(g);if(tk)preUsedTopicKeys.add(tk);}
         }
       }
       const remainingPoolSize=Math.max(0,poolSize-preExcludedInPool);
@@ -16173,12 +16246,13 @@ ${NG_GROUNDING_ADAPTER}
 
 ${typeof NCLEX_PLATE_TRAP_RULES==='string'?NCLEX_PLATE_TRAP_RULES+'\n\n':''}${kbPacket}`});
       const wantPerBatch=Math.max(1,Math.round(batchSize*factsPerQ));
-      // v20.2 + v22.4: attach per-batch target capacities, persisted-Point inheritance, and fixed prior-run exclusions onto pool.
+      // v20.2 + v22.4 + v23.2 (#2): attach per-batch capacities, persisted-Point inheritance, prior-run exclusions, and prior-topic keys onto pool so follow-up runs target untouched topics first.
       if(allocMode){
         const batchCapsList=Array.from({length:numBatches},(_,i)=>Math.max(1,Math.round(Math.max(0,Math.min(batchSize,targetCount-i*batchSize))*factsPerQ)));
         Object.defineProperty(pool,'_batchCaps',{value:batchCapsList,configurable:true});
         Object.defineProperty(pool,'_inheritPersistedPoints',{value:!points.trim()&&Array.isArray(K.knowledgeBase?.numberedPoints)&&K.knowledgeBase.numberedPoints.length>0,configurable:true});
         if(preExcludedPoolIds.size)Object.defineProperty(pool,'_excludeIds',{value:preExcludedPoolIds,configurable:true});
+        if(preUsedTopicKeys.size)Object.defineProperty(pool,'_usedTopicKeys',{value:preUsedTopicKeys,configurable:true});
       }
       // v18.6: the student's Points and Outcomes pick facts that go first in their batches, at most half the run's targets.
       const focus=allocMode?ngFocusPlan(pool,{points,outcomes,batches:numBatches,perItem:factsPerQ,cap:Math.floor(targetCount*factsPerQ/2)}):{plan:[],items:[]};
@@ -16444,10 +16518,14 @@ Each KBFACT row is source-grounded with a stable fact ID, P-LATE bucket, tier, s
         }
 
         publishBatch();
-        // v22.4: commit each valid batch's cited facts/stems incrementally so cancelled or quota-halted runs still protect completed questions from future overlap.
+        // v22.4 + v23.2 (#2): commit each valid batch's cited facts, covered topics, and stems incrementally so cancelled or quota-halted runs still advance topic progress and prevent future overlap.
         if(qs.length>0&&wsErr===0&&typeof onRecordUsedFacts==='function'&&current()){
           const finalRP=ngSplitParts(workRaw);
-          onRecordUsedFacts({factIds:[...ngCitedFactIds(finalRP.p1,finalRP.p3,finalRP.p4)],stems:batchStems,questionDelta:qs.length,runDelta:committedRun?0:1});
+          const batchCitedIds=[...ngCitedFactIds(finalRP.p1,finalRP.p3,finalRP.p4)];
+          const batchCitedSet=new Set(batchCitedIds.map(id=>String(id||'').toLowerCase()));
+          const batchTopicIds=[];
+          for(const g of pool){if((g.facts||[]).some(f=>f&&f.id&&batchCitedSet.has(String(f.id).toLowerCase()))){const tk=_ngPoolTk(g);if(tk&&!batchTopicIds.includes(tk))batchTopicIds.push(tk);}}
+          onRecordUsedFacts({factIds:batchCitedIds,topicIds:batchTopicIds,stems:batchStems,questionDelta:qs.length,runDelta:committedRun?0:1});
           committedRun=true;
         }
         produced+=qs.length;
@@ -17247,9 +17325,7 @@ function ngBuildWorksheetMd(ws,wsIssuesAll,exportNotice,opts=null){
   const body='# NCLEX Practice Questions\n\n**'+ws.count+' questions** generated from source material.\n\n---\n\n## Questions\n\n'
     +ws.questions.map(ngMdLiteralNumbers).join('\n\n')+'\n\n<div class="pagebreak"></div>\n\n## Answer Key\n\n'+ws.answers.map(ngMdLiteralNumbers).join('\n\n');
   if(!(opts&&opts.diagnosticsAtEnd))return exportNotice+caseValidationStamp(wsIssuesAll,'worksheet')+body;
-  // v22.5 (#6): optional consolidated Warnings, Errors & Review Appendix at the end of the exported worksheet (UI default on, toggleable).
-  const errs=(wsIssuesAll||[]).filter(x=>x.sev==='error');
-  const topSafety=errs.length?'> **\u26a0 Unverified worksheet ('+errs.length+' error'+(errs.length===1?'':'s')+')** \u2014 see **Warnings, Errors & Review Appendix** at the end of this document.\n\n':'';
+  // v22.5 (#6) + v23.2 (#3/#4): consolidated Warnings, Errors & Review Appendix at the end of the exported worksheet with no red banner ahead of the student questions.
   const stamp=caseValidationStamp(wsIssuesAll,'worksheet');
   const prov=opts.provenance?latteProvenanceStamp(opts.provenance):'';
   const issueLines=(wsIssuesAll||[]).length?('### Deterministic Worksheet Checks\n\n'+(wsIssuesAll||[]).map(x=>'- '+x.sev.toUpperCase()+': '+x.msg).join('\n')):'### Deterministic Worksheet Checks\n\nValidation: no findings.';
@@ -17257,7 +17333,7 @@ function ngBuildWorksheetMd(ws,wsIssuesAll,exportNotice,opts=null){
   const allAudit=auditBatches.flatMap(b=>(b.auditRows||[]).map(r=>({batch:b.n,...r})));
   const auditLines=allAudit.length?('### Item Quality Review\n\n'+allAudit.map(r=>'- Batch '+r.batch+' Q'+r.num+': **'+r.status+'**'+(r.criterion?' \u2014 '+r.criterion:'')+(r.detail&&r.status!=='PASS'?' \u2014 '+r.detail:'')+(r.warns||[]).map(w=>'\n  - WARN '+w.criterion+': '+w.detail).join('')).join('\n')):'';
   const diag=[exportNotice,stamp,prov,issueLines,auditLines].filter(Boolean).join('\n\n').trim();
-  return topSafety+body+'\n\n<div class="pagebreak"></div>\n\n## Warnings, Errors & Review Appendix\n\n'+diag+'\n';
+  return body+'\n\n<div class="pagebreak"></div>\n\n## Warnings, Errors & Review Appendix\n\n'+diag+'\n';
 }
 function caseComputeAuditTotals(auditRows){
   const n=s=>auditRows.filter(r=>r.status===s).length;
@@ -17281,16 +17357,18 @@ async function caseRunBatchWithEnv({cfg,batchPlan,waveConfig=null,initialPriorTi
       const st=waveConfig.stages||4,qps=waveConfig.questionsPerStage||3;
       const minFreshWave2=Math.min(8,Math.max(1,st*qps));
       const liveEx=new Set(waveConfig.initialExcludeIds&&typeof waveConfig.initialExcludeIds!=='string'&&typeof waveConfig.initialExcludeIds[Symbol.iterator]==='function'?[...waveConfig.initialExcludeIds].map(x=>String(x||'').toLowerCase()):[]);
+      const liveTopics=new Set(waveConfig.initialExcludeTopicKeys&&typeof waveConfig.initialExcludeTopicKeys!=='string'&&typeof waveConfig.initialExcludeTopicKeys[Symbol.iterator]==='function'?[...waveConfig.initialExcludeTopicKeys].map(x=>typeof genLedgerTopicKey==='function'?genLedgerTopicKey(x):String(x||'').trim().toLowerCase()).filter(Boolean):[]);
+      const _wTk=c=>typeof genLedgerTopicKey==='function'?genLedgerTopicKey(c):(c?((String(c.condition||c.name||c.id||'').replace(/\s+/g,' ').trim().toLowerCase())+(c.entityKind?'::'+String(c.entityKind).trim().toLowerCase():'')):'');
       const liveTitles=Array.isArray(waveConfig.initialPriorTitles)?waveConfig.initialPriorTitles.slice(-20):[];
       let completedCount=0,halted='';
       const isCancelled=()=>batchCancelRef.current||currentSourceKB.current!==startKB;
       try{
         for(let w=0;w<maxW;w++){
           if(isCancelled()){halted='abort';break;}
-          // v22.5 (#7): focus each wave on its distinct KB-spread topic cluster when >5 entries are selected ("All topics").
-          const waveSlice=cond.isMixed&&entries.length>CASE_BROAD_MIX_THRESHOLD&&typeof caseSliceBroadMixedEntries==='function'?caseSliceBroadMixedEntries(entries,{...fOptsBase,excludeFactIds:liveEx}):null;
+          // v22.5 (#7) + v23.2 (#2): focus each wave on its distinct untouched-first KB-spread topic cluster when >5 entries are selected ("All topics").
+          const waveSlice=cond.isMixed&&entries.length>CASE_BROAD_MIX_THRESHOLD&&typeof caseSliceBroadMixedEntries==='function'?caseSliceBroadMixedEntries(entries,{...fOptsBase,excludeFactIds:liveEx,excludeTopicKeys:liveTopics}):null;
           const waveCond=waveSlice&&waveSlice.isBroadSlice&&waveSlice.label?{...cond,name:waveSlice.label,scopeEntries:waveSlice.entryNames,allowedNames:[...new Set([...(cond.allowedNames||[]),...(waveSlice.entryNames||[])])],conditions:waveSlice.entries}:cond;
-          const waveFacts=cond.isMixed?selectCaseFactsMulti(waveSlice?waveSlice.entries:entries,{...fOptsBase,excludeFactIds:liveEx}):selectCaseFacts(cond,{...fOptsBase,excludeFactIds:liveEx});
+          const waveFacts=cond.isMixed?selectCaseFactsMulti(waveSlice?waveSlice.entries:entries,{...fOptsBase,excludeFactIds:liveEx,excludeTopicKeys:liveTopics}):selectCaseFacts(cond,{...fOptsBase,excludeFactIds:liveEx});
           const freshFacts=waveFacts.filter(f=>!f.contextAnchor);
           if(!freshFacts.length||(w>0&&freshFacts.length<minFreshWave2)){
             log((w>0?'\n':'')+'ⓘ Stopped before Wave '+(w+1)+': only '+freshFacts.length+' unused fact(s) remain (need at least '+(w>0?minFreshWave2:1)+') — stopping rather than repeating content.','warn');
@@ -17301,7 +17379,7 @@ async function caseRunBatchWithEnv({cfg,batchPlan,waveConfig=null,initialPriorTi
           const label=waveCond.name+' (Wave '+(w+1)+')';
           setBatchStatus({done:w,total:maxW,currentName:label});
           log((w>0?'\n':'')+'═══ Multi-wave case '+(w+1)+' of up to '+maxW+': '+waveCond.name+' ('+freshFacts.length+' fresh'+(anchorCnt?' + '+anchorCnt+' context anchor':'')+' facts) ═══','warn');
-          const ovr={condition:waveCond,facts:waveFacts,sufficiency:waveSuff,priorTitles:liveTitles.slice(-20),priorUsedIds:new Set(liveEx),waveIndex:w+1,keepLogs:true,packetId:'pkt-'+Date.now().toString(36)+'-w'+w+'-'+uid().slice(0,4),completed:false,halted:'',citedFactIds:[],errCount:0,caseTitle:''};
+          const ovr={condition:waveCond,facts:waveFacts,sufficiency:waveSuff,priorTitles:liveTitles.slice(-20),priorUsedIds:new Set(liveEx),waveIndex:w+1,keepLogs:true,packetId:'pkt-'+Date.now().toString(36)+'-w'+w+'-'+uid().slice(0,4),completed:false,halted:'',citedFactIds:[],citedTopicKeys:[],errCount:0,caseTitle:''};
           batchOverrideRef.current=ovr;
           try{await run();}finally{batchOverrideRef.current=null;}
           if(ovr.completed){
@@ -17309,9 +17387,12 @@ async function caseRunBatchWithEnv({cfg,batchPlan,waveConfig=null,initialPriorTi
             if(ovr.caseTitle)liveTitles.push(ovr.caseTitle);
             if(ovr.errCount===0&&Array.isArray(ovr.citedFactIds)&&ovr.citedFactIds.length){
               for(const id of ovr.citedFactIds)liveEx.add(String(id||'').toLowerCase());
+              if(Array.isArray(ovr.citedTopicKeys)&&ovr.citedTopicKeys.length)for(const tk of ovr.citedTopicKeys)liveTopics.add(tk);
+              else if(waveSlice&&Array.isArray(waveSlice.entries))for(const e of waveSlice.entries){const tk=_wTk(e);if(tk)liveTopics.add(tk);}
             }else{
               // Local-only advance so a validation-failed wave does not loop on the exact same slice.
               for(const f of freshFacts)liveEx.add(String(f.id||'').toLowerCase());
+              if(waveSlice&&Array.isArray(waveSlice.entries))for(const e of waveSlice.entries){const tk=_wTk(e);if(tk)liveTopics.add(tk);}
             }
           }
           if(isCancelled()||ovr.halted==='abort'){halted='abort';break;}
@@ -18471,10 +18552,10 @@ Scale every quota to ${size} questions:
 
   return buildBatchBlock(b,total,size);
 }
-// v21.10 (Phase 5 M6) + v22.5 (#1, #2): standard JSON Schema for CaseStudyGenerator aligned 1-to-1 with CASE_NGN_TYPE_RULES & caseValidateNgnQuestion
-// (fixing matrix.columns {id,label}, matrix.rows {id,text}, and trendTable.rows {label,values,factIds}), plus dynamic per-run type enum enforcement.
+// v21.10 (Phase 5 M6) + v22.5 (#1, #2) + v23.2 (#5): standard JSON Schema for CaseStudyGenerator aligned 1-to-1 with CASE_NGN_TYPE_RULES & caseValidateNgnQuestion.
+// Requiring `correctAnswers` (minItems: 1) prevents Gemini constrained JSON decoding from omitting `correctAnswers` on Matrix items (which caused "no correct answer" / "got 0" across rows).
 const CASE_TYPE_KEY_MAP=[['mcq','MCQ'],['sata','SATA'],['prioritization','Prioritization'],['ordering','Ordering'],['calculation','Calculation'],['education','Education'],['bowtie','Bowtie'],['matrix','Matrix'],['cloze','Cloze'],['trend','Trend']];
-const CASE_STUDY_JSON_SCHEMA={type:'object',required:['title','condition','difficulty','patient','stages','debrief'],properties:{title:{type:'string'},condition:{type:'string'},difficulty:{type:'string'},patient:{type:'object',required:['age','sex','background'],properties:{age:{type:['number','string']},sex:{type:'string'},background:{type:'string'}}},stages:{type:'array',items:{type:'object',required:['stageNumber','title','narrative','data','questions'],properties:{stageNumber:{type:'integer'},title:{type:'string'},narrative:{type:'string'},data:{type:'array',items:{type:'object',required:['label','value','supportType','availability','factIds'],properties:{label:{type:'string'},value:{type:'string'},supportType:{type:'string'},availability:{type:'string'},factIds:{type:'array',items:{type:'string'}}}}},questions:{type:'array',items:{type:'object',required:['id','type','stem','rationales','cjmmSkill'],properties:{id:{type:'string'},type:{type:'string',enum:['MCQ','SATA','Prioritization','Ordering','Calculation','Education','Bowtie','Matrix','Cloze','Trend']},stem:{type:'string'},options:{type:'array',items:{type:'object',required:['label','text'],properties:{label:{type:'string'},text:{type:'string'},group:{type:'string'}}}},correctAnswers:{type:'array',items:{type:'string'}},matrix:{type:'object',properties:{mode:{type:'string',enum:['single','multiple']},columns:{type:'array',items:{type:'object',required:['id','label'],properties:{id:{type:'string'},label:{type:'string'}}}},rows:{type:'array',items:{type:'object',required:['id','text'],properties:{id:{type:'string'},text:{type:'string'}}}}}},cloze:{type:'object',properties:{blanks:{type:'array',items:{type:'object',required:['id','options','correctAnswer'],properties:{id:{type:'string'},options:{type:'array',items:{type:'string'}},correctAnswer:{type:'string'}}}}}},trendTable:{type:'object',properties:{timepoints:{type:'array',items:{type:'string'}},rows:{type:'array',items:{type:'object',required:['label','values','factIds'],properties:{label:{type:'string'},values:{type:'array',items:{type:'string'}},supportType:{type:'string'},factIds:{type:'array',items:{type:'string'}}}}}}},rationales:{type:'array',items:{type:'object',required:['option','text','supportType','factIds'],properties:{option:{type:'string'},text:{type:'string'},supportType:{type:'string'},factIds:{type:'array',items:{type:'string'}}}}},cjmmSkill:{type:'string'}}}}}}},debrief:{type:'object',required:['priorityProblem','keyDecisions','notes'],properties:{priorityProblem:{type:'string'},keyDecisions:{type:'array',items:{type:'string'}},notes:{type:'string'},factIds:{type:'array',items:{type:'string'}}}}}};
+const CASE_STUDY_JSON_SCHEMA={type:'object',required:['title','condition','difficulty','patient','stages','debrief'],properties:{title:{type:'string'},condition:{type:'string'},difficulty:{type:'string'},patient:{type:'object',required:['age','sex','background'],properties:{age:{type:['number','string']},sex:{type:'string'},background:{type:'string'}}},stages:{type:'array',items:{type:'object',required:['stageNumber','title','narrative','data','questions'],properties:{stageNumber:{type:'integer'},title:{type:'string'},narrative:{type:'string'},data:{type:'array',items:{type:'object',required:['label','value','supportType','availability','factIds'],properties:{label:{type:'string'},value:{type:'string'},supportType:{type:'string'},availability:{type:'string'},factIds:{type:'array',items:{type:'string'}}}}},questions:{type:'array',items:{type:'object',required:['id','type','stem','correctAnswers','rationales','cjmmSkill'],properties:{id:{type:'string'},type:{type:'string',enum:['MCQ','SATA','Prioritization','Ordering','Calculation','Education','Bowtie','Matrix','Cloze','Trend']},stem:{type:'string'},options:{type:'array',items:{type:'object',required:['label','text'],properties:{label:{type:'string'},text:{type:'string'},group:{type:'string'}}}},correctAnswers:{type:'array',minItems:1,description:'Required for every question. Matrix MUST list "<rowId>:<colId>" pairs for every row (e.g. ["R1:C1","R2:C2","R3:C1"]). Bowtie lists 5 labels (2 actions, 1 condition, 2 parameters). Cloze lists 1 label per blank (e.g. ["D1B","D2A"]).',items:{type:'string'}},matrix:{type:'object',description:'Required for Matrix questions. Put keyed cells in top-level correctAnswers as "<rowId>:<colId>" pairs, never omitted.',properties:{mode:{type:'string',enum:['single','multiple']},columns:{type:'array',items:{type:'object',required:['id','label'],properties:{id:{type:'string'},label:{type:'string'}}}},rows:{type:'array',items:{type:'object',required:['id','text'],properties:{id:{type:'string'},text:{type:'string'}}}}}},cloze:{type:'object',description:'Do not use for Cloze questions; populate top-level options (with group "D1".."D4") and top-level correctAnswers instead.',properties:{blanks:{type:'array',items:{type:'object',required:['id','options','correctAnswer'],properties:{id:{type:'string'},options:{type:'array',items:{type:'string'}},correctAnswer:{type:'string'}}}}}},trendTable:{type:'object',properties:{timepoints:{type:'array',items:{type:'string'}},rows:{type:'array',items:{type:'object',required:['label','values','factIds'],properties:{label:{type:'string'},values:{type:'array',items:{type:'string'}},supportType:{type:'string'},factIds:{type:'array',items:{type:'string'}}}}}}},rationales:{type:'array',items:{type:'object',required:['option','text','supportType','factIds'],properties:{option:{type:'string'},text:{type:'string'},supportType:{type:'string'},factIds:{type:'array',items:{type:'string'}}}}},cjmmSkill:{type:'string'}}}}}}},debrief:{type:'object',required:['priorityProblem','keyDecisions','notes'],properties:{priorityProblem:{type:'string'},keyDecisions:{type:'array',items:{type:'string'}},notes:{type:'string'},factIds:{type:'array',items:{type:'string'}}}}}};
 function caseResolveEnabledTypeNames(types){
   if(!types||typeof types!=='object')return CASE_TYPE_KEY_MAP.map(([,nm])=>nm);
   const hasExplicit=CASE_TYPE_KEY_MAP.some(([k])=>typeof types[k]==='boolean');
@@ -18506,8 +18587,11 @@ function buildCaseStudyJsonSchema(types){
     }
   };
 }
+// v23.2 (#5): defensively normalize harmless Matrix/Cloze key-placement & separator drift without ever inventing missing answers.
 function caseNormalizeParsedNgnFields(cs){
   if(!cs||typeof cs!=='object'||!Array.isArray(cs.stages))return cs;
+  const normStr=s=>String(s==null?'':s).replace(/\s+/g,' ').trim();
+  const normLow=s=>normStr(s).toLowerCase();
   for(const st of cs.stages){
     if(!st||!Array.isArray(st.questions))continue;
     for(const q of st.questions){
@@ -18515,6 +18599,88 @@ function caseNormalizeParsedNgnFields(cs){
       if(q.matrix&&typeof q.matrix==='object'&&!Array.isArray(q.matrix)){
         if(Array.isArray(q.matrix.columns))q.matrix.columns=q.matrix.columns.map((c,i)=>typeof c==='string'?{id:'C'+(i+1),label:c}:c);
         if(Array.isArray(q.matrix.rows))q.matrix.rows=q.matrix.rows.map(r=>r&&typeof r==='object'&&!Array.isArray(r)&&!r.text&&typeof r.label==='string'?{...r,text:r.label}:r);
+        const cols=Array.isArray(q.matrix.columns)?q.matrix.columns:[];
+        const rows=Array.isArray(q.matrix.rows)?q.matrix.rows:[];
+        const colIdMap=new Map(),colLblCounts=new Map(),colLblMap=new Map();
+        for(const c of cols){
+          const cid=normStr(c&&c.id),clbl=normStr(c&&c.label);
+          if(cid)colIdMap.set(cid.toLowerCase(),cid);
+          if(cid&&clbl){const lk=clbl.toLowerCase();colLblCounts.set(lk,(colLblCounts.get(lk)||0)+1);colLblMap.set(lk,cid);}
+        }
+        const resolveCol=raw=>{
+          const k=normLow(raw);if(!k)return '';
+          if(colIdMap.has(k))return colIdMap.get(k);
+          if(colLblCounts.get(k)===1)return colLblMap.get(k);
+          return '';
+        };
+        const rowIdMap=new Map(),rowTxtCounts=new Map(),rowTxtMap=new Map();
+        for(const r of rows){
+          const rid=normStr(r&&r.id),rtxt=normStr(r&&r.text);
+          if(rid)rowIdMap.set(rid.toLowerCase(),rid);
+          if(rid&&rtxt){const tk=rtxt.toLowerCase();rowTxtCounts.set(tk,(rowTxtCounts.get(tk)||0)+1);rowTxtMap.set(tk,rid);}
+        }
+        const resolveRow=raw=>{
+          const k=normLow(raw);if(!k)return '';
+          if(rowIdMap.has(k))return rowIdMap.get(k);
+          if(rowTxtCounts.get(k)===1)return rowTxtMap.get(k);
+          return '';
+        };
+        const parsePair=raw=>{
+          if(raw&&typeof raw==='object'&&!Array.isArray(raw)){
+            const rr=resolveRow(raw.rowId||raw.row||raw.row_id),cc=resolveCol(raw.colId||raw.columnId||raw.column||raw.col||raw.col_id);
+            return rr&&cc?(rr+':'+cc):'';
+          }
+          const s=normStr(raw);if(!s)return '';
+          const m=s.match(/^(.+?)\s*(?::|->|\u2192|=|\|)\s*(.+)$/);
+          if(!m)return s;
+          const rr=resolveRow(m[1]),cc=resolveCol(m[2]);
+          return rr&&cc?(rr+':'+cc):s;
+        };
+        let ans=Array.isArray(q.correctAnswers)?q.correctAnswers.map(parsePair).filter(Boolean):[];
+        if(!ans.length){
+          const nested=Array.isArray(q.matrix.correctAnswers)?q.matrix.correctAnswers:Array.isArray(q.matrix.answers)?q.matrix.answers:null;
+          if(nested){
+            ans=nested.map(parsePair).filter(Boolean);
+          }else if(q.matrix.correctAnswers&&typeof q.matrix.correctAnswers==='object'&&!Array.isArray(q.matrix.correctAnswers)){
+            for(const [rk,cv] of Object.entries(q.matrix.correctAnswers)){
+              const rr=resolveRow(rk);if(!rr)continue;
+              for(const item of (Array.isArray(cv)?cv:[cv])){const cc=resolveCol(item);if(cc)ans.push(rr+':'+cc);}
+            }
+          }else{
+            for(const r of rows){
+              if(!r||typeof r!=='object')continue;
+              const rid=normStr(r.id);if(!rid)continue;
+              const rawRowAns=r.correctColumns??r.correctAnswers??r.correctColumn??r.correctAnswer??r.answer;
+              if(rawRowAns==null)continue;
+              for(const item of (Array.isArray(rawRowAns)?rawRowAns:[rawRowAns])){const cc=resolveCol(item);if(cc)ans.push(rid+':'+cc);}
+            }
+          }
+        }
+        if(ans.length)q.correctAnswers=[...new Set(ans)];
+        delete q.matrix.correctAnswers;delete q.matrix.answers;
+        for(const r of rows){if(r&&typeof r==='object'){delete r.correctColumns;delete r.correctAnswers;delete r.correctColumn;delete r.correctAnswer;delete r.answer;}}
+      }
+      if(q.type==='Cloze'&&q.cloze&&typeof q.cloze==='object'&&Array.isArray(q.cloze.blanks)&&q.cloze.blanks.length&&(!(q.options&&q.options.length)||!(q.correctAnswers&&q.correctAnswers.length))){
+        const nextOpts=[],nextAns=[];
+        let ok=true;
+        q.cloze.blanks.forEach((bl,bi)=>{
+          const bid=normStr(bl&&bl.id)||('D'+(bi+1));
+          const bOpts=Array.isArray(bl&&bl.options)?bl.options.map(normStr).filter(Boolean):[];
+          const bCor=normStr(bl&&bl.correctAnswer);
+          if(!bOpts.length||!bCor){ok=false;return;}
+          let matchedLbl='';
+          bOpts.forEach((txt,oi)=>{
+            const lbl=bid+String.fromCharCode(65+oi);
+            nextOpts.push({label:lbl,group:bid,text:txt});
+            if(!matchedLbl&&(txt.toLowerCase()===bCor.toLowerCase()||lbl.toLowerCase()===bCor.toLowerCase()))matchedLbl=lbl;
+          });
+          if(!matchedLbl)ok=false;
+          else nextAns.push(matchedLbl);
+        });
+        if(ok&&nextOpts.length&&nextAns.length===q.cloze.blanks.length){
+          q.options=nextOpts;q.correctAnswers=nextAns;
+          delete q.cloze;
+        }
       }
       if(q.trendTable&&typeof q.trendTable==='object'&&!Array.isArray(q.trendTable)&&Array.isArray(q.trendTable.rows)){
         q.trendTable.rows=q.trendTable.rows.map(tr=>tr&&typeof tr==='object'&&!Array.isArray(tr)&&!tr.label&&typeof tr.parameter==='string'?{...tr,label:tr.parameter}:tr);
@@ -18826,10 +18992,21 @@ async function caseRunSingleWithEnv(env){
       // the inspector it reads as verified provenance, and linking an invalid case there would
       // make a fabrication look audited.
       if(errCount===0)registerValidatedCase(parsed,cited);
-      // v22.4: report cited fact IDs back to sequential wave runners and commit valid cases to the persistent per-KB ledger.
-      if(_ovr){_ovr.citedFactIds=[...usedSelected];_ovr.errCount=errCount;_ovr.caseTitle=parsed.title||runCond.name;}
+      // v22.4 + v23.2 (#2): report cited fact IDs & covered topic keys back to sequential wave runners and commit valid cases to the persistent per-KB ledger.
+      const _resolveCaseTopics=idList=>{
+        const out=new Set();
+        const fx=source&&source.factIndex;
+        for(const id of idList){
+          const hit=fx&&fx.get(String(id||'').toLowerCase());
+          if(hit&&hit.condition){const tk=typeof genLedgerTopicKey==='function'?genLedgerTopicKey(hit.condition):'';if(tk)out.add(tk);}
+        }
+        if(!out.size&&runCond&&!runCond.isMixed){const tk=typeof genLedgerTopicKey==='function'?genLedgerTopicKey(runCond):'';if(tk)out.add(tk);}
+        return[...out];
+      };
+      const coveredTopics=_resolveCaseTopics([...usedSelected]);
+      if(_ovr){_ovr.citedFactIds=[...usedSelected];_ovr.citedTopicKeys=coveredTopics;_ovr.errCount=errCount;_ovr.caseTitle=parsed.title||runCond.name;}
       if(errCount===0&&typeof onRecordUsedFacts==='function'&&current()){
-        onRecordUsedFacts({factIds:[...usedSelected],titles:[parsed.title||runCond.name],caseDelta:1});
+        onRecordUsedFacts({factIds:[...usedSelected],topicIds:coveredTopics,titles:[parsed.title||runCond.name],caseDelta:1});
       }
       owned_log('✅ Case generated: '+parsed.stages.length+' stages, '+(parsed.stages||[]).reduce((n,s)=>n+((s.questions||[]).length),0)+' questions.','ok');
       const _fr=finalCoverage.freshness;
@@ -18850,9 +19027,11 @@ async function caseRunSingleWithEnv(env){
       if(e&&e.name==='AbortError'&&parsedCase&&generatorSlot.current.owns(operation)&&(K.isCurrentSource?K.isCurrentSource(source.sourceKB):source.sourceKB===currentSourceKB.current)){
         const cited=new Set(caseAllFactIds(parsedCase));
         if(caseErrCount===0&&typeof registerValidatedCase==='function')registerValidatedCase(parsedCase,cited);
-        if(_ovr){_ovr.citedFactIds=[...cited];_ovr.errCount=caseErrCount;_ovr.caseTitle=parsedCase.title||runCond.name;}
+        const abortTopics=[];
+        for(const id of cited){const hit=source&&source.factIndex&&source.factIndex.get(String(id||'').toLowerCase());if(hit&&hit.condition){const tk=typeof genLedgerTopicKey==='function'?genLedgerTopicKey(hit.condition):'';if(tk&&!abortTopics.includes(tk))abortTopics.push(tk);}}
+        if(_ovr){_ovr.citedFactIds=[...cited];_ovr.citedTopicKeys=abortTopics;_ovr.errCount=caseErrCount;_ovr.caseTitle=parsedCase.title||runCond.name;}
         if(caseErrCount===0&&typeof onRecordUsedFacts==='function'){
-          onRecordUsedFacts({factIds:[...cited],titles:[parsedCase.title||runCond.name],caseDelta:1});
+          onRecordUsedFacts({factIds:[...cited],topicIds:abortTopics,titles:[parsedCase.title||runCond.name],caseDelta:1});
         }
         if(typeof setCasePacket==='function'){
           const snap={id:runPid,caseId:registeredCaseId,caseStudy:parsedCase,issues:caseIssues,coverage:caseCoverage,audit:finalAudit,auditState:'interrupted',provenance:runProvenance,artifactSource:runArtifactSource,...(_ovr&&_ovr.waveIndex?{waveIndex:_ovr.waveIndex}:{})};
@@ -19126,6 +19305,7 @@ function nclexProKbMeta(kb){
         tier:Number(f.tier)||1,
         bucket:canonBucket(f.latteBucket),
         trapRole:f.trapRole?String(f.trapRole).trim():'',
+        clinicalLayer:f.clinicalLayer==='bridge'?'bridge':'rn',
         conditionName:g.entryRole==='concept'?'':gName,
         conceptName:gConcept,
       });
@@ -19142,7 +19322,7 @@ function nclexProKbMeta(kb){
   const kbKey=typeof genLedgerKbKey==='function'&&kb?genLedgerKbKey(kb):(totalFacts?nclexProHashId(sigParts.join('|')+'#'+totalFacts):'');
   const resolveFactMeta=rawIds=>{
     const fids=[],buckets=new Set(),traps=new Set(),conds=new Set(),concepts=new Set();
-    let bestTier=0;
+    let bestTier=0,hasRn=false,hasBridge=false;
     for(const raw of (rawIds||[])){
       const id=String(raw||'').trim().toLowerCase();
       if(!id||fids.includes(id))continue;
@@ -19153,12 +19333,35 @@ function nclexProKbMeta(kb){
         if(m.trapRole)traps.add(m.trapRole);
         if(m.conditionName)conds.add(m.conditionName);
         if(m.conceptName)concepts.add(m.conceptName);
+        if(m.clinicalLayer==='bridge')hasBridge=true;else hasRn=true;
         if(!bestTier||m.tier<bestTier)bestTier=m.tier;
       }
     }
-    return{factIds:fids,plateBuckets:[...buckets],trapRoles:[...traps],conditionNames:[...conds],conceptNames:[...concepts],tier:bestTier||0};
+    return{factIds:fids,plateBuckets:[...buckets],trapRoles:[...traps],conditionNames:[...conds],conceptNames:[...concepts],tier:bestTier||0,clinicalLayer:hasBridge&&!hasRn?'bridge':'rn'};
   };
   return{course,exam,examKey,kbKey,factMap,condByNorm,conceptByNorm,normSlug,resolveFactMeta};
+}
+// v23.2: deterministic Anki-compatible hierarchical tag array for synced NCLEX questions, Case Study items, and Flashcards.
+const NCLEX_PRO_TRAP_TAG_MAP={'twin-cue':'TwinContrast','twin-rx-opposite':'TwinContrast','trend-slope':'TrendSlope','pseudo-improvement':'PseudoImprovement','therapy-overshoot':'TherapyOvershoot','bedside-first':'BedsideFirst','first-action':'BedsideFirst','ordered-escalation':'OrderedEscalation','hold-triangle':'HoldTriangle','dynamic-monitor':'DynamicMonitor','never-click':'NeverClick'};
+function nclexProComposeTags({tier=0,conceptNames=[],conditionNames=[],plateBuckets=[],trapRoles=[],clinicalLayer='rn',course='',exam='',cjmm='',extraTags=[]}={}){
+  const slug=s=>String(s||'').trim().replace(/[^A-Za-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
+  const out=[],seen=new Set();
+  const add=tg=>{const clean=String(tg||'').trim();if(!clean)return;const lo=clean.toLowerCase();if(!seen.has(lo)){seen.add(lo);out.push(clean);}};
+  for(const tg of (Array.isArray(extraTags)?extraTags:[]))add(tg);
+  if(tier>=1&&tier<=3)add('Tier::'+tier);
+  add(clinicalLayer==='bridge'?'Layer::NPBridge':'Layer::RNCore');
+  for(const cn of (Array.isArray(conceptNames)?conceptNames:[])){const s=slug(cn);if(s)add('Concept::'+s);}
+  for(const kn of (Array.isArray(conditionNames)?conditionNames:[])){const s=slug(kn);if(s)add('Condition::'+s);}
+  for(const bk of (Array.isArray(plateBuckets)?plateBuckets:[])){const s=slug(bk);if(s)add('Nursing::PLATE::'+s);}
+  for(const tr of (Array.isArray(trapRoles)?trapRoles:[])){
+    const raw=String(tr||'').trim();if(!raw)continue;
+    const mapped=NCLEX_PRO_TRAP_TAG_MAP[raw.toLowerCase()]||slug(raw);
+    if(mapped)add('Trap::'+mapped);
+  }
+  if(cjmm){const s=slug(cjmm);if(s)add('CJMM::'+s);}
+  const srcSlug=[course,exam].map(slug).filter(Boolean).join('_');
+  if(srcSlug)add('Source::Suite::'+srcSlug);
+  return out;
 }
 function nclexProConvertWorksheet(ws,batches,kb,opts={}){
   const km=nclexProKbMeta(kb);
@@ -19257,12 +19460,14 @@ function nclexProConvertWorksheet(ws,batches,kb,opts={}){
     }
 
     const diffB=Math.max(-1.8,Math.min(2.1,Math.round((baseB+(t==='sata'?0.35:t==='ordering'?0.4:0)+(isPri?0.25:0))*100)/100));
+    const itemTags=nclexProComposeTags({tier:itemTier,conceptNames:tags.conceptNames,conditionNames:tags.conditionNames,plateBuckets:fm.plateBuckets,trapRoles:fm.trapRoles,clinicalLayer:fm.clinicalLayer,course:metaCourse,exam:metaExam,cjmm:key.cjmm||''});
     items.push({
       aiId:nclexProHashId(setName+'|'+parsed.stem+'|'+optsArr.join('|')),
       setId,setName,t,
       d:nclexProInferDomain(parsed.stem+' '+rat),
       b:diffB,
       tier:itemTier,
+      clinicalLayer:fm.clinicalLayer,
       stem:parsed.stem,
       opts:optsArr.length?optsArr:undefined,
       cor,
@@ -19273,6 +19478,7 @@ function nclexProConvertWorksheet(ws,batches,kb,opts={}){
       pri:isPri,
       conceptNames:tags.conceptNames,
       conditionNames:tags.conditionNames,
+      tags:itemTags.length?itemTags:undefined,
       kbKey:km.kbKey||undefined,
       course:metaCourse||undefined,
       exam:metaExam||undefined,
@@ -19290,7 +19496,10 @@ function nclexProConvertCaseStudy(cs,kb,opts={}){
   const km=nclexProKbMeta(kb);
   const title=String(cs.title||cs.condition||'AI Clinical Case Study').trim();
   const rawCondName=String(cs.condition||'').trim();
-  const cleanCondName=/\(\+\d+\s+more\)/.test(rawCondName)?'':rawCondName;
+  // v23.2: split composite mixed-case labels ("A + B + C" / "(+N more)") instead of pushing the concatenated string into conditionNames as one fake condition.
+  const condParts=rawCondName.replace(/\s*\(\+\d+\s+more\)\s*$/,'').split(/\s+\+\s+/).map(s=>s.trim()).filter(Boolean);
+  const fallbackCondNames=condParts.filter(p=>!km.conceptByNorm.has(km.normSlug(p))||km.condByNorm.has(km.normSlug(p))).map(p=>km.condByNorm.get(km.normSlug(p))||p);
+  const cleanCondName=condParts.length===1?condParts[0]:'';
   const metaCourse=km.course,metaExam=km.exam;
   const setName=String(opts.setName||([metaCourse,metaExam,title].filter(Boolean).join(' · '))).trim();
   const createdAt=new Date().toISOString();
@@ -19326,7 +19535,8 @@ function nclexProConvertCaseStudy(cs,kb,opts={}){
       const rat=ratLines.join('\n');
       const qFactIds=[...(q.rationales||[]).flatMap(r=>r.factIds||[]),...(qType==='Trend'&&q.trendTable&&Array.isArray(q.trendTable.rows)?q.trendTable.rows.flatMap(tr=>tr.factIds||[]):[])];
       const fm=km.resolveFactMeta(qFactIds.length?qFactIds:[...stageFactAccum]);
-      const tags=nclexProKbTagLookup(kb,title+' '+cleanCondName+' '+(q.stem||'')+' '+rat,fm.conceptNames,[...fm.conditionNames,...(cleanCondName?[cleanCondName]:[])]);
+      const fbConds=fm.conditionNames.length?fm.conditionNames:fallbackCondNames;
+      const tags=nclexProKbTagLookup(kb,title+' '+(cleanCondName||'')+' '+(q.stem||'')+' '+rat,fm.conceptNames,fbConds);
       const cd={...baseCd};
       if(qType==='Trend'&&q.trendTable&&Array.isArray(q.trendTable.timepoints)){
         const tps=q.trendTable.timepoints;
@@ -19334,12 +19544,14 @@ function nclexProConvertCaseStudy(cs,kb,opts={}){
         cd.trend=['| Parameter | '+tps.join(' | ')+' |','| --- | '+tps.map(()=>'---').join(' | ')+' |',...rows].join('\n');
       }
 
+      const itemTags=nclexProComposeTags({tier:fm.tier||1,conceptNames:tags.conceptNames,conditionNames:tags.conditionNames,plateBuckets:fm.plateBuckets,trapRoles:fm.trapRoles,clinicalLayer:fm.clinicalLayer,course:metaCourse,exam:metaExam,cjmm:q.cjmmSkill||''});
       let item={
         aiId:nclexProHashId(csId+'|S'+stage.stageNumber+'|Q'+(qi+1)+'|'+(q.stem||'')),
         setId,setName,csId,csTitle:title,
         d:nclexProInferDomain((q.stem||'')+' '+rat),
         b:Math.max(-1.8,Math.min(2.2,Math.round((diffBase+(qType==='Bowtie'||qType==='Matrix'||qType==='Trend'?0.35:qType==='SATA'||qType==='Prioritization'?0.25:0))*100)/100)),
         tier:fm.tier||1,
+        clinicalLayer:fm.clinicalLayer,
         stem:q.stem||'',
         cd,rat,tip:cs.debrief&&cs.debrief.priorityProblem?'Priority Focus: '+cs.debrief.priorityProblem:'',
         ref:`✨ AI Case Study · ${title} (S${stage.stageNumber}.${qi+1})`,
@@ -19347,6 +19559,7 @@ function nclexProConvertCaseStudy(cs,kb,opts={}){
         pri:qType==='Prioritization'||/\b(first|priority|immediately)\b/i.test(q.stem||''),
         conceptNames:tags.conceptNames,
         conditionNames:tags.conditionNames,
+        tags:itemTags.length?itemTags:undefined,
         kbKey:km.kbKey||undefined,
         course:metaCourse||undefined,
         exam:metaExam||undefined,
@@ -19517,6 +19730,7 @@ function nclexProConvertAnkiDeck(notes,batch,kb,opts={}){
     const sourceRef=typeof opts.getSourceRef==='function'?String(opts.getSourceRef(n)||'').trim():'';
     const noteId='fcn_'+nclexProHashId(deckName+'|'+rawText).slice(3);
 
+    const cardTags=nclexProComposeTags({tier:finalTier,conceptNames:lookup.conceptNames,conditionNames:lookup.conditionNames,plateBuckets:finalBucket?[finalBucket]:fm.plateBuckets,trapRoles:[...trapTags],clinicalLayer,course:metaCourse,exam:metaExam,extraTags:tagTokens});
     for(const ord of ords){
       const cardId='fc_'+nclexProHashId(deckName+'|'+rawText+'|c'+ord).slice(3);
       cards.push({
@@ -19534,6 +19748,7 @@ function nclexProConvertAnkiDeck(notes,batch,kb,opts={}){
         conceptNames:lookup.conceptNames,
         conditionNames:lookup.conditionNames,
         trapTags:trapTags.size?[...trapTags]:undefined,
+        tags:cardTags.length?cardTags:undefined,
         factIds:fm.factIds.length?fm.factIds:undefined,
         kbKey:km.kbKey||undefined,
         course:metaCourse||undefined,
@@ -20436,8 +20651,16 @@ function genLedgerKbKey(kb){
   cache.set(kb,{sig,key});
   return key;
 }
+// v23.2 (#2): canonical topic key shared across persistent ledger, Case Study rotation, and NCLEX batch spacing.
+function genLedgerTopicKey(entryOrName){
+  if(!entryOrName)return'';
+  if(typeof entryOrName==='string')return entryOrName.replace(/\s+/g,' ').trim().toLowerCase();
+  const base=String(entryOrName.condition||entryOrName.name||entryOrName.id||'').replace(/\s+/g,' ').trim().toLowerCase();
+  if(!base)return'';
+  return entryOrName.entityKind?(base+'::'+String(entryOrName.entityKind).trim().toLowerCase()):base;
+}
 function genLedgerEmptyRecord(kbKey=''){
-  return{kbKey:String(kbKey||''),updatedAt:0,nclex:{factIds:[],stems:[],runCount:0,questionCount:0},cases:{factIds:[],titles:[],caseCount:0}};
+  return{kbKey:String(kbKey||''),updatedAt:0,nclex:{factIds:[],topicIds:[],stems:[],runCount:0,questionCount:0},cases:{factIds:[],topicIds:[],titles:[],caseCount:0}};
 }
 function _genLedgerResolveStorage(storage){
   if(storage)return storage;
@@ -20453,8 +20676,8 @@ function _genLedgerNormalizeRec(raw,kbKey){
   return{
     kbKey:String(kbKey||raw.kbKey||''),
     updatedAt:Math.max(0,Number(raw.updatedAt)||0),
-    nclex:{factIds:uniqLower(n.factIds),stems:uniqText(n.stems,GEN_LEDGER_MAX_STEMS),runCount:Math.max(0,Math.floor(Number(n.runCount)||0)),questionCount:Math.max(0,Math.floor(Number(n.questionCount)||0))},
-    cases:{factIds:uniqLower(c.factIds),titles:uniqText(c.titles,GEN_LEDGER_MAX_TITLES),caseCount:Math.max(0,Math.floor(Number(c.caseCount)||0))}
+    nclex:{factIds:uniqLower(n.factIds),topicIds:uniqLower(n.topicIds),stems:uniqText(n.stems,GEN_LEDGER_MAX_STEMS),runCount:Math.max(0,Math.floor(Number(n.runCount)||0)),questionCount:Math.max(0,Math.floor(Number(n.questionCount)||0))},
+    cases:{factIds:uniqLower(c.factIds),topicIds:uniqLower(c.topicIds),titles:uniqText(c.titles,GEN_LEDGER_MAX_TITLES),caseCount:Math.max(0,Math.floor(Number(c.caseCount)||0))}
   };
 }
 function _genLedgerReadStore(storage){
@@ -20477,7 +20700,7 @@ function _genLedgerReadStore(storage){
 function _genLedgerWriteStore(store,kbKey,storage){
   const st=_genLedgerResolveStorage(storage);
   if(!st||typeof st.setItem!=='function')return;
-  const entries=Object.entries(store.byKb||{}).filter(([,v])=>v&&((v.nclex&&v.nclex.factIds.length)||(v.cases&&v.cases.factIds.length)));
+  const entries=Object.entries(store.byKb||{}).filter(([,v])=>v&&((v.nclex&&(v.nclex.factIds.length||v.nclex.topicIds.length))||(v.cases&&(v.cases.factIds.length||v.cases.topicIds.length))));
   entries.sort((a,b)=>(b[1].updatedAt||0)-(a[1].updatedAt||0));
   const trimmed=Object.create(null);
   for(const [k,v] of entries.slice(0,GEN_LEDGER_MAX_KBS))trimmed[k]=v;
@@ -20493,7 +20716,7 @@ function genLedgerLoad(kb,storage){
   const store=_genLedgerReadStore(storage);
   return _genLedgerNormalizeRec(store.byKb[kbKey],kbKey);
 }
-function genLedgerRecord(kb,kind,{factIds=[],stems=[],titles=[],questionDelta=0,caseDelta=0,runDelta=0}={},storage){
+function genLedgerRecord(kb,kind,{factIds=[],topicIds=[],stems=[],titles=[],questionDelta=0,caseDelta=0,runDelta=0}={},storage){
   const kbKey=genLedgerKbKey(kb);
   if(!kbKey||(kind!=='nclex'&&kind!=='cases'))return genLedgerEmptyRecord(kbKey);
   const store=_genLedgerReadStore(storage);
@@ -20502,7 +20725,28 @@ function genLedgerRecord(kb,kind,{factIds=[],stems=[],titles=[],questionDelta=0,
     const seen=new Set(rec[kind].factIds);
     for(const id of Array.isArray(arr)?arr:[]){const lo=String(id||'').trim().toLowerCase();if(lo&&!seen.has(lo)){seen.add(lo);rec[kind].factIds.push(lo);}}
   };
+  const addTopics=arr=>{
+    const seen=new Set(rec[kind].topicIds);
+    for(const tp of Array.isArray(arr)?arr:[]){const k=genLedgerTopicKey(tp);if(k&&!seen.has(k)){seen.add(k);rec[kind].topicIds.push(k);}}
+  };
   addIds(factIds);
+  addTopics(topicIds);
+  // v23.2 (#2): also auto-derive owning KB topic keys for every recorded factId so topic-level progress stays accurate across sessions even for callers passing only factIds.
+  if(Array.isArray(factIds)&&factIds.length&&kb){
+    const idSet=new Set(factIds.map(x=>String(x||'').trim().toLowerCase()).filter(Boolean));
+    if(idSet.size){
+      const view=typeof kbFactView==='function'?kbFactView(kb):kb;
+      const derived=[];
+      for(const c of (view&&Array.isArray(view.conditions)?view.conditions:[])){
+        if(!c||!Array.isArray(c.facts))continue;
+        if(c.facts.some(f=>f&&f.id&&idSet.has(String(f.id).trim().toLowerCase()))){
+          const tk=genLedgerTopicKey(c);
+          if(tk)derived.push(tk);
+        }
+      }
+      addTopics(derived);
+    }
+  }
   if(kind==='nclex'){
     const seenS=new Set(rec.nclex.stems);
     for(const s of Array.isArray(stems)?stems:[]){const cl=String(s||'').replace(/\s+/g,' ').trim();if(cl&&!seenS.has(cl)){seenS.add(cl);rec.nclex.stems.push(cl);}}
@@ -20525,10 +20769,10 @@ function genLedgerReset(kb,scope='both',storage){
   if(!kbKey)return genLedgerEmptyRecord('');
   const store=_genLedgerReadStore(storage);
   const rec=_genLedgerNormalizeRec(store.byKb[kbKey],kbKey);
-  if(scope==='nclex'||scope==='both')rec.nclex={factIds:[],stems:[],runCount:0,questionCount:0};
-  if(scope==='cases'||scope==='both')rec.cases={factIds:[],titles:[],caseCount:0};
+  if(scope==='nclex'||scope==='both')rec.nclex={factIds:[],topicIds:[],stems:[],runCount:0,questionCount:0};
+  if(scope==='cases'||scope==='both')rec.cases={factIds:[],topicIds:[],titles:[],caseCount:0};
   rec.updatedAt=Date.now();
-  if(!rec.nclex.factIds.length&&!rec.cases.factIds.length)delete store.byKb[kbKey];
+  if(!rec.nclex.factIds.length&&!rec.nclex.topicIds.length&&!rec.cases.factIds.length&&!rec.cases.topicIds.length)delete store.byKb[kbKey];
   else store.byKb[kbKey]=rec;
   _genLedgerWriteStore(store,kbKey,storage);
   return _genLedgerNormalizeRec(store.byKb[kbKey],kbKey);
@@ -20540,6 +20784,15 @@ function genLedgerExcludeSet(rec,primaryKind,{excludeOwn=true,excludeOther=false
   const other=primaryKind==='cases'?rec.nclex:rec.cases;
   if(excludeOwn&&own&&Array.isArray(own.factIds))for(const id of own.factIds)if(id)out.add(String(id).toLowerCase());
   if(excludeOther&&other&&Array.isArray(other.factIds))for(const id of other.factIds)if(id)out.add(String(id).toLowerCase());
+  return out;
+}
+function genLedgerExcludeTopicSet(rec,primaryKind,{excludeOwn=true,excludeOther=false}={}){
+  const out=new Set();
+  if(!rec||typeof rec!=='object')return out;
+  const own=primaryKind==='cases'?rec.cases:rec.nclex;
+  const other=primaryKind==='cases'?rec.nclex:rec.cases;
+  if(excludeOwn&&own&&Array.isArray(own.topicIds))for(const k of own.topicIds){const nk=genLedgerTopicKey(k);if(nk)out.add(nk);}
+  if(excludeOther&&other&&Array.isArray(other.topicIds))for(const k of other.topicIds){const nk=genLedgerTopicKey(k);if(nk)out.add(nk);}
   return out;
 }
 function genLedgerScopeStats(factsOrGroups,excludeSet){
@@ -20558,18 +20811,71 @@ function genLedgerScopeStats(factsOrGroups,excludeSet){
   }
   return{total:seen.size,excluded,remaining:Math.max(0,seen.size-excluded)};
 }
-function GenLedgerControl({idPrefix,primaryKind,ledger,scopeStats,excludeOwn,setExcludeOwn,excludeOther,setExcludeOther,allowContextAnchors,setAllowContextAnchors,freshnessPreview,onReset,disabled,resetHint}){
+function genLedgerTopicScopeStats(entriesOrGroups,excludeFactSet,excludeTopicSet){
+  const exF=excludeFactSet&&typeof excludeFactSet.has==='function'?excludeFactSet:new Set();
+  const exT=excludeTopicSet&&typeof excludeTopicSet.has==='function'?excludeTopicSet:new Set();
+  const seenTopics=new Map();
+  for(const entry of Array.isArray(entriesOrGroups)?entriesOrGroups:[]){
+    if(!entry||typeof entry!=='object')continue;
+    const facts=Array.isArray(entry.facts)?entry.facts.filter(f=>f&&f.id):[];
+    if(!facts.length)continue;
+    const tk=genLedgerTopicKey(entry);
+    if(!tk)continue;
+    const hit=exT.has(tk)||facts.some(f=>exF.has(String(f.id).toLowerCase()));
+    seenTopics.set(tk,Boolean(seenTopics.get(tk)||hit));
+  }
+  const totalTopics=seenTopics.size;
+  let coveredTopics=0;
+  for(const v of seenTopics.values())if(v)coveredTopics++;
+  const untouchedTopics=Math.max(0,totalTopics-coveredTopics);
+  const pct=totalTopics?Math.round((coveredTopics/totalTopics)*100):0;
+  return{totalTopics,coveredTopics,untouchedTopics,pct};
+}
+// v23.2 (#2): inspect current-KB packet entries that failed validation and were not auto-committed to the ledger,
+// returning their cited fact IDs, covered topic keys, and titles so the user can opt into marking them used in 1 click.
+function caseCollectUnrecordedPacketTopics(packet,activeKB,excludeFactSet,excludeTopicSet){
+  const exF=excludeFactSet&&typeof excludeFactSet.has==='function'?excludeFactSet:new Set();
+  const exT=excludeTopicSet&&typeof excludeTopicSet.has==='function'?excludeTopicSet:new Set();
+  const factIds=new Set(),topicIds=new Set(),titles=[];
+  let count=0;
+  for(const p of Array.isArray(packet)?packet:[]){
+    if(!p||!p.caseStudy)continue;
+    if(p.artifactSource&&typeof artifactSourceCurrent==='function'&&!artifactSourceCurrent(p.artifactSource,activeKB))continue;
+    const errs=(p.issues||[]).filter(x=>x&&x.sev==='error');
+    if(!errs.length)continue;
+    const fx=(p.artifactSource&&p.artifactSource.factIndex)||(activeKB&&typeof buildFactIndex==='function'?buildFactIndex(activeKB):null);
+    const cited=typeof caseAllFactIds==='function'?caseAllFactIds(p.caseStudy):[];
+    const pTopics=[];
+    for(const id of cited){
+      const lo=String(id||'').toLowerCase();
+      const hit=fx&&fx.get(lo);
+      if(hit&&hit.condition){const tk=genLedgerTopicKey(hit.condition);if(tk&&!pTopics.includes(tk))pTopics.push(tk);}
+    }
+    const alreadySaved=(pTopics.length>0&&pTopics.every(tk=>exT.has(tk)))||(cited.length>0&&cited.every(id=>exF.has(String(id||'').toLowerCase())));
+    if(alreadySaved)continue;
+    count++;
+    for(const id of cited){const lo=String(id||'').toLowerCase();if(lo)factIds.add(lo);}
+    for(const tk of pTopics)topicIds.add(tk);
+    if(p.caseStudy.title)titles.push(p.caseStudy.title);
+  }
+  return{count,factIds:[...factIds],topicIds:[...topicIds],titles};
+}
+function GenLedgerControl({idPrefix,primaryKind,ledger,scopeStats,topicStats=null,unrecordedPacketInfo=null,excludeOwn,setExcludeOwn,excludeOther,setExcludeOther,allowContextAnchors,setAllowContextAnchors,freshnessPreview,onReset,disabled,resetHint}){
   const h=React.createElement;
   const isCases=primaryKind==='cases';
   const own=isCases?(ledger&&ledger.cases):(ledger&&ledger.nclex);
   const other=isCases?(ledger&&ledger.nclex):(ledger&&ledger.cases);
   const ownCount=(own&&own.factIds&&own.factIds.length)||0;
+  const ownTopicCount=(own&&own.topicIds&&own.topicIds.length)||0;
   const otherCount=(other&&other.factIds&&other.factIds.length)||0;
+  const otherTopicCount=(other&&other.topicIds&&other.topicIds.length)||0;
   const ownMeta=isCases?(own&&own.caseCount?own.caseCount+' prior case'+(own.caseCount===1?'':'s'):''):(own&&own.questionCount?own.questionCount+' prior Q'+(own.questionCount===1?'':'s'):'');
   const otherLabel=isCases?'NCLEX Generator':'Case Studies';
   const ownLabel=isCases?'prior cases':'prior NCLEX runs';
-  const hasAny=ownCount>0||otherCount>0;
-  // v22.5 (#4): explicit live status badge showing whether the next run uses 100% fresh facts, background anchors, or reused facts.
+  const hasAny=ownCount>0||ownTopicCount>0||otherCount>0||otherTopicCount>0;
+  const hasTopicBar=Boolean(topicStats&&topicStats.totalTopics>0);
+  const isPass2=Boolean(hasTopicBar&&topicStats.untouchedTopics===0&&scopeStats&&scopeStats.remaining>0);
+  // v22.5 (#4) + v23.2 (#2): live status badge showing topic freshness, unused facts, background anchors, or Pass 2 sweep.
   let pill=null;
   if(freshnessPreview&&freshnessPreview.totalSelected>0){
     const {freshCount,anchorCount,reusedCount,isBatch,batchCount,batchFreshOnlyCount}=freshnessPreview;
@@ -20588,30 +20894,43 @@ function GenLedgerControl({idPrefix,primaryKind,ledger,scopeStats,excludeOwn,set
       );
     }else{
       pill=h('div',{id:idPrefix+'-freshness-status',style:{marginTop:4,marginBottom:5,padding:'4px 8px',borderRadius:5,fontSize:11,fontWeight:600,background:'var(--success-bg)',border:'1px solid var(--success-border)',color:'var(--accent-green)'}},
-        '✓ Using 100% unused facts ('+freshCount+' fresh · 0 previously used)'
+        '✓ Using 100% unused facts ('+freshCount+' fresh · 0 previously used)'+(isPass2?' · Pass 2 (all topics visited once; drawing remaining unused facts)':'')
       );
     }
   }
   return h('div',{style:{marginTop:9,padding:'8px 10px',borderRadius:6,border:'1px solid var(--border)',background:'var(--bg-input)',fontSize:11.5}},
-    h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap',marginBottom:(hasAny||pill)?5:0}},
-      h('span',{style:{fontWeight:600,color:'var(--text-bright)'}},'Non-overlap fact tracking',
-        scopeStats&&scopeStats.total>0&&h('span',{style:{fontWeight:400,color:scopeStats.remaining?'var(--text-dim)':'var(--accent-warm)',marginLeft:6}},'('+scopeStats.remaining+' of '+scopeStats.total+' in scope unused'+(scopeStats.excluded?' · '+scopeStats.excluded+' excluded':'')+')')
+    h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap',marginBottom:(hasAny||pill||hasTopicBar)?5:0}},
+      h('span',{style:{fontWeight:600,color:'var(--text-bright)'}},'Non-overlap topic & fact tracking',
+        scopeStats&&scopeStats.total>0&&h('span',{style:{fontWeight:400,color:scopeStats.remaining?'var(--text-dim)':'var(--accent-warm)',marginLeft:6}},'('+scopeStats.remaining+' of '+scopeStats.total+' facts unused'+(scopeStats.excluded?' · '+scopeStats.excluded+' excluded':'')+')')
       ),
-      ownCount>0&&h('button',{type:'button',id:idPrefix+'-reset-history',className:'btn-secondary',disabled,style:{padding:'2px 8px',fontSize:11},onClick:onReset},'Reset '+(isCases?'Case':'NCLEX')+' history')
+      (ownCount>0||ownTopicCount>0)&&h('button',{type:'button',id:idPrefix+'-reset-history',className:'btn-secondary',disabled,style:{padding:'2px 8px',fontSize:11},onClick:onReset},'Reset '+(isCases?'Case':'NCLEX')+' history')
+    ),
+    hasTopicBar&&h('div',{id:idPrefix+'-topic-progress',style:{marginBottom:6}},
+      h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:8,fontSize:11,marginBottom:3}},
+        h('span',{style:{color:'var(--text)'}},'Topics covered (current + past sessions): ',h('b',{style:{color:topicStats.pct>=100?'var(--accent-green)':'var(--accent)'}},topicStats.coveredTopics+' / '+topicStats.totalTopics),' (',topicStats.pct,'%)'),
+        h('span',{style:{color:topicStats.untouchedTopics?'var(--text-dim)':'var(--accent-green)'}},topicStats.untouchedTopics?topicStats.untouchedTopics+' untouched remaining':'All topics visited once')
+      ),
+      h('div',{role:'progressbar','aria-label':(isCases?'Case Study':'NCLEX')+' topic progress across sessions','aria-valuemin':0,'aria-valuemax':topicStats.totalTopics,'aria-valuenow':topicStats.coveredTopics,style:{height:7,borderRadius:999,background:'var(--bg-deep)',border:'1px solid var(--border)',overflow:'hidden'}},
+        h('div',{style:{height:'100%',width:Math.min(100,Math.max(0,topicStats.pct))+'%',background:topicStats.pct>=100?'var(--accent-green)':'var(--accent)',transition:'width .25s ease'}})
+      )
     ),
     pill,
+    unrecordedPacketInfo&&unrecordedPacketInfo.count>0&&h('div',{id:idPrefix+'-unrecorded-packet',style:{marginTop:4,marginBottom:5,padding:'5px 8px',borderRadius:5,fontSize:11,background:'var(--warning-bg)',border:'1px solid var(--warning-border)',color:'var(--accent-warm)',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap'}},
+      h('span',null,'⚠ '+unrecordedPacketInfo.count+' case'+(unrecordedPacketInfo.count===1?'':'s')+' in your current packet failed validation and '+(unrecordedPacketInfo.count===1?'was':'were')+' not auto-saved to history.'),
+      typeof unrecordedPacketInfo.onMarkUsed==='function'&&h('button',{type:'button',id:idPrefix+'-mark-packet-used',className:'btn-secondary',disabled,style:{padding:'2px 8px',fontSize:11},onClick:unrecordedPacketInfo.onMarkUsed},'Mark packet topics used')
+    ),
     !hasAny
-      ?h('div',{style:{color:'var(--text-dim)',marginTop:3,lineHeight:1.45}},'Tracks cited facts for this Knowledge Base across runs and reloads so follow-up '+(isCases?'cases/waves':'worksheets/appends')+' draw remaining unused facts automatically.')
+      ?h('div',{style:{color:'var(--text-dim)',marginTop:3,lineHeight:1.45}},'Tracks generated topics and cited facts for this Knowledge Base across runs and reloads so follow-up '+(isCases?'cases/waves':'worksheets/appends')+' pick untouched topics first without overlap.')
       :h('div',{style:{display:'flex',flexDirection:'column',gap:4}},
         h('label',{style:{display:'flex',alignItems:'center',gap:6,color:'var(--text)',cursor:'pointer'}},
           h('input',{id:idPrefix+'-exclude-prior',type:'checkbox',checked:excludeOwn,onChange:e=>setExcludeOwn(e.target.checked),style:{accentColor:'var(--accent)'}}),
-          h('span',null,'Exclude facts already used in '+ownLabel+' (',h('b',null,ownCount),' fact'+(ownCount===1?'':'s')+(ownMeta?' · '+ownMeta:''),')')
+          h('span',null,'Prioritize untouched topics & exclude facts from '+ownLabel+' (',h('b',null,ownTopicCount),' topic'+(ownTopicCount===1?'':'s')+' · ',h('b',null,ownCount),' fact'+(ownCount===1?'':'s')+(ownMeta?' · '+ownMeta:''),')')
         ),
-        h('label',{style:{display:'flex',alignItems:'center',gap:6,color:otherCount?'var(--text)':'var(--text-dim)',cursor:'pointer'}},
+        h('label',{style:{display:'flex',alignItems:'center',gap:6,color:(otherCount||otherTopicCount)?'var(--text)':'var(--text-dim)',cursor:'pointer'}},
           h('input',{id:idPrefix+'-exclude-other',type:'checkbox',checked:excludeOther,onChange:e=>setExcludeOther(e.target.checked),style:{accentColor:'var(--accent)'}}),
-          h('span',null,'Also exclude facts used in '+otherLabel+' (',h('b',null,otherCount),' fact'+(otherCount===1?'':'s'),') ',h('span',{className:'badge-opt'},'optional'))
+          h('span',null,'Also exclude topics & facts used in '+otherLabel+' (',h('b',null,otherTopicCount),' topic'+(otherTopicCount===1?'':'s')+' · ',h('b',null,otherCount),' fact'+(otherCount===1?'':'s'),') ',h('span',{className:'badge-opt'},'optional'))
         ),
-        isCases&&(excludeOwn||(excludeOther&&otherCount>0))&&typeof setAllowContextAnchors==='function'&&h('label',{style:{display:'flex',alignItems:'center',gap:6,color:'var(--text)',cursor:'pointer'}},
+        isCases&&(excludeOwn||(excludeOther&&(otherCount>0||otherTopicCount>0)))&&typeof setAllowContextAnchors==='function'&&h('label',{style:{display:'flex',alignItems:'center',gap:6,color:'var(--text)',cursor:'pointer'}},
           h('input',{id:idPrefix+'-allow-anchors',type:'checkbox',checked:allowContextAnchors!==false,onChange:e=>setAllowContextAnchors(e.target.checked),style:{accentColor:'var(--accent)'}}),
           h('span',null,'Allow ≤2 previously used background context anchors only if Look/Analyze/Treat has 0 unused facts ',h('span',{className:'badge-opt'},'uncheck = strict 0 reuse'))
         ),
@@ -21175,8 +21494,8 @@ function KnowledgeBaseBuilder(){
   const [verifyPass,setVerifyPass]=useState(KB_DEFAULT_AUDIT);
   const [chunkChars,setChunkChars]=useState(KB_DEFAULT_CHUNK_CHARS);
   const [overlapUnits,setOverlapUnits]=useState(KB_DEFAULT_OVERLAP);
-  // v17.3: opt-in second lane; the sequential default keeps free-tier pacing and existing behavior.
-  const [laneCount,setLaneCount]=useState(1);
+  // v23.2: default to 2 parallel lanes so Knowledge Base builds finish roughly twice as fast out of the box (uncheck on rate-limited free-tier keys).
+  const [laneCount,setLaneCount]=useState(2);
   const [diag,setDiag]=useState(null);
   const [logs,pushLog,setLogs]=useCappedLog();
   const [showDiag,setShowDiag]=useState(false);
@@ -21495,8 +21814,8 @@ function KnowledgeBaseBuilder(){
       </label>
       <label style={{display:'flex',alignItems:'flex-start',gap:8,fontSize:12,color:'var(--text)',cursor:'pointer',marginBottom:10}}>
         <input type="checkbox" checked={laneCount>1} onChange={e=>setLaneCount(e.target.checked?2:1)} style={{accentColor:'var(--accent)',marginTop:2}}/>
-        <span>Two parallel lanes <span className="badge-opt">faster</span>
-          <div style={{fontSize:12,color:'var(--text-dim)',marginTop:2,lineHeight:1.5}}>Runs two chunks at once, so a long source finishes in roughly half the time. Results keep their page order. Uses more of your per-minute quota; leave it off on a free-tier key that already hits rate limits. The smaller 15,000-character default makes about twice as many calls per build; two lanes offset that.</div>
+        <span>Two parallel lanes <span className="badge-opt">default · faster</span>
+          <div style={{fontSize:12,color:'var(--text-dim)',marginTop:2,lineHeight:1.5}}>Runs two chunks at once so a long source finishes in roughly half the time while keeping original page order. Enabled by default; uncheck on a free-tier key that already hits rate limits. The smaller 15,000-character default makes about twice as many calls per build; two lanes offset that.</div>
         </span>
       </label>
       <div className="form-grid">
@@ -22890,7 +23209,9 @@ function NCLEXGenerator(){
   const previewPool=useMemo(()=>ngBuildFactPool(scopeFactView,{tiers:kbTiers,conditionQuery:kbConditionFilter,scope:hasStructuredScope?nclexScope:null,includeBridge:kbIncludeBridge}),[scopeFactView,kbTiers,kbConditionFilter,hasStructuredScope,nclexScope,kbIncludeBridge]);
   const previewPoolFacts=useMemo(()=>ngPoolSize(previewPool),[previewPool]);
   const nclexExcludeSet=useMemo(()=>{const s=genLedgerExcludeSet(ledger,'nclex',{excludeOwn:excludePriorNclex,excludeOther:excludeCaseFacts});for(const id of rxUnlockedFactIds)s.delete(String(id).toLowerCase());return s;},[ledger,excludePriorNclex,excludeCaseFacts,rxUnlockedFactIds]);
+  const nclexExcludeTopicSet=useMemo(()=>{const s=genLedgerExcludeTopicSet(ledger,'nclex',{excludeOwn:excludePriorNclex,excludeOther:excludeCaseFacts});if(rxUnlockedFactIds.length){const u=new Set(rxUnlockedFactIds.map(x=>String(x||'').toLowerCase()));for(const g of previewPool)if((g.facts||[]).some(f=>f&&f.id&&u.has(String(f.id).toLowerCase())))s.delete(genLedgerTopicKey(g));}return s;},[ledger,excludePriorNclex,excludeCaseFacts,rxUnlockedFactIds,previewPool]);
   const scopeLedgerStats=useMemo(()=>genLedgerScopeStats(previewPool,nclexExcludeSet),[previewPool,nclexExcludeSet]);
+  const scopeTopicStats=useMemo(()=>genLedgerTopicScopeStats(previewPool,nclexExcludeSet,nclexExcludeTopicSet),[previewPool,nclexExcludeSet,nclexExcludeTopicSet]);
   const remainingTargetEst=Math.min(MAX_NCLEX_TARGET,Math.floor(scopeLedgerStats.remaining/Math.max(1,factsPerQ)));
   const previewScopeDesc=useMemo(()=>hasStructuredScope?kbDescribeScopeSelection(kbResolveScopeGroups(scopeFactView,nclexScope),nclexScope):null,[hasStructuredScope,scopeFactView,nclexScope]);
   const toggleKbConcept=cn=>setKbSelectedConcepts(p=>p.some(x=>x.toLowerCase()===cn.toLowerCase())?p.filter(x=>x.toLowerCase()!==cn.toLowerCase()):[...p,cn]);
@@ -22911,7 +23232,7 @@ function NCLEXGenerator(){
   const [artifactSource,setArtifactSource]=useState(null),[auditState,setAuditState]=useState('disabled');
   useEffect(()=>{const op=generatorSlot.current.active;if(op&&op.sourceKB!==K.knowledgeBase){generatorSlot.current.cancel();setBusy(false);setAbortCtl(null);setLiveKB(0);setAuditState('interrupted');}},[K.knowledgeBase]);
   useEffect(()=>()=>generatorSlot.current.cancel(),[]);
-  const run=useCallback((appendMode=false)=>ngRunGeneratorWithEnv({cfg,log,K,generatorSlot,setArtifactSource,targetCount,runAudit,setAuditState,currentSourceKB,setBusy,setProg,setLogs,setBatches,setCoverage,setShowUncov,setAbortCtl,setProvenance,setTrackers,setLiveKB,numBatches,batchSize,hasStructuredScope,nclexScope,kbIncludeBridge,kbTiers,kbConditionFilter,allocMode,factsPerQ,points,outcomes,buildBatchBlock,buildFocusBlock,appendMode:appendMode===true,existingBatches:batches,prevRequested:artifactSource?.requested||0,excludeFactIds:nclexExcludeSet.size?nclexExcludeSet:null,priorStems:excludePriorNclex?ledger.nclex.stems:null,onRecordUsedFacts:recordNclexUsed}),[cfg,targetCount,batchSize,numBatches,outcomes,points,focusContext,K.knowledgeBase,kbTiers,kbConditionFilter,hasStructuredScope,nclexScope,kbIncludeBridge,log,allocMode,factsPerQ,runAudit,batches,artifactSource,nclexExcludeSet,excludePriorNclex,ledger.nclex.stems,recordNclexUsed]);
+  const run=useCallback((appendMode=false)=>ngRunGeneratorWithEnv({cfg,log,K,generatorSlot,setArtifactSource,targetCount,runAudit,setAuditState,currentSourceKB,setBusy,setProg,setLogs,setBatches,setCoverage,setShowUncov,setAbortCtl,setProvenance,setTrackers,setLiveKB,numBatches,batchSize,hasStructuredScope,nclexScope,kbIncludeBridge,kbTiers,kbConditionFilter,allocMode,factsPerQ,points,outcomes,buildBatchBlock,buildFocusBlock,appendMode:appendMode===true,existingBatches:batches,prevRequested:artifactSource?.requested||0,excludeFactIds:nclexExcludeSet.size?nclexExcludeSet:null,excludeTopicKeys:nclexExcludeTopicSet.size?nclexExcludeTopicSet:null,priorStems:excludePriorNclex?ledger.nclex.stems:null,onRecordUsedFacts:recordNclexUsed}),[cfg,targetCount,batchSize,numBatches,outcomes,points,focusContext,K.knowledgeBase,kbTiers,kbConditionFilter,hasStructuredScope,nclexScope,kbIncludeBridge,log,allocMode,factsPerQ,runAudit,batches,artifactSource,nclexExcludeSet,nclexExcludeTopicSet,excludePriorNclex,ledger.nclex.stems,recordNclexUsed]);
 
   const ws=useMemo(()=>ngAssembleWorksheet(batches),[batches]);
   const wsIssuesAll=useMemo(()=>batches.flatMap(b=>(b.wsIssues||[]).map(x=>({...x,msg:'Batch '+b.n+': '+x.msg}))),[batches]);
@@ -22980,7 +23301,7 @@ function NCLEXGenerator(){
         </div>
         {nclexHasBridge&&<label style={{display:'flex',alignItems:'center',gap:6,fontSize:12,color:'var(--text)',cursor:'pointer',marginTop:8}}><input id="nclex-include-bridge" type="checkbox" checked={kbIncludeBridge} onChange={e=>setKbIncludeBridge(e.target.checked)} style={{accentColor:'var(--accent)'}}/><span>Include NP Bridge facts <span className="badge-opt">off = RN Core only</span></span></label>}
         {scopeFactView.conditions.length>0&&<NclexProWeakTagBridge idPrefix="nclex" mode="nclex" kb={K.knowledgeBase} passphrase={cfg.nclexProPass} vaultUrl={cfg.nclexProUrl} unlockedCount={rxUnlockedFactIds.length} setters={{setKbSelectedConditionIds,setKbSelectedConcepts,setKbTiers,setOutcomes,setFocusContext,setRxUnlockedFactIds}}/>}
-        {scopeFactView.conditions.length>0&&<GenLedgerControl idPrefix="nclex" primaryKind="nclex" ledger={ledger} scopeStats={scopeLedgerStats} excludeOwn={excludePriorNclex} setExcludeOwn={setExcludePriorNclex} excludeOther={excludeCaseFacts} setExcludeOther={setExcludeCaseFacts} onReset={resetNclexHistory} disabled={busy}/>}
+        {scopeFactView.conditions.length>0&&<GenLedgerControl idPrefix="nclex" primaryKind="nclex" ledger={ledger} scopeStats={scopeLedgerStats} topicStats={scopeTopicStats} excludeOwn={excludePriorNclex} setExcludeOwn={setExcludePriorNclex} excludeOther={excludeCaseFacts} setExcludeOther={setExcludeCaseFacts} onReset={resetNclexHistory} disabled={busy}/>}
         {poolExhausted&&<div className="tip-banner" style={{marginTop:8,marginBottom:0,fontSize:12,lineHeight:1.45,color:'var(--accent-warm)'}}>⚠ All {previewPoolFacts} fact(s) in this scope have already been tested. Click <b>Reset NCLEX history</b> above, uncheck exclusion, or widen your scope to generate more.</div>}
         <div style={{fontSize:12,color:'var(--text-dim)',marginTop:9,lineHeight:1.5}}>Tier 1–3 are included by default. Narrowing scope can improve depth, but excluding lower tiers may reduce distractor variety and concept inventory size.</div>
       </Step>
@@ -23170,10 +23491,12 @@ function CaseStudyGenerator(){
     if(!activeCondition)return[];
     const list=activeCondition.isMixed?activeCondition.conditions:[activeCondition];
     const tierOk=f=>(caseIncludeBridge||f.clinicalLayer!=='bridge')&&(Number(f.tier)===1||(includeTier2&&Number(f.tier)===2)||(includeTier3&&Number(f.tier)===3));
-    return list.map(c=>({facts:(c&&c.facts||[]).filter(tierOk)}));
+    return list.map(c=>({id:c&&c.id,name:c&&c.name,entityKind:c&&c.entityKind,facts:(c&&c.facts||[]).filter(tierOk)}));
   },[activeCondition,includeTier2,includeTier3,caseIncludeBridge]);
+  const caseExcludeTopicSet=useMemo(()=>{const s=genLedgerExcludeTopicSet(ledger,'cases',{excludeOwn:excludePriorCases,excludeOther:excludeNclexFacts});if(rxUnlockedCaseIds.length){const u=new Set(rxUnlockedCaseIds.map(x=>String(x||'').toLowerCase()));for(const g of activeScopeGroups)if((g.facts||[]).some(f=>f&&f.id&&u.has(String(f.id).toLowerCase())))s.delete(genLedgerTopicKey(g));}return s;},[ledger,excludePriorCases,excludeNclexFacts,rxUnlockedCaseIds,activeScopeGroups]);
   const caseScopeStats=useMemo(()=>genLedgerScopeStats(activeScopeGroups,caseExcludeSet),[activeScopeGroups,caseExcludeSet]);
-  const caseFactOpts=useMemo(()=>({includeTier2,includeTier3,includeCalculation:types.calculation,includeEducation:types.education,includeBridge:caseIncludeBridge,excludeFactIds:caseExcludeSet.size?caseExcludeSet:null,allowContextAnchors}),[includeTier2,includeTier3,types.calculation,types.education,caseIncludeBridge,caseExcludeSet,allowContextAnchors]);
+  const caseTopicStats=useMemo(()=>genLedgerTopicScopeStats(activeScopeGroups,caseExcludeSet,caseExcludeTopicSet),[activeScopeGroups,caseExcludeSet,caseExcludeTopicSet]);
+  const caseFactOpts=useMemo(()=>({includeTier2,includeTier3,includeCalculation:types.calculation,includeEducation:types.education,includeBridge:caseIncludeBridge,excludeFactIds:caseExcludeSet.size?caseExcludeSet:null,excludeTopicKeys:caseExcludeTopicSet.size?caseExcludeTopicSet:null,allowContextAnchors}),[includeTier2,includeTier3,types.calculation,types.education,caseIncludeBridge,caseExcludeSet,caseExcludeTopicSet,allowContextAnchors]);
   const selectedFacts=useMemo(()=>activeCondition?(activeCondition.isMixed?selectCaseFactsMulti(activeCondition.conditions,{...caseFactOpts,allConditions:conditions}):selectCaseFacts(activeCondition,{...caseFactOpts,allConditions:conditions})):[],[activeCondition,conditions,caseFactOpts]);
   const freshSelectedCount=useMemo(()=>selectedFacts.filter(f=>!f.contextAnchor&&!allPriorUsedSet.has(String(f.id||'').toLowerCase())).length,[selectedFacts,allPriorUsedSet]);
   const anchorSelectedCount=useMemo(()=>selectedFacts.filter(f=>f.contextAnchor).length,[selectedFacts]);
@@ -23246,12 +23569,14 @@ function CaseStudyGenerator(){
     setAudit(null);setAuditState('disabled');setProvenance(null);setArtifactSource(null);setInvalidCaseRaw('');
   },[K]);
   const isBatchMode=hasCustomCaseScope&&resolvedCaseConditions.length>1&&caseRunMode==='batch';
-  const wavePlan=useMemo(()=>!isBatchMode&&activeCondition?caseEstimateWavePlan({condition:activeCondition,conditions,factOpts:{includeTier2,includeTier3,includeCalculation:types.calculation,includeEducation:types.education,includeBridge:caseIncludeBridge},includeTypes:types,stages,questionsPerStage,excludeFactIds:caseExcludeSet.size?caseExcludeSet:null,allowContextAnchors,requestedWaves:caseWaveCount,maxBatch:MAX_CASE_BATCH}):{waves:0,maxUsefulWaves:0,totalEligible:0,unusedBefore:0,freshCounts:[],exhausted:true},[isBatchMode,activeCondition,conditions,includeTier2,includeTier3,types,caseIncludeBridge,stages,questionsPerStage,caseExcludeSet,allowContextAnchors,caseWaveCount]);
+  const wavePlan=useMemo(()=>!isBatchMode&&activeCondition?caseEstimateWavePlan({condition:activeCondition,conditions,factOpts:{includeTier2,includeTier3,includeCalculation:types.calculation,includeEducation:types.education,includeBridge:caseIncludeBridge},includeTypes:types,stages,questionsPerStage,excludeFactIds:caseExcludeSet.size?caseExcludeSet:null,excludeTopicKeys:caseExcludeTopicSet.size?caseExcludeTopicSet:null,allowContextAnchors,requestedWaves:caseWaveCount,maxBatch:MAX_CASE_BATCH}):{waves:0,maxUsefulWaves:0,totalEligible:0,unusedBefore:0,freshCounts:[],exhausted:true},[isBatchMode,activeCondition,conditions,includeTier2,includeTier3,types,caseIncludeBridge,stages,questionsPerStage,caseExcludeSet,caseExcludeTopicSet,allowContextAnchors,caseWaveCount]);
   const isWaveBatch=!isBatchMode&&!!activeCondition&&caseWaveCount!=='1'&&!wavePlan.exhausted;
   const batchPlan=useMemo(()=>isBatchMode?caseBuildBatchTargets({conditions,resolvedConditions:resolvedCaseConditions,concepts:validCaseConcepts,mixConceptExemplars:caseMixExemplars,includeRelated:caseIncludeRelated,mixMode:caseMixMode,batchUnit:(validCaseConcepts.length>0&&caseMixExemplars)?caseBatchUnit:'conditions',factOpts:caseFactOpts,includeTypes:types,stages,questionsPerStage,maxBatch:MAX_CASE_BATCH}):{targets:[],skipped:[],overflowCount:0,totalEligible:0},[isBatchMode,conditions,resolvedCaseConditions,validCaseConcepts,caseMixExemplars,caseIncludeRelated,caseMixMode,caseBatchUnit,caseFactOpts,types,stages,questionsPerStage]);
   const freshnessPreview=useMemo(()=>isBatchMode?{totalSelected:batchPlan.targets.length,isBatch:true,batchCount:batchPlan.targets.length,batchFreshOnlyCount:batchPlan.targets.filter(t=>t.facts.every(f=>!f.contextAnchor&&!allPriorUsedSet.has(String(f.id||'').toLowerCase()))).length}:{totalSelected:selectedFacts.length,isBatch:false,freshCount:freshSelectedCount,anchorCount:anchorSelectedCount,reusedCount:reusedSelectedCount},[isBatchMode,batchPlan,allPriorUsedSet,selectedFacts.length,freshSelectedCount,anchorSelectedCount,reusedSelectedCount]);
+  const unrecordedPacket=useMemo(()=>caseCollectUnrecordedPacketTopics(casePacket,K.knowledgeBase,caseExcludeSet,caseExcludeTopicSet),[casePacket,K.knowledgeBase,caseExcludeSet,caseExcludeTopicSet]);
+  const unrecordedPacketInfo=useMemo(()=>unrecordedPacket.count>0?{count:unrecordedPacket.count,onMarkUsed:()=>recordCaseUsed({factIds:unrecordedPacket.factIds,topicIds:unrecordedPacket.topicIds,titles:unrecordedPacket.titles,caseDelta:unrecordedPacket.count})}:null,[unrecordedPacket,recordCaseUsed]);
   const runBatch=useCallback(()=>caseRunBatchWithEnv({cfg,batchPlan,initialPriorTitles:excludePriorCases?ledger.cases.titles:null,priorUsedFactIds:allPriorUsedSet,generatorSlot,batchBusy,K,batchCancelRef,setBatchBusy,setLogs,log,currentSourceKB,setBatchStatus,batchOverrideRef,run,caseStudyRef,casePacketRef,selectPacketEntry}),[cfg.apiKey,batchPlan,excludePriorCases,ledger.cases.titles,allPriorUsedSet,batchBusy,K.knowledgeBase,log,setLogs,run,selectPacketEntry]);
-  const runWaves=useCallback(()=>caseRunBatchWithEnv({cfg,batchPlan:{targets:[],skipped:[],overflowCount:0},waveConfig:{condition:activeCondition,conditions,factOpts:{includeTier2,includeTier3,includeCalculation:types.calculation,includeEducation:types.education,includeBridge:caseIncludeBridge},includeTypes:types,stages,questionsPerStage,requestedWaves:caseWaveCount,maxBatch:MAX_CASE_BATCH,initialExcludeIds:caseExcludeSet,initialPriorTitles:excludePriorCases?ledger.cases.titles:[],allowContextAnchors},generatorSlot,batchBusy,K,batchCancelRef,setBatchBusy,setLogs,log,currentSourceKB,setBatchStatus,batchOverrideRef,run,caseStudyRef,casePacketRef,selectPacketEntry}),[cfg.apiKey,activeCondition,conditions,includeTier2,includeTier3,types,caseIncludeBridge,stages,questionsPerStage,caseWaveCount,caseExcludeSet,excludePriorCases,ledger.cases.titles,allowContextAnchors,batchBusy,K.knowledgeBase,log,setLogs,run,selectPacketEntry]);
+  const runWaves=useCallback(()=>caseRunBatchWithEnv({cfg,batchPlan:{targets:[],skipped:[],overflowCount:0},waveConfig:{condition:activeCondition,conditions,factOpts:{includeTier2,includeTier3,includeCalculation:types.calculation,includeEducation:types.education,includeBridge:caseIncludeBridge},includeTypes:types,stages,questionsPerStage,requestedWaves:caseWaveCount,maxBatch:MAX_CASE_BATCH,initialExcludeIds:caseExcludeSet,initialExcludeTopicKeys:caseExcludeTopicSet,initialPriorTitles:excludePriorCases?ledger.cases.titles:[],allowContextAnchors},generatorSlot,batchBusy,K,batchCancelRef,setBatchBusy,setLogs,log,currentSourceKB,setBatchStatus,batchOverrideRef,run,caseStudyRef,casePacketRef,selectPacketEntry}),[cfg.apiKey,activeCondition,conditions,includeTier2,includeTier3,types,caseIncludeBridge,stages,questionsPerStage,caseWaveCount,caseExcludeSet,caseExcludeTopicSet,excludePriorCases,ledger.cases.titles,allowContextAnchors,batchBusy,K.knowledgeBase,log,setLogs,run,selectPacketEntry]);
   const cancelCaseRun=useCallback(()=>{batchCancelRef.current=true;abortCtl?.abort();},[abortCtl]);
   const buildPacketMd=()=>casePacket.length?casePacketToMarkdown(casePacket,{activeKB:K.knowledgeBase,layout:packetLayout,worksheetFactIds:true,includeProvenance:true,factCategoryPlacement,diagnosticsPlacement}):'';
   const buildPacketPrintMd=()=>casePacket.length?casePacketToMarkdown(casePacket,{activeKB:K.knowledgeBase,layout:packetLayout,worksheetFactIds:false,includeProvenance:false,factCategoryPlacement,diagnosticsPlacement}):'';
@@ -23370,7 +23695,7 @@ function CaseStudyGenerator(){
         </div>
         {caseHasBridge&&<label style={{display:'flex',alignItems:'center',gap:6,fontSize:12,color:'var(--text)',cursor:'pointer',marginBottom:8}}><input id="case-include-bridge" type="checkbox" checked={caseIncludeBridge} onChange={e=>setCaseIncludeBridge(e.target.checked)} style={{accentColor:'var(--accent)'}}/><span>Include NP Bridge facts <span className="badge-opt">off = RN Core only</span></span></label>}
         {conditions.length>0&&<NclexProWeakTagBridge idPrefix="case" mode="cases" kb={K.knowledgeBase} passphrase={cfg.nclexProPass} vaultUrl={cfg.nclexProUrl} unlockedCount={rxUnlockedCaseIds.length} setters={{setConditionId,setCaseExtraConditionIds,setCaseSelectedConcepts,setCaseMixMode,setCaseRunMode,setIncludeTier2,setTypes,setRxUnlockedCaseIds,setCaseFocusOutcomes,setCaseFocusContext}}/>}
-        {conditions.length>0&&<GenLedgerControl idPrefix="case" primaryKind="cases" ledger={ledger} scopeStats={caseScopeStats} excludeOwn={excludePriorCases} setExcludeOwn={setExcludePriorCases} excludeOther={excludeNclexFacts} setExcludeOther={setExcludeNclexFacts} allowContextAnchors={allowContextAnchors} setAllowContextAnchors={setAllowContextAnchors} freshnessPreview={freshnessPreview} onReset={resetCaseHistory} disabled={isBusy} resetHint="Separate from Clear packet — clearing the packet tray keeps used-fact history so your next run continues from unused facts."/>}
+        {conditions.length>0&&<GenLedgerControl idPrefix="case" primaryKind="cases" ledger={ledger} scopeStats={caseScopeStats} topicStats={caseTopicStats} unrecordedPacketInfo={unrecordedPacketInfo} excludeOwn={excludePriorCases} setExcludeOwn={setExcludePriorCases} excludeOther={excludeNclexFacts} setExcludeOther={setExcludeNclexFacts} allowContextAnchors={allowContextAnchors} setAllowContextAnchors={setAllowContextAnchors} freshnessPreview={freshnessPreview} onReset={resetCaseHistory} disabled={isBusy} resetHint="Separate from Clear packet — clearing the packet tray keeps used-topic & fact history so your next run continues from untouched topics."/>}
         {caseExhausted&&<div className="tip-banner" style={{marginTop:8,marginBottom:0,fontSize:12,lineHeight:1.45,color:'var(--accent-warm)'}}>⚠ All {caseScopeStats.total} fact(s) in this scope have already been used in prior cases. Click <b>Reset Case history</b>, uncheck exclusion, include Tier 2/3, or widen your scope.</div>}
         <div style={{fontSize:12,color:'var(--text-dim)',marginTop:8,lineHeight:1.5}}>Tier 1 facts drive the critical decisions. Tier 2 adds realistic context; Tier 3 adds lower-priority background detail. Distractors are built from contextually plausible near-misses at any tier, not from Tier 3. {isBatchMode?<>Queued cases select facts per entry independently.</>:<> <b style={{color:'var(--text)'}}>{freshSelectedCount}</b> fresh fact(s){anchorSelectedCount?<> + <b style={{color:'var(--text)'}}>{anchorSelectedCount}</b> background context anchor(s)</>:null} selected for {isWaveBatch?'Wave 1':'this case'}.</>}</div>
         {!isBatchMode&&sufficiency.warnings.length>0&&<div className="tip-banner" style={{marginTop:10,marginBottom:0,fontSize:12,lineHeight:1.5}}>⚠ {sufficiency.warnings.join(' · ')} The generator will not invent to fill these gaps.</div>}

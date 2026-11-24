@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 4233;
+const EXPECTED_ASSERTIONS = 4241;
 
 let file;
 try {
@@ -3027,6 +3027,9 @@ section('v15.14 — clamps, backoff, storage');
 
   section('v22.6 Closed-Loop NCLEX Pro FSRS-5 Weak-Tag Prescription Bridge & Leech Fact Re-Angling');
   await require('./tools/v22-6-fsrs-prescription-tests')(S,t);
+
+  section('v23.2 Default Parallel Lanes, NGN Matrix Schema/Normalizer, Topic Progress Bar & Rotation, End-of-Document Red Boxes, & NCLEX Pro Tag Parity');
+  await require('./tools/v23-2-updates-tests')(S,t);
 
   console.log('\n════════════════════════════');
   const total = pass + fail;

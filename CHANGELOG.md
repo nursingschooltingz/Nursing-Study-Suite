@@ -9,6 +9,25 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [23.2] — 2026-11-24
+
+Defaults **Knowledge Base** extraction to **two parallel lanes**, fixes NGN **Matrix `no correct answer` / `got 0`** validation failures by requiring `correctAnswers` in `CASE_STUDY_JSON_SCHEMA` and hardening `caseNormalizeParsedNgnFields`, adds a **cross-session Topic Progress Bar & untouched-topics-first rotation** across both **05 · NCLEX Generator** and **06 · Clinical Case Study Generator**, moves **packet-level and per-case red validation banners** strictly to the trailing **Warnings, Errors & Review Appendix** by default, and aligns **NCLEX Pro sync tags** (`clinicalLayer`, hierarchical `tags[]`, and clean mixed-case `conditionNames`). All 13 byte-frozen prompt constants in `prompt-baseline.json` are unchanged.
+
+### Fixed & Improved
+
+- **Two parallel lanes enabled by default (`KnowledgeBaseBuilder`).** Changes default `laneCount` from `1` to `2` so Knowledge Base builds process two chunks concurrently in original page order out of the box (still toggleable off for rate-limited free-tier keys).
+- **NGN Matrix `"no correct answer"` / `"got 0"` schema & normalizer fix (`CASE_STUDY_JSON_SCHEMA`, `buildCaseStudyJsonSchema`, `caseNormalizeParsedNgnFields`).** Adds `'correctAnswers'` to `questions.items.required` with `minItems: 1` and explicit Matrix/Bowtie/Cloze format descriptions so Gemini constrained JSON decoding no longer omits `correctAnswers` on Matrix items. Hardens `caseNormalizeParsedNgnFields` to deterministically rescue harmless model placement/separator drift (`matrix.correctAnswers`, `matrix.answers`, per-row `correctColumn`/`correctAnswer`, `"R1 -> Indicated"` pairs, and legacy `cloze.blanks`) without ever inventing genuinely missing keys.
+- **Cross-session Topic Progress Bar & untouched-topics-first rotation (`genLedgerTopicKey`, `genLedgerRecord`, `genLedgerExcludeTopicSet`, `genLedgerTopicScopeStats`, `caseCollectUnrecordedPacketTopics`, `GenLedgerControl`, `caseSliceBroadMixedEntries`, `selectCaseFactsMulti`, `caseBuildBatchTargets`, `caseEstimateWavePlan`, `caseRunBatchWithEnv`, `caseRunSingleWithEnv`, `ngBatchStart`, `ngAllocateBatch`, `ngRunGeneratorWithEnv`, `NCLEXGenerator`, `CaseStudyGenerator`).** Extends `latte_gen_fact_ledger_v1` additively with per-KB `topicIds[]` (auto-derived alongside explicit topic keys and backward-compatible with prior `factIds`-only saves), displays a live cross-session **Topic progress** bar inside `GenLedgerControl` on both workbenches (plus a 1-click **Mark packet topics used** notice when unverified failed cases sit in the current Case Packet), and prioritizes untouched topics first on follow-up Case Study waves, separate-case Batch Queues, and NCLEX `New Worksheet` / `+ Append` runs before transitioning to Pass 2.
+- **All red validation boxes grouped at the end after Answer Keys by default (`casePacketToMarkdown`, `caseComposeSingleExportMd`, `ngBuildWorksheetMd`, `n2aConvertText`).** When `Warnings, errors & review appendix` is set to **Grouped together at end (default)**, moves the packet-level red `PACKET CONTAINS UNVERIFIED CASE(S)` box, per-case worksheet red banners, page-1 TOC `⚠ FAILED VALIDATION` flags, and single-case / NCLEX top `Unverified` boxes strictly into the trailing `# Warnings, Errors & Review Appendix` after the Answer Keys (preserving classic `'inline'` and `'top-of-key'` modes unchanged). Updates `n2aConvertText` to detect trailing `FAILED VALIDATION` stamps for `NeedsReview` tagging and stop key parsing before the trailing appendix.
+- **NCLEX Pro sync tag parity & mixed-case `conditionNames` fix (`nclexProKbMeta`, `nclexProComposeTags`, `nclexProConvertWorksheet`, `nclexProConvertCaseStudy`, `nclexProConvertAnkiDeck`).** Fixes mixed 2–3 topic Case Studies pushing concatenated `"A + B + C"` strings into `conditionNames` as fake single conditions, derives `clinicalLayer` (`'rn'` | `'bridge'`) from cited KB facts, and attaches deterministic Anki-compatible hierarchical `tags[]` (`Tier::*`, `Layer::*`, `Concept::*`, `Condition::*`, `Nursing::PLATE::*`, `Trap::*`, `CJMM::*`, `Source::Suite::*`) across synced NCLEX questions, Case Study items, and Flashcards.
+
+### Verification
+
+- **4,241 passed · 0 failed** in `node verify-repo.js` (8 new live behavioral assertion suites in `tools/v23-2-updates-tests.js`).
+- **Prompt bytes & CDN SRI pins.** All 13 frozen hashes in `prompt-baseline.json` pass unchanged; `Prompts.md` updated for `v23.2` across all 25 prompt constants and all 5 dynamic builders; all 7 pinned CDN `<script>` resources plus both `PDF_WORKER_URLS` copies verified via SHA-384 (`9/9`, `0` mismatches).
+
+---
+
 ## [23.1] — 2026-11-24
 
 Adds automatic **`RECITATION` chunk-splitting fallback** in **02 · Knowledge Base** across both Pass 1 extraction and Pass 2 omission audit so a Gemini `FinishReason.RECITATION` stop no longer discards an entire multi-page chunk. All 13 byte-frozen prompt constants in `prompt-baseline.json` are unchanged.
