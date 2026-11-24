@@ -14,6 +14,15 @@
      The print preview (about:blank window or srcdoc frame) inherits this policy and uses only its own inline style block and system fonts. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://nclex-pro.rn-study-vault.workers.dev; style-src 'unsafe-inline'; font-src 'none'">
 <title>P-LATE Study Suite</title>
+<!-- v22.6 (2026-11-23): Closed-Loop NCLEX Pro FSRS Weak-Tag Prescription Bridge & Leech Fact Re-Angling
+     (nclexProFsrsRetrievability, nclexProIsLeechSr, nclexProAnalyzeWeakTagPrescription,
+     nclexProPullWeakTagPrescription, nclexProApplyPrescriptionToNclex, nclexProApplyPrescriptionToCases,
+     NclexProWeakTagBridge, AnkiNoteDiagnostics, NclexProSettingsField, NCLEXGenerator, CaseStudyGenerator).
+     All 13 frozen prompt constants in prompt-baseline.json unchanged.
+     Adds read-only E2E-decrypted /api/progress + /api/ai-bank + /api/ai-flashcards cloud pull and offline
+     prescription/progress JSON import so NCLEX Pro's FSRS-5 forgetting curves, P-LATE × Trap weaknesses,
+     and lapsed Leech factIds auto-scope 05 · NCLEX Generator and 06 · Clinical Case Study Generator
+     (including opt-in re-unlocking of Leech facts from the used-fact exclusion ledger for fresh clinical re-angling). -->
 <!-- v22.5 (2026-11-23): Case Study MCQ/NGN Enforcement, NGN Schema Alignment, Broad-KB Topic Rotation,
      Fact-Reuse Transparency, Answer Key Used-Fact Categories, Consolidated Diagnostics, & NCLEX Pro Anki Sync
      (buildCaseStudyJsonSchema, caseResolveEnabledTypeNames, caseAttachRunTypeContract, caseNormalizeParsedNgnFields,
@@ -8510,7 +8519,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '22.5';}
+function suiteVersion(){return '22.6';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -19602,7 +19611,476 @@ function NclexProSettingsField({cfg}){
         h('input',{id:'suite-nclex-pass','aria-describedby':'suite-nclex-pass-help',autoComplete:'off',type:'password','data-1p-ignore':'true','data-lpignore':'true','data-form-type':'other',value:cfg.nclexProPass||'',onChange:e=>cfg.setNclexProPass?.(e.target.value),placeholder:'NCLEX Pro passphrase…',spellCheck:false,style:{flex:1}}),
         cfg.nclexProPass&&h('button',{type:'button',className:'btn-secondary','aria-label':'Clear NCLEX Pro passphrase',style:{padding:'4px 10px',fontSize:12,flexShrink:0},onClick:()=>cfg.setNclexProPass?.('')},'Clear')
       ),
-      h('div',{className:'sb-hint',id:'suite-nclex-pass-help'},'Session-only passphrase for E2E-encrypted sync of Anki flashcards, NCLEX worksheets, & unfolding Case Studies to your private Cloudflare NCLEX Pro app (with bidirectional Question ↔ Flashcard remediation).')
+      h('div',{className:'sb-hint',id:'suite-nclex-pass-help'},'Session-only passphrase for E2E-encrypted sync of Anki flashcards, NCLEX worksheets, & unfolding Case Studies to your private Cloudflare NCLEX Pro app — plus read-only FSRS Weak-Tag Prescription pull.')
+    )
+  );
+}
+// v22.6: Closed-loop NCLEX Pro FSRS-5 Weak-Tag Prescription analyzer, E2E-decrypted cloud pull, and Step 01 prescription bridge.
+function nclexProStableAiNumericId(aiId){
+  let h=2166136261;
+  const s=String(aiId||'');
+  for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}
+  return 200000+((h>>>0)%799000000);
+}
+function nclexProFsrsRetrievability(sr,nowMs=Date.now(),extraDays=0){
+  if(!sr||typeof sr!=='object')return 0;
+  const S=(typeof sr.stability==='number'&&sr.stability>0)?sr.stability:((typeof sr.interval==='number'&&sr.interval>0)?Math.max(0.5,sr.interval):(sr.reps?1.2:0));
+  if(!S||S<=0)return 0;
+  let elapsed=1;
+  if(sr.lastReviewTs){const ts=Date.parse(sr.lastReviewTs);if(Number.isFinite(ts))elapsed=Math.max(0,(nowMs-ts)/86400000);}
+  else if(sr.lastSeen){const ts=Date.parse(sr.lastSeen+'T00:00:00Z');if(Number.isFinite(ts))elapsed=Math.max(0,(nowMs-ts)/86400000);}
+  else if(sr.updatedAt){const ts=Date.parse(sr.updatedAt);if(Number.isFinite(ts))elapsed=Math.max(0,(nowMs-ts)/86400000);}
+  else if(sr.due&&typeof sr.interval==='number'){const dueMs=Date.parse(sr.due+'T00:00:00Z');if(Number.isFinite(dueMs))elapsed=Math.max(0,sr.interval+(nowMs-dueMs)/86400000);}
+  const t=Math.max(0,elapsed+Math.max(0,Number(extraDays)||0));
+  return Math.pow(1+(19/81)*(t/S),-0.5);
+}
+function nclexProIsLeechSr(sr){
+  if(!sr||typeof sr!=='object')return false;
+  const lapses=Number(sr.lapses)||0;
+  const diff=typeof sr.difficulty==='number'?sr.difficulty:(typeof sr.ef==='number'?Math.max(1,Math.min(10,11-3.2*(sr.ef-1.3))):5.6);
+  return lapses>=3||(lapses>=2&&diff>=6.8)||Boolean(sr.isLeech);
+}
+function nclexProAnalyzeWeakTagPrescription(rawInput,{aiBank=null,aiFlashcards=null,kb=null,nowMs=Date.now()}={}){
+  let doc=rawInput;
+  if(typeof rawInput==='string'){
+    const trimmed=rawInput.trim();
+    if(!trimmed)throw new Error('Paste or load a valid NCLEX Pro Prescription or Progress JSON first.');
+    try{doc=JSON.parse(trimmed);}catch{throw new Error('Invalid JSON: expected an NCLEX Pro Weak-Tag Prescription or Progress backup.');}
+  }
+  if(!doc||typeof doc!=='object')throw new Error('Invalid NCLEX Pro payload.');
+  const norm=s=>String(s||'').replace(/([a-z0-9])([A-Z])/g,'$1 $2').replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
+  const canonBucket=b=>{
+    const k=norm(b);
+    if(k==='patho'||k==='briefpatho'||k==='brief patho')return'Patho';
+    if(k==='look')return'Look';
+    if(k==='analyze'||k==='tests'||k==='assess')return'Analyze';
+    if(k==='treat'||k==='treatments')return'Treat';
+    if(k==='educate')return'Educate';
+    return'';
+  };
+
+  let rx=null;
+  if(doc.kind==='nclex_pro_weak_tag_prescription'||Array.isArray(doc.weakConditions)){
+    rx={
+      scopeName:String(doc.scopeName||'NCLEX Pro Prescription'),
+      examDate:doc.examDate||null,
+      daysToExam:typeof doc.daysToExam==='number'?doc.daysToExam:null,
+      weakConditions:Array.isArray(doc.weakConditions)?doc.weakConditions:[],
+      weakConcepts:Array.isArray(doc.weakConcepts)?doc.weakConcepts:[],
+      weakBuckets:(Array.isArray(doc.weakBuckets)?doc.weakBuckets:[]).map(canonBucket).filter(Boolean),
+      weakTraps:Array.isArray(doc.weakTraps)?doc.weakTraps.map(String).filter(Boolean):[],
+      weakFactIds:Array.isArray(doc.weakFactIds)?doc.weakFactIds:[],
+      leechFactIds:Array.isArray(doc.leechFactIds)?doc.leechFactIds.map(x=>String(x||'').toLowerCase()).filter(Boolean):[],
+    };
+  }else if(doc.questionHistory||doc.flashcardSr||doc.conditionTotals||Array.isArray(doc.sessions)){
+    // Derive Weak-Tag Prescription deterministically from raw progress:v2 + optional aiBank & aiFlashcards
+    const condAgg=new Map(),concAgg=new Map(),bucketLoss={},trapLoss={},weakFactMap=new Map();
+    const touchCond=(name,r,lapses,leech,bkt,traps)=>{
+      const clean=String(name||'').trim();if(!clean)return;
+      const k=norm(clean);
+      if(!condAgg.has(k))condAgg.set(k,{name:clean,seen:0,rSum:0,lapses:0,leeches:0,buckets:new Map(),traps:new Set()});
+      const rec=condAgg.get(k);
+      rec.seen++;rec.rSum+=r;rec.lapses+=lapses;if(leech)rec.leeches++;
+      if(bkt){const prev=rec.buckets.get(bkt)||{seen:0,rSum:0,lapses:0};prev.seen++;prev.rSum+=r;prev.lapses+=lapses;rec.buckets.set(bkt,prev);}
+      for(const tr of (traps||[]))if(tr)rec.traps.add(String(tr));
+    };
+    const cards=(aiFlashcards&&Array.isArray(aiFlashcards.cards))?aiFlashcards.cards:[];
+    const cardById=new Map(cards.filter(c=>c&&c.cardId).map(c=>[c.cardId,c]));
+    for(const [cid,sr] of Object.entries(doc.flashcardSr||{})){
+      if(!sr||!(sr.reps>0||sr.lapses>0))continue;
+      const r=nclexProFsrsRetrievability(sr,nowMs);
+      const lapses=Number(sr.lapses)||0;
+      const leech=nclexProIsLeechSr(sr);
+      const c=cardById.get(cid)||(doc.remediation&&doc.remediation.qTargetsFromMissedCards&&doc.remediation.qTargetsFromMissedCards['fc_'+cid])||null;
+      const bkt=c?canonBucket(c.plateBucket):'';
+      const loss=(1-r)+lapses*0.35;
+      if(bkt&&loss>0.12)bucketLoss[bkt]=(bucketLoss[bkt]||0)+loss;
+      const cTraps=(c&&Array.isArray(c.trapTags))?c.trapTags:[];
+      for(const tr of cTraps)if(loss>0.12)trapLoss[tr]=(trapLoss[tr]||0)+loss;
+      for(const kn of ((c&&c.conditionNames)||[]))touchCond(kn,r,lapses,leech,bkt,cTraps);
+      for(const cn of ((c&&c.conceptNames)||[])){
+        const ck=norm(cn);if(!concAgg.has(ck))concAgg.set(ck,{name:cn,correct:0,total:0});
+        const cr=concAgg.get(ck);cr.total++;if(r>=0.8)cr.correct++;
+      }
+      if((r<0.85||lapses>0)&&c&&Array.isArray(c.factIds)){
+        for(const fid of c.factIds){
+          const lo=String(fid||'').trim().toLowerCase();if(!lo)continue;
+          const fk=(c.kbKey||'')+'|'+lo,prev=weakFactMap.get(fk);
+          if(!prev||r<prev.r)weakFactMap.set(fk,{kbKey:c.kbKey||undefined,factId:lo,condition:(c.conditionNames&&c.conditionNames[0])||undefined,plateBucket:bkt||undefined,retrievabilityPct:Math.round(r*100),r,lapses:Math.max((prev&&prev.lapses)||0,lapses),isLeech:Boolean((prev&&prev.isLeech)||leech||lapses>=2)});
+        }
+      }
+    }
+    const aiItems=(aiBank&&Array.isArray(aiBank.items))?aiBank.items:[];
+    const aiByNumId=new Map();
+    const usedIds=new Set();
+    for(const it of aiItems){
+      if(!it)continue;
+      let nid=(typeof it.id==='number'&&it.id>=200000)?it.id:nclexProStableAiNumericId(it.aiId||it.stem);
+      while(usedIds.has(nid))nid++;
+      usedIds.add(nid);
+      aiByNumId.set(String(nid),it);
+    }
+    for(const [qid,h] of Object.entries(doc.questionHistory||{})){
+      if(!h||!h.seen)continue;
+      const sr=h.sr;
+      const r=sr?nclexProFsrsRetrievability(sr,nowMs):((h.correct||0)/Math.max(1,h.seen));
+      const misses=Math.max(0,(h.seen||0)-(h.correct||0));
+      const lapses=Math.max((sr&&sr.lapses)||0,misses);
+      const leech=Boolean((sr&&nclexProIsLeechSr(sr))||lapses>=3);
+      const it=aiByNumId.get(String(qid));
+      if(!it)continue;
+      const loss=(1-r)+lapses*0.4;
+      const bkts=(it.plateBuckets||[]).map(canonBucket).filter(Boolean);
+      for(const b of bkts)if(loss>0.12)bucketLoss[b]=(bucketLoss[b]||0)+loss;
+      const traps=it.trapRoles||[];
+      for(const tr of traps)if(loss>0.12)trapLoss[tr]=(trapLoss[tr]||0)+loss;
+      for(const kn of (it.conditionNames||[]))touchCond(kn,r,lapses,leech,bkts[0]||'',traps);
+      if((r<0.85||lapses>0)&&Array.isArray(it.factIds)){
+        for(const fid of it.factIds){
+          const lo=String(fid||'').trim().toLowerCase();if(!lo)continue;
+          const fk=(it.kbKey||'')+'|'+lo,prev=weakFactMap.get(fk);
+          if(!prev||r<prev.r)weakFactMap.set(fk,{kbKey:it.kbKey||undefined,factId:lo,condition:(it.conditionNames&&it.conditionNames[0])||undefined,plateBucket:bkts[0]||undefined,retrievabilityPct:Math.round(r*100),r,lapses:Math.max((prev&&prev.lapses)||0,lapses),isLeech:Boolean((prev&&prev.isLeech)||leech||lapses>=2)});
+        }
+      }
+    }
+    // Also fold cumulative conditionTotals & conceptTotals (captures published Saunders/LaCharity/Davis weaknesses!)
+    for(const [name,tot] of Object.entries(doc.conditionTotals||{})){
+      if(!tot||!tot.total)continue;
+      const k=norm(name);
+      if(!condAgg.has(k)){
+        const acc=(tot.correct||0)/Math.max(1,tot.total);
+        const misses=Math.max(0,tot.total-(tot.correct||0));
+        if(acc<0.82||misses>0)condAgg.set(k,{name,seen:tot.total,rSum:acc*tot.total,lapses:misses,leeches:misses>=3?1:0,buckets:new Map(),traps:new Set()});
+      }
+    }
+    for(const [name,tot] of Object.entries(doc.conceptTotals||{})){
+      if(!tot||!tot.total)continue;
+      const k=norm(name),prev=concAgg.get(k)||{name,correct:0,total:0};
+      prev.correct+=(tot.correct||0);prev.total+=tot.total;
+      concAgg.set(k,prev);
+    }
+    const weakConditions=[...condAgg.values()].map(c=>{
+      const meanR=c.rSum/Math.max(1,c.seen);
+      const wBuckets=[...c.buckets.entries()].filter(([,v])=>(v.rSum/Math.max(1,v.seen))<0.86||v.lapses>0).sort((a,b)=>(a[1].rSum/Math.max(1,a[1].seen))-(b[1].rSum/Math.max(1,b[1].seen))).map(([b])=>b);
+      const score=(1-meanR)*100+c.leeches*18+Math.min(25,c.lapses*4);
+      return{name:c.name,retrievabilityPct:Math.round(meanR*100),lapses:c.lapses,leeches:c.leeches,weakBuckets:wBuckets,weakTraps:[...c.traps].slice(0,5),_score:score};
+    }).filter(c=>c.retrievabilityPct<88||c.lapses>0||c.leeches>0).sort((a,b)=>b._score-a._score).slice(0,12).map(({_score,...rest})=>rest);
+    const weakConcepts=[...concAgg.values()].filter(c=>c.total>0).map(c=>({name:c.name,accuracyPct:Math.round((c.correct/c.total)*100),total:c.total})).filter(c=>c.accuracyPct<85).sort((a,b)=>a.accuracyPct-b.accuracyPct).slice(0,8);
+    const weakFacts=[...weakFactMap.values()].sort((a,b)=>(Number(b.isLeech)-Number(a.isLeech))||(b.lapses-a.lapses)||(a.retrievabilityPct-b.retrievabilityPct)).slice(0,60).map(({r,...rest})=>rest);
+    const activeDecks=(Array.isArray(doc.customDecks)?doc.customDecks:[]).filter(d=>d&&!d.deleted&&d.examDate);
+    const soonest=activeDecks.sort((a,b)=>String(a.examDate).localeCompare(String(b.examDate)))[0]||null;
+    const daysToExam=soonest?Math.round((Date.parse(soonest.examDate+'T00:00:00Z')-nowMs)/86400000):null;
+    rx={
+      scopeName:soonest?soonest.name:'NCLEX Pro Cloud Progress',
+      examDate:soonest?soonest.examDate:null,
+      daysToExam,
+      weakConditions,
+      weakConcepts,
+      weakBuckets:Object.entries(bucketLoss).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]).map(([k])=>k),
+      weakTraps:Object.entries(trapLoss).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]).map(([k])=>k).slice(0,8),
+      weakFactIds:weakFacts,
+      leechFactIds:weakFacts.filter(f=>f.isLeech).map(f=>f.factId),
+    };
+  }else{
+    throw new Error('Unrecognized JSON format: expected an NCLEX Pro Weak-Tag Prescription or Progress backup.');
+  }
+
+  // Resolve prescription tags against the active LATTE Knowledge Base
+  const fv=kb?kbFactView(kb,{boxTableFirst:true}):{conditions:[]};
+  const cat=kbCollectScopeCatalog(fv.conditions);
+  const km=nclexProKbMeta(kb);
+  const matchedCondIds=[],matchedCondNames=[];
+  const seenCondId=new Set();
+  const addCondEntry=entry=>{
+    if(!entry||seenCondId.has(String(entry.id)))return;
+    seenCondId.add(String(entry.id));
+    matchedCondIds.push(entry.id);
+    matchedCondNames.push(entry.name);
+  };
+  const findKbCondition=rawName=>{
+    const q=norm(rawName);
+    if(!q||q.length<2)return null;
+    for(const c of fv.conditions){
+      if(c.entryRole==='concept')continue;
+      if(norm(c.name)===q||(c.aliases||[]).some(a=>norm(a)===q))return c;
+    }
+    for(const c of fv.conditions){
+      if(c.entryRole==='concept')continue;
+      const cn=norm(c.name);
+      if(q.length>=4&&cn.length>=4&&(cn.includes(q)||q.includes(cn)))return c;
+      if((c.aliases||[]).some(a=>{const an=norm(a);return an.length>=4&&(an.includes(q)||q.includes(an));}))return c;
+    }
+    return null;
+  };
+  for(const wc of rx.weakConditions){const hit=findKbCondition(wc&&wc.name);if(hit)addCondEntry(hit);}
+
+  const matchedWeakFactIds=[],matchedLeechFactIds=[];
+  const seenFid=new Set(),seenLeech=new Set();
+  const leechInputSet=new Set((rx.leechFactIds||[]).map(x=>String(x||'').trim().toLowerCase()));
+  for(const wf of (rx.weakFactIds||[])){
+    const fid=String((wf&&wf.factId)||wf||'').trim().toLowerCase();
+    if(!fid||!km.factMap.has(fid))continue;
+    if(wf&&wf.kbKey&&km.kbKey&&wf.kbKey!==km.kbKey)continue;
+    if(!seenFid.has(fid)){seenFid.add(fid);matchedWeakFactIds.push(fid);}
+    if((wf&&wf.isLeech)||leechInputSet.has(fid)){if(!seenLeech.has(fid)){seenLeech.add(fid);matchedLeechFactIds.push(fid);}}
+    const fm=km.factMap.get(fid);
+    if(fm&&fm.conditionName){const hit=findKbCondition(fm.conditionName);if(hit)addCondEntry(hit);}
+  }
+  for(const rawLid of leechInputSet){
+    if(km.factMap.has(rawLid)&&!seenLeech.has(rawLid)){seenLeech.add(rawLid);matchedLeechFactIds.push(rawLid);}
+  }
+
+  const matchedConcepts=[];
+  const seenConcept=new Set();
+  const tryMatchConcept=rawName=>{
+    const q=norm(rawName);if(!q)return;
+    for(const rec of cat.concepts){
+      const rk=norm(rec.name);
+      if(rk===q||(q.length>=4&&rk.length>=4&&(rk.includes(q)||q.includes(rk)))){
+        if(!seenConcept.has(rec.key)){seenConcept.add(rec.key);matchedConcepts.push(rec.name);}
+      }
+    }
+  };
+  for(const wc of rx.weakConcepts)tryMatchConcept(wc&&wc.name);
+  for(const cid of matchedCondIds){
+    const entry=fv.conditions.find(c=>String(c.id)===String(cid));
+    if(entry&&entry.concept)tryMatchConcept(entry.concept);
+  }
+
+  // Build concise focus lines so ngFocusPlan boosts unused & unlocked-leech facts in weak (Condition, P-LATE, Trap) cells
+  const focusLines=[];
+  for(const wc of rx.weakConditions.slice(0,8)){
+    if(!wc||!wc.name)continue;
+    const hit=findKbCondition(wc.name);
+    if(fv.conditions.length>0&&!hit)continue;
+    const label=hit?hit.name:wc.name;
+    const bkts=(wc.weakBuckets&&wc.weakBuckets.length?wc.weakBuckets:rx.weakBuckets).slice(0,3);
+    const traps=(wc.weakTraps&&wc.weakTraps.length?wc.weakTraps:rx.weakTraps).slice(0,2);
+    const detail=[bkts.length?bkts.join('/'):'',traps.length?'traps: '+traps.join(', '):''].filter(Boolean).join(' · ');
+    focusLines.push(detail?`${label} — ${detail}`:label);
+  }
+  if(!focusLines.length&&matchedCondNames.length){
+    for(const nm of matchedCondNames.slice(0,6)){
+      const bkts=rx.weakBuckets.slice(0,2).join('/');
+      focusLines.push(bkts?`${nm} — ${bkts}`:nm);
+    }
+  }
+  const bktStr=rx.weakBuckets.slice(0,3).join(', ');
+  const trapStr=rx.weakTraps.slice(0,4).join(', ');
+  const horizonStr=(typeof rx.daysToExam==='number'&&rx.daysToExam>=0)?` (${rx.daysToExam}d to exam)`:'';
+  const focusContextText=[
+    `NCLEX Pro FSRS Remediation — ${rx.scopeName}${horizonStr}.`,
+    bktStr?`Prioritize weak P-LATE buckets: ${bktStr}.`:'',
+    trapStr?`Test recurring exam traps: ${trapStr}.`:'',
+    matchedLeechFactIds.length?`Re-angle ${matchedLeechFactIds.length} lapsed leech fact(s) in fresh clinical stems rather than verbatim recall.`:'',
+  ].filter(Boolean).join(' ');
+
+  const hasTwinTrap=rx.weakTraps.some(t=>/twin/i.test(t))||rx.weakConditions.some(c=>(c.weakTraps||[]).some(t=>/twin/i.test(t)));
+  const suggestedCaseMixMode=hasTwinTrap&&matchedCondIds.length>=2?'differential':(matchedConcepts.length>=2&&!matchedCondIds.length?'cascade':'comorbid');
+  const suggestedCaseTypes={
+    sata:true,
+    bowtie:rx.weakBuckets.includes('Treat')||rx.weakTraps.some(t=>/priority|safety|hold/i.test(t)),
+    matrix:hasTwinTrap||rx.weakBuckets.includes('Analyze'),
+    trend:rx.weakBuckets.includes('Look')||rx.weakBuckets.includes('Analyze'),
+    cloze:rx.weakBuckets.includes('Patho')||rx.weakBuckets.includes('Educate'),
+  };
+
+  return{
+    ...rx,
+    matchedConditionIds:matchedCondIds,
+    matchedConditionNames:matchedCondNames,
+    matchedConcepts,
+    matchedWeakFactIds,
+    matchedLeechFactIds,
+    focusOutcomesText:focusLines.join('\n'),
+    focusContextText,
+    suggestedCaseMixMode,
+    suggestedCaseTypes,
+  };
+}
+async function nclexProPullWeakTagPrescription({url=NCLEX_PRO_DEFAULT_URL,passphrase='',kb=null,onStatus}={}){
+  const pass=String(passphrase||'');
+  if(!pass)throw new Error('Enter your NCLEX Pro vault passphrase in Study Settings first.');
+  const base=String(url||NCLEX_PRO_DEFAULT_URL).replace(/\/+$/,'');
+  const b64ToBytes=b64=>{const bin=atob(b64),arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return arr;};
+  const bytesToB64=u8=>{let bin='';for(let i=0;i<u8.length;i+=0x8000)bin+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(bin);};
+  const scrub=m=>{const s=String(m||'');return pass.length>=4?s.split(pass).join('[redacted]'):s;};
+  const decryptRec=async(rec,aesKey)=>{
+    if(!rec||!rec.payload)return null;
+    const raw=b64ToBytes(rec.payload);
+    const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:raw.slice(0,12)},aesKey,raw.slice(12));
+    return JSON.parse(new TextDecoder().decode(plain));
+  };
+  try{
+    onStatus?.('Connecting to NCLEX Pro vault…');
+    const metaRes=await nclexProFetch(base+'/api/meta',{cache:'no-store'});
+    if(!metaRes.ok)throw new Error('Could not reach NCLEX Pro vault ('+metaRes.status+').');
+    const meta=await metaRes.json();
+    if(!meta.configured)throw new Error('NCLEX Pro vault is not configured.');
+
+    onStatus?.('Deriving AES-256-GCM key…');
+    const baseKey=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveBits','deriveKey']);
+    const authBits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:b64ToBytes(meta.authSalt),iterations:meta.iterations||310000,hash:'SHA-256'},baseKey,256);
+    const token=bytesToB64(new Uint8Array(authBits));
+    const aesKey=await crypto.subtle.deriveKey({name:'PBKDF2',salt:b64ToBytes(meta.encSalt),iterations:meta.iterations||310000,hash:'SHA-256'},baseKey,{name:'AES-GCM',length:256},false,['decrypt']);
+
+    onStatus?.('Pulling encrypted FSRS progress & tag metadata…');
+    const headers={'X-Vault-Token':token};
+    const [progRes,aiRes,fcRes]=await Promise.all([
+      nclexProFetch(base+'/api/progress',{headers,cache:'no-store'}),
+      nclexProFetch(base+'/api/ai-bank',{headers,cache:'no-store'}).catch(()=>null),
+      nclexProFetch(base+'/api/ai-flashcards',{headers,cache:'no-store'}).catch(()=>null),
+    ]);
+    if(progRes.status===401)throw new Error('Incorrect NCLEX Pro vault passphrase.');
+    if(!progRes.ok)throw new Error('Failed to read NCLEX Pro progress ('+progRes.status+').');
+    const progRec=await progRes.json();
+    const progress=await decryptRec(progRec,aesKey);
+    if(!progress)throw new Error('No study progress stored in NCLEX Pro cloud vault yet.');
+    const aiBank=(aiRes&&aiRes.ok)?await decryptRec(await aiRes.json(),aesKey).catch(()=>null):null;
+    const aiFlashcards=(fcRes&&fcRes.ok)?await decryptRec(await fcRes.json(),aesKey).catch(()=>null):null;
+    return nclexProAnalyzeWeakTagPrescription(progress,{aiBank,aiFlashcards,kb});
+  }catch(e){
+    throw new Error(scrub(e&&e.message?e.message:String(e)));
+  }
+}
+function nclexProApplyPrescriptionToNclex(rx,{unlockLeeches=true}={},setters={}){
+  if(!rx)return{appliedConditions:0,appliedConcepts:0,unlockedLeeches:0};
+  const condIds=Array.isArray(rx.matchedConditionIds)?rx.matchedConditionIds:[];
+  const concepts=Array.isArray(rx.matchedConcepts)?rx.matchedConcepts:[];
+  if(condIds.length>0){
+    setters.setKbSelectedConditionIds?.(condIds);
+    setters.setKbSelectedConcepts?.([]);
+  }else if(concepts.length>0){
+    setters.setKbSelectedConcepts?.(concepts);
+  }
+  setters.setKbTiers?.([1,2]);
+  if(rx.focusOutcomesText)setters.setOutcomes?.(rx.focusOutcomesText);
+  if(rx.focusContextText)setters.setFocusContext?.(rx.focusContextText);
+  const leeches=unlockLeeches&&Array.isArray(rx.matchedLeechFactIds)?rx.matchedLeechFactIds:[];
+  setters.setRxUnlockedFactIds?.(leeches);
+  return{appliedConditions:condIds.length,appliedConcepts:condIds.length?0:concepts.length,unlockedLeeches:leeches.length};
+}
+function nclexProApplyPrescriptionToCases(rx,{unlockLeeches=true,maxConditions=6}={},setters={}){
+  if(!rx)return{appliedConditions:0,appliedConcepts:0,unlockedLeeches:0};
+  const condIds=(Array.isArray(rx.matchedConditionIds)?rx.matchedConditionIds:[]).slice(0,Math.max(1,maxConditions));
+  const concepts=Array.isArray(rx.matchedConcepts)?rx.matchedConcepts:[];
+  if(condIds.length===1){
+    setters.setConditionId?.(condIds[0]);
+    setters.setCaseExtraConditionIds?.([]);
+    setters.setCaseSelectedConcepts?.([]);
+  }else if(condIds.length>1){
+    setters.setCaseExtraConditionIds?.(condIds);
+    setters.setCaseSelectedConcepts?.([]);
+    setters.setCaseRunMode?.('mixed');
+    if(rx.suggestedCaseMixMode)setters.setCaseMixMode?.(rx.suggestedCaseMixMode);
+  }else if(concepts.length>0){
+    setters.setCaseSelectedConcepts?.(concepts.slice(0,4));
+    setters.setCaseRunMode?.('mixed');
+    if(rx.suggestedCaseMixMode)setters.setCaseMixMode?.(rx.suggestedCaseMixMode);
+  }
+  setters.setIncludeTier2?.(true);
+  if(rx.suggestedCaseTypes&&typeof setters.setTypes==='function'){
+    setters.setTypes(prev=>{
+      const next={...prev};
+      for(const [k,v] of Object.entries(rx.suggestedCaseTypes))if(v)next[k]=true;
+      return next;
+    });
+  }
+  const leeches=unlockLeeches&&Array.isArray(rx.matchedLeechFactIds)?rx.matchedLeechFactIds:[];
+  setters.setRxUnlockedCaseIds?.(leeches);
+  return{appliedConditions:condIds.length,appliedConcepts:condIds.length?0:Math.min(4,concepts.length),unlockedLeeches:leeches.length};
+}
+function NclexProWeakTagBridge({idPrefix,mode,kb,passphrase,unlockedCount=0,setters}){
+  const h=React.createElement;
+  const [rx,setRx]=useState(null);
+  const [busy,setBusy]=useState(false);
+  const [msg,setMsg]=useState('');
+  const [err,setErr]=useState('');
+  const [showPaste,setShowPaste]=useState(false);
+  const [pasteText,setPasteText]=useState('');
+  const [unlockLeeches,setUnlockLeeches]=useState(true);
+  const fileRef=useRef(null);
+
+  // Re-resolve matched KB IDs automatically if the active KB changes while a prescription is loaded
+  useEffect(()=>{
+    if(!rx)return;
+    try{setRx(prev=>prev?nclexProAnalyzeWeakTagPrescription(prev,{kb}):null);}catch{}
+  },[kb]);
+
+  const handlePull=async()=>{
+    setBusy(true);setErr('');setMsg('Connecting to NCLEX Pro…');
+    try{
+      const analyzed=await nclexProPullWeakTagPrescription({passphrase,kb,onStatus:m=>setMsg(m)});
+      setRx(analyzed);
+      setMsg(`Loaded FSRS weaknesses from "${analyzed.scopeName}" (${analyzed.matchedConditionNames.length} matching KB condition(s)${analyzed.matchedLeechFactIds.length?` · ${analyzed.matchedLeechFactIds.length} leech fact(s)`:''}).`);
+    }catch(e){setMsg('');setErr(e?.message||String(e));}
+    finally{setBusy(false);}
+  };
+  const handleJsonText=(txt)=>{
+    setErr('');
+    try{
+      const analyzed=nclexProAnalyzeWeakTagPrescription(txt,{kb});
+      setRx(analyzed);
+      setShowPaste(false);setPasteText('');
+      setMsg(`Loaded prescription "${analyzed.scopeName}" (${analyzed.matchedConditionNames.length} matching KB condition(s)).`);
+    }catch(e){setErr(e?.message||String(e));}
+  };
+  const handleFile=e=>{
+    const f=e.target.files&&e.target.files[0];if(!f)return;
+    const r=new FileReader();
+    r.onload=ev=>handleJsonText(String(ev.target?.result||''));
+    r.readAsText(f);
+    e.target.value='';
+  };
+  const handleApply=()=>{
+    if(!rx)return;
+    const res=mode==='cases'
+      ?nclexProApplyPrescriptionToCases(rx,{unlockLeeches},setters)
+      :nclexProApplyPrescriptionToNclex(rx,{unlockLeeches},setters);
+    setMsg(`Applied to ${mode==='cases'?'Case Study':'NCLEX'} scope: ${res.appliedConditions?res.appliedConditions+' condition(s)':res.appliedConcepts+' concept(s)'}${rx.weakBuckets.length?' · P-LATE '+rx.weakBuckets.slice(0,3).join('/'):''}${res.unlockedLeeches?' · '+res.unlockedLeeches+' leech fact(s) unlocked for re-angling':''}.`);
+    setErr('');
+  };
+  const handleClear=()=>{
+    setRx(null);setMsg('');setErr('');
+    if(mode==='cases')setters.setRxUnlockedCaseIds?.([]);
+    else setters.setRxUnlockedFactIds?.([]);
+  };
+
+  return h('details',{id:idPrefix+'-nclex-pro-rx',style:{marginTop:8,marginBottom:8,padding:'7px 10px',borderRadius:6,border:'1px solid var(--border)',background:'var(--bg-input)',fontSize:11.5}},
+    h('summary',{style:{cursor:'pointer',fontWeight:600,color:'var(--text-bright)',display:'flex',alignItems:'center',justifyContent:'space-between',gap:6,flexWrap:'wrap'}},
+      h('span',null,'🎯 Prescribe from NCLEX Pro FSRS ',h('span',{className:'badge-opt'},'closed-loop remediation')),
+      unlockedCount>0&&h('span',{style:{fontSize:10.5,color:'var(--accent-warm)',fontWeight:600}},'🩸 '+unlockedCount+' leech fact(s) unlocked')
+    ),
+    h('div',{style:{marginTop:7,display:'flex',flexDirection:'column',gap:6}},
+      h('div',{style:{color:'var(--text-dim)',lineHeight:1.45}},'Pull live encrypted FSRS forgetting curves from NCLEX Pro (or load an exported Prescription / Progress JSON) to auto-target weak Conditions, P-LATE buckets, Exam Traps, and lapsed Leech facts in this Knowledge Base.'),
+      h('div',{style:{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}},
+        h('button',{type:'button',id:idPrefix+'-rx-pull-btn',className:'btn-secondary',disabled:busy,style:{padding:'3px 9px',fontSize:11.5},onClick:handlePull},busy?'⟳ Pulling…':'☁ Pull FSRS Weaknesses'),
+        h('button',{type:'button',id:idPrefix+'-rx-file-btn',className:'btn-secondary',disabled:busy,style:{padding:'3px 9px',fontSize:11.5},onClick:()=>fileRef.current?.click()},'📂 Load Rx / Progress .json'),
+        h('button',{type:'button',className:'btn-secondary',disabled:busy,style:{padding:'3px 9px',fontSize:11.5},onClick:()=>setShowPaste(v=>!v)},showPaste?'✕ Hide Paste':'📋 Paste JSON'),
+        rx&&h('button',{type:'button',className:'btn-secondary',style:{padding:'3px 9px',fontSize:11.5,marginLeft:'auto'},onClick:handleClear},'Clear Rx'),
+        h('input',{ref:fileRef,type:'file',accept:'.json',style:{display:'none'},onChange:handleFile})
+      ),
+      showPaste&&h('div',{style:{display:'flex',flexDirection:'column',gap:5}},
+        h('textarea',{'aria-label':'Paste NCLEX Pro Prescription JSON',rows:3,value:pasteText,onChange:e=>setPasteText(e.target.value),placeholder:'Paste JSON from NCLEX Pro "📋 Suite Prescription"…',style:{fontSize:11,fontFamily:'var(--font-mono)'}}),
+        h('div',null,h('button',{type:'button',className:'btn-secondary',style:{padding:'3px 9px',fontSize:11},onClick:()=>handleJsonText(pasteText)},'Parse Prescription JSON'))
+      ),
+      err&&h('div',{style:{color:'var(--accent-red)',fontSize:11.5}},'⚠ '+err),
+      msg&&!err&&h('div',{style:{color:'var(--accent-green)',fontSize:11.5}},'✓ '+msg),
+      rx&&h('div',{style:{padding:'7px 9px',borderRadius:5,border:'1px solid var(--border)',background:'var(--bg-card)',display:'flex',flexDirection:'column',gap:5}},
+        h('div',{style:{fontSize:11.5,color:'var(--text)'}},
+          h('b',null,'KB Match: '),
+          rx.matchedConditionNames.length?rx.matchedConditionNames.slice(0,6).join(', ')+(rx.matchedConditionNames.length>6?` (+${rx.matchedConditionNames.length-6} more)`:''):(rx.matchedConcepts.length?'Concepts: '+rx.matchedConcepts.join(', '):'0 matching entries in current KB'),
+          rx.weakBuckets.length?(' · Weak P-LATE: '+rx.weakBuckets.slice(0,3).join('/')):''
+        ),
+        rx.weakTraps.length>0&&h('div',{style:{fontSize:11,color:'var(--accent-warm)'}},'⚡ Weak Exam Traps: '+rx.weakTraps.slice(0,5).join(' · ')),
+        rx.matchedLeechFactIds.length>0&&h('label',{style:{display:'flex',alignItems:'center',gap:6,color:'var(--text)',cursor:'pointer',fontSize:11.5}},
+          h('input',{id:idPrefix+'-rx-unlock-leeches',type:'checkbox',checked:unlockLeeches,onChange:e=>setUnlockLeeches(e.target.checked),style:{accentColor:'var(--accent)'}}),
+          h('span',null,'Unlock ',h('b',null,rx.matchedLeechFactIds.length),' lapsed Leech fact(s) from prior used-fact exclusion for fresh clinical re-angling')
+        ),
+        h('div',{style:{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}},
+          h('button',{type:'button',id:idPrefix+'-rx-apply-btn',className:'btn-primary',disabled:!rx.matchedConditionIds.length&&!rx.matchedConcepts.length&&!rx.matchedLeechFactIds.length,style:{padding:'4px 11px',fontSize:11.5},onClick:handleApply},'✓ Apply Weak-Tag Scope')
+        )
+      )
     )
   );
 }
@@ -20090,6 +20568,18 @@ function CaseQuestionTypesGrid({types,toggleType,setTypes}){
         h('input',{type:'checkbox',checked:types[k],onChange:()=>toggleType(k),style:{accentColor:'var(--accent)'}}),lbl
       ))
     )
+  );
+}
+// v22.6: hoist AnkiNoteDiagnostics to plain script to keep the JSX Babel block comfortably under 390 KB.
+function AnkiNoteDiagnostics({card,audit,current}){
+  const h=React.createElement;
+  const FT=typeof FactTag==='function'?FactTag:null;
+  return h('details',{style:{fontSize:12,marginTop:6,color:audit.findings.length?'var(--accent-warm)':'var(--text-dim)'}},
+    h('summary',null,audit.status,' · ',audit.checked,' revealed numeric token',audit.checked===1?'':'s',' checked · ',audit.hintChecked||0,' hint token(s) checked'),
+    audit.findings.map((x,i)=>h('div',{key:i},x.msg)),
+    h('div',null,'Source association (retained after edits): ',current?(card.factIds||[]).map(id=>FT?h(FT,{key:id,factId:id}):h('span',{key:id,className:'fact-tag'},id)):'earlier KB; links inactive',current&&!(card.factIds||[]).length&&'unavailable'),
+    h('div',null,'Checks value/unit occurrence in revealed Text, Extra and visible hints; comparators, roles, and clinical meaning still need review.'),
+    card.sourceLinksNeedReview&&h('div',null,'Text or Extra changed; review and confirm the source links.')
   );
 }
 </script>
@@ -21142,16 +21632,8 @@ function AnkiCollisionWarnings({groups=[],current}){
     </div>)}
   </details>;
 }
-function AnkiNoteDiagnostics({card,audit,current}){
-  return <details style={{fontSize:12,marginTop:6,color:audit.findings.length?'var(--accent-warm)':'var(--text-dim)'}}>
-    <summary>{audit.status} · {audit.checked} revealed numeric token{audit.checked===1?'':'s'} checked · {audit.hintChecked||0} hint token(s) checked</summary>
-    {audit.findings.map((x,i)=><div key={i}>{x.msg}</div>)}
-    <div>Source association (retained after edits): {current?(card.factIds||[]).map(id=><FactTag key={id} factId={id}/>):'earlier KB; links inactive'}{current&&!(card.factIds||[]).length&&'unavailable'}</div>
-    <div>Checks value/unit occurrence in revealed Text, Extra and visible hints; comparators, roles, and clinical meaning still need review.</div>
-    {card.sourceLinksNeedReview&&<div>Text or Extra changed; review and confirm the source links.</div>}
-  </details>;
-}
 // v21.10 (Phase 5): AnkiReviewCard & AnkiSourceLinkEditor hoisted to plain script above.
+// v22.6: AnkiNoteDiagnostics hoisted to plain script above.
 // v16.0: source links were buried in numeric diagnostics; inspect actual targets beside their supplied facts.
 function AnkiReviewSource({card,batch,current,initialIndex,expanded=false,onSourcesChange,conditionCheck}){
   const [open,setOpen]=useState(expanded);
@@ -22055,6 +22537,8 @@ function NCLEXGenerator(){
   const [ledger,setLedger]=useGenLedger(K.knowledgeBase);
   const [excludePriorNclex,setExcludePriorNclex]=useState(true);
   const [excludeCaseFacts,setExcludeCaseFacts]=useState(false);
+  const [rxUnlockedFactIds,setRxUnlockedFactIds]=useState([]);
+  useEffect(()=>{setRxUnlockedFactIds([]);},[K.knowledgeBase]);
   const buildNclexProWs=()=>nclexProConvertWorksheet(ws,batches,K.knowledgeBase,{concepts:validKbConcepts,conditions:validKbCondIds.map(id=>(scopeFactView.conditions.find(c=>String(c.id)===String(id))||{}).name).filter(Boolean)});
 
   const log=useCallback((msg,t='')=>pushLog({msg,t}),[pushLog]); // v15.14: capped, like the KB builder
@@ -22076,7 +22560,7 @@ function NCLEXGenerator(){
   const hasStructuredScope=kbScopeHasSelection(nclexScope);
   const previewPool=useMemo(()=>ngBuildFactPool(scopeFactView,{tiers:kbTiers,conditionQuery:kbConditionFilter,scope:hasStructuredScope?nclexScope:null,includeBridge:kbIncludeBridge}),[scopeFactView,kbTiers,kbConditionFilter,hasStructuredScope,nclexScope,kbIncludeBridge]);
   const previewPoolFacts=useMemo(()=>ngPoolSize(previewPool),[previewPool]);
-  const nclexExcludeSet=useMemo(()=>genLedgerExcludeSet(ledger,'nclex',{excludeOwn:excludePriorNclex,excludeOther:excludeCaseFacts}),[ledger,excludePriorNclex,excludeCaseFacts]);
+  const nclexExcludeSet=useMemo(()=>{const s=genLedgerExcludeSet(ledger,'nclex',{excludeOwn:excludePriorNclex,excludeOther:excludeCaseFacts});for(const id of rxUnlockedFactIds)s.delete(String(id).toLowerCase());return s;},[ledger,excludePriorNclex,excludeCaseFacts,rxUnlockedFactIds]);
   const scopeLedgerStats=useMemo(()=>genLedgerScopeStats(previewPool,nclexExcludeSet),[previewPool,nclexExcludeSet]);
   const remainingTargetEst=Math.min(MAX_NCLEX_TARGET,Math.floor(scopeLedgerStats.remaining/Math.max(1,factsPerQ)));
   const previewScopeDesc=useMemo(()=>hasStructuredScope?kbDescribeScopeSelection(kbResolveScopeGroups(scopeFactView,nclexScope),nclexScope):null,[hasStructuredScope,scopeFactView,nclexScope]);
@@ -22166,6 +22650,7 @@ function NCLEXGenerator(){
           {[1,2,3].map(t=><button key={t} type="button" aria-pressed={kbTiers.includes(t)} className={'tier-btn t'+t+(kbTiers.includes(t)?' active':'')} onClick={()=>setKbTiers(p=>p.includes(t)?(p.length>1?p.filter(x=>x!==t):p):[...p,t].sort())}><b>Tier {t}</b></button>)}
         </div>
         {nclexHasBridge&&<label style={{display:'flex',alignItems:'center',gap:6,fontSize:12,color:'var(--text)',cursor:'pointer',marginTop:8}}><input id="nclex-include-bridge" type="checkbox" checked={kbIncludeBridge} onChange={e=>setKbIncludeBridge(e.target.checked)} style={{accentColor:'var(--accent)'}}/><span>Include NP Bridge facts <span className="badge-opt">off = RN Core only</span></span></label>}
+        {scopeFactView.conditions.length>0&&<NclexProWeakTagBridge idPrefix="nclex" mode="nclex" kb={K.knowledgeBase} passphrase={cfg.nclexProPass} unlockedCount={rxUnlockedFactIds.length} setters={{setKbSelectedConditionIds,setKbSelectedConcepts,setKbTiers,setOutcomes,setFocusContext,setRxUnlockedFactIds}}/>}
         {scopeFactView.conditions.length>0&&<GenLedgerControl idPrefix="nclex" primaryKind="nclex" ledger={ledger} scopeStats={scopeLedgerStats} excludeOwn={excludePriorNclex} setExcludeOwn={setExcludePriorNclex} excludeOther={excludeCaseFacts} setExcludeOther={setExcludeCaseFacts} onReset={resetNclexHistory} disabled={busy}/>}
         {poolExhausted&&<div className="tip-banner" style={{marginTop:8,marginBottom:0,fontSize:12,lineHeight:1.45,color:'var(--accent-warm)'}}>⚠ All {previewPoolFacts} fact(s) in this scope have already been tested. Click <b>Reset NCLEX history</b> above, uncheck exclusion, or widen your scope to generate more.</div>}
         <div style={{fontSize:12,color:'var(--text-dim)',marginTop:9,lineHeight:1.5}}>Tier 1–3 are included by default. Narrowing scope can improve depth, but excluding lower tiers may reduce distractor variety and concept inventory size.</div>
@@ -22311,6 +22796,8 @@ function CaseStudyGenerator(){
   const [excludePriorCases,setExcludePriorCases]=useState(true);
   const [excludeNclexFacts,setExcludeNclexFacts]=useState(false);
   const [allowContextAnchors,setAllowContextAnchors]=useState(true);
+  const [rxUnlockedCaseIds,setRxUnlockedCaseIds]=useState([]);
+  useEffect(()=>{setRxUnlockedCaseIds([]);},[K.knowledgeBase]);
   const [factCategoryPlacement,setFactCategoryPlacement]=useState('auto');
   const [diagnosticsPlacement,setDiagnosticsPlacement]=useState('end');
   const caseHasBridge=useMemo(()=>Boolean(K.knowledgeBase.metadata?.plateBridge)||conditions.some(c=>(c.facts||[]).some(f=>f&&f.clinicalLayer==='bridge')),[K.knowledgeBase,conditions]);
@@ -22345,7 +22832,7 @@ function CaseStudyGenerator(){
   const recordCaseUsed=useCallback(rec=>setLedger(genLedgerRecord(K.knowledgeBase,'cases',rec)),[K.knowledgeBase]);
   const resetCaseHistory=useCallback(()=>setLedger(genLedgerReset(K.knowledgeBase,'cases')),[K.knowledgeBase]);
 
-  const caseExcludeSet=useMemo(()=>genLedgerExcludeSet(ledger,'cases',{excludeOwn:excludePriorCases,excludeOther:excludeNclexFacts}),[ledger,excludePriorCases,excludeNclexFacts]);
+  const caseExcludeSet=useMemo(()=>{const s=genLedgerExcludeSet(ledger,'cases',{excludeOwn:excludePriorCases,excludeOther:excludeNclexFacts});for(const id of rxUnlockedCaseIds)s.delete(String(id).toLowerCase());return s;},[ledger,excludePriorCases,excludeNclexFacts,rxUnlockedCaseIds]);
   const allPriorUsedSet=useMemo(()=>genLedgerExcludeSet(ledger,'cases',{excludeOwn:true,excludeOther:excludeNclexFacts}),[ledger,excludeNclexFacts]);
   const activeScopeGroups=useMemo(()=>{
     if(!activeCondition)return[];
@@ -22550,6 +23037,7 @@ function CaseStudyGenerator(){
           <button type="button" className={'tier-btn t3'+(includeTier3?' active':'')} aria-pressed={includeTier3} onClick={()=>setIncludeTier3(v=>!v)}><b>Tier 3</b> background</button>{/* v18.1: the label said "distractors", but distractors come from any tier (see the help text below) */}
         </div>
         {caseHasBridge&&<label style={{display:'flex',alignItems:'center',gap:6,fontSize:12,color:'var(--text)',cursor:'pointer',marginBottom:8}}><input id="case-include-bridge" type="checkbox" checked={caseIncludeBridge} onChange={e=>setCaseIncludeBridge(e.target.checked)} style={{accentColor:'var(--accent)'}}/><span>Include NP Bridge facts <span className="badge-opt">off = RN Core only</span></span></label>}
+        {conditions.length>0&&<NclexProWeakTagBridge idPrefix="case" mode="cases" kb={K.knowledgeBase} passphrase={cfg.nclexProPass} unlockedCount={rxUnlockedCaseIds.length} setters={{setConditionId,setCaseExtraConditionIds,setCaseSelectedConcepts,setCaseMixMode,setCaseRunMode,setIncludeTier2,setTypes,setRxUnlockedCaseIds}}/>}
         {conditions.length>0&&<GenLedgerControl idPrefix="case" primaryKind="cases" ledger={ledger} scopeStats={caseScopeStats} excludeOwn={excludePriorCases} setExcludeOwn={setExcludePriorCases} excludeOther={excludeNclexFacts} setExcludeOther={setExcludeNclexFacts} allowContextAnchors={allowContextAnchors} setAllowContextAnchors={setAllowContextAnchors} freshnessPreview={freshnessPreview} onReset={resetCaseHistory} disabled={isBusy} resetHint="Separate from Clear packet — clearing the packet tray keeps used-fact history so your next run continues from unused facts."/>}
         {caseExhausted&&<div className="tip-banner" style={{marginTop:8,marginBottom:0,fontSize:12,lineHeight:1.45,color:'var(--accent-warm)'}}>⚠ All {caseScopeStats.total} fact(s) in this scope have already been used in prior cases. Click <b>Reset Case history</b>, uncheck exclusion, include Tier 2/3, or widen your scope.</div>}
         <div style={{fontSize:12,color:'var(--text-dim)',marginTop:8,lineHeight:1.5}}>Tier 1 facts drive the critical decisions. Tier 2 adds realistic context; Tier 3 adds lower-priority background detail. Distractors are built from contextually plausible near-misses at any tier, not from Tier 3. {isBatchMode?<>Queued cases select facts per entry independently.</>:<> <b style={{color:'var(--text)'}}>{freshSelectedCount}</b> fresh fact(s){anchorSelectedCount?<> + <b style={{color:'var(--text)'}}>{anchorSelectedCount}</b> background context anchor(s)</>:null} selected for {isWaveBatch?'Wave 1':'this case'}.</>}</div>

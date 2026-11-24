@@ -9,6 +9,29 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [22.6] — 2026-11-23
+
+Adds the **closed-loop NCLEX Pro FSRS-5 Weak-Tag Prescription Bridge & Leech Fact Re-Angling** across **05 · NCLEX Generator** and **06 · Clinical Case Study Generator**, enabling 1-click E2E-decrypted cloud pull (`/api/progress` + `/api/ai-bank` + `/api/ai-flashcards`) or offline JSON import so FSRS forgetting curves, weak `(Condition × P-LATE × Trap)` clusters, and lapsed Leech `fact-*` IDs from NCLEX Pro automatically scope fresh targeted questions and unfolding clinical cases. All 13 byte-frozen prompt constants in `prompt-baseline.json` are unchanged.
+
+### Added
+
+- **Closed-Loop FSRS-5 Weak-Tag Prescription Analyzer & Cloud Pull (`nclexProStableAiNumericId`, `nclexProFsrsRetrievability`, `nclexProIsLeechSr`, `nclexProAnalyzeWeakTagPrescription`, `nclexProPullWeakTagPrescription`).**
+  - Computes exact FSRS-5 power-law Retrievability $R(t, S) = (1 + \frac{19}{81}\frac{t}{S})^{-0.5}$ and Leech status (`lapses >= 3` or `lapses >= 2` with `difficulty >= 6.8`) across both compact `nclex_pro_weak_tag_prescription` exports and raw decrypted `progress:v2` payloads (joining `flashcardSr` to `/api/ai-flashcards`, `questionHistory` to `/api/ai-bank` via `nclexProStableAiNumericId`, and cumulative `conditionTotals`/`conceptTotals` from published Q-Banks).
+  - Resolves weak Condition names/aliases, Giddens Concepts, P-LATE buckets (`Patho`, `Look`, `Analyze`, `Treat`, `Educate`), 4-Pillar Exam Traps, and same-KB `fact-*` IDs against `kbFactView(kb)` under strict origin allowlisting (`NCLEX_PRO_ALLOWED_ORIGINS`) and passphrase redaction on error.
+- **Step 01 Prescription Bridge & Leech Fact Re-Angling (`nclexProApplyPrescriptionToNclex`, `nclexProApplyPrescriptionToCases`, `NclexProWeakTagBridge`, `AnkiNoteDiagnostics`, `NCLEXGenerator`, `CaseStudyGenerator`).**
+  - Adds a collapsible **🎯 Prescribe from NCLEX Pro FSRS** panel inside Step 01 of **05 · NCLEX Generator** and **06 · Clinical Case Study Generator** with **☁ Pull FSRS Weaknesses**, **📂 Load Rx / Progress .json**, and **📋 Paste JSON**.
+  - In **05 · NCLEX Generator**, scopes weak KB conditions/concepts at Tiers 1–2 and populates `outcomes` + `focusContext` so `ngFocusPlan` prioritizes weak `(Condition, P-LATE, Trap)` clusters while leaving `points` untouched so persisted KB `numberedPoints` (`[P#]`) still inherit cleanly.
+  - In **06 · Clinical Case Study Generator**, scopes multi-condition mixed cases (auto-selecting **Differential / Twin Tie-Breaker** framing when `TwinContrast` traps are weak across $\ge 2$ conditions) and enables high-transfer NGN formats (`bowtie`, `matrix`, `trend`, `sata`, `cloze`).
+  - Adds an opt-in **"Unlock lapsed Leech fact(s) from prior used-fact exclusion for fresh clinical re-angling"** checkbox (on by default) that selectively removes only lapsed Leech `fact-*` IDs from `nclexExcludeSet` / `caseExcludeSet` while keeping mastered previously-used facts excluded.
+
+### Verification
+
+- **4,222 passed · 0 failed** in `node verify-repo.js` (9 new behavioral assertions in `tools/v22-6-fsrs-prescription-tests.js` covering FSRS-5 $R(S,S)=0.90$ math, Leech detection, compact prescription + raw `progress:v2` KB mapping, E2E PBKDF2 + AES-256-GCM `/api/progress` cloud pull, origin allowlist + passphrase redaction, Leech-only ledger unlocking, and component render smoke).
+- **Prompt bytes & Babel budget.** All 13 frozen hashes in `prompt-baseline.json` pass unchanged; `Prompts.md` verified across all 25 prompt constants and all 5 dynamic builders; `AnkiNoteDiagnostics` hoisted to plain script so `<script type="text/babel">` stays below the `390 KB` Phase 5 budget and `500 KB` ceiling with `0` AST undeclared references across all 4 inline script blocks.
+- **CDN SRI pins.** All 7 pinned CDN `<script>` endpoints plus both `PDF_WORKER_URLS` copies verified via SHA-384 digest match (`9/9`, `0` mismatches).
+
+---
+
 ## [22.5] — 2026-11-23
 
 Adds **strict MCQ/type enforcement and NGN + SATA presets** in Case Studies, fixes **NGN Matrix/Trend `responseJsonSchema` field mismatches** and replaces cryptic grounding-skip messages with plain-English diagnostics, introduces **full-KB 4-topic cluster rotation** across multi-wave "All topics" runs, surfaces **explicit fact-freshness indicators + strict zero-reuse mode**, adds **cited fact category summaries** in Case Answer Keys, consolidates **warnings, errors, and Review Appendices at the end** by default (with opt-in layout toggles), and ships **1-click E2E-encrypted Anki Cloze Flashcard sync + bidirectional remediation metadata** for NCLEX Pro. All 13 byte-frozen prompt constants in `prompt-baseline.json` are unchanged.
