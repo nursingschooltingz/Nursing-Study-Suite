@@ -11,9 +11,14 @@
      v18.0 (review L44): styles and fonts had no directive (defence in depth only).
      v21.11 (Option A / M7): removed external Google Fonts stylesheets; style-src allows inline styles/sanitized style
      attributes only and font-src is 'none' so the suite uses native system fonts with zero external font origins.
+     v22.6: replaced hardcoded personal workers.dev origin with https://*.workers.dev + localhost in connect-src so each user configures their own Vault URL in Study Settings (enforced by nclexProFetch exact-origin checks).
      The print preview (about:blank window or srcdoc frame) inherits this policy and uses only its own inline style block and system fonts. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://nclex-pro.rn-study-vault.workers.dev; style-src 'unsafe-inline'; font-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://*.workers.dev http://localhost:* http://127.0.0.1:*; style-src 'unsafe-inline'; font-src 'none'">
 <title>P-LATE Study Suite</title>
+<!-- v23.0 (2026-11-23): Production Hardening — User-Configurable NCLEX Pro Vault URL, Optimistic-Concurrency E2E Sync
+     (expectedRev + 409 Conflict retry + timestamped LWW tombstones), Foreign-KB Leech Isolation, Fail-Closed NGN Converters,
+     Case Study FSRS Focus Injection, Gemini Prefix-Cache Hoisting & Stream Keep-Alives, Zero document.write() PDF Export,
+     and Deprecated Safety Category Cleanup. All 13 frozen prompt constants in prompt-baseline.json unchanged. -->
 <!-- v22.6 (2026-11-23): Closed-Loop NCLEX Pro FSRS Weak-Tag Prescription Bridge & Leech Fact Re-Angling
      (nclexProFsrsRetrievability, nclexProIsLeechSr, nclexProAnalyzeWeakTagPrescription,
      nclexProPullWeakTagPrescription, nclexProApplyPrescriptionToNclex, nclexProApplyPrescriptionToCases,
@@ -1507,13 +1512,12 @@ async function extractPptxText(file,{signal}={}) {
 // across any model string. Medical-education content (dosages, self-harm assessment,
 // abuse scenarios) is a classic false-positive source. Core-harm protections are
 // built into the API and are NOT adjustable by this setting.
-// v21.6: include HARM_CATEGORY_CIVIC_INTEGRITY at BLOCK_NONE so public-health/policy nursing content never trips civic filters.
+// v22.6: drop deprecated HARM_CATEGORY_CIVIC_INTEGRITY (removed from current Gemini API enum); keep the 4 active categories at BLOCK_NONE.
 const SAFETY_SETTINGS=[
   {category:'HARM_CATEGORY_HARASSMENT',threshold:'BLOCK_NONE'},
   {category:'HARM_CATEGORY_HATE_SPEECH',threshold:'BLOCK_NONE'},
   {category:'HARM_CATEGORY_SEXUALLY_EXPLICIT',threshold:'BLOCK_NONE'},
-  {category:'HARM_CATEGORY_DANGEROUS_CONTENT',threshold:'BLOCK_NONE'},
-  {category:'HARM_CATEGORY_CIVIC_INTEGRITY',threshold:'BLOCK_NONE'}
+  {category:'HARM_CATEGORY_DANGEROUS_CONTENT',threshold:'BLOCK_NONE'}
 ];
 
 // Single core for ALL Gemini traffic. Pass onUpdate(fullTextSoFar) to stream via SSE;
@@ -1642,22 +1646,25 @@ async function geminiRequest(apiKey,model,body,{signal,retries=2,onUpdate,onMeta
   // encoding leaves unchanged; anything else can no longer alter the request path.
   const url=`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(String(model))}:${streaming?'streamGenerateContent?alt=sse':'generateContent'}`;
   const meta=m=>{if(typeof onMeta==='function')try{const safe=m&&typeof m.error==='string'?{...m,error:redactApiSecrets(m.error,apiKey)}:m;onMeta({...safe,model,maxOutputTokens:cap});}catch(e){}};
-  let bestPartial='',retriedStore=false;
+  // v22.6: separate per-call storeFallbackUsed from per-attempt retryingStoreFallback so a later dropped stream (finish===null) never bypasses Incomplete-response handling and returns undefined.
+  let bestPartial='',storeFallbackUsed=false;
   const MAX_CONTINUATION_HOPS=3;
   const mergeUsage=(prev,next)=>{
     if(!next)return prev;
     if(!prev)return {...next};
     const sum=(a,b)=>(Number(a)||0)+(Number(b)||0);
+    // v22.6: accumulate cachedContentTokenCount across continuation hops so implicit prefix-cache hits stay visible in onMeta.
     return {...prev,...next,
       candidatesTokenCount:sum(prev.candidatesTokenCount,next.candidatesTokenCount),
       thoughtsTokenCount:sum(prev.thoughtsTokenCount,next.thoughtsTokenCount),
+      cachedContentTokenCount:sum(prev.cachedContentTokenCount,next.cachedContentTokenCount),
       totalTokenCount:sum(prev.totalTokenCount,next.totalTokenCount)
     };
   };
   for(let attempt=0;attempt<=retries;attempt++){
     if(signal?.aborted)throw new DOMException('Aborted','AbortError');
     const wd=new AbortController();let timedOut=false,timer=null,reader=null,readerDone=false,activeWaitMs=timeoutMs;
-    let text='',lastEmitted='',finish=null,blocked=null,usage=null,failure=null,retryDelay=null,result,contHops=0,activeBody=body;
+    let text='',lastEmitted='',finish=null,blocked=null,usage=null,failure=null,retryDelay=null,result,contHops=0,activeBody=body,retryingStoreFallback=false;
     const arm=(ms=timeoutMs)=>{activeWaitMs=ms;clearTimeout(timer);timer=setTimeout(()=>{timedOut=true;wd.abort();},ms);};
     const onOuterAbort=()=>wd.abort();
     if(signal)signal.addEventListener('abort',onOuterAbort,{once:true});
@@ -1672,8 +1679,8 @@ async function geminiRequest(apiKey,model,body,{signal,retries=2,onUpdate,onMeta
         const resp=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':apiKey},body:JSON.stringify(activeBody),signal:wd.signal});
         if(!resp.ok){
           const err=await resp.json().catch(()=>({})),rawMsg=String(err.error?.message||'API error '+resp.status);
-          if(resp.status===400&&activeBody.store===false&&!retriedStore&&/\bstore\b/i.test(rawMsg)){
-            geminiRequest._storeUnsupported=true;retriedStore=true;delete body.store;
+          if(resp.status===400&&activeBody.store===false&&!storeFallbackUsed&&/\bstore\b/i.test(rawMsg)){
+            geminiRequest._storeUnsupported=true;storeFallbackUsed=true;retryingStoreFallback=true;delete body.store;
             clearTimeout(timer);if(signal)signal.removeEventListener('abort',onOuterAbort);
             attempt--;failure=null;result=undefined;break;
           }
@@ -1737,7 +1744,7 @@ async function geminiRequest(apiKey,model,body,{signal,retries=2,onUpdate,onMeta
         }
         break;
       }
-      if(retriedStore&&result===undefined&&finish===null&&!blocked)continue;
+      if(retryingStoreFallback)continue;
       if(finish==='SAFETY'||blocked){const e=new Error('Response blocked by safety filters'+(blocked?' (prompt: '+blocked+')':'.'));e.isFatal=true;throw e;}
       if(!finish)throw Object.assign(new Error('Incomplete response: the stream ended without finish metadata.'),{incomplete:true});
       // v15.17 + v21.10 (Phase 5 M6): accept STOP, MAX_TOKENS, and terminal CONTINUATION; reject other unsuccessful reasons.
@@ -5790,11 +5797,11 @@ async function cardTranscribe(apiKey,model,level,file,opts){
   // v15.14: bounded payload, with the resize reported so the log can say it happened.
   const payload=await cardFilePayload(file);
   if(opts&&typeof opts.onPayload==='function'){try{opts.onPayload(payload);}catch(e){}}
-  // v21.6 + v21.10 (Phase 5 M5/M6): reuse CARD_TRANSCRIBE_JSON_SCHEMA and enable SSE streaming keep-alives (stream:true) by default.
-  const schema=typeof CARD_TRANSCRIBE_JSON_SCHEMA==='object'?CARD_TRANSCRIBE_JSON_SCHEMA:{type:'object',required:['face','category','cardNumber','sections','numerics','overallLegibility'],properties:{face:{type:'string',enum:['front','back','unknown']},category:{type:['string','null']},cardNumber:{type:['string','null']},title:{type:['string','null']},pronunciation:{type:['string','null']},sections:{type:'array',items:{type:'object',required:['key','bullets'],properties:{key:{type:'string'},heading:{type:['string','null']},bullets:{type:'array',items:{type:'string'}},legibility:{type:'string',enum:['clean','uncertain','unreadable']}}}},numerics:{type:'array',items:{type:'object',required:['value','context'],properties:{value:{type:'string'},context:{type:'string'},legibility:{type:'string',enum:['clean','uncertain','unreadable']}}}},symbols:{type:'array',items:{type:'string'}},unreadable:{type:'array',items:{type:'string'}},overallLegibility:{type:'string',enum:['clean','uncertain','unreadable']}}};
+  // v22.6: remove duplicate inline fallback copy of CARD_TRANSCRIBE_JSON_SCHEMA while keeping typeof guard for isolated harness extraction.
+  const schema=typeof CARD_TRANSCRIBE_JSON_SCHEMA==='object'?CARD_TRANSCRIBE_JSON_SCHEMA:undefined;
   // v20.2: place static CARD_TRANSCRIBE_PROMPT in systemInstruction before per-image bytes for Gemini implicit prefix caching.
   const raw=await geminiRequest(apiKey,model,{systemInstruction:{parts:[{text:CARD_TRANSCRIBE_PROMPT}]},contents:[{parts:[{inlineData:{mimeType:payload.mimeType,data:payload.data}}]}],
-    generationConfig:{responseMimeType:'application/json',responseJsonSchema:schema,thinkingConfig:{thinkingLevel:level}}},Object.assign({stream:true},opts||{})); // v17.13: the ceiling comes from geminiRequest
+    generationConfig:{responseMimeType:'application/json',...(schema?{responseJsonSchema:schema}:{}),thinkingConfig:{thinkingLevel:level}}},Object.assign({stream:true},opts||{})); // v17.13: the ceiling comes from geminiRequest
   const p=extractJSON(raw);
   if(!p||!Array.isArray(p.sections))throw new Error('response was not a card transcript');
   // v16.9: the outer array alone admitted a null section, which threw while reading its heading,
@@ -8519,7 +8526,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '22.6';}
+function suiteVersion(){return '23.0';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -13077,7 +13084,7 @@ When using Bowtie, Matrix, Cloze, or Trend among the allowed question types, obe
 // v17.1: generic disease knowledge cannot establish absent client findings/history or absolute exclusions.
 // v17.1: rejected option quantities were repeated as sourced facts or assigned invented clinical contexts.
 // v18.1: the case prompt also carries PRIORITY_ORDER_RULES, so prioritization keys follow the Priority Analyzer's order.
-function caseBuildPrompt({conditionName,facts,difficulty,stages,questionsPerStage,includeTypes,mixMode,scopeEntries,priorTitles}){
+function caseBuildPrompt({conditionName,facts,difficulty,stages,questionsPerStage,includeTypes,mixMode,scopeEntries,priorTitles,focusOutcomes,focusContext}){
   const typeList=[],_it=includeTypes||{};
   const _hasNgn=!!(_it.bowtie||_it.matrix||_it.cloze||_it.trend);
   const _mcqOff=_it.mcq===false;
@@ -13106,6 +13113,13 @@ function caseBuildPrompt({conditionName,facts,difficulty,stages,questionsPerStag
   // v22.4 + v22.5 (#7): increase stored/prompted prior case title window so multi-batch runs (e.g. 16 cases = 2 batches of 8) avoid earlier scenarios.
   const _priorList=Array.isArray(priorTitles)?priorTitles.map(s=>String(s||'').replace(/\s+/g,' ').trim()).filter(Boolean).slice(-20):[];
   const _hasAnchors=Array.isArray(facts)&&facts.some(f=>f&&f.contextAnchor);
+  // v22.6: optional NCLEX Pro FSRS remediation focus block (omitted when blank so legacy prompts stay byte-identical and systemInstruction prefix caching stays intact).
+  const _rxCtx=String(focusContext||'').trim(),_rxOut=String(focusOutcomes||'').trim();
+  const rxFocusBlock=(_rxCtx||_rxOut)?(
+    '\n\n═══ FSRS REMEDIATION FOCUS (from NCLEX Pro Weak-Tag Prescription) ═══\n'+
+    (_rxCtx?_rxCtx+'\n':'')+
+    (_rxOut?'Priority weak conditions, P-LATE buckets, and exam traps to emphasize (using ONLY supplied CASE SOURCE PACKET facts):\n'+_rxOut+'\n':'')
+  ):'';
   const waveBlock=(_priorList.length||_hasAnchors)?(
     '\n\n═══ MULTI-WAVE NON-OVERLAP & CONTEXT ANCHOR RULES ═══\n'+
     (_priorList.length?'Prior cases already generated from this Knowledge Base: '+_priorList.map(t=>'"'+t.replace(/"/g,"'")+'"').join(' · ')+'. Write a FRESH clinical scenario, client presentation, and question set that does NOT repeat those earlier cases.\n':'')+
@@ -13258,7 +13272,7 @@ Prioritize Hypotheses · Generate Solutions · Take Action · Evaluate Outcomes.
 Generic disease descriptions do not establish this client's absence of findings or personal history.
 Preserve source qualifiers: an association does not justify an absolute diagnostic exclusion.
 Every question needs a rationale entry for EVERY option (correct and incorrect). Ordering-question
-correctAnswers list the step labels in correct sequence. Return ONLY the JSON object.${waveBlock}
+correctAnswers list the step labels in correct sequence. Return ONLY the JSON object.${waveBlock}${rxFocusBlock}
 
 ${caseRenderFactPacket(conditionName,facts)}`;
 }
@@ -16222,19 +16236,17 @@ ${typeof NCLEX_PLATE_TRAP_RULES==='string'?NCLEX_PLATE_TRAP_RULES+'\n\n':''}${kb
         }
         // v15.17: validation retains targets AND supplied supporting context, or the filtered legacy packet.
         const worksheetContract=ngWorksheetContract({allocation:allocMode?alloc:null,pool,expectedCount:size,knownFactIds:[...source.factIndex.keys()]});
-        const groundingAdapter=allocMode?`═══ STRUCTURED P-LATE FACTS ═══
+        // v22.6: hoist static NCLEX_GEN_PROMPT + priority/focus/adapter rules into systemInstruction (and place static fileParts before per-batch prompt in legacy mode) so Gemini implicit prefix caching hits across batches; log cachedContentTokenCount hits.
+        const staticSysPrompt=NCLEX_GEN_PROMPT+'\n'+PRIORITY_ORDER_RULES+'\n'+buildFocusBlock()+(allocMode?`\n\n${NG_GROUNDING_ADAPTER}\n\n${typeof NCLEX_PLATE_TRAP_RULES==='string'?NCLEX_PLATE_TRAP_RULES+'\n\n':''}`.trimEnd():'');
+        const batchPrompt=buildBatchBlock(b,numBatches,size)+(allocMode?buildCarryLite(stems):buildCarry(logged,used,stems));
+        const groundingPayload=allocMode?`═══ STRUCTURED P-LATE FACTS ═══
 Each KBFACT row is source-grounded with a stable fact ID, P-LATE bucket, tier, short source anchor, concise fact, and source pointer.
 
-${NG_GROUNDING_ADAPTER}
-
-${typeof NCLEX_PLATE_TRAP_RULES==='string'?NCLEX_PLATE_TRAP_RULES+'\n\n':''}`+ngRenderAllocation(alloc.targets,alloc.context):'';
-        // v18.1: the shared priority order follows the batch block (see PRIORITY_ORDER_RULES).
-        let prompt=NCLEX_GEN_PROMPT+buildBatchBlock(b,numBatches,size)+'\n'+PRIORITY_ORDER_RULES+'\n'+buildFocusBlock()+(allocMode?buildCarryLite(stems):buildCarry(logged,used,stems));
-        // v20.2: place static NCLEX_GEN_PROMPT prefix in parts[0] before per-batch allocated facts for Gemini implicit prefix caching.
-        const parts=allocMode?[{text:prompt},{text:groundingAdapter}]:[{text:prompt},...fileParts];
+`+ngRenderAllocation(alloc.targets,alloc.context):'';
+        const parts=allocMode?[{text:batchPrompt},{text:groundingPayload}]:[...fileParts,{text:batchPrompt}];
 
         let raw;
-        try{raw=await ownedCallGemini(cfg.apiKey,model,parts,{thinkingLevel:toolLevel,signal:ctl.signal,onUpdate:t=>owned_setLiveKB(Math.round(t.length/102.4)/10),onMeta:m=>{if(m.truncated){const th=m.usage?.thoughtsTokenCount||0;owned_log('  \u26a0 Batch '+batchNum+' hit the '+(m.maxOutputTokens||65536).toLocaleString()+'-token ceiling \u2014 the answer key is likely cut short.'+(th?' Thinking used '+th.toLocaleString()+' tok of that budget.':' Try a smaller batch size.'),'err');}}});}
+        try{raw=await ownedCallGemini(cfg.apiKey,model,parts,{thinkingLevel:toolLevel,systemInstruction:staticSysPrompt,signal:ctl.signal,onUpdate:t=>owned_setLiveKB(Math.round(t.length/102.4)/10),onMeta:m=>{if(m.usage?.cachedContentTokenCount>0)owned_log('  ⚡ Prefix cache hit: '+Number(m.usage.cachedContentTokenCount).toLocaleString()+' cached prompt token(s).','ok');if(m.truncated){const th=m.usage?.thoughtsTokenCount||0;owned_log('  \u26a0 Batch '+batchNum+' hit the '+(m.maxOutputTokens||65536).toLocaleString()+'-token ceiling \u2014 the answer key is likely cut short.'+(th?' Thinking used '+th.toLocaleString()+' tok of that budget.':' Try a smaller batch size.'),'err');}}});}
         catch(e){
           if(e.name==='AbortError')throw e;
           owned_log('  ⚠ Batch '+batchNum+' failed: '+e.message,'err');
@@ -16375,7 +16387,8 @@ ${typeof NCLEX_PLATE_TRAP_RULES==='string'?NCLEX_PLATE_TRAP_RULES+'\n\n':''}`+ng
                 try{
                   const k=keyItems.get(r.num);
                   const keyRaw=k?k.raw:'';
-                  const out=await ownedCallGemini(cfg.apiKey,gModel,[{text:ngBuildRepairPrompt({item:r.item,criterion:r.criterion,keyBlock:keyRaw})}],{thinkingLevel:gLevel,signal:ctl.signal,retries:1,generationConfig:{responseMimeType:'application/json',...(typeof NG_REPAIR_JSON_SCHEMA==='object'?{responseJsonSchema:NG_REPAIR_JSON_SCHEMA}:{})}});
+                  // v22.6: enable SSE streaming keep-alives on NCLEX item repair so long high-thinking repairs cannot hit non-streaming proxy timeouts.
+                  const out=await ownedCallGemini(cfg.apiKey,gModel,[{text:ngBuildRepairPrompt({item:r.item,criterion:r.criterion,keyBlock:keyRaw})}],{thinkingLevel:gLevel,signal:ctl.signal,retries:1,stream:true,generationConfig:{responseMimeType:'application/json',...(typeof NG_REPAIR_JSON_SCHEMA==='object'?{responseJsonSchema:NG_REPAIR_JSON_SCHEMA}:{})}});
                   const fixed=extractJSON(out);
                   const repairShape=ngRepairShapeIssues(fixed);if(repairShape.length)throw new Error(repairShape.map(i=>i.msg).join('; '));
                   if(fixed.options.map(o=>o.label).join('|')!==r.item.options.map(o=>o.label).join('|'))throw new Error('repair changed the original option labels');
@@ -16734,9 +16747,13 @@ function exportAsPdf(mdContent,title,subtitle){
   // v20.2: clear cloned sessionStorage on the child about:blank tab immediately so suite_key is never retained in print tabs.
   try{win=window.open('','_blank');if(win){win.opener=null;try{win.sessionStorage?.clear();}catch(e){}}winDoc=win?win.document:null;}catch(e){win=null;winDoc=null;}
   if(!win||!winDoc){printViaIframe(html);return;}
-  // v19.0 + v20.2 + v21.10 (Phase 4 H21.7): bind a single opener click listener (avoiding double win.print() from redundant btn.onclick), falling back to btn.onclick only when addEventListener is absent.
+  // v19.0 + v20.2 + v21.10 (Phase 4 H21.7) + v22.6: replace document.write() with DOMParser + importNode/replaceChild (falling back to printViaIframe), keeping single opener #lp-print listener.
   try{
-    win.document.open();win.document.write(html);win.document.close();
+    const Parser=typeof DOMParser==='function'?DOMParser:(win&&typeof win.DOMParser==='function'?win.DOMParser:(typeof window!=='undefined'&&typeof window.DOMParser==='function'?window.DOMParser:null));
+    if(!Parser||typeof win.document.importNode!=='function'||typeof win.document.replaceChild!=='function'||!win.document.documentElement)throw new Error('DOM print transfer unavailable');
+    const parsed=new Parser().parseFromString(html,'text/html');
+    if(!parsed||!parsed.documentElement)throw new Error('DOMParser returned empty document');
+    win.document.replaceChild(win.document.importNode(parsed.documentElement,true),win.document.documentElement);
     if(typeof win.addEventListener==='function'){win.addEventListener('click',ev=>{if(ev?.target?.id==='lp-print'||ev?.target?.closest?.('#lp-print'))win.print();});}
     else{const btn=win.document.getElementById('lp-print');if(btn)btn.onclick=()=>win.print();}
   }
@@ -18331,7 +18348,8 @@ async function n2aRunImagesWithEnv(env){
         let sys,schema=I2A_TRANSCRIBE_JSON_SCHEMA;
         if(Array.isArray(parts)&&parts[0]?.text===I2A_TRANSCRIBE_PROMPT&&parts.length>1){sys=I2A_TRANSCRIBE_PROMPT;parts=parts.slice(1);}
         else if(Array.isArray(parts)&&parts.length===1&&typeof parts[0]?.text==='string'&&parts[0].text.startsWith(I2A_ANSWER_PROMPT)){sys=I2A_ANSWER_PROMPT;parts=[{text:parts[0].text.slice(I2A_ANSWER_PROMPT.length)}];schema=I2A_ANSWER_JSON_SCHEMA;}
-        const text=await callGemini(cfg.apiKey,model,parts,{thinkingLevel:level,signal:ac.signal,retries:4,...(sys?{systemInstruction:sys}:{}),generationConfig:{responseMimeType:'application/json',responseJsonSchema:schema}});
+        // v22.6: enable SSE streaming keep-alives (stream:true) on NCLEX-to-Anki image transcription/answering to prevent proxy timeouts.
+        const text=await callGemini(cfg.apiKey,model,parts,{thinkingLevel:level,signal:ac.signal,retries:4,stream:true,...(sys?{systemInstruction:sys}:{}),generationConfig:{responseMimeType:'application/json',responseJsonSchema:schema}});
         try{return extractJSON(text);}catch(e){throw new Error(/No JSON/.test(e.message)?"no JSON in Gemini's reply":"malformed JSON in Gemini's reply");}
       };
       const r=await i2aConvert({images:prepared,gemini,halts:geminiHaltsBatch,model,cache:cacheRef.current,deck,extraTags,sourceTag:sourceTag.trim(),aiAnswers,thinking,log:m=>pushLog(m),onProgress:(current,total)=>setProgress({current,total})});
@@ -18454,7 +18472,7 @@ function caseAttachRunTypeContract(cs,types){
   return cs;
 }
 async function caseRunSingleWithEnv(env){
-  const {batchOverrideRef,activeCondition,selectedFacts,sufficiency,cfg,log,generatorSlot,setActivePacketId,K,stages,questionsPerStage,runAudit,setArtifactSource,setAuditState,currentSourceKB,setBusy,setLogs,setCaseStudy,setIssues,setCoverage,setLiveKB,setAudit,setAuditPhase,setProvenance,setInvalidCaseRaw,setAbortCtl,difficulty,types,setCasePacket,casePacketRef,priorTitles,priorUsedFactIds,onRecordUsedFacts}=env;
+  const {batchOverrideRef,activeCondition,selectedFacts,sufficiency,cfg,log,generatorSlot,setActivePacketId,K,stages,questionsPerStage,runAudit,setArtifactSource,setAuditState,currentSourceKB,setBusy,setLogs,setCaseStudy,setIssues,setCoverage,setLiveKB,setAudit,setAuditPhase,setProvenance,setInvalidCaseRaw,setAbortCtl,difficulty,types,setCasePacket,casePacketRef,priorTitles,priorUsedFactIds,onRecordUsedFacts,focusOutcomes,focusContext}=env;
   const run=async()=>{
     // v20.1: batchOverrideRef lets sequential batch runs reuse the full grounding/shuffle/audit/repair pipeline
     // without duplicating logic, while staying a transparent no-op in isolated single-case harnesses.
@@ -18503,7 +18521,10 @@ async function caseRunSingleWithEnv(env){
       owned_log('Model: '+model+' [Thinking: '+level+']'+(cfg.autoProfile?' (auto)':''),'warn');
       for(const w of runSuff.warnings)owned_log('ⓘ '+w,'warn');
       const caseContract=Object.freeze({stages,questionsPerStage});
-      const prompt=caseBuildPrompt({conditionName:runCond.name,facts:runFacts,difficulty,stages,questionsPerStage,includeTypes:types,mixMode:runCond.mixMode,scopeEntries:runCond.scopeEntries,...(Array.isArray(_priorTitles)&&_priorTitles.length?{priorTitles:_priorTitles}:{})});
+      // v22.6: forward optional NCLEX Pro Weak-Tag Prescription focusOutcomes/focusContext into caseBuildPrompt (guarded with typeof for isolated run() harness slices; omitted when blank so legacy prompts stay identical).
+      const _rxFocusOut=typeof focusOutcomes!=='undefined'?focusOutcomes:'';
+      const _rxFocusCtx=typeof focusContext!=='undefined'?focusContext:'';
+      const prompt=caseBuildPrompt({conditionName:runCond.name,facts:runFacts,difficulty,stages,questionsPerStage,includeTypes:types,mixMode:runCond.mixMode,scopeEntries:runCond.scopeEntries,...(Array.isArray(_priorTitles)&&_priorTitles.length?{priorTitles:_priorTitles}:{}),...(_rxFocusOut?{focusOutcomes:_rxFocusOut}:{}),...(_rxFocusCtx?{focusContext:_rxFocusCtx}:{})});
       const _caseSplit=typeof caseSplitSystemPrompt==='function'?caseSplitSystemPrompt(prompt):{systemInstruction:undefined,userPrompt:prompt};
       owned_log('Generating unfolding case ('+stages+' stages · '+questionsPerStage+' Q/stage)...','warn');
       let raw;
@@ -18514,7 +18535,7 @@ async function caseRunSingleWithEnv(env){
         thinkingLevel:level,signal:ctl.signal,
         ...(_caseSplit.systemInstruction?{systemInstruction:_caseSplit.systemInstruction}:{}),
         onUpdate:t=>owned_setLiveKB(Math.round(t.length/102.4)/10),
-        onMeta:m=>{if(m.truncated)owned_log('  ⚠ Output hit the '+(m.maxOutputTokens||65536).toLocaleString()+'-token ceiling — the case may be cut short. Reduce stages or questions per stage.','err');},
+        onMeta:m=>{if(m.usage?.cachedContentTokenCount>0)owned_log('  ⚡ Prefix cache hit: '+Number(m.usage.cachedContentTokenCount).toLocaleString()+' cached prompt token(s).','ok');if(m.truncated)owned_log('  ⚠ Output hit the '+(m.maxOutputTokens||65536).toLocaleString()+'-token ceiling — the case may be cut short. Reduce stages or questions per stage.','err');},
         // v15 + v21.10 (Phase 5 M6) + v22.5 (#1, #2): enforce bare JSON and attach dynamic type-filtered schema (preserving CASE_STUDY_JSON_SCHEMA fallback).
         generationConfig:{responseMimeType:'application/json',...(typeof buildCaseStudyJsonSchema==='function'?{responseJsonSchema:buildCaseStudyJsonSchema(types)}:typeof CASE_STUDY_JSON_SCHEMA==='object'?{responseJsonSchema:CASE_STUDY_JSON_SCHEMA}:{})}});
       }catch(e){
@@ -18938,9 +18959,39 @@ function RunStatus({label,value,max=100,caption,detail,children}){
     children
   );
 }
-// v22.2: NCLEX Pro Cloudflare Vault E2E Sync & Deterministic Converters (pure non-JSX helpers kept out of text/babel)
-const NCLEX_PRO_DEFAULT_URL='https://nclex-pro.rn-study-vault.workers.dev';
-const NCLEX_PRO_ALLOWED_ORIGINS=new Set(['https://nclex-pro.rn-study-vault.workers.dev']);
+// v22.2 + v22.6: NCLEX Pro Cloudflare Vault E2E Sync & Deterministic Converters (pure non-JSX helpers kept out of text/babel).
+// v22.6: remove hardcoded personal workers.dev URL from public GPL-3.0 code; Vault URL is user-configured in Study Settings (localStorage suite_nclex_url).
+const NCLEX_PRO_DEFAULT_URL='';
+const NCLEX_PRO_URL_KEY='suite_nclex_url';
+const NCLEX_PRO_TIMEOUT_MS=30000;
+const NCLEX_PRO_MAX_IMPORT_BYTES=25*1024*1024;
+const NCLEX_PRO_LEGACY_TOMBSTONE_TS='1970-01-01T00:00:00.000Z';
+
+function nclexProNormalizeUrl(raw){
+  const s=String(raw||'').trim();
+  if(!s)return '';
+  let parsed;
+  try{parsed=new URL(s);}catch{throw new Error('Invalid NCLEX Pro Vault URL. Enter a full https:// origin (for example https://your-vault.workers.dev).');}
+  if(parsed.username||parsed.password)throw new Error('NCLEX Pro Vault URL must not include embedded credentials.');
+  const isLocal=parsed.protocol==='http:'&&(parsed.hostname==='localhost'||parsed.hostname==='127.0.0.1'||parsed.hostname==='[::1]');
+  if(parsed.protocol!=='https:'&&!isLocal)throw new Error('Blocked untrusted NCLEX Pro sync origin: '+parsed.origin+' (HTTPS required).');
+  return parsed.origin;
+}
+function nclexProLoadUrl(storage){
+  try{
+    const st=storage||(typeof localStorage!=='undefined'?localStorage:null);
+    const raw=st?st.getItem(NCLEX_PRO_URL_KEY):'';
+    return raw?nclexProNormalizeUrl(raw):'';
+  }catch{return '';}
+}
+function nclexProSaveUrl(raw,storage){
+  const st=storage||(typeof localStorage!=='undefined'?localStorage:null);
+  const trimmed=String(raw||'').trim();
+  if(!trimmed){try{st&&st.removeItem(NCLEX_PRO_URL_KEY);}catch{}return '';}
+  const normalized=nclexProNormalizeUrl(trimmed);
+  try{st&&st.setItem(NCLEX_PRO_URL_KEY,normalized);}catch{}
+  return normalized;
+}
 
 function nclexProHashId(str){
   let h=2166136261;
@@ -19088,11 +19139,12 @@ function nclexProConvertWorksheet(ws,batches,kb,opts={}){
     }
   }
   const items=[];
+  let skipped=0;
 
   for(const qb of qBlocks){
     const parsed=ngParseItem(qb);
     const key=keyMap.get(qb.num);
-    if(!parsed||!parsed.stem||!key)continue;
+    if(!parsed||!parsed.stem||!key){skipped++;continue;}
     const stratM=String(key.raw||'').match(/^[ \t]*Strategy:[ \t]*([^\n]+)/im);
     const tip=stratM?stratM[1].trim():'';
     const ratLines=(key.rationales||[]).map(r=>`${r.kind==='correct'?'✓':'✗'} ${r.label}. ${ngRationaleText(r.text)}`);
@@ -19110,14 +19162,14 @@ function nclexProConvertWorksheet(ws,batches,kb,opts={}){
       optsArr=parsed.options.map(o=>o.text);
       const labels=ngAnswerLabels(key.answer);
       const ci=labels.length?parsed.options.findIndex(o=>o.label.toUpperCase()===labels[0]):-1;
-      if(ci<0)continue;
+      if(ci<0){skipped++;continue;}
       cor=ci;
     }else if(parsed.type==='SATA'&&parsed.options.length>=2){
       t='sata';
       optsArr=parsed.options.map(o=>o.text);
       const labels=ngAnswerLabels(key.answer);
       const idxs=labels.map(lb=>parsed.options.findIndex(o=>o.label.toUpperCase()===lb)).filter(i=>i>=0);
-      if(!idxs.length)continue;
+      if(!idxs.length){skipped++;continue;}
       cor=[...new Set(idxs)].sort((a,b)=>a-b);
     }else if(parsed.type==='Ordering'&&parsed.steps.length>=2){
       t='ordering';
@@ -19129,16 +19181,18 @@ function nclexProConvertWorksheet(ws,batches,kb,opts={}){
         const found=optsArr.findIndex((txt,i)=>!order.includes(i)&&(txt.toLowerCase()===low||txt.toLowerCase().includes(low.slice(0,24))||low.includes(txt.toLowerCase().slice(0,24))));
         if(found>=0)order.push(found);
       }
-      cor=order.length===optsArr.length?order:optsArr.map((_,i)=>i);
+      // v22.6: fail closed on unmapped Ordering keys instead of silently grading [0,1,2,...] as correct.
+      if(order.length!==optsArr.length){skipped++;continue;}
+      cor=order;
     }else if(parsed.type==='Calculation'){
       t='fill_blank';
       const ansClean=String(key.answer||'').replace(/\(Source:[^)]*\)/gi,'').trim();
       const numM=ansClean.match(/(-?\d+(?:\.\d+)?(?:\s*(?:to|-|–)\s*\d+(?:\.\d+)?)?)\s*([a-zA-Z/%][a-zA-Z0-9/% .-]*)?/);
       cor=numM?numM[1].trim():ansClean;
       unit=numM&&numM[2]?numM[2].trim():'';
-      if(!cor)continue;
+      if(!cor){skipped++;continue;}
     }else{
-      continue;
+      skipped++;continue;
     }
 
     const diffB=Math.max(-1.8,Math.min(2.1,Math.round((baseB+(t==='sata'?0.35:t==='ordering'?0.4:0)+(isPri?0.25:0))*100)/100));
@@ -19167,11 +19221,11 @@ function nclexProConvertWorksheet(ws,batches,kb,opts={}){
       trapRoles:fm.trapRoles.length?fm.trapRoles:undefined,
     });
   }
-  return{set:{setId,name:setName,kind:'worksheet',createdAt,count:items.length,kbKey:km.kbKey||undefined,course:metaCourse||undefined,exam:metaExam||undefined,examKey:km.examKey||undefined},items};
+  return{set:{setId,name:setName,kind:'worksheet',createdAt,updatedAt:createdAt,count:items.length,kbKey:km.kbKey||undefined,course:metaCourse||undefined,exam:metaExam||undefined,examKey:km.examKey||undefined},items,skipped};
 }
 
 function nclexProConvertCaseStudy(cs,kb,opts={}){
-  if(!cs||!Array.isArray(cs.stages))return{set:null,items:[]};
+  if(!cs||!Array.isArray(cs.stages))return{set:null,items:[],skipped:0};
   const km=nclexProKbMeta(kb);
   const title=String(cs.title||cs.condition||'AI Clinical Case Study').trim();
   const rawCondName=String(cs.condition||'').trim();
@@ -19185,6 +19239,7 @@ function nclexProConvertCaseStudy(cs,kb,opts={}){
   const clientLine=[p.age!=null&&String(p.age).trim()!==''?String(p.age)+' y/o':'',p.sex||'',p.background||''].filter(Boolean).join(', ');
   const diffBase=String(cs.difficulty||'').toLowerCase().includes('hard')||String(cs.difficulty||'').toLowerCase().includes('advanced')?0.95:String(cs.difficulty||'').toLowerCase().includes('easy')||String(cs.difficulty||'').toLowerCase().includes('foundational')?-0.2:0.5;
   const items=[];
+  let skipped=0;
   const histAccum=clientLine?['Client: '+clientLine]:[];
   const labsAccum=[],vitalsAccum=[],stageFactAccum=new Set();
 
@@ -19240,14 +19295,15 @@ function nclexProConvertCaseStudy(cs,kb,opts={}){
         trapRoles:fm.trapRoles.length?fm.trapRoles:undefined,
       };
 
+      // v22.6: fail closed on unmapped NGN Bowtie/Matrix/Cloze/Ordering/Calculation keys instead of fabricating index-0 or identity answers, and report skipped count.
       if(qType==='Bowtie'){
         const act=qOpts.filter(o=>String(o.group||'').trim()==='actions');
         const cnd=qOpts.filter(o=>String(o.group||'').trim()==='condition');
         const prm=qOpts.filter(o=>String(o.group||'').trim()==='parameters');
-        const corA=ansRaw.map(a=>act.findIndex(o=>String(o.label||'').trim()===a)).filter(i=>i>=0);
+        const corA=[...new Set(ansRaw.map(a=>act.findIndex(o=>String(o.label||'').trim()===a)).filter(i=>i>=0))].sort((a,b)=>a-b);
         const corC=ansRaw.map(a=>cnd.findIndex(o=>String(o.label||'').trim()===a)).find(i=>i>=0);
-        const corP=ansRaw.map(a=>prm.findIndex(o=>String(o.label||'').trim()===a)).filter(i=>i>=0);
-        if(!act.length||!cnd.length||!prm.length||corC===undefined)return;
+        const corP=[...new Set(ansRaw.map(a=>prm.findIndex(o=>String(o.label||'').trim()===a)).filter(i=>i>=0))].sort((a,b)=>a-b);
+        if(act.length<2||!cnd.length||prm.length<2||corA.length!==2||corC===undefined||corP.length!==2){skipped++;return;}
         item.t='ngn_bowtie';
         item.bowtie={actions:act.map(o=>o.text||''),conditions:cnd.map(o=>o.text||''),parameters:prm.map(o=>o.text||'')};
         item.cor={actions:corA,condition:corC,parameters:corP};
@@ -19257,7 +19313,7 @@ function nclexProConvertCaseStudy(cs,kb,opts={}){
         const rows=(q.matrix.rows||[]).map(r=>r.text||'');
         const rowIds=(q.matrix.rows||[]).map(r=>String(r.id||'').trim());
         const multi=q.matrix.mode==='multiple';
-        const cor=multi?rows.map(()=>[]):rows.map(()=>0);
+        const cor=multi?rows.map(()=>[]):rows.map(()=>-1);
         for(const ca of ansRaw){
           const m=ca.match(/^([^:]+):([^:]+)$/);
           if(!m)continue;
@@ -19266,7 +19322,8 @@ function nclexProConvertCaseStudy(cs,kb,opts={}){
           if(multi){if(!cor[ri].includes(ci))cor[ri].push(ci);}
           else cor[ri]=ci;
         }
-        if(!cols.length||!rows.length)return;
+        const allRowsMapped=multi?cor.every(arr=>arr.length>0):cor.every(ci=>ci>=0);
+        if(!cols.length||!rows.length||!allRowsMapped){skipped++;return;}
         item.t='ngn_matrix';
         item.matrix={cols,rows,multi};
         item.cor=cor;
@@ -19274,57 +19331,79 @@ function nclexProConvertCaseStudy(cs,kb,opts={}){
         const blanks=[...new Set([...String(q.stem||'').matchAll(/\{\{(D\d+)\}\}/g)].map(m=>m[1]))];
         const groups=blanks.length?blanks:[...new Set(qOpts.map(o=>String(o.group||'').trim()).filter(Boolean))];
         const blankOpts=[],cor=[];
+        let badBlank=false;
         for(const g of groups){
           const gOpts=qOpts.filter(o=>String(o.group||'').trim()===g);
           const ci=ansRaw.map(a=>gOpts.findIndex(o=>String(o.label||'').trim()===a)).find(i=>i>=0);
+          if(gOpts.length<2||ci===undefined){badBlank=true;break;}
           blankOpts.push(gOpts.map(o=>o.text||''));
-          cor.push(ci!==undefined?ci:0);
+          cor.push(ci);
         }
-        if(!blankOpts.length)return;
+        if(!blankOpts.length||badBlank){skipped++;return;}
         item.t='ngn_cloze';
         item.stem=String(q.stem||'').replace(/\{\{(D\d+)\}\}/g,'[Blank $1]');
         item.cloze={blanks:blankOpts};
         item.cor=cor;
       }else if(qType==='Ordering'){
-        if(qOpts.length<2)return;
+        if(qOpts.length<2){skipped++;return;}
         item.t='ordering';
         item.opts=qOpts.map(o=>o.text||'');
         const ord=ansRaw.map(a=>qOpts.findIndex(o=>String(o.label||'').trim()===a)).filter(i=>i>=0);
-        item.cor=ord.length===qOpts.length?ord:qOpts.map((_,i)=>i);
+        if(ord.length!==qOpts.length||new Set(ord).size!==qOpts.length){skipped++;return;}
+        item.cor=ord;
       }else if(qType==='Calculation'&&!qOpts.length){
         item.t='fill_blank';
-        const rawA=ansRaw[0]||'';
-        const nm=rawA.match(/(-?\d+(?:\.\d+)?)\s*([a-zA-Z/%][a-zA-Z0-9/% .-]*)?/);
-        item.cor=nm?nm[1]:rawA;
+        const rawA=String(ansRaw[0]||'').replace(/\(Source:[^)]*\)/gi,'').trim();
+        const nm=rawA.match(/(-?\d+(?:\.\d+)?(?:\s*(?:to|-|–)\s*\d+(?:\.\d+)?)?)\s*([a-zA-Z/%][a-zA-Z0-9/% .-]*)?/);
+        item.cor=nm?nm[1].trim():rawA;
+        if(!item.cor){skipped++;return;}
         if(nm&&nm[2])item.unit=nm[2].trim();
       }else if(qType==='SATA'||(ansRaw.length>1&&qOpts.length>=2)){
         item.t='sata';
         item.opts=qOpts.map(o=>o.text||'');
-        item.cor=ansRaw.map(a=>qOpts.findIndex(o=>String(o.label||'').trim()===a)).filter(i=>i>=0).sort((a,b)=>a-b);
-        if(!item.cor.length)return;
+        item.cor=[...new Set(ansRaw.map(a=>qOpts.findIndex(o=>String(o.label||'').trim()===a)).filter(i=>i>=0))].sort((a,b)=>a-b);
+        if(!item.cor.length){skipped++;return;}
       }else{
-        if(qOpts.length<2)return;
+        if(qOpts.length<2){skipped++;return;}
         item.t='mcq';
         item.opts=qOpts.map(o=>o.text||'');
         const ci=ansRaw.length?qOpts.findIndex(o=>String(o.label||'').trim()===ansRaw[0]):-1;
-        if(ci<0)return;
+        if(ci<0){skipped++;return;}
         item.cor=ci;
       }
       items.push(item);
     });
   }
-  return{set:{setId,name:setName,kind:'case_study',createdAt,count:items.length,kbKey:km.kbKey||undefined,course:metaCourse||undefined,exam:metaExam||undefined,examKey:km.examKey||undefined},items};
+  return{set:{setId,name:setName,kind:'case_study',createdAt,updatedAt:createdAt,count:items.length,kbKey:km.kbKey||undefined,course:metaCourse||undefined,exam:metaExam||undefined,examKey:km.examKey||undefined},items,skipped};
 }
 
 // v22.5 (#8): deterministic Anki Cloze Deck -> NCLEX Pro Flashcard converter & E2E-encrypted /api/ai-flashcards sync.
 // Expands multi-cloze notes (c1..c3) into independent reviewable flashcards while preserving exact KB factIds,
 // P-LATE buckets, Exam Trap tags, 4-Pillar Trap Audits, and Giddens Concepts/Conditions for bidirectional question <-> card remediation.
+// v22.6: ankiCardTrapAudit returns `{condition, lines:[{key,tag,text}]}`; calling `String(opts.getTrapAudit(n))` previously
+// serialized that object into literal `"[object Object]"` inside synced /api/ai-flashcards payloads and .json exports.
+function nclexProFormatTrapAudit(raw){
+  if(!raw)return '';
+  if(typeof raw==='string'){
+    const t=raw.trim();
+    return t==='[object Object]'?'':t;
+  }
+  if(typeof raw==='object'&&Array.isArray(raw.lines)&&raw.lines.length){
+    const body=raw.lines.map(l=>l&&typeof l==='object'?[String(l.tag||'').trim(),String(l.text||'').trim()].filter(Boolean).join(' '):String(l||'').trim()).filter(Boolean).join('\n');
+    if(!body)return '';
+    const cond=String(raw.condition||'').trim();
+    return cond?'['+cond+']\n'+body:body;
+  }
+  return '';
+}
 function nclexProConvertAnkiDeck(notes,batch,kb,opts={}){
   const list=Array.isArray(notes)?notes:[];
   const srcKb=(batch&&batch.sourceKB)||kb||null;
   const km=nclexProKbMeta(srcKb);
   const metaCourse=km.course,metaExam=km.exam;
-  const defaultDeck=[metaCourse,metaExam].filter(Boolean).join(' · ')||'P-LATE Study Suite Flashcards';
+  const baseDeck=[metaCourse,metaExam].filter(Boolean).join(' · ')||'P-LATE Study Suite Flashcards';
+  const scopeSuffix=String(opts.scopeLabel||'').trim();
+  const defaultDeck=scopeSuffix?`${baseDeck} · ${scopeSuffix}`:baseDeck;
   const deckName=String(opts.deckName||defaultDeck).trim();
   const createdAt=new Date().toISOString();
   const deckId='deck_'+nclexProHashId(deckName+'|'+(km.kbKey||createdAt.slice(0,10))).slice(3);
@@ -19373,7 +19452,7 @@ function nclexProConvertAnkiDeck(notes,batch,kb,opts={}){
     const finalBucket=plateBucket||fm.plateBuckets[0]||'';
     const finalTier=tagTier||fm.tier||1;
     const extraText=String(n.extra||'').trim();
-    const trapAudit=typeof opts.getTrapAudit==='function'?String(opts.getTrapAudit(n)||'').trim():'';
+    const trapAudit=typeof opts.getTrapAudit==='function'?nclexProFormatTrapAudit(opts.getTrapAudit(n)):'';
     const sourceRef=typeof opts.getSourceRef==='function'?String(opts.getSourceRef(n)||'').trim():'';
     const noteId='fcn_'+nclexProHashId(deckName+'|'+rawText).slice(3);
 
@@ -19402,7 +19481,8 @@ function nclexProConvertAnkiDeck(notes,batch,kb,opts={}){
       });
     }
   }
-  return{deck:{deckId,name:deckName,noteCount,count:cards.length,createdAt,kbKey:km.kbKey||undefined,course:metaCourse||undefined,exam:metaExam||undefined,examKey:km.examKey||undefined},cards};
+  // v22.6: stamp both cardCount and count plus updatedAt so NCLEX Pro displays accurate deck counts and honors LWW deck-replacement sync.
+  return{deck:{deckId,name:deckName,noteCount,cardCount:cards.length,count:cards.length,createdAt,updatedAt:createdAt,kbKey:km.kbKey||undefined,course:metaCourse||undefined,exam:metaExam||undefined,examKey:km.examKey||undefined},cards};
 }
 function nclexProBuildFlashcardsExportJson(payload){
   const decks=Array.isArray(payload.decks)?payload.decks:(payload.deck?[payload.deck]:[]);
@@ -19412,12 +19492,14 @@ function nclexProBuildFlashcardsExportJson(payload){
 
 function nclexProConvertCasePacket(packet,kb,opts={}){
   const sets=[],items=[];
+  let skipped=0;
   for(const entry of (packet||[])){
     if(!entry||!entry.caseStudy)continue;
     const conv=nclexProConvertCaseStudy(entry.caseStudy,kb,opts);
+    skipped+=Number(conv.skipped)||0;
     if(conv.set&&conv.items.length){sets.push(conv.set);items.push(...conv.items);}
   }
-  return{sets,items};
+  return{sets,items,skipped};
 }
 
 function nclexProBuildExportJson(payload){
@@ -19426,171 +19508,259 @@ function nclexProBuildExportJson(payload){
   return JSON.stringify({version:'1.0',updatedAt:new Date().toISOString(),sets,items},null,2);
 }
 
-function nclexProFetch(url,opts){
+// v22.6: enforce HTTPS (or localhost) + exact origin matching against the configured Vault URL, disable cross-origin redirects, and abort hung requests after 30s.
+function nclexProFetch(url,opts={},expectedOrigin=''){
   const parsed=new URL(url);
-  if(!NCLEX_PRO_ALLOWED_ORIGINS.has(parsed.origin))throw new Error('Blocked untrusted NCLEX Pro sync origin: '+parsed.origin);
-  return fetch(url,opts);
+  const isLocal=parsed.protocol==='http:'&&(parsed.hostname==='localhost'||parsed.hostname==='127.0.0.1'||parsed.hostname==='[::1]');
+  if(parsed.protocol!=='https:'&&!isLocal)throw new Error('Blocked untrusted NCLEX Pro sync origin: '+parsed.origin);
+  const allowedOrigin=expectedOrigin?nclexProNormalizeUrl(expectedOrigin):nclexProLoadUrl();
+  if(!allowedOrigin||parsed.origin!==allowedOrigin)throw new Error('Blocked untrusted NCLEX Pro sync origin: '+parsed.origin);
+  const ac=typeof AbortController==='function'?new AbortController():null;
+  let timer=null;
+  const externalSig=opts&&opts.signal;
+  const onExtAbort=()=>ac&&ac.abort();
+  if(ac&&externalSig){
+    if(externalSig.aborted)ac.abort();
+    else if(typeof externalSig.addEventListener==='function')externalSig.addEventListener('abort',onExtAbort,{once:true});
+  }
+  if(ac&&typeof setTimeout==='function')timer=setTimeout(()=>ac.abort(),NCLEX_PRO_TIMEOUT_MS);
+  const fetchOpts=Object.assign({redirect:'error'},opts||{},ac?{signal:ac.signal}:{});
+  return Promise.resolve(fetch(url,fetchOpts)).finally(()=>{
+    if(timer!=null&&typeof clearTimeout==='function')clearTimeout(timer);
+    if(ac&&externalSig&&typeof externalSig.removeEventListener==='function')externalSig.removeEventListener('abort',onExtAbort);
+  });
+}
+
+// v22.6: shared base64/AES-GCM/PBKDF2 session helper with in-memory key cache, URI-encoded secret scrubbing, and timestamped LWW tombstone normalization.
+const _nclexProVaultKeyCache=new Map();
+function nclexProClearVaultKeyCache(){_nclexProVaultKeyCache.clear();}
+function nclexProB64ToBytes(b64){const bin=atob(b64),arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return arr;}
+function nclexProBytesToB64(u8){let bin='';for(let i=0;i<u8.length;i+=0x8000)bin+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(bin);}
+function nclexProScrubSecret(msg,pass){
+  let s=String(msg||'');
+  const p=String(pass||'');
+  if(p.length>=4){
+    s=s.split(p).join('[redacted]');
+    const enc=encodeURIComponent(p);
+    if(enc!==p)s=s.split(enc).join('[redacted]');
+  }
+  return s;
+}
+function nclexProNormalizeTombstoneMap(tsMapRaw,legacyIdsRaw,fallbackTs){
+  const out={};
+  if(tsMapRaw&&typeof tsMapRaw==='object'&&!Array.isArray(tsMapRaw)){
+    for(const [id,ts] of Object.entries(tsMapRaw))if(id&&typeof ts==='string'&&ts)out[id]=ts;
+  }
+  const legTs=(typeof fallbackTs==='string'&&fallbackTs)?fallbackTs:NCLEX_PRO_LEGACY_TOMBSTONE_TS;
+  if(Array.isArray(legacyIdsRaw)){
+    for(const id of legacyIdsRaw)if(id&&!Object.prototype.hasOwnProperty.call(out,id))out[id]=legTs;
+  }
+  return out;
+}
+async function nclexProVaultSession(rawUrl,passphrase,onStatus){
+  const pass=String(passphrase||'');
+  if(!pass)throw new Error('Enter your NCLEX Pro vault passphrase in Study Settings first.');
+  const candidate=String(rawUrl||nclexProLoadUrl()||'').trim();
+  if(!candidate)throw new Error('Configure your NCLEX Pro Vault URL in Study Settings first.');
+  const base=nclexProNormalizeUrl(candidate);
+  const scrub=m=>nclexProScrubSecret(m,pass);
+  onStatus?.('Connecting to NCLEX Pro vault…');
+  const metaRes=await nclexProFetch(base+'/api/meta',{cache:'no-store'},base);
+  if(!metaRes.ok)throw new Error('Could not reach NCLEX Pro vault ('+metaRes.status+').');
+  const meta=await metaRes.json();
+  if(!meta.configured)throw new Error('NCLEX Pro vault is not configured.');
+  const iter=meta.iterations||310000;
+  const cacheKey=[base,meta.authSalt||'',meta.encSalt||'',iter,pass].join('|');
+  let derived=_nclexProVaultKeyCache.get(cacheKey);
+  if(!derived){
+    onStatus?.('Deriving AES-256-GCM key…');
+    const baseKey=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveBits','deriveKey']);
+    const authBits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:nclexProB64ToBytes(meta.authSalt),iterations:iter,hash:'SHA-256'},baseKey,256);
+    const token=nclexProBytesToB64(new Uint8Array(authBits));
+    const aesKey=await crypto.subtle.deriveKey({name:'PBKDF2',salt:nclexProB64ToBytes(meta.encSalt),iterations:iter,hash:'SHA-256'},baseKey,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+    derived={token,aesKey};
+    if(_nclexProVaultKeyCache.size>=4)_nclexProVaultKeyCache.clear();
+    _nclexProVaultKeyCache.set(cacheKey,derived);
+  }
+  const decryptRec=async(rec)=>{
+    if(!rec||!rec.payload)return null;
+    const raw=nclexProB64ToBytes(rec.payload);
+    const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:raw.slice(0,12)},derived.aesKey,raw.slice(12));
+    return JSON.parse(new TextDecoder().decode(plain));
+  };
+  const encryptJson=async(obj)=>{
+    const iv=crypto.getRandomValues(new Uint8Array(12));
+    const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},derived.aesKey,new TextEncoder().encode(JSON.stringify(obj)));
+    const combined=new Uint8Array(12+ct.byteLength);
+    combined.set(iv,0);combined.set(new Uint8Array(ct),12);
+    return nclexProBytesToB64(combined);
+  };
+  return{base,token:derived.token,aesKey:derived.aesKey,scrub,decryptRec,encryptJson};
 }
 
 async function nclexProSyncToCloud(payload,{url=NCLEX_PRO_DEFAULT_URL,passphrase='',onStatus}={}){
-  const pass=String(passphrase||'');
-  if(!pass)throw new Error('Enter your NCLEX Pro vault passphrase in Study Settings first.');
-  const base=String(url||NCLEX_PRO_DEFAULT_URL).replace(/\/+$/,'');
   const sets=Array.isArray(payload.sets)?payload.sets:(payload.set?[payload.set]:[]);
   const items=Array.isArray(payload.items)?payload.items:[];
   if(!items.length)throw new Error('No convertible questions found to sync.');
-
-  const b64ToBytes=b64=>{const bin=atob(b64),arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return arr;};
-  const bytesToB64=u8=>{let bin='';for(let i=0;i<u8.length;i+=0x8000)bin+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(bin);};
-  const scrub=m=>{const s=String(m||'');return pass.length>=4?s.split(pass).join('[redacted]'):s;};
+  const scrub=m=>nclexProScrubSecret(m,passphrase);
 
   try{
-    onStatus?.('Connecting to NCLEX Pro vault…');
-    const metaRes=await nclexProFetch(base+'/api/meta',{cache:'no-store'});
-    if(!metaRes.ok)throw new Error('Could not reach NCLEX Pro vault ('+metaRes.status+').');
-    const meta=await metaRes.json();
-    if(!meta.configured)throw new Error('NCLEX Pro vault is not configured.');
-
-    onStatus?.('Deriving AES-256-GCM key…');
-    const baseKey=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveBits','deriveKey']);
-    const authBits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:b64ToBytes(meta.authSalt),iterations:meta.iterations||310000,hash:'SHA-256'},baseKey,256);
-    const token=bytesToB64(new Uint8Array(authBits));
-    const aesKey=await crypto.subtle.deriveKey({name:'PBKDF2',salt:b64ToBytes(meta.encSalt),iterations:meta.iterations||310000,hash:'SHA-256'},baseKey,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
-
-    onStatus?.('Loading existing synced AI sets…');
-    const getRes=await nclexProFetch(base+'/api/ai-bank',{headers:{'X-Vault-Token':token},cache:'no-store'});
-    if(getRes.status===401)throw new Error('Incorrect NCLEX Pro vault passphrase.');
-    if(!getRes.ok)throw new Error('Failed to read AI bank ('+getRes.status+').');
-    const remoteRec=await getRes.json();
-    let existing={version:'1.0',sets:[],items:[],deletedSetIds:[]};
-    if(remoteRec&&remoteRec.payload){
-      const raw=b64ToBytes(remoteRec.payload);
-      const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:raw.slice(0,12)},aesKey,raw.slice(12));
-      existing=JSON.parse(new TextDecoder().decode(plain));
-    }
-
-    // v22.5 (#3, #8): respect deletedSetIds AND deletedCaseIds tombstones for sets/cases deleted in NCLEX Pro while allowing an explicitly re-synced setId/csId to restore cleanly.
+    const session=await nclexProVaultSession(url,passphrase,onStatus);
     const pushedSetIds=new Set(sets.map(s=>s&&s.setId).filter(Boolean));
     const pushedCaseIds=new Set(items.map(x=>x&&x.csId).filter(Boolean));
-    const delSet=new Set((existing.deletedSetIds||[]).filter(id=>!pushedSetIds.has(id)));
-    const delCs=new Set((existing.deletedCaseIds||[]).filter(id=>!pushedCaseIds.has(id)));
-    const itemMap=new Map((existing.items||[]).filter(x=>x&&!(x.setId&&delSet.has(x.setId))&&!(x.csId&&delCs.has(x.csId))).map(x=>[x.aiId,x]));
-    let added=0;
-    for(const it of items){if(!itemMap.has(it.aiId))added++;itemMap.set(it.aiId,it);}
-    const countBySet={};
-    for(const it of itemMap.values())if(it&&it.setId)countBySet[it.setId]=(countBySet[it.setId]||0)+1;
-    const setMap=new Map((existing.sets||[]).filter(s=>s&&!delSet.has(s.setId)&&(countBySet[s.setId]||0)>0).map(s=>[s.setId,{...s,count:countBySet[s.setId]}]));
-    for(const s of sets)setMap.set(s.setId,s);
-    const merged={version:'1.0',updatedAt:new Date().toISOString(),deletedSetIds:[...delSet],deletedCaseIds:[...delCs],sets:[...setMap.values()],items:[...itemMap.values()]};
 
-    onStatus?.('Encrypting & uploading '+items.length+' question(s)…');
-    const iv=crypto.getRandomValues(new Uint8Array(12));
-    const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},aesKey,new TextEncoder().encode(JSON.stringify(merged)));
-    const combined=new Uint8Array(12+ct.byteLength);
-    combined.set(iv,0);combined.set(new Uint8Array(ct),12);
-    const putRes=await nclexProFetch(base+'/api/ai-bank',{
-      method:'PUT',
-      headers:{'Content-Type':'application/json','X-Vault-Token':token},
-      body:JSON.stringify({payload:bytesToB64(combined),itemCount:merged.items.length}),
-    });
-    if(!putRes.ok)throw new Error('Upload failed ('+putRes.status+').');
-    const saved=await putRes.json();
-    return{ok:true,syncedCount:items.length,addedCount:added,totalAiCount:merged.items.length,rev:saved.rev};
+    // v22.6: optimistic concurrency (expectedRev + HTTP 409 Conflict merge-retry) and timestamped LWW tombstones.
+    for(let attempt=0;attempt<3;attempt++){
+      onStatus?.(attempt===0?'Loading existing synced AI sets…':'Sync conflict detected — re-merging latest vault state…');
+      const getRes=await nclexProFetch(session.base+'/api/ai-bank',{headers:{'X-Vault-Token':session.token},cache:'no-store'},session.base);
+      if(getRes.status===401){nclexProClearVaultKeyCache();throw new Error('Incorrect NCLEX Pro vault passphrase.');}
+      if(!getRes.ok)throw new Error('Failed to read AI bank ('+getRes.status+').');
+      const remoteRec=await getRes.json();
+      const expectedRev=typeof remoteRec?.rev==='number'?remoteRec.rev:0;
+      const existing=(await session.decryptRec(remoteRec))||{version:'1.0',sets:[],items:[],deletedSetIds:[],deletedCaseIds:[],deletedSetAt:{},deletedCaseAt:{}};
+
+      const delSetAt=nclexProNormalizeTombstoneMap(existing.deletedSetAt,existing.deletedSetIds,existing.updatedAt);
+      const delCsAt=nclexProNormalizeTombstoneMap(existing.deletedCaseAt,existing.deletedCaseIds,existing.updatedAt);
+      for(const sid of pushedSetIds)delete delSetAt[sid];
+      for(const cid of pushedCaseIds)delete delCsAt[cid];
+      const setTsById=new Map((existing.sets||[]).filter(s=>s&&s.setId).map(s=>[s.setId,s.updatedAt||s.createdAt||existing.updatedAt||'']));
+      const isDel=(map,id,ts)=>Boolean(id&&Object.prototype.hasOwnProperty.call(map,id)&&(!ts||map[id]>=ts));
+
+      const itemMap=new Map((existing.items||[]).filter(x=>{
+        if(!x)return false;
+        const ts=x.updatedAt||(x.setId?setTsById.get(x.setId):'')||existing.updatedAt||'';
+        if(x.setId&&isDel(delSetAt,x.setId,ts))return false;
+        if(x.csId&&isDel(delCsAt,x.csId,ts))return false;
+        return true;
+      }).map(x=>[x.aiId,x]));
+      let added=0;
+      for(const it of items){if(!itemMap.has(it.aiId))added++;itemMap.set(it.aiId,it);}
+      const countBySet={};
+      for(const it of itemMap.values())if(it&&it.setId)countBySet[it.setId]=(countBySet[it.setId]||0)+1;
+      const setMap=new Map((existing.sets||[]).filter(s=>{
+        if(!s||!s.setId)return false;
+        const sTs=s.updatedAt||s.createdAt||existing.updatedAt||'';
+        return !isDel(delSetAt,s.setId,sTs)&&(countBySet[s.setId]||0)>0;
+      }).map(s=>[s.setId,{...s,count:countBySet[s.setId]}]));
+      const nowIso=new Date().toISOString();
+      for(const s of sets)setMap.set(s.setId,{...s,count:countBySet[s.setId]||s.count||0,updatedAt:s.updatedAt||nowIso});
+      const merged={version:'1.0',updatedAt:nowIso,deletedSetIds:Object.keys(delSetAt),deletedCaseIds:Object.keys(delCsAt),deletedSetAt:delSetAt,deletedCaseAt:delCsAt,sets:[...setMap.values()],items:[...itemMap.values()]};
+
+      onStatus?.('Encrypting & uploading '+items.length+' question(s)…');
+      const encPayload=await session.encryptJson(merged);
+      const putRes=await nclexProFetch(session.base+'/api/ai-bank',{
+        method:'PUT',
+        headers:{'Content-Type':'application/json','X-Vault-Token':session.token},
+        body:JSON.stringify({payload:encPayload,itemCount:merged.items.length,expectedRev}),
+      },session.base);
+      if(putRes.status===409&&attempt<2)continue;
+      if(!putRes.ok)throw new Error('Upload failed ('+putRes.status+').');
+      const saved=await putRes.json();
+      return{ok:true,syncedCount:items.length,addedCount:added,totalAiCount:merged.items.length,rev:saved.rev};
+    }
+    throw new Error('Upload conflicted repeatedly (409). Please try again.');
   }catch(e){
     throw new Error(scrub(e&&e.message?e.message:String(e)));
   }
 }
 async function nclexProSyncFlashcardsToCloud(payload,{url=NCLEX_PRO_DEFAULT_URL,passphrase='',onStatus}={}){
-  const pass=String(passphrase||'');
-  if(!pass)throw new Error('Enter your NCLEX Pro vault passphrase in Study Settings first.');
-  const base=String(url||NCLEX_PRO_DEFAULT_URL).replace(/\/+$/,'');
   const decks=Array.isArray(payload.decks)?payload.decks:(payload.deck?[payload.deck]:[]);
   const cards=Array.isArray(payload.cards)?payload.cards:[];
   if(!cards.length)throw new Error('No kept cloze flashcards found to sync.');
-
-  const b64ToBytes=b64=>{const bin=atob(b64),arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return arr;};
-  const bytesToB64=u8=>{let bin='';for(let i=0;i<u8.length;i+=0x8000)bin+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(bin);};
-  const scrub=m=>{const s=String(m||'');return pass.length>=4?s.split(pass).join('[redacted]'):s;};
+  const scrub=m=>nclexProScrubSecret(m,passphrase);
 
   try{
-    onStatus?.('Connecting to NCLEX Pro vault…');
-    const metaRes=await nclexProFetch(base+'/api/meta',{cache:'no-store'});
-    if(!metaRes.ok)throw new Error('Could not reach NCLEX Pro vault ('+metaRes.status+').');
-    const meta=await metaRes.json();
-    if(!meta.configured)throw new Error('NCLEX Pro vault is not configured.');
-
-    onStatus?.('Deriving AES-256-GCM key…');
-    const baseKey=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveBits','deriveKey']);
-    const authBits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:b64ToBytes(meta.authSalt),iterations:meta.iterations||310000,hash:'SHA-256'},baseKey,256);
-    const token=bytesToB64(new Uint8Array(authBits));
-    const aesKey=await crypto.subtle.deriveKey({name:'PBKDF2',salt:b64ToBytes(meta.encSalt),iterations:meta.iterations||310000,hash:'SHA-256'},baseKey,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
-
-    onStatus?.('Loading existing synced flashcard decks…');
-    const getRes=await nclexProFetch(base+'/api/ai-flashcards',{headers:{'X-Vault-Token':token},cache:'no-store'});
-    if(getRes.status===401)throw new Error('Incorrect NCLEX Pro vault passphrase.');
-    if(!getRes.ok)throw new Error('Failed to read AI flashcards ('+getRes.status+').');
-    const remoteRec=await getRes.json();
-    let existing={version:'1.0',decks:[],cards:[],deletedDeckIds:[]};
-    if(remoteRec&&remoteRec.payload){
-      const raw=b64ToBytes(remoteRec.payload);
-      const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:raw.slice(0,12)},aesKey,raw.slice(12));
-      existing=JSON.parse(new TextDecoder().decode(plain));
-    }
-
+    const session=await nclexProVaultSession(url,passphrase,onStatus);
     const pushedDeckIds=new Set(decks.map(d=>d&&d.deckId).filter(Boolean));
-    const delDecks=new Set((existing.deletedDeckIds||[]).filter(id=>!pushedDeckIds.has(id)));
-    const cardMap=new Map((existing.cards||[]).filter(c=>c&&!(c.deckId&&delDecks.has(c.deckId))&&!pushedDeckIds.has(c.deckId)).map(c=>[c.cardId,c]));
-    let added=0;
-    for(const c of cards){if(!cardMap.has(c.cardId))added++;cardMap.set(c.cardId,c);}
-    const deckMap=new Map((existing.decks||[]).filter(d=>d&&!delDecks.has(d.deckId)).map(d=>[d.deckId,d]));
-    for(const d of decks)deckMap.set(d.deckId,d);
-    const merged={version:'1.0',kind:'flashcards',updatedAt:new Date().toISOString(),deletedDeckIds:[...delDecks],decks:[...deckMap.values()],cards:[...cardMap.values()]};
 
-    onStatus?.('Encrypting & uploading '+cards.length+' flashcard(s)…');
-    const iv=crypto.getRandomValues(new Uint8Array(12));
-    const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},aesKey,new TextEncoder().encode(JSON.stringify(merged)));
-    const combined=new Uint8Array(12+ct.byteLength);
-    combined.set(iv,0);combined.set(new Uint8Array(ct),12);
-    const putRes=await nclexProFetch(base+'/api/ai-flashcards',{
-      method:'PUT',
-      headers:{'Content-Type':'application/json','X-Vault-Token':token},
-      body:JSON.stringify({payload:bytesToB64(combined),cardCount:merged.cards.length,deckCount:merged.decks.length}),
-    });
-    if(!putRes.ok)throw new Error('Flashcard upload failed ('+putRes.status+').');
-    const saved=await putRes.json();
-    return{ok:true,syncedCount:cards.length,addedCount:added,totalCardCount:merged.cards.length,totalDeckCount:merged.decks.length,rev:saved.rev};
+    for(let attempt=0;attempt<3;attempt++){
+      onStatus?.(attempt===0?'Loading existing synced flashcard decks…':'Sync conflict detected — re-merging latest vault state…');
+      const getRes=await nclexProFetch(session.base+'/api/ai-flashcards',{headers:{'X-Vault-Token':session.token},cache:'no-store'},session.base);
+      if(getRes.status===401){nclexProClearVaultKeyCache();throw new Error('Incorrect NCLEX Pro vault passphrase.');}
+      if(!getRes.ok)throw new Error('Failed to read AI flashcards ('+getRes.status+').');
+      const remoteRec=await getRes.json();
+      const expectedRev=typeof remoteRec?.rev==='number'?remoteRec.rev:0;
+      const existing=(await session.decryptRec(remoteRec))||{version:'1.0',decks:[],cards:[],deletedDeckIds:[],deletedDeckAt:{}};
+
+      const delDeckAt=nclexProNormalizeTombstoneMap(existing.deletedDeckAt,existing.deletedDeckIds,existing.updatedAt);
+      for(const did of pushedDeckIds)delete delDeckAt[did];
+      const deckTsById=new Map((existing.decks||[]).filter(d=>d&&d.deckId).map(d=>[d.deckId,d.updatedAt||d.createdAt||existing.updatedAt||'']));
+      const isDel=(id,ts)=>Boolean(id&&Object.prototype.hasOwnProperty.call(delDeckAt,id)&&(!ts||delDeckAt[id]>=ts));
+
+      const cardMap=new Map((existing.cards||[]).filter(c=>{
+        if(!c)return false;
+        if(c.deckId&&pushedDeckIds.has(c.deckId))return false;
+        const ts=c.updatedAt||(c.deckId?deckTsById.get(c.deckId):'')||existing.updatedAt||'';
+        if(c.deckId&&isDel(c.deckId,ts))return false;
+        return true;
+      }).map(c=>[c.cardId,c]));
+      let added=0;
+      for(const c of cards){if(!cardMap.has(c.cardId))added++;cardMap.set(c.cardId,c);}
+      const countByDeck={};
+      for(const c of cardMap.values())if(c&&c.deckId)countByDeck[c.deckId]=(countByDeck[c.deckId]||0)+1;
+      const deckMap=new Map((existing.decks||[]).filter(d=>{
+        if(!d||!d.deckId)return false;
+        const dTs=d.updatedAt||d.createdAt||existing.updatedAt||'';
+        return !isDel(d.deckId,dTs);
+      }).map(d=>{const n=countByDeck[d.deckId]??d.cardCount??d.count??0;return[d.deckId,{...d,cardCount:n,count:n}];}));
+      const nowIso=new Date().toISOString();
+      for(const d of decks){const n=countByDeck[d.deckId]??d.cardCount??d.count??0;deckMap.set(d.deckId,{...d,cardCount:n,count:n,updatedAt:d.updatedAt||nowIso});}
+      const merged={version:'1.0',kind:'flashcards',updatedAt:nowIso,deletedDeckIds:Object.keys(delDeckAt),deletedDeckAt:delDeckAt,decks:[...deckMap.values()],cards:[...cardMap.values()]};
+
+      onStatus?.('Encrypting & uploading '+cards.length+' flashcard(s)…');
+      const encPayload=await session.encryptJson(merged);
+      const putRes=await nclexProFetch(session.base+'/api/ai-flashcards',{
+        method:'PUT',
+        headers:{'Content-Type':'application/json','X-Vault-Token':session.token},
+        body:JSON.stringify({payload:encPayload,cardCount:merged.cards.length,deckCount:merged.decks.length,expectedRev}),
+      },session.base);
+      if(putRes.status===409&&attempt<2)continue;
+      if(!putRes.ok)throw new Error('Flashcard upload failed ('+putRes.status+').');
+      const saved=await putRes.json();
+      return{ok:true,syncedCount:cards.length,addedCount:added,totalCardCount:merged.cards.length,totalDeckCount:merged.decks.length,rev:saved.rev};
+    }
+    throw new Error('Flashcard upload conflicted repeatedly (409). Please try again.');
   }catch(e){
     throw new Error(scrub(e&&e.message?e.message:String(e)));
   }
 }
-async function nclexProRunFlashcardUiSync(buildPayload,passphrase,setSyncState){
+async function nclexProRunFlashcardUiSync(buildPayload,passphrase,setSyncState,vaultUrl){
   const payload=buildPayload();
   if(!(payload&&Array.isArray(payload.cards)&&payload.cards.length)){setSyncState({busy:false,msg:'',err:'No kept cloze flashcards found to sync.'});return;}
   setSyncState({busy:true,msg:'Encrypting & syncing flashcards…',err:''});
   try{
-    const res=await nclexProSyncFlashcardsToCloud(payload,{passphrase,onStatus:m=>setSyncState({busy:true,msg:m,err:''})});
-    setSyncState({busy:false,msg:`Synced ${res.syncedCount} review flashcard(s) to NCLEX Pro (${res.totalCardCount} total across ${res.totalDeckCount} deck(s) — linked by fact ID & topic for bidirectional Q ↔ Card remediation).`,err:''});
+    const res=await nclexProSyncFlashcardsToCloud(payload,{url:vaultUrl,passphrase,onStatus:m=>setSyncState({busy:true,msg:m,err:''})});
+    setSyncState({busy:false,msg:`Synced ${res.syncedCount} review flashcard(s) as "${payload.deck?.name||'Deck'}" to NCLEX Pro (${res.totalCardCount} total across ${res.totalDeckCount} deck(s) — linked by fact ID & topic for bidirectional Q ↔ Card remediation).`,err:''});
   }catch(e){setSyncState({busy:false,msg:'',err:e?.message||String(e)});}
 }
 function nclexProDownloadFlashcardsJson(payload,filename){
   if(!(payload&&Array.isArray(payload.cards)&&payload.cards.length))return;
   downloadBlob(new Blob([nclexProBuildFlashcardsExportJson(payload)],{type:'application/json'}),filename);
 }
-function AnkiNclexProSyncButtons({kept,keptCount,batch,kb,includeTrapAudit,current,passphrase,syncState,setSyncState}){
+function AnkiNclexProSyncButtons({kept,keptCount,batch,kb,includeTrapAudit,current,passphrase,vaultUrl,scopeLabel='',syncState,setSyncState}){
   const h=React.createElement;
-  const build=()=>nclexProConvertAnkiDeck(kept,batch,kb,{getTrapAudit:includeTrapAudit?c=>ankiCardTrapAudit(c,batch,current):null,getSourceRef:c=>ankiSourcePointers(c,batch,current).join('; ')});
+  // v22.6: allow customizing the deck name before syncing/exporting to NCLEX Pro and include active scopeLabel in default name so filtered subsets never overwrite full decks.
+  const [deckName,setDeckName]=React.useState('');
+  const srcKb=(batch&&batch.sourceKB)||kb||null;
+  const km=nclexProKbMeta(srcKb);
+  const baseDeck=[km.course,km.exam].filter(Boolean).join(' · ')||'P-LATE Study Suite Flashcards';
+  const defaultDeck=scopeLabel?`${baseDeck} · ${scopeLabel}`:baseDeck;
+  const effDeckName=deckName.trim()||defaultDeck;
+  const build=()=>nclexProConvertAnkiDeck(kept,batch,kb,{deckName:effDeckName,scopeLabel,getTrapAudit:includeTrapAudit?c=>ankiCardTrapAudit(c,batch,current):null,getSourceRef:c=>ankiSourcePointers(c,batch,current).join('; ')});
   return h(React.Fragment,null,
-    h('button',{type:'button',className:'btn-secondary',disabled:!keptCount||syncState.busy,onClick:()=>nclexProRunFlashcardUiSync(build,passphrase,setSyncState)},syncState.busy?'⟳ Syncing…':'☁ Sync to NCLEX Pro'),
+    h('input',{id:'anki-nclex-pro-deck-name','aria-label':'NCLEX Pro synced deck name',type:'text',value:deckName,onChange:e=>setDeckName(e.target.value),placeholder:defaultDeck,title:'Deck name in NCLEX Pro dropdown (leave blank for "'+defaultDeck+'")',style:{width:185,padding:'4px 8px',fontSize:12}}),
+    h('button',{type:'button',className:'btn-secondary',disabled:!keptCount||syncState.busy,onClick:()=>nclexProRunFlashcardUiSync(build,passphrase,setSyncState,vaultUrl)},syncState.busy?'⟳ Syncing…':'☁ Sync to NCLEX Pro'),
     h('button',{type:'button',className:'btn-secondary',disabled:!keptCount,onClick:()=>nclexProDownloadFlashcardsJson(build(),'NCLEX-Pro-Sync-Flashcards.json')},'⬇ NCLEX Pro .json')
   );
 }
-async function nclexProRunUiSync(buildPayload,passphrase,setSyncState,kindLabel){
+async function nclexProRunUiSync(buildPayload,passphrase,setSyncState,kindLabel,vaultUrl){
   const payload=buildPayload();
   if(!(payload&&Array.isArray(payload.items)&&payload.items.length)){setSyncState({busy:false,msg:'',err:'No convertible questions found to sync.'});return;}
   setSyncState({busy:true,msg:'Encrypting & syncing…',err:''});
   try{
-    const res=await nclexProSyncToCloud(payload,{passphrase,onStatus:m=>setSyncState({busy:true,msg:m,err:''})});
-    setSyncState({busy:false,msg:`Synced ${res.syncedCount} ${kindLabel} to NCLEX Pro (${res.totalAiCount} total AI Qs in vault — toggle "Include AI" in NCLEX Pro).`,err:''});
+    const res=await nclexProSyncToCloud(payload,{url:vaultUrl,passphrase,onStatus:m=>setSyncState({busy:true,msg:m,err:''})});
+    const skipNote=payload.skipped>0?` · skipped ${payload.skipped} unconvertible item(s)`:'';
+    setSyncState({busy:false,msg:`Synced ${res.syncedCount} ${kindLabel} to NCLEX Pro (${res.totalAiCount} total AI Qs in vault${skipNote} — toggle "Include AI" in NCLEX Pro).`,err:''});
   }catch(e){setSyncState({busy:false,msg:'',err:e?.message||String(e)});}
 }
 function nclexProDownloadJson(payload,filename){
@@ -19604,14 +19774,29 @@ function NclexProSyncBanner({state}){
 }
 function NclexProSettingsField({cfg}){
   const h=React.createElement;
+  const [urlDraft,setUrlDraft]=React.useState(cfg.nclexProUrl||'');
+  const [urlErr,setUrlErr]=React.useState('');
+  React.useEffect(()=>{setUrlDraft(cfg.nclexProUrl||'');setUrlErr('');},[cfg.nclexProUrl]);
+  const commitUrl=raw=>{
+    setUrlDraft(raw);
+    const trimmed=String(raw||'').trim();
+    if(!trimmed){setUrlErr('');cfg.setNclexProUrl?.('');return;}
+    try{const norm=nclexProNormalizeUrl(trimmed);setUrlErr('');cfg.setNclexProUrl?.(norm);}
+    catch(e){setUrlErr(e?.message||'Enter a valid https:// Vault URL.');}
+  };
   return h('div',{className:'sb-section'},
-    h('label',{className:'sb-label',htmlFor:'suite-nclex-pass'},'NCLEX Pro Vault Sync'),
+    h('label',{className:'sb-label',htmlFor:'suite-nclex-url'},'NCLEX Pro Vault Sync'),
     h('div',{className:'sb-field'},
+      h('div',{style:{display:'flex',gap:6,alignItems:'center',marginBottom:6}},
+        h('input',{id:'suite-nclex-url','aria-label':'NCLEX Pro Vault URL',type:'url',autoComplete:'off',value:urlDraft,onChange:e=>commitUrl(e.target.value),placeholder:'https://your-nclex-pro.workers.dev',spellCheck:false,style:{flex:1}}),
+        urlDraft&&h('button',{type:'button',className:'btn-secondary','aria-label':'Clear NCLEX Pro Vault URL',style:{padding:'4px 10px',fontSize:12,flexShrink:0},onClick:()=>commitUrl('')},'Clear')
+      ),
+      urlErr&&h('div',{role:'alert',style:{fontSize:11,color:'var(--accent-red)',marginBottom:6}},'⚠ '+urlErr),
       h('div',{style:{display:'flex',gap:6,alignItems:'center'}},
         h('input',{id:'suite-nclex-pass','aria-describedby':'suite-nclex-pass-help',autoComplete:'off',type:'password','data-1p-ignore':'true','data-lpignore':'true','data-form-type':'other',value:cfg.nclexProPass||'',onChange:e=>cfg.setNclexProPass?.(e.target.value),placeholder:'NCLEX Pro passphrase…',spellCheck:false,style:{flex:1}}),
         cfg.nclexProPass&&h('button',{type:'button',className:'btn-secondary','aria-label':'Clear NCLEX Pro passphrase',style:{padding:'4px 10px',fontSize:12,flexShrink:0},onClick:()=>cfg.setNclexProPass?.('')},'Clear')
       ),
-      h('div',{className:'sb-hint',id:'suite-nclex-pass-help'},'Session-only passphrase for E2E-encrypted sync of Anki flashcards, NCLEX worksheets, & unfolding Case Studies to your private Cloudflare NCLEX Pro app — plus read-only FSRS Weak-Tag Prescription pull.')
+      h('div',{className:'sb-hint',id:'suite-nclex-pass-help'},'Configure your private Cloudflare NCLEX Pro Vault URL (saved locally) and session-only passphrase for E2E-encrypted sync of Anki flashcards, NCLEX worksheets, unfolding Case Studies, and FSRS Weak-Tag Prescription pulls.')
     )
   );
 }
@@ -19670,7 +19855,8 @@ function nclexProAnalyzeWeakTagPrescription(rawInput,{aiBank=null,aiFlashcards=n
       weakBuckets:(Array.isArray(doc.weakBuckets)?doc.weakBuckets:[]).map(canonBucket).filter(Boolean),
       weakTraps:Array.isArray(doc.weakTraps)?doc.weakTraps.map(String).filter(Boolean):[],
       weakFactIds:Array.isArray(doc.weakFactIds)?doc.weakFactIds:[],
-      leechFactIds:Array.isArray(doc.leechFactIds)?doc.leechFactIds.map(x=>String(x||'').toLowerCase()).filter(Boolean):[],
+      // v22.6: preserve scoped {kbKey, factId} objects in leechFactIds instead of coercing them to "[object object]".
+      leechFactIds:Array.isArray(doc.leechFactIds)?doc.leechFactIds.filter(Boolean):[],
     };
   }else if(doc.questionHistory||doc.flashcardSr||doc.conditionTotals||Array.isArray(doc.sessions)){
     // Derive Weak-Tag Prescription deterministically from raw progress:v2 + optional aiBank & aiFlashcards
@@ -19779,7 +19965,7 @@ function nclexProAnalyzeWeakTagPrescription(rawInput,{aiBank=null,aiFlashcards=n
       weakBuckets:Object.entries(bucketLoss).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]).map(([k])=>k),
       weakTraps:Object.entries(trapLoss).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]).map(([k])=>k).slice(0,8),
       weakFactIds:weakFacts,
-      leechFactIds:weakFacts.filter(f=>f.isLeech).map(f=>f.factId),
+      leechFactIds:weakFacts.filter(f=>f.isLeech).map(f=>f.kbKey?{kbKey:f.kbKey,factId:f.factId}:f.factId),
     };
   }else{
     throw new Error('Unrecognized JSON format: expected an NCLEX Pro Weak-Tag Prescription or Progress backup.');
@@ -19814,20 +20000,43 @@ function nclexProAnalyzeWeakTagPrescription(rawInput,{aiBank=null,aiFlashcards=n
   };
   for(const wc of rx.weakConditions){const hit=findKbCondition(wc&&wc.name);if(hit)addCondEntry(hit);}
 
+  // v22.6: enforce KB isolation on both weakFactIds and leechFactIds (supporting {kbKey,factId}, "kbKey|factId", and blocking legacy bare leech IDs that belonged to a foreign KB).
   const matchedWeakFactIds=[],matchedLeechFactIds=[];
-  const seenFid=new Set(),seenLeech=new Set();
-  const leechInputSet=new Set((rx.leechFactIds||[]).map(x=>String(x||'').trim().toLowerCase()));
+  const seenFid=new Set(),seenLeech=new Set(),foreignFactIds=new Set(),matchedSameKbFids=new Set();
+  const parseScopedFact=entry=>{
+    if(!entry)return{kbKey:'',factId:''};
+    if(typeof entry==='object')return{kbKey:String(entry.kbKey||'').trim(),factId:String(entry.factId||'').trim().toLowerCase()};
+    const raw=String(entry).trim();
+    const pipe=raw.indexOf('|');
+    if(pipe>0)return{kbKey:raw.slice(0,pipe).trim(),factId:raw.slice(pipe+1).trim().toLowerCase()};
+    return{kbKey:'',factId:raw.toLowerCase()};
+  };
+  const sameKbLeechIds=new Set();
+  const parsedLeeches=[];
+  for(const rawL of (rx.leechFactIds||[])){
+    const p=parseScopedFact(rawL);
+    if(!p.factId)continue;
+    if(p.kbKey&&km.kbKey&&p.kbKey!==km.kbKey){foreignFactIds.add(p.factId);continue;}
+    parsedLeeches.push(p);
+    sameKbLeechIds.add(p.factId);
+  }
   for(const wf of (rx.weakFactIds||[])){
-    const fid=String((wf&&wf.factId)||wf||'').trim().toLowerCase();
-    if(!fid||!km.factMap.has(fid))continue;
-    if(wf&&wf.kbKey&&km.kbKey&&wf.kbKey!==km.kbKey)continue;
-    if(!seenFid.has(fid)){seenFid.add(fid);matchedWeakFactIds.push(fid);}
-    if((wf&&wf.isLeech)||leechInputSet.has(fid)){if(!seenLeech.has(fid)){seenLeech.add(fid);matchedLeechFactIds.push(fid);}}
-    const fm=km.factMap.get(fid);
+    const p=parseScopedFact(wf);
+    if(!p.factId)continue;
+    if(p.kbKey&&km.kbKey&&p.kbKey!==km.kbKey){foreignFactIds.add(p.factId);continue;}
+    if(!km.factMap.has(p.factId))continue;
+    if(p.kbKey&&km.kbKey&&p.kbKey===km.kbKey)matchedSameKbFids.add(p.factId);
+    if(!seenFid.has(p.factId)){seenFid.add(p.factId);matchedWeakFactIds.push(p.factId);}
+    if((wf&&typeof wf==='object'&&wf.isLeech)||sameKbLeechIds.has(p.factId)){
+      if(!seenLeech.has(p.factId)){seenLeech.add(p.factId);matchedLeechFactIds.push(p.factId);}
+    }
+    const fm=km.factMap.get(p.factId);
     if(fm&&fm.conditionName){const hit=findKbCondition(fm.conditionName);if(hit)addCondEntry(hit);}
   }
-  for(const rawLid of leechInputSet){
-    if(km.factMap.has(rawLid)&&!seenLeech.has(rawLid)){seenLeech.add(rawLid);matchedLeechFactIds.push(rawLid);}
+  for(const p of parsedLeeches){
+    if(!km.factMap.has(p.factId)||seenLeech.has(p.factId))continue;
+    if(!p.kbKey&&foreignFactIds.has(p.factId)&&!matchedSameKbFids.has(p.factId))continue;
+    seenLeech.add(p.factId);matchedLeechFactIds.push(p.factId);
   }
 
   const matchedConcepts=[];
@@ -19899,46 +20108,27 @@ function nclexProAnalyzeWeakTagPrescription(rawInput,{aiBank=null,aiFlashcards=n
   };
 }
 async function nclexProPullWeakTagPrescription({url=NCLEX_PRO_DEFAULT_URL,passphrase='',kb=null,onStatus}={}){
-  const pass=String(passphrase||'');
-  if(!pass)throw new Error('Enter your NCLEX Pro vault passphrase in Study Settings first.');
-  const base=String(url||NCLEX_PRO_DEFAULT_URL).replace(/\/+$/,'');
-  const b64ToBytes=b64=>{const bin=atob(b64),arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return arr;};
-  const bytesToB64=u8=>{let bin='';for(let i=0;i<u8.length;i+=0x8000)bin+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(bin);};
-  const scrub=m=>{const s=String(m||'');return pass.length>=4?s.split(pass).join('[redacted]'):s;};
-  const decryptRec=async(rec,aesKey)=>{
-    if(!rec||!rec.payload)return null;
-    const raw=b64ToBytes(rec.payload);
-    const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:raw.slice(0,12)},aesKey,raw.slice(12));
-    return JSON.parse(new TextDecoder().decode(plain));
-  };
+  const scrub=m=>nclexProScrubSecret(m,passphrase);
   try{
-    onStatus?.('Connecting to NCLEX Pro vault…');
-    const metaRes=await nclexProFetch(base+'/api/meta',{cache:'no-store'});
-    if(!metaRes.ok)throw new Error('Could not reach NCLEX Pro vault ('+metaRes.status+').');
-    const meta=await metaRes.json();
-    if(!meta.configured)throw new Error('NCLEX Pro vault is not configured.');
-
-    onStatus?.('Deriving AES-256-GCM key…');
-    const baseKey=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveBits','deriveKey']);
-    const authBits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:b64ToBytes(meta.authSalt),iterations:meta.iterations||310000,hash:'SHA-256'},baseKey,256);
-    const token=bytesToB64(new Uint8Array(authBits));
-    const aesKey=await crypto.subtle.deriveKey({name:'PBKDF2',salt:b64ToBytes(meta.encSalt),iterations:meta.iterations||310000,hash:'SHA-256'},baseKey,{name:'AES-GCM',length:256},false,['decrypt']);
-
+    const session=await nclexProVaultSession(url,passphrase,onStatus);
     onStatus?.('Pulling encrypted FSRS progress & tag metadata…');
-    const headers={'X-Vault-Token':token};
+    const headers={'X-Vault-Token':session.token};
     const [progRes,aiRes,fcRes]=await Promise.all([
-      nclexProFetch(base+'/api/progress',{headers,cache:'no-store'}),
-      nclexProFetch(base+'/api/ai-bank',{headers,cache:'no-store'}).catch(()=>null),
-      nclexProFetch(base+'/api/ai-flashcards',{headers,cache:'no-store'}).catch(()=>null),
+      nclexProFetch(session.base+'/api/progress',{headers,cache:'no-store'},session.base),
+      nclexProFetch(session.base+'/api/ai-bank',{headers,cache:'no-store'},session.base).catch(()=>null),
+      nclexProFetch(session.base+'/api/ai-flashcards',{headers,cache:'no-store'},session.base).catch(()=>null),
     ]);
-    if(progRes.status===401)throw new Error('Incorrect NCLEX Pro vault passphrase.');
+    if(progRes.status===401){nclexProClearVaultKeyCache();throw new Error('Incorrect NCLEX Pro vault passphrase.');}
     if(!progRes.ok)throw new Error('Failed to read NCLEX Pro progress ('+progRes.status+').');
     const progRec=await progRes.json();
-    const progress=await decryptRec(progRec,aesKey);
+    const progress=await session.decryptRec(progRec);
     if(!progress)throw new Error('No study progress stored in NCLEX Pro cloud vault yet.');
-    const aiBank=(aiRes&&aiRes.ok)?await decryptRec(await aiRes.json(),aesKey).catch(()=>null):null;
-    const aiFlashcards=(fcRes&&fcRes.ok)?await decryptRec(await fcRes.json(),aesKey).catch(()=>null):null;
-    return nclexProAnalyzeWeakTagPrescription(progress,{aiBank,aiFlashcards,kb});
+    const aiBank=(aiRes&&aiRes.ok)?await session.decryptRec(await aiRes.json()).catch(()=>null):null;
+    const aiFlashcards=(fcRes&&fcRes.ok)?await session.decryptRec(await fcRes.json()).catch(()=>null):null;
+    const analyzed=nclexProAnalyzeWeakTagPrescription(progress,{aiBank,aiFlashcards,kb});
+    // v22.6: retain raw decrypted payloads non-enumerably so switching active KBs re-analyzes against the full cloud snapshot without re-fetching.
+    Object.defineProperty(analyzed,'_rawPull',{value:{progress,aiBank,aiFlashcards},enumerable:false,configurable:true});
+    return analyzed;
   }catch(e){
     throw new Error(scrub(e&&e.message?e.message:String(e)));
   }
@@ -19969,6 +20159,8 @@ function nclexProApplyPrescriptionToCases(rx,{unlockLeeches=true,maxConditions=6
     setters.setCaseExtraConditionIds?.([]);
     setters.setCaseSelectedConcepts?.([]);
   }else if(condIds.length>1){
+    // v22.6: also sync primary conditionId to condIds[0] so the dropdown matches the prescribed multi-condition scope.
+    setters.setConditionId?.(condIds[0]);
     setters.setCaseExtraConditionIds?.(condIds);
     setters.setCaseSelectedConcepts?.([]);
     setters.setCaseRunMode?.('mixed');
@@ -19979,6 +20171,9 @@ function nclexProApplyPrescriptionToCases(rx,{unlockLeeches=true,maxConditions=6
     if(rx.suggestedCaseMixMode)setters.setCaseMixMode?.(rx.suggestedCaseMixMode);
   }
   setters.setIncludeTier2?.(true);
+  // v22.6: forward FSRS weak-bucket & trap focus lines into CaseStudyGenerator -> caseBuildPrompt.
+  if(rx.focusOutcomesText)setters.setCaseFocusOutcomes?.(rx.focusOutcomesText);
+  if(rx.focusContextText)setters.setCaseFocusContext?.(rx.focusContextText);
   if(rx.suggestedCaseTypes&&typeof setters.setTypes==='function'){
     setters.setTypes(prev=>{
       const next={...prev};
@@ -19990,7 +20185,7 @@ function nclexProApplyPrescriptionToCases(rx,{unlockLeeches=true,maxConditions=6
   setters.setRxUnlockedCaseIds?.(leeches);
   return{appliedConditions:condIds.length,appliedConcepts:condIds.length?0:Math.min(4,concepts.length),unlockedLeeches:leeches.length};
 }
-function NclexProWeakTagBridge({idPrefix,mode,kb,passphrase,unlockedCount=0,setters}){
+function NclexProWeakTagBridge({idPrefix,mode,kb,passphrase,vaultUrl,unlockedCount=0,setters}){
   const h=React.createElement;
   const [rx,setRx]=useState(null);
   const [busy,setBusy]=useState(false);
@@ -20000,17 +20195,23 @@ function NclexProWeakTagBridge({idPrefix,mode,kb,passphrase,unlockedCount=0,sett
   const [pasteText,setPasteText]=useState('');
   const [unlockLeeches,setUnlockLeeches]=useState(true);
   const fileRef=useRef(null);
+  const rawSourceRef=useRef(null);
 
-  // Re-resolve matched KB IDs automatically if the active KB changes while a prescription is loaded
+  // v22.6: re-resolve against the original raw pulled/loaded payload (not the already-filtered rx) when the active KB changes.
   useEffect(()=>{
-    if(!rx)return;
-    try{setRx(prev=>prev?nclexProAnalyzeWeakTagPrescription(prev,{kb}):null);}catch{}
+    const src=rawSourceRef.current;
+    if(!src)return;
+    try{
+      if(src.progress)setRx(nclexProAnalyzeWeakTagPrescription(src.progress,{aiBank:src.aiBank,aiFlashcards:src.aiFlashcards,kb}));
+      else if(src.rawText)setRx(nclexProAnalyzeWeakTagPrescription(src.rawText,{kb}));
+    }catch{}
   },[kb]);
 
   const handlePull=async()=>{
     setBusy(true);setErr('');setMsg('Connecting to NCLEX Pro…');
     try{
-      const analyzed=await nclexProPullWeakTagPrescription({passphrase,kb,onStatus:m=>setMsg(m)});
+      const analyzed=await nclexProPullWeakTagPrescription({url:vaultUrl,passphrase,kb,onStatus:m=>setMsg(m)});
+      rawSourceRef.current=analyzed._rawPull||null;
       setRx(analyzed);
       setMsg(`Loaded FSRS weaknesses from "${analyzed.scopeName}" (${analyzed.matchedConditionNames.length} matching KB condition(s)${analyzed.matchedLeechFactIds.length?` · ${analyzed.matchedLeechFactIds.length} leech fact(s)`:''}).`);
     }catch(e){setMsg('');setErr(e?.message||String(e));}
@@ -20020,6 +20221,7 @@ function NclexProWeakTagBridge({idPrefix,mode,kb,passphrase,unlockedCount=0,sett
     setErr('');
     try{
       const analyzed=nclexProAnalyzeWeakTagPrescription(txt,{kb});
+      rawSourceRef.current={rawText:txt};
       setRx(analyzed);
       setShowPaste(false);setPasteText('');
       setMsg(`Loaded prescription "${analyzed.scopeName}" (${analyzed.matchedConditionNames.length} matching KB condition(s)).`);
@@ -20027,6 +20229,12 @@ function NclexProWeakTagBridge({idPrefix,mode,kb,passphrase,unlockedCount=0,sett
   };
   const handleFile=e=>{
     const f=e.target.files&&e.target.files[0];if(!f)return;
+    // v22.6: enforce 25 MB client file-size cap before loading prescription/progress JSON into memory.
+    if(f.size>NCLEX_PRO_MAX_IMPORT_BYTES){
+      setErr(`File too large (${(f.size/1048576).toFixed(1)} MB). Maximum supported JSON size is 25 MB.`);
+      e.target.value='';
+      return;
+    }
     const r=new FileReader();
     r.onload=ev=>handleJsonText(String(ev.target?.result||''));
     r.readAsText(f);
@@ -20041,9 +20249,13 @@ function NclexProWeakTagBridge({idPrefix,mode,kb,passphrase,unlockedCount=0,sett
     setErr('');
   };
   const handleClear=()=>{
+    rawSourceRef.current=null;
     setRx(null);setMsg('');setErr('');
-    if(mode==='cases')setters.setRxUnlockedCaseIds?.([]);
-    else setters.setRxUnlockedFactIds?.([]);
+    if(mode==='cases'){
+      setters.setRxUnlockedCaseIds?.([]);
+      setters.setCaseFocusOutcomes?.('');
+      setters.setCaseFocusContext?.('');
+    }else setters.setRxUnlockedFactIds?.([]);
   };
 
   return h('details',{id:idPrefix+'-nclex-pro-rx',style:{marginTop:8,marginBottom:8,padding:'7px 10px',borderRadius:6,border:'1px solid var(--border)',background:'var(--bg-input)',fontSize:11.5}},
@@ -20580,6 +20792,62 @@ function AnkiNoteDiagnostics({card,audit,current}){
     h('div',null,'Source association (retained after edits): ',current?(card.factIds||[]).map(id=>FT?h(FT,{key:id,factId:id}):h('span',{key:id,className:'fact-tag'},id)):'earlier KB; links inactive',current&&!(card.factIds||[]).length&&'unavailable'),
     h('div',null,'Checks value/unit occurrence in revealed Text, Extra and visible hints; comparators, roles, and clinical meaning still need review.'),
     card.sourceLinksNeedReview&&h('div',null,'Text or Extra changed; review and confirm the source links.')
+  );
+}
+// v22.6: hoist GizmoChunkAndAllPanels & GizmoPreviewDisclose to plain script to keep the JSX Babel block comfortably under 390 KB.
+function GizmoChunkAndAllPanels({outputMode,activeChunk,chunks,pages,copiedChunks,safeChunkIdx,setChunkIdx,handleCopyChunk,result,allText,handleCopyAll}){
+  const h=React.createElement;
+  return h(React.Fragment,null,
+    h('div',{style:{display:outputMode==='chunks'?'block':'none'}},
+      activeChunk&&h(Panel,{
+        title:'Chunk '+activeChunk.chunkNumber+' of '+chunks.length+' · Pages '+activeChunk.startPage+'–'+activeChunk.endPage+' of '+pages.length,
+        className:'flat',
+        actions:h(React.Fragment,null,
+          copiedChunks.has(activeChunk.chunkIndex)&&h('span',{className:'chip ok',style:{minHeight:26,padding:'2px 8px'}},'✓ Copied'),
+          h('button',{type:'button',className:'btn-secondary',disabled:safeChunkIdx<=0,onClick:()=>setChunkIdx(i=>Math.max(0,i-1))},'← Previous'),
+          h('button',{type:'button',className:'btn-secondary',disabled:safeChunkIdx>=chunks.length-1,onClick:()=>setChunkIdx(i=>Math.min(chunks.length-1,i+1))},'Next →'),
+          h('button',{type:'button',className:'btn-primary',onClick:()=>handleCopyChunk(false)},'📋 Copy chunk ',activeChunk.chunkNumber),
+          safeChunkIdx<chunks.length-1&&h('button',{type:'button',className:'btn-secondary',onClick:()=>handleCopyChunk(true)},'Copy & Next →')
+        )
+      },
+        h('div',{style:{display:'flex',flexWrap:'wrap',gap:6,alignItems:'center',marginBottom:10}},
+          h('span',{style:{fontSize:12,color:'var(--text-dim)',marginRight:4}},'Cards ',activeChunk.startCard,'–',activeChunk.endCard,' (',activeChunk.cardCount,' card',activeChunk.cardCount===1?'':'s',' · ',activeChunk.charCount.toLocaleString(),' chars)'),
+          chunks.length>1&&h('div',{role:'group','aria-label':'Chunk slides',style:{display:'flex',flexWrap:'wrap',gap:4,marginLeft:'auto'}},
+            chunks.map(ch=>{
+              const active=ch.chunkIndex===safeChunkIdx,done=copiedChunks.has(ch.chunkIndex);
+              return h('button',{key:ch.chunkIndex,type:'button','aria-pressed':active,'aria-label':'Chunk '+ch.chunkNumber+' (pages '+ch.startPage+' to '+ch.endPage+')',className:'btn-secondary',style:{padding:'2px 8px',fontSize:11,borderColor:active?'var(--accent)':done?'var(--ok-line)':undefined,background:active?'var(--blue-tint)':done?'var(--ok-tint)':undefined,color:active?'var(--blue-deep)':done?'var(--ok)':undefined},onClick:()=>setChunkIdx(ch.chunkIndex)},(done?'✓ ':'')+'#'+ch.chunkNumber+' (p.'+ch.startPage+'–'+ch.endPage+')');
+            })
+          )
+        ),
+        h('textarea',{'aria-label':'Converted Gizmo chunk plain text',readOnly:true,rows:12,value:activeChunk.text,onFocus:e=>e.target.select(),style:{fontFamily:'var(--font-mono)',fontSize:12,lineHeight:1.5,whiteSpace:'pre'}})
+      )
+    ),
+    h('div',{style:{display:outputMode==='all'?'block':'none'}},
+      h(Panel,{
+        title:'All converted cards · Pages 1–'+pages.length+' ('+result.cards.length+' cards)',
+        className:'flat',
+        actions:h('button',{type:'button',className:'btn-primary',onClick:handleCopyAll},'📋 Copy all (',result.cards.length,' cards)')
+      },
+        h('div',{style:{fontSize:12,color:'var(--text-dim)',marginBottom:8}},allText.length.toLocaleString(),' characters · 1 card per line, tab-separated. If Gizmo truncates large pastes, switch to ',h('b',null,'Chunk slideshow'),'.'),
+        h('textarea',{'aria-label':'All converted Gizmo plain text',readOnly:true,rows:14,value:allText,onFocus:e=>e.target.select(),style:{fontFamily:'var(--font-mono)',fontSize:12,lineHeight:1.5,whiteSpace:'pre'}})
+      )
+    )
+  );
+}
+function GizmoPreviewDisclose({activePreviewCards}){
+  const h=React.createElement;
+  return h(Disclose,{summary:'Preview highlighted [blanks] & backs',note:'showing '+Math.min(activePreviewCards.length,GIZMO_PREVIEW_LIMIT)+' of '+activePreviewCards.length},
+    activePreviewCards.slice(0,GIZMO_PREVIEW_LIMIT).map(c=>h('div',{key:c.index,style:{border:'1px solid var(--border)',borderRadius:8,padding:'10px 12px',marginBottom:8,background:'var(--bg-card)'}},
+      h('div',{style:{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--text-dim)',marginBottom:4}},'Card #',c.index,' · ',c.blankCount,' blank',c.blankCount===1?'':'s'),
+      h('div',{style:{fontSize:13,lineHeight:1.55,color:'var(--text-bright)'}},
+        gizmoRenderHighlightedFront(c.front).map((seg,si)=>seg.blank
+          ?h('mark',{key:si,style:{background:'var(--ok-tint)',color:'var(--ok)',border:'1px solid var(--ok-line)',borderRadius:4,padding:'0 4px',fontWeight:600}},seg.text)
+          :h(React.Fragment,{key:si},seg.text))
+      ),
+      h('div',{style:{borderTop:'1px dashed var(--border)',margin:'8px 0'}}),
+      h('div',{style:{fontSize:12,lineHeight:1.5,color:c.back?'var(--text)':'var(--text-dim)',fontStyle:c.back?'normal':'italic'}},c.back||'(empty Back — source Extra was blank)')
+    )),
+    activePreviewCards.length>GIZMO_PREVIEW_LIMIT&&h('div',{className:'hint'},'Showing first ',GIZMO_PREVIEW_LIMIT,' of ',activePreviewCards.length,' cards in this view. Copy includes every card in the selected mode.')
   );
 }
 </script>
@@ -21989,7 +22257,7 @@ function AnkiGenerator(){
               {['table','list','preview'].map(v=><button key={v} aria-pressed={view===v} onClick={()=>setView(v)} >{v==='table'?'Table':v==='list'?'List':'Preview'}</button>)}
             </div>
         <button className="btn-primary" onClick={exportTxt} disabled={!keptCount}>⬇ Export .txt</button>
-        {typeof AnkiNclexProSyncButtons==='function'&&<AnkiNclexProSyncButtons kept={selected.kept} keptCount={keptCount} batch={batch} kb={K.knowledgeBase} includeTrapAudit={includeTrapAudit} current={current} passphrase={cfg.nclexProPass} syncState={ankiSyncState} setSyncState={setAnkiSyncState}/>}
+        {typeof AnkiNclexProSyncButtons==='function'&&<AnkiNclexProSyncButtons kept={selected.kept} keptCount={keptCount} batch={batch} kb={K.knowledgeBase} includeTrapAudit={includeTrapAudit} current={current} passphrase={cfg.nclexProPass} vaultUrl={cfg.nclexProUrl} scopeLabel={[ankiConditionFilter.trim(),!['all','rn-only'].includes(ankiScopeMode)?ankiScopeMode:''].filter(Boolean).join(' · ')} syncState={ankiSyncState} setSyncState={setAnkiSyncState}/>}
       </ResultsHead>
       {typeof NclexProSyncBanner==='function'&&<NclexProSyncBanner state={ankiSyncState}/>}
       <div className="meta-row">
@@ -22650,7 +22918,7 @@ function NCLEXGenerator(){
           {[1,2,3].map(t=><button key={t} type="button" aria-pressed={kbTiers.includes(t)} className={'tier-btn t'+t+(kbTiers.includes(t)?' active':'')} onClick={()=>setKbTiers(p=>p.includes(t)?(p.length>1?p.filter(x=>x!==t):p):[...p,t].sort())}><b>Tier {t}</b></button>)}
         </div>
         {nclexHasBridge&&<label style={{display:'flex',alignItems:'center',gap:6,fontSize:12,color:'var(--text)',cursor:'pointer',marginTop:8}}><input id="nclex-include-bridge" type="checkbox" checked={kbIncludeBridge} onChange={e=>setKbIncludeBridge(e.target.checked)} style={{accentColor:'var(--accent)'}}/><span>Include NP Bridge facts <span className="badge-opt">off = RN Core only</span></span></label>}
-        {scopeFactView.conditions.length>0&&<NclexProWeakTagBridge idPrefix="nclex" mode="nclex" kb={K.knowledgeBase} passphrase={cfg.nclexProPass} unlockedCount={rxUnlockedFactIds.length} setters={{setKbSelectedConditionIds,setKbSelectedConcepts,setKbTiers,setOutcomes,setFocusContext,setRxUnlockedFactIds}}/>}
+        {scopeFactView.conditions.length>0&&<NclexProWeakTagBridge idPrefix="nclex" mode="nclex" kb={K.knowledgeBase} passphrase={cfg.nclexProPass} vaultUrl={cfg.nclexProUrl} unlockedCount={rxUnlockedFactIds.length} setters={{setKbSelectedConditionIds,setKbSelectedConcepts,setKbTiers,setOutcomes,setFocusContext,setRxUnlockedFactIds}}/>}
         {scopeFactView.conditions.length>0&&<GenLedgerControl idPrefix="nclex" primaryKind="nclex" ledger={ledger} scopeStats={scopeLedgerStats} excludeOwn={excludePriorNclex} setExcludeOwn={setExcludePriorNclex} excludeOther={excludeCaseFacts} setExcludeOther={setExcludeCaseFacts} onReset={resetNclexHistory} disabled={busy}/>}
         {poolExhausted&&<div className="tip-banner" style={{marginTop:8,marginBottom:0,fontSize:12,lineHeight:1.45,color:'var(--accent-warm)'}}>⚠ All {previewPoolFacts} fact(s) in this scope have already been tested. Click <b>Reset NCLEX history</b> above, uncheck exclusion, or widen your scope to generate more.</div>}
         <div style={{fontSize:12,color:'var(--text-dim)',marginTop:9,lineHeight:1.5}}>Tier 1–3 are included by default. Narrowing scope can improve depth, but excluding lower tiers may reduce distractor variety and concept inventory size.</div>
@@ -22735,7 +23003,7 @@ function NCLEXGenerator(){
       </div>
     </Disclose>}
       <NgCoveragePanel coverage={coverage} showUncov={showUncov} setShowUncov={setShowUncov} FactTagComp={FactTag}/>
-    {ws.count>0&&<NgWorksheetPanel ws={ws} totalConcepts={totalConcepts} view={view} setView={setView} wsMd={wsMd} workMd={workMd} syncState={syncState} diagnosticsAtEnd={ngDiagnosticsAtEnd} setDiagnosticsAtEnd={setNgDiagnosticsAtEnd} onSync={()=>nclexProRunUiSync(buildNclexProWs,cfg.nclexProPass,setSyncState,'Q(s)')} onExportJson={()=>nclexProDownloadJson(buildNclexProWs(),'NCLEX-Pro-Sync-Questions.json')}/>}
+    {ws.count>0&&<NgWorksheetPanel ws={ws} totalConcepts={totalConcepts} view={view} setView={setView} wsMd={wsMd} workMd={workMd} syncState={syncState} diagnosticsAtEnd={ngDiagnosticsAtEnd} setDiagnosticsAtEnd={setNgDiagnosticsAtEnd} onSync={()=>nclexProRunUiSync(buildNclexProWs,cfg.nclexProPass,setSyncState,'Q(s)',cfg.nclexProUrl)} onExportJson={()=>nclexProDownloadJson(buildNclexProWs(),'NCLEX-Pro-Sync-Questions.json')}/>}
     {!ws.count&&!busy&&<EmptyState mark="✎" title="No questions generated yet" note="Every question is written from fact IDs in your Knowledge Base and checked back against them, so nothing appears that your sources do not support." steps={['Choose which conditions and tiers the questions may draw on.','Set how many questions you want and how large each batch is.','Generate — questions first, then one answer key, with the grounding evidence beside it.']}/>}
     </Workbench></ArtifactSourceCtx.Provider>
   );
@@ -22797,7 +23065,10 @@ function CaseStudyGenerator(){
   const [excludeNclexFacts,setExcludeNclexFacts]=useState(false);
   const [allowContextAnchors,setAllowContextAnchors]=useState(true);
   const [rxUnlockedCaseIds,setRxUnlockedCaseIds]=useState([]);
-  useEffect(()=>{setRxUnlockedCaseIds([]);},[K.knowledgeBase]);
+  // v22.6: store Weak-Tag Prescription focus strings for CaseStudyGenerator -> caseBuildPrompt so weak P-LATE buckets and traps shape generated unfolding cases.
+  const [caseFocusOutcomes,setCaseFocusOutcomes]=useState('');
+  const [caseFocusContext,setCaseFocusContext]=useState('');
+  useEffect(()=>{setRxUnlockedCaseIds([]);setCaseFocusOutcomes('');setCaseFocusContext('');},[K.knowledgeBase]);
   const [factCategoryPlacement,setFactCategoryPlacement]=useState('auto');
   const [diagnosticsPlacement,setDiagnosticsPlacement]=useState('end');
   const caseHasBridge=useMemo(()=>Boolean(K.knowledgeBase.metadata?.plateBridge)||conditions.some(c=>(c.facts||[]).some(f=>f&&f.clinicalLayer==='bridge')),[K.knowledgeBase,conditions]);
@@ -22858,7 +23129,7 @@ function CaseStudyGenerator(){
   // v21.10 (Phase 4): also reset auditPhase and trip batchCancelRef when KB changes even between queued batch items.
   useEffect(()=>{const op=generatorSlot.current.active;if((op&&op.sourceKB!==K.knowledgeBase)||batchBusy){batchCancelRef.current=true;generatorSlot.current.cancel();setBusy(false);setBatchBusy(false);setBatchStatus(null);setAbortCtl(null);setLiveKB(0);setAuditPhase('');setAuditState(s=>s==='running'?'interrupted':s);}},[K.knowledgeBase]);
   useEffect(()=>()=>{batchCancelRef.current=true;generatorSlot.current.cancel();},[]);
-  const run=useCallback(async()=>{return caseRunSingleWithEnv({batchOverrideRef,activeCondition,selectedFacts,sufficiency,cfg,log,generatorSlot,setActivePacketId,K,stages,questionsPerStage,runAudit,setArtifactSource,setAuditState,currentSourceKB,setBusy,setLogs,setCaseStudy,setIssues,setCoverage,setLiveKB,setAudit,setAuditPhase,setProvenance,setInvalidCaseRaw,setAbortCtl,difficulty,types,setCasePacket,casePacketRef,priorTitles:excludePriorCases?ledger.cases.titles:null,priorUsedFactIds:allPriorUsedSet,onRecordUsedFacts:recordCaseUsed});},[cfg,activeCondition,selectedFacts,sufficiency,difficulty,stages,questionsPerStage,types,K,runAudit,excludePriorCases,ledger.cases.titles,allPriorUsedSet,recordCaseUsed]);
+  const run=useCallback(async()=>{return caseRunSingleWithEnv({batchOverrideRef,activeCondition,selectedFacts,sufficiency,cfg,log,generatorSlot,setActivePacketId,K,stages,questionsPerStage,runAudit,setArtifactSource,setAuditState,currentSourceKB,setBusy,setLogs,setCaseStudy,setIssues,setCoverage,setLiveKB,setAudit,setAuditPhase,setProvenance,setInvalidCaseRaw,setAbortCtl,difficulty,types,setCasePacket,casePacketRef,priorTitles:excludePriorCases?ledger.cases.titles:null,priorUsedFactIds:allPriorUsedSet,onRecordUsedFacts:recordCaseUsed,focusOutcomes:caseFocusOutcomes,focusContext:caseFocusContext});},[cfg,activeCondition,selectedFacts,sufficiency,difficulty,stages,questionsPerStage,types,K,runAudit,excludePriorCases,ledger.cases.titles,allPriorUsedSet,recordCaseUsed,caseFocusOutcomes,caseFocusContext]);
 
   // v15.6: audit verdicts joined back to their items for display.
   // NOTE: deriving the rows does NOT by itself keep them fresh — the verdict map is written
@@ -22938,7 +23209,7 @@ function CaseStudyGenerator(){
   }),[casePacket,K.knowledgeBase,K.factIndex]);
   const packetSubtitle=useMemo(()=>casePacket.map((p,i)=>(i+1)+'. '+(p.caseStudy?.condition||p.caseStudy?.title||'Case')).join(' · '),[casePacket]);
   const [syncState,setSyncState]=useState({busy:false,msg:'',err:''});
-  const syncCaseToNclexPro=(u)=>nclexProRunUiSync(()=>u?nclexProConvertCasePacket(casePacket,K.knowledgeBase):nclexProConvertCaseStudy(caseStudy,K.knowledgeBase),cfg.nclexProPass,setSyncState,'case Q(s)');
+  const syncCaseToNclexPro=(u)=>nclexProRunUiSync(()=>u?nclexProConvertCasePacket(casePacket,K.knowledgeBase):nclexProConvertCaseStudy(caseStudy,K.knowledgeBase),cfg.nclexProPass,setSyncState,'case Q(s)',cfg.nclexProUrl);
   const thinBatchCount=useMemo(()=>batchPlan.targets.filter(t=>t.sufficiency.warnings.length>0).length,[batchPlan]);
   const estMcqPerCase=types.mcq?Math.max(1,Math.ceil(stages*questionsPerStage*0.5)):0;
   // Every checkbox can be unchecked, which would send the model an empty type list.
@@ -23037,7 +23308,7 @@ function CaseStudyGenerator(){
           <button type="button" className={'tier-btn t3'+(includeTier3?' active':'')} aria-pressed={includeTier3} onClick={()=>setIncludeTier3(v=>!v)}><b>Tier 3</b> background</button>{/* v18.1: the label said "distractors", but distractors come from any tier (see the help text below) */}
         </div>
         {caseHasBridge&&<label style={{display:'flex',alignItems:'center',gap:6,fontSize:12,color:'var(--text)',cursor:'pointer',marginBottom:8}}><input id="case-include-bridge" type="checkbox" checked={caseIncludeBridge} onChange={e=>setCaseIncludeBridge(e.target.checked)} style={{accentColor:'var(--accent)'}}/><span>Include NP Bridge facts <span className="badge-opt">off = RN Core only</span></span></label>}
-        {conditions.length>0&&<NclexProWeakTagBridge idPrefix="case" mode="cases" kb={K.knowledgeBase} passphrase={cfg.nclexProPass} unlockedCount={rxUnlockedCaseIds.length} setters={{setConditionId,setCaseExtraConditionIds,setCaseSelectedConcepts,setCaseMixMode,setCaseRunMode,setIncludeTier2,setTypes,setRxUnlockedCaseIds}}/>}
+        {conditions.length>0&&<NclexProWeakTagBridge idPrefix="case" mode="cases" kb={K.knowledgeBase} passphrase={cfg.nclexProPass} vaultUrl={cfg.nclexProUrl} unlockedCount={rxUnlockedCaseIds.length} setters={{setConditionId,setCaseExtraConditionIds,setCaseSelectedConcepts,setCaseMixMode,setCaseRunMode,setIncludeTier2,setTypes,setRxUnlockedCaseIds,setCaseFocusOutcomes,setCaseFocusContext}}/>}
         {conditions.length>0&&<GenLedgerControl idPrefix="case" primaryKind="cases" ledger={ledger} scopeStats={caseScopeStats} excludeOwn={excludePriorCases} setExcludeOwn={setExcludePriorCases} excludeOther={excludeNclexFacts} setExcludeOther={setExcludeNclexFacts} allowContextAnchors={allowContextAnchors} setAllowContextAnchors={setAllowContextAnchors} freshnessPreview={freshnessPreview} onReset={resetCaseHistory} disabled={isBusy} resetHint="Separate from Clear packet — clearing the packet tray keeps used-fact history so your next run continues from unused facts."/>}
         {caseExhausted&&<div className="tip-banner" style={{marginTop:8,marginBottom:0,fontSize:12,lineHeight:1.45,color:'var(--accent-warm)'}}>⚠ All {caseScopeStats.total} fact(s) in this scope have already been used in prior cases. Click <b>Reset Case history</b>, uncheck exclusion, include Tier 2/3, or widen your scope.</div>}
         <div style={{fontSize:12,color:'var(--text-dim)',marginTop:8,lineHeight:1.5}}>Tier 1 facts drive the critical decisions. Tier 2 adds realistic context; Tier 3 adds lower-priority background detail. Distractors are built from contextually plausible near-misses at any tier, not from Tier 3. {isBatchMode?<>Queued cases select facts per entry independently.</>:<> <b style={{color:'var(--text)'}}>{freshSelectedCount}</b> fresh fact(s){anchorSelectedCount?<> + <b style={{color:'var(--text)'}}>{anchorSelectedCount}</b> background context anchor(s)</>:null} selected for {isWaveBatch?'Wave 1':'this case'}.</>}</div>
@@ -23538,39 +23809,7 @@ function GizmoImporter(){
         </div>
       </div>
 
-      <div style={{display:outputMode==='chunks'?'block':'none'}}>
-        {activeChunk&&<Panel title={'Chunk '+activeChunk.chunkNumber+' of '+chunks.length+' · Pages '+activeChunk.startPage+'–'+activeChunk.endPage+' of '+pages.length} className="flat"
-          actions={<>
-            {copiedChunks.has(activeChunk.chunkIndex)&&<span className="chip ok" style={{minHeight:26,padding:'2px 8px'}}>✓ Copied</span>}
-            <button type="button" className="btn-secondary" disabled={safeChunkIdx<=0} onClick={()=>setChunkIdx(i=>Math.max(0,i-1))}>← Previous</button>
-            <button type="button" className="btn-secondary" disabled={safeChunkIdx>=chunks.length-1} onClick={()=>setChunkIdx(i=>Math.min(chunks.length-1,i+1))}>Next →</button>
-            <button type="button" className="btn-primary" onClick={()=>handleCopyChunk(false)}>📋 Copy chunk {activeChunk.chunkNumber}</button>
-            {safeChunkIdx<chunks.length-1&&<button type="button" className="btn-secondary" onClick={()=>handleCopyChunk(true)}>Copy &amp; Next →</button>}
-          </>}>
-          <div style={{display:'flex',flexWrap:'wrap',gap:6,alignItems:'center',marginBottom:10}}>
-            <span style={{fontSize:12,color:'var(--text-dim)',marginRight:4}}>Cards {activeChunk.startCard}–{activeChunk.endCard} ({activeChunk.cardCount} card{activeChunk.cardCount===1?'':'s'} · {activeChunk.charCount.toLocaleString()} chars)</span>
-            {chunks.length>1&&<div role="group" aria-label="Chunk slides" style={{display:'flex',flexWrap:'wrap',gap:4,marginLeft:'auto'}}>
-              {chunks.map(ch=>{
-                const active=ch.chunkIndex===safeChunkIdx,done=copiedChunks.has(ch.chunkIndex);
-                return <button key={ch.chunkIndex} type="button" aria-pressed={active} aria-label={'Chunk '+ch.chunkNumber+' (pages '+ch.startPage+' to '+ch.endPage+')'}
-                  className="btn-secondary" style={{padding:'2px 8px',fontSize:11,borderColor:active?'var(--accent)':done?'var(--ok-line)':undefined,background:active?'var(--blue-tint)':done?'var(--ok-tint)':undefined,color:active?'var(--blue-deep)':done?'var(--ok)':undefined}}
-                  onClick={()=>setChunkIdx(ch.chunkIndex)}>
-                  {done?'✓ ':''}#{ch.chunkNumber} (p.{ch.startPage}–{ch.endPage})
-                </button>;
-              })}
-            </div>}
-          </div>
-          <textarea aria-label="Converted Gizmo chunk plain text" readOnly rows={12} value={activeChunk.text} onFocus={e=>e.target.select()} style={{fontFamily:'var(--font-mono)',fontSize:12,lineHeight:1.5,whiteSpace:'pre'}}/>
-        </Panel>}
-      </div>
-
-      <div style={{display:outputMode==='all'?'block':'none'}}>
-        <Panel title={'All converted cards · Pages 1–'+pages.length+' ('+result.cards.length+' cards)'} className="flat"
-          actions={<button type="button" className="btn-primary" onClick={handleCopyAll}>📋 Copy all ({result.cards.length} cards)</button>}>
-          <div style={{fontSize:12,color:'var(--text-dim)',marginBottom:8}}>{allText.length.toLocaleString()} characters · 1 card per line, tab-separated. If Gizmo truncates large pastes, switch to <b>Chunk slideshow</b>.</div>
-          <textarea aria-label="All converted Gizmo plain text" readOnly rows={14} value={allText} onFocus={e=>e.target.select()} style={{fontFamily:'var(--font-mono)',fontSize:12,lineHeight:1.5,whiteSpace:'pre'}}/>
-        </Panel>
-      </div>
+      <GizmoChunkAndAllPanels outputMode={outputMode} activeChunk={activeChunk} chunks={chunks} pages={pages} copiedChunks={copiedChunks} safeChunkIdx={safeChunkIdx} setChunkIdx={setChunkIdx} handleCopyChunk={handleCopyChunk} result={result} allText={allText} handleCopyAll={handleCopyAll}/>
 
       <div style={{display:outputMode==='range'?'block':'none'}}>
         <Panel title={'Page number range · '+(rangeSlice.valid?'Pages '+rangeSlice.startPage+'–'+rangeSlice.endPage+' of '+pages.length+' ('+rangeSlice.cardCount+' cards)':'Invalid page range')} className="flat"
@@ -23590,19 +23829,7 @@ function GizmoImporter(){
         </Panel>
       </div>
 
-      <Disclose summary="Preview highlighted [blanks] &amp; backs" note={'showing '+Math.min(activePreviewCards.length,GIZMO_PREVIEW_LIMIT)+' of '+activePreviewCards.length}>
-        {activePreviewCards.slice(0,GIZMO_PREVIEW_LIMIT).map(c=><div key={c.index} style={{border:'1px solid var(--border)',borderRadius:8,padding:'10px 12px',marginBottom:8,background:'var(--bg-card)'}}>
-          <div style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--text-dim)',marginBottom:4}}>Card #{c.index} · {c.blankCount} blank{c.blankCount===1?'':'s'}</div>
-          <div style={{fontSize:13,lineHeight:1.55,color:'var(--text-bright)'}}>
-            {gizmoRenderHighlightedFront(c.front).map((seg,si)=>seg.blank
-              ?<mark key={si} style={{background:'var(--ok-tint)',color:'var(--ok)',border:'1px solid var(--ok-line)',borderRadius:4,padding:'0 4px',fontWeight:600}}>{seg.text}</mark>
-              :<React.Fragment key={si}>{seg.text}</React.Fragment>)}
-          </div>
-          <div style={{borderTop:'1px dashed var(--border)',margin:'8px 0'}}/>
-          <div style={{fontSize:12,lineHeight:1.5,color:c.back?'var(--text)':'var(--text-dim)',fontStyle:c.back?'normal':'italic'}}>{c.back||'(empty Back — source Extra was blank)'}</div>
-        </div>)}
-        {activePreviewCards.length>GIZMO_PREVIEW_LIMIT&&<div className="hint">Showing first {GIZMO_PREVIEW_LIMIT} of {activePreviewCards.length} cards in this view. Copy includes every card in the selected mode.</div>}
-      </Disclose>
+      <GizmoPreviewDisclose activePreviewCards={activePreviewCards}/>
     </>}
 
     {!result&&!busy&&<EmptyState mark="⇄" title="Import to Gizmo"
@@ -23775,6 +24002,9 @@ const NoopTool=()=>null; // v20.2: unvisited tabs render NoopTool on boot and st
 function App(){
   const [apiKey,setApiKey]=useState(()=>{try{return sessionStorage.getItem('suite_key')||'';}catch{return'';}});
   const [nclexProPass,setNclexProPass]=useState(()=>{try{return sessionStorage.getItem('suite_nclex_pass')||'';}catch{return'';}});
+  // v22.6: user-configured NCLEX Pro Vault origin persisted in localStorage (suite_nclex_url), replacing hardcoded personal workers.dev URL.
+  const [nclexProUrl,setNclexProUrlState]=useState(()=>typeof nclexProLoadUrl==='function'?nclexProLoadUrl():'');
+  const setNclexProUrl=useCallback(raw=>{const saved=typeof nclexProSaveUrl==='function'?nclexProSaveUrl(raw):'';setNclexProUrlState(saved);if(typeof nclexProClearVaultKeyCache==='function')nclexProClearVaultKeyCache();},[]);
   // v17.3: hydrate once from the validated snapshot; loadModelSettings holds the defaults and the validation.
   const [savedModels]=useState(()=>{try{return loadModelSettings(localStorage);}catch(e){return {...MODEL_SETTINGS_DEFAULTS};}});
   const [hydrogenModel,setHydrogenModel]=useState(savedModels.hydrogenModel); // v20.2: Gemini 4 Hydrogen (gemini-4-hydrogen) supports low/medium/high/xhigh thinking levels and a 65,536-token output ceiling.
@@ -23811,6 +24041,9 @@ function App(){
         setThinkingMode(next.thinkingMode);setHydrogenLevel(next.hydrogenLevel);setNeonLevel(next.neonLevel);
       }else if(ev.key==='latte_auto_profile_v1'){
         setAutoProfile(ev.newValue===null?true:ev.newValue==='1');
+      }else if(ev.key==='suite_nclex_url'){
+        setNclexProUrlState(typeof nclexProLoadUrl==='function'?nclexProLoadUrl(ls):'');
+        if(typeof nclexProClearVaultKeyCache==='function')nclexProClearVaultKeyCache();
       }else if(ev.key==='latte_tool_profiles_v1'){
         try{
           const p=ev.newValue?JSON.parse(ev.newValue):null;
@@ -23870,7 +24103,7 @@ function App(){
   const sendCourseBriefToKb=useCallback(brief=>{setKbHandoff({...brief,sentAt:Date.now()});selectTool('knowledge');},[selectTool]);
 
   useEffect(()=>{try{if(apiKey)sessionStorage.setItem('suite_key',apiKey);else sessionStorage.removeItem('suite_key');}catch{}},[apiKey]);
-  useEffect(()=>{try{if(nclexProPass)sessionStorage.setItem('suite_nclex_pass',nclexProPass);else sessionStorage.removeItem('suite_nclex_pass');}catch{}},[nclexProPass]);
+  useEffect(()=>{try{if(nclexProPass)sessionStorage.setItem('suite_nclex_pass',nclexProPass);else sessionStorage.removeItem('suite_nclex_pass');}catch{}if(typeof nclexProClearVaultKeyCache==='function')nclexProClearVaultKeyCache();},[nclexProPass]);
   useEffect(()=>{
     mounted.current=true;let alive=true;const started=kbMutation.current;
     (async()=>{
@@ -23942,7 +24175,7 @@ function App(){
 
   // v17.3: activeTool left this context; it invalidated every mounted tool on each tab switch and only the settings drawer read it.
   const activeModel=thinkingMode?neonModel:hydrogenModel;
-  const cfg=useMemo(()=>({apiKey,setApiKey,nclexProPass,setNclexProPass,hydrogenModel,setHydrogenModel,neonModel,setNeonModel,thinkingMode,setThinkingMode,hydrogenLevel,neonLevel,thinkingLevel:(geminiIsArgon(activeModel)&&(thinkingMode?neonLevel:hydrogenLevel)==='xhigh')?'high':(thinkingMode?neonLevel:hydrogenLevel),setThinkingLevel:thinkingMode?setNeonLevel:setHydrogenLevel,activeModel,autoProfile,setAutoProfile,profiles,setProfile,resetProfiles,forTool}),[apiKey,nclexProPass,hydrogenModel,neonModel,thinkingMode,hydrogenLevel,neonLevel,activeModel,autoProfile,profiles,setProfile,resetProfiles,forTool]);
+  const cfg=useMemo(()=>({apiKey,setApiKey,nclexProPass,setNclexProPass,nclexProUrl,setNclexProUrl,hydrogenModel,setHydrogenModel,neonModel,setNeonModel,thinkingMode,setThinkingMode,hydrogenLevel,neonLevel,thinkingLevel:(geminiIsArgon(activeModel)&&(thinkingMode?neonLevel:hydrogenLevel)==='xhigh')?'high':(thinkingMode?neonLevel:hydrogenLevel),setThinkingLevel:thinkingMode?setNeonLevel:setHydrogenLevel,activeModel,autoProfile,setAutoProfile,profiles,setProfile,resetProfiles,forTool}),[apiKey,nclexProPass,nclexProUrl,setNclexProUrl,hydrogenModel,neonModel,thinkingMode,hydrogenLevel,neonLevel,activeModel,autoProfile,profiles,setProfile,resetProfiles,forTool]);
 
   // O(1) fact lookup, rebuilt only when the KB changes — powers FactTag and the drawer.
   const factIndex=useMemo(()=>buildFactIndex(knowledgeBase),[knowledgeBase]);

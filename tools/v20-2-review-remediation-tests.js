@@ -872,18 +872,21 @@ module.exports = async function runV202ReviewRemediationTests(S, t) {
     );
     const safePdfParams = pdfSafeDocParams({ data: new Uint8Array(4), isEvalSupported: true });
 
-    let sessionCleared = 0, winPrinted = 0, clickHandler = null, iframeTimeoutMs = 0, iframeRemoved = 0, afterPrintFn = null;
+    let sessionCleared = 0, winPrinted = 0, winWrites = 0, winReplaced = 0, clickHandler = null, iframeTimeoutMs = 0, iframeRemoved = 0, afterPrintFn = null;
+    const MockDOMParser = class { parseFromString(h) { return { documentElement: { html: h } }; } };
     const mockWin = {
       opener: { secret: 1 },
+      DOMParser: MockDOMParser,
       sessionStorage: { clear: () => { sessionCleared++; } },
       addEventListener: (ev, fn) => { if (ev === 'click') clickHandler = fn; },
       focus() {},
       print: () => { winPrinted++; },
       document: {
         readyState: 'complete',
-        open() {},
-        write() {},
-        close() {},
+        documentElement: { initial: true },
+        importNode: n => n,
+        replaceChild: (next) => { mockWin.document.documentElement = next; winReplaced++; },
+        write() { winWrites++; },
         getElementById: () => ({ onclick: null })
       }
     };
@@ -904,7 +907,7 @@ module.exports = async function runV202ReviewRemediationTests(S, t) {
       {
         mdToSafeHtml: s => '<p>' + s + '</p>',
         alert() {},
-        window: { open: () => mockWin },
+        window: { open: () => mockWin, DOMParser: MockDOMParser },
         document: {
           createElement: () => mockFrame,
           body: { appendChild() {} }
@@ -918,10 +921,12 @@ module.exports = async function runV202ReviewRemediationTests(S, t) {
     if (mockFrame.onload) mockFrame.onload();
     if (afterPrintFn) afterPrintFn();
 
-    t('v20.2 (Phase 7 — exportAsPdf, printViaIframe, & pdfSafeDocParams): clears child sessionStorage, binds opener #lp-print click, holds print iframe 180s, and forces isEvalSupported:false',
+    t('v20.2 (Phase 7 — exportAsPdf, printViaIframe, & pdfSafeDocParams): clears child sessionStorage, constructs print DOM without document.write, binds opener #lp-print click, holds print iframe 180s, and forces isEvalSupported:false',
       safePdfParams.isEvalSupported === false &&
       mockWin.opener === null &&
       sessionCleared === 1 &&
+      winReplaced === 1 &&
+      winWrites === 0 &&
       winPrinted === 1 &&
       iframeTimeoutMs === 180000 &&
       iframeRemoved === 1);

@@ -15,16 +15,22 @@ module.exports = async function runNclexProSyncTests(S, t) {
   const ngLabelsSrc = S.slice(ngLabelsStart, ngLabelsEnd);
 
   const loadEnv = (mockFetch) => {
+    const lsMap = new Map();
+    const mockStorage = {
+      getItem: k => (lsMap.has(String(k)) ? lsMap.get(String(k)) : null),
+      setItem: (k, v) => { lsMap.set(String(k), String(v)); },
+      removeItem: k => { lsMap.delete(String(k)); },
+    };
     const fn = new Function(
-      'fetch', 'crypto', 'TextEncoder', 'TextDecoder', 'URL', 'atob', 'btoa', 'Uint8Array',
-      ngSrc + '\n' + ngLabelsSrc + '\n' + helperSrc + '\nreturn { NCLEX_PRO_DEFAULT_URL, nclexProConvertWorksheet, nclexProConvertCaseStudy, nclexProConvertCasePacket, nclexProBuildExportJson, nclexProFetch, nclexProSyncToCloud };'
+      'fetch', 'crypto', 'TextEncoder', 'TextDecoder', 'URL', 'atob', 'btoa', 'Uint8Array', 'localStorage',
+      ngSrc + '\n' + ngLabelsSrc + '\n' + helperSrc + '\nreturn { NCLEX_PRO_DEFAULT_URL, nclexProNormalizeUrl, nclexProLoadUrl, nclexProSaveUrl, nclexProClearVaultKeyCache, nclexProConvertWorksheet, nclexProConvertCaseStudy, nclexProConvertCasePacket, nclexProConvertAnkiDeck, nclexProBuildExportJson, nclexProFetch, nclexProSyncToCloud, nclexProSyncFlashcardsToCloud };'
     );
     return fn(
       mockFetch || (() => { throw new Error('unexpected fetch'); }),
       webcrypto, TextEncoder, TextDecoder, URL,
       s => Buffer.from(s, 'base64').toString('binary'),
       s => Buffer.from(s, 'binary').toString('base64'),
-      Uint8Array
+      Uint8Array, mockStorage
     );
   };
 
@@ -109,40 +115,94 @@ module.exports = async function runNclexProSyncTests(S, t) {
     csOut.items[2].t === 'ngn_cloze' && JSON.stringify(csOut.items[2].cor) === '[0,0]' &&
     csOut.items[3].t === 'mcq' && Boolean(csOut.items[3].cd && csOut.items[3].cd.trend && csOut.items[3].cd.vitals && csOut.items[3].cd.labs));
 
-  // 3. Untrusted origin refusal in nclexProFetch
-  let blockedOrigin = false;
+  // 3. User-configured Vault URL & untrusted origin refusal in nclexProFetch
+  const testVaultUrl = 'https://vault.example.test';
+  let blockedOrigin = false, blockedHttp = false, blockedCreds = false, blockedMismatch = false, missingUrlErr = '';
   try { env.nclexProFetch('https://evil.example/api/ai-bank'); } catch (e) { blockedOrigin = /untrusted/i.test(e.message); }
-  t('nclexProFetch blocks untrusted origins outside NCLEX_PRO_ALLOWED_ORIGINS', blockedOrigin);
+  try { env.nclexProNormalizeUrl('http://evil.example'); } catch (e) { blockedHttp = /HTTPS required/i.test(e.message); }
+  try { env.nclexProNormalizeUrl('https://user:pass@vault.example.test'); } catch (e) { blockedCreds = /credentials/i.test(e.message); }
+  try { env.nclexProFetch('https://other.example/api/meta', {}, testVaultUrl); } catch (e) { blockedMismatch = /untrusted/i.test(e.message); }
+  try { await env.nclexProSyncToCloud(csOut, { passphrase: 'SecretTestPhrase!99' }); } catch (e) { missingUrlErr = e.message; }
+  t('nclexProNormalizeUrl & nclexProFetch remove hardcoded personal URL, require HTTPS/localhost, and enforce exact configured origin',
+    env.NCLEX_PRO_DEFAULT_URL === '' &&
+    env.nclexProNormalizeUrl('https://vault.example.test/some/path?x=1#h') === testVaultUrl &&
+    env.nclexProNormalizeUrl('http://localhost:8787/api') === 'http://localhost:8787' &&
+    blockedOrigin && blockedHttp && blockedCreds && blockedMismatch &&
+    /Configure your NCLEX Pro Vault URL/i.test(missingUrlErr));
 
-  // 4. End-to-end E2E-encrypted sync roundtrip + secret redaction on error
+  // 4. End-to-end E2E-encrypted sync roundtrip + HTTP 409 Conflict merge-retry + expectedRev + redirect:'error'
   let storedPayload = null;
+  let remoteRev = 1;
+  let putCalls = 0;
+  let sawRedirectError = false;
+  let sawExpectedRev = [];
   const authSalt = Buffer.from('0123456789abcdef').toString('base64');
   const encSalt = Buffer.from('fedcba9876543210').toString('base64');
   const mockEnv = loadEnv(async (url, opts = {}) => {
+    if (opts.redirect === 'error') sawRedirectError = true;
     if (url.endsWith('/api/meta')) {
       return { ok: true, status: 200, json: async () => ({ configured: true, iterations: 1000, authSalt, encSalt }) };
     }
     if (url.endsWith('/api/ai-bank') && (!opts.method || opts.method === 'GET')) {
-      return { ok: true, status: 200, json: async () => storedPayload ? { rev: 1, payload: storedPayload } : { empty: true, rev: 0, payload: null } };
+      return { ok: true, status: 200, json: async () => storedPayload ? { rev: remoteRev, payload: storedPayload } : { empty: true, rev: 0, payload: null } };
     }
     if (url.endsWith('/api/ai-bank') && opts.method === 'PUT') {
+      putCalls++;
       const b = JSON.parse(opts.body);
+      sawExpectedRev.push(b.expectedRev);
+      if (putCalls === 1) {
+        // Simulate concurrent writer bumping rev before our first PUT lands
+        remoteRev = 2;
+        return { ok: false, status: 409, json: async () => ({ error: 'Conflict', currentRev: 2 }) };
+      }
       storedPayload = b.payload;
-      return { ok: true, status: 200, json: async () => ({ ok: true, rev: 2 }) };
+      remoteRev = b.expectedRev + 1;
+      return { ok: true, status: 200, json: async () => ({ ok: true, rev: remoteRev }) };
     }
     return { ok: false, status: 404, json: async () => ({}) };
   });
-  const syncRes = await mockEnv.nclexProSyncToCloud(csOut, { passphrase: 'SecretTestPhrase!99' });
-  t('nclexProSyncToCloud E2E-encrypts AI bank payload with AES-256-GCM before PUT (zero plaintext in transit)',
+  const syncRes = await mockEnv.nclexProSyncToCloud(csOut, { url: testVaultUrl, passphrase: 'SecretTestPhrase!99' });
+  t('nclexProSyncToCloud E2E-encrypts with AES-256-GCM, sends expectedRev + redirect:error, and auto-recovers from HTTP 409 Conflict',
     syncRes.ok === true && syncRes.syncedCount === 4 && syncRes.totalAiCount === 4 &&
+    putCalls === 2 && sawRedirectError &&
+    sawExpectedRev[0] === 0 && sawExpectedRev[1] === 0 &&
     typeof storedPayload === 'string' && !storedPayload.includes('furosemide') && !storedPayload.includes('Pulmonary edema'));
 
-  // 5. Passphrase scrubbing on error + sessionStorage-only persistence in HTML
-  const errEnv = loadEnv(async () => { throw new Error('Network leaked SecretTestPhrase!99'); });
+  // 5. Fail-closed NGN & Ordering converters report skipped count instead of fabricating index-0 / identity answers
+  const badCase = {
+    title: 'Malformed NGN Case',
+    condition: 'Heart Failure',
+    stages: [{
+      stageNumber: 1, title: 'S1', narrative: 'Arrives.',
+      data: [],
+      questions: [
+        { type: 'Bowtie', stem: 'Incomplete bowtie', options: [{ label: 'A1', group: 'actions', text: 'Act1' }, { label: 'A2', group: 'actions', text: 'Act2' }, { label: 'C1', group: 'condition', text: 'Cond1' }, { label: 'P1', group: 'parameters', text: 'P1' }, { label: 'P2', group: 'parameters', text: 'P2' }], correctAnswers: ['A1', 'C1', 'P1'], rationales: [] },
+        { type: 'Matrix', stem: 'Unmapped row matrix', matrix: { mode: 'single', columns: [{ id: 'c1', label: 'Yes' }, { id: 'c2', label: 'No' }], rows: [{ id: 'r1', text: 'Row 1' }, { id: 'r2', text: 'Row 2' }] }, correctAnswers: ['r1:c1'], rationales: [] },
+        { type: 'Cloze', stem: 'Missing blank {{D1}} and {{D2}}', options: [{ label: 'A', group: 'D1', text: 'One' }, { label: 'B', group: 'D1', text: 'Two' }, { label: 'C', group: 'D2', text: 'Three' }, { label: 'D', group: 'D2', text: 'Four' }], correctAnswers: ['A'], rationales: [] },
+        { type: 'Ordering', stem: 'Incomplete order', options: [{ label: 'A', text: 'First' }, { label: 'B', text: 'Second' }], correctAnswers: ['A'], rationales: [] },
+        { type: 'Calculation', stem: 'Range calc', options: [], correctAnswers: ['120 to 130 mL/hr'], rationales: [] },
+      ],
+    }],
+  };
+  const badWs = {
+    questions: ['1. Put these steps in the correct clinical order:\n____ Step alpha\n____ Step beta\n____ Step gamma'],
+    answers: ['1. ANSWER:\n1. Unmatched completely unrelated answer text\nTags: Tier 1 | Take Action'],
+  };
+  const badCaseOut = env.nclexProConvertCaseStudy(badCase, sampleKb);
+  const badWsOut = env.nclexProConvertWorksheet(badWs, [], sampleKb);
+  t('nclexProConvertCaseStudy & nclexProConvertWorksheet fail closed on unmapped NGN/Ordering items, report skipped counts, and preserve range calculations',
+    badCaseOut.items.length === 1 &&
+    badCaseOut.items[0].t === 'fill_blank' && badCaseOut.items[0].cor === '120 to 130' && badCaseOut.items[0].unit === 'mL/hr' &&
+    badCaseOut.skipped === 4 &&
+    badWsOut.items.length === 0 && badWsOut.skipped === 1);
+
+  // 6. Passphrase scrubbing (raw + URI-encoded) on error + sessionStorage-only persistence in HTML
+  const trickyPass = 'Secret Test/Phrase!99';
+  const errEnv = loadEnv(async () => { throw new Error('Network leaked ' + trickyPass + ' and ' + encodeURIComponent(trickyPass)); });
   let scrubbedErr = '';
-  try { await errEnv.nclexProSyncToCloud(csOut, { passphrase: 'SecretTestPhrase!99' }); } catch (e) { scrubbedErr = e.message; }
-  t('nclexProSyncToCloud scrubs passphrase from errors and HTML keeps passphrase strictly in sessionStorage',
-    !scrubbedErr.includes('SecretTestPhrase!99') && scrubbedErr.includes('[redacted]') &&
+  try { await errEnv.nclexProSyncToCloud(csOut, { url: testVaultUrl, passphrase: trickyPass }); } catch (e) { scrubbedErr = e.message; }
+  t('nclexProSyncToCloud scrubs raw & URI-encoded passphrase from errors and HTML keeps passphrase strictly in sessionStorage',
+    !scrubbedErr.includes(trickyPass) && !scrubbedErr.includes(encodeURIComponent(trickyPass)) && scrubbedErr.includes('[redacted]') &&
     S.includes("sessionStorage.getItem('suite_nclex_pass')") &&
     !S.includes("localStorage.setItem('suite_nclex_pass'"));
 };

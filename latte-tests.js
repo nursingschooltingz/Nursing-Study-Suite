@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const { NAME_CLASH_RE, resolveSuiteFile, extractAnchoredRegex } = require('./tools/repo-checks');
-const EXPECTED_ASSERTIONS = 4222;
+const EXPECTED_ASSERTIONS = 4228;
 
 let file;
 try {
@@ -2658,7 +2658,7 @@ section('v15.14 — tier 3');
     S.includes('worker-src blob:'));
   t('object-src, base-uri and form-action are locked, since none of them is used at all',
     S.includes("object-src 'none'; base-uri 'none'; form-action 'none'"));
-  t('connect-src governs Gemini, the integrity-checked worker fetch, and allowlisted NCLEX Pro sync', S.split('fetch(').length - 1 === 3 && S.includes('integrity:PDF_WORKER_INTEGRITY') && S.includes('https://nclex-pro.rn-study-vault.workers.dev'));
+  t('connect-src governs Gemini, the integrity-checked worker fetch, and user-configured NCLEX Pro Workers sync without hardcoded personal URLs', S.split('fetch(').length - 1 === 3 && S.includes('integrity:PDF_WORKER_INTEGRITY') && S.includes('https://*.workers.dev') && !S.includes('rn-study-vault'));
   t('and still no form, object, embed or base tag to need the other three',
     !S.includes('<form') && !S.includes('<object') && !S.includes('<embed') && !S.includes('<base '));
   // T3.8 — the shared DOMPurify hash was an assumption; it is now a measurement.

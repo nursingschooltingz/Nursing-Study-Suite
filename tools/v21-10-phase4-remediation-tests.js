@@ -226,12 +226,17 @@ module.exports = async function runPhase4RemediationTests(S, t) {
 
   // 5. H21.7 — exportAsPdf fires win.print() exactly once per click (no duplicate btn.onclick)
   {
-    let printCalls = 0, clickListeners = 0;
+    let printCalls = 0, clickListeners = 0, writes = 0;
     const printBtn = { id: 'lp-print', onclick: null, closest(sel) { return sel === '#lp-print' ? this : null; } };
     let capturedClick = null;
+    const MockDOMParser = class { parseFromString(h) { return { documentElement: { html: h } }; } };
     const fakeWin = {
+      DOMParser: MockDOMParser,
       document: {
-        open() {}, write() {}, close() {},
+        documentElement: { initial: true },
+        importNode: n => n,
+        replaceChild(next) { this.documentElement = next; },
+        write() { writes++; },
         getElementById(id) { return id === 'lp-print' ? printBtn : null; }
       },
       addEventListener(ev, fn) { if (ev === 'click') { clickListeners++; capturedClick = fn; } },
@@ -240,15 +245,15 @@ module.exports = async function runPhase4RemediationTests(S, t) {
     const env = U(
       { isSupported: true, addHook() {}, sanitize: s => ({ html: s, querySelectorAll: () => [] }) },
       { parse: s => '<p>' + s + '</p>' },
-      { open: () => fakeWin },
+      { open: () => fakeWin, DOMParser: MockDOMParser },
       { createElement: () => ({ innerHTML: '', appendChild(f) { this.innerHTML = f.html || ''; } }) },
       {}, null, null, null, null, null, null, null, null, null, null
     );
     env.exportAsPdf('# Hello', 'Title', 'Sub');
     if (capturedClick) capturedClick({ target: printBtn });
     if (typeof printBtn.onclick === 'function') printBtn.onclick();
-    t('v21.10 Phase 4 (H21.7 — exportAsPdf single print): attaches one delegated click listener with no duplicate btn.onclick so clicking #lp-print triggers win.print() exactly once',
-      clickListeners === 1 && printBtn.onclick === null && printCalls === 1);
+    t('v21.10 Phase 4 (H21.7 — exportAsPdf single print): attaches one delegated click listener without document.write or duplicate btn.onclick so clicking #lp-print triggers win.print() exactly once',
+      clickListeners === 1 && writes === 0 && printBtn.onclick === null && printCalls === 1);
   }
 
   // 6. H21.8 — NCLEXExtractor concurrency guard, error secret redaction, /\.pdf$/i, and [firstFile] effect

@@ -200,12 +200,13 @@ async function runTests(source,test=(name,ok)=>assert.ok(ok,name)){
   t('ordinary retry waits remain immediately abortable',(await waiting)?.name==='AbortError');
 
   const printSource=extract(source,'function exportAsPdf(','\n/* ═');
-  let writes=0,printed=0,fallback=0,opened=0;const opener={sensitive:'synthetic'};
-  const popup={opener,document:{open(){assert.equal(popup.opener,null,'opener must be severed before document construction');},write(){writes++;},close(){},readyState:'complete',getElementById(){return{};}},focus(){},print(){printed++;}};
+  let replaced=0,writes=0,printed=0,fallback=0,opened=0;const opener={sensitive:'synthetic'};
+  const MockDOMParser=class{parseFromString(h){return{documentElement:{html:h}};}};
+  const popup={opener,DOMParser:MockDOMParser,document:{documentElement:{old:true},importNode(node){return node;},replaceChild(next,prev){assert.equal(popup.opener,null,'opener must be severed before document construction');assert.equal(prev,popup.document.documentElement);popup.document.documentElement=next;replaced++;},write(){writes++;},readyState:'complete',getElementById(){return{};}},focus(){},print(){printed++;}};
   const print=new Function('window','buildPrintDoc','printViaIframe','setTimeout','alert',printSource+';return exportAsPdf;')(
-    {open(){opened++;return popup;}},()=>'<p>synthetic</p>',()=>{fallback++;},fn=>fn(),()=>{});
+    {open(){opened++;return popup;},DOMParser:MockDOMParser},()=>'<p>synthetic</p>',()=>{fallback++;},fn=>fn(),()=>{});
   print('synthetic','Study');
-  t('successful popup severs opener while parent can still write and print',popup.opener===null&&writes===1&&printed===1&&opened===1&&fallback===0);
+  t('successful popup severs opener and constructs print DOM via DOMParser without document.write',popup.opener===null&&replaced===1&&writes===0&&printed===1&&opened===1&&fallback===0);
   const blockedPrint=new Function('window','buildPrintDoc','printViaIframe','alert',printSource+';return exportAsPdf;')({open:()=>null},()=>'<p>safe</p>',()=>{fallback++;},()=>{});
   blockedPrint('synthetic','Study');t('blocked popup still uses the sandboxed iframe fallback',fallback===1);
   t('extractions include full failure, cleanup and output tails',pptxSource.includes('pptxCheckAbort(signal);return out;')&&transportSource.includes('await _sleep(retryDelay,signal);')&&printSource.includes("win.addEventListener('load'"));

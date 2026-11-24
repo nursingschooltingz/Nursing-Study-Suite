@@ -374,12 +374,13 @@ module.exports = async function runV225SuiteAndSyncTests(S, t) {
       }
       throw new Error('Unexpected URL: ' + url);
     };
-    const syncRes = await E.nclexProSyncFlashcardsToCloud(deckPayload, { passphrase: 'correct-horse-battery-staple' });
+    const syncRes = await E.nclexProSyncFlashcardsToCloud(deckPayload, { url: 'https://vault.example.test', passphrase: 'correct-horse-battery-staple' });
 
+    E.nclexProClearVaultKeyCache?.();
     mockFetch = async () => { throw new Error('network failed for secret correct-horse-battery-staple'); };
     let scrubbedErr = '';
     try {
-      await E.nclexProSyncFlashcardsToCloud(deckPayload, { passphrase: 'correct-horse-battery-staple' });
+      await E.nclexProSyncFlashcardsToCloud(deckPayload, { url: 'https://vault.example.test', passphrase: 'correct-horse-battery-staple' });
     } catch (e) {
       scrubbedErr = e.message;
     }

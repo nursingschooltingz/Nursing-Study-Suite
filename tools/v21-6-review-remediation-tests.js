@@ -191,11 +191,11 @@ module.exports = async function runV216ReviewRemediationTests(S, t) {
       generationConfig: { thinkingConfig: { thinkingLevel: 'low' } }
     }, { stream: true, timeoutMs: 900000 });
 
-    t('v21.6 (ISSUE-02, ISSUE-07, ISSUE-08 — transport privacy, safety, & SSE routing): defaults store:false without mutating caller, auto-falls back on HTTP 400 rejecting store, includes CIVIC_INTEGRITY, routes application/json under stream:true, and tightens SSE inter-frame timeout to 180s',
-      tr.SAFETY_SETTINGS.length === 5 &&
-      tr.SAFETY_SETTINGS.some(s => s.category === 'HARM_CATEGORY_CIVIC_INTEGRITY' && s.threshold === 'BLOCK_NONE') &&
-      MEASUREMENT_SAFETY_SETTINGS.length === 5 &&
-      MEASUREMENT_SAFETY_SETTINGS.some(s => s.category === 'HARM_CATEGORY_CIVIC_INTEGRITY' && s.threshold === 'BLOCK_NONE') &&
+    t('v21.6 + v22.6 (ISSUE-02, ISSUE-07, ISSUE-08 — transport privacy, safety, & SSE routing): defaults store:false without mutating caller, auto-falls back on HTTP 400 rejecting store, drops deprecated CIVIC_INTEGRITY (4 active BLOCK_NONE categories), routes application/json under stream:true, and tightens SSE inter-frame timeout to 180s',
+      tr.SAFETY_SETTINGS.length === 4 &&
+      !tr.SAFETY_SETTINGS.some(s => s.category === 'HARM_CATEGORY_CIVIC_INTEGRITY') &&
+      MEASUREMENT_SAFETY_SETTINGS.length === 4 &&
+      !MEASUREMENT_SAFETY_SETTINGS.some(s => s.category === 'HARM_CATEGORY_CIVIC_INTEGRITY') &&
       callerBody.store === undefined &&
       sentBodies.length === 3 &&
       sentBodies[0].store === false &&

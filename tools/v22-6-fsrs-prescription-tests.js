@@ -44,7 +44,7 @@ module.exports = async function runV226FsrsPrescriptionTests(S, t) {
     marked: { parse: x => x, use: noop },
     DOMPurify: { sanitize: x => x, addHook: noop, isSupported: true },
     console,
-    setTimeout: fn => { fn(); return 0; },
+    setTimeout: (fn, ms) => { if (!ms || ms < 5000) fn(); return 0; },
     clearTimeout: noop,
     TextEncoder,
     TextDecoder,
@@ -70,8 +70,8 @@ module.exports = async function runV226FsrsPrescriptionTests(S, t) {
   const rAtS = ctx.nclexProFsrsRetrievability(srTenDays, fixedNow);
   const rAtZero = ctx.nclexProFsrsRetrievability({ stability: 10, reps: 1, lastReviewTs: new Date(fixedNow).toISOString() }, fixedNow);
   const rFuture = ctx.nclexProFsrsRetrievability(srTenDays, fixedNow, 15);
-  t('v22.6 (FSRS-5 math & version): suiteVersion is 22.6 and nclexProFsrsRetrievability satisfies R(0,S)=1.0, R(S,S)=0.90, and monotonic decay',
-    ctx.suiteVersion() === '22.6' &&
+  t('v22.6 (FSRS-5 math & version): suiteVersion is 23.0 and nclexProFsrsRetrievability satisfies R(0,S)=1.0, R(S,S)=0.90, and monotonic decay',
+    ctx.suiteVersion() === '23.0' &&
     Math.abs(rAtZero - 1.0) < 1e-9 &&
     Math.abs(rAtS - 0.90) < 1e-9 &&
     rFuture < rAtS && rFuture > 0.70);
@@ -236,7 +236,8 @@ module.exports = async function runV226FsrsPrescriptionTests(S, t) {
     return { ok: false, status: 404, json: async () => ({}) };
   };
 
-  const pulledRx = await ctx.nclexProPullWeakTagPrescription({ passphrase: secretPass, kb: syntheticKb });
+  const testVaultUrl = 'https://vault.example.test';
+  const pulledRx = await ctx.nclexProPullWeakTagPrescription({ url: testVaultUrl, passphrase: secretPass, kb: syntheticKb });
   t('v22.6 (Cloud pull E2E): nclexProPullWeakTagPrescription derives PBKDF2 token + AES-256-GCM key, decrypts /api/progress + /api/ai-bank + /api/ai-flashcards, and returns KB-matched prescription',
     seenTokens.length === 3 &&
     seenTokens.every(tk => tk === expectedToken) &&
@@ -247,16 +248,17 @@ module.exports = async function runV226FsrsPrescriptionTests(S, t) {
 
   let blockedOriginErr = '';
   try {
-    await ctx.nclexProPullWeakTagPrescription({ url: 'https://evil-collector.example.com', passphrase: secretPass, kb: syntheticKb });
+    await ctx.nclexProPullWeakTagPrescription({ url: 'http://evil-collector.example.com', passphrase: secretPass, kb: syntheticKb });
   } catch (e) { blockedOriginErr = e.message; }
 
+  ctx.nclexProClearVaultKeyCache();
   mockFetch = async () => { throw new Error('Echoed secret ' + secretPass + ' in transport failure'); };
   let scrubbedErr = '';
   try {
-    await ctx.nclexProPullWeakTagPrescription({ passphrase: secretPass, kb: syntheticKb });
+    await ctx.nclexProPullWeakTagPrescription({ url: testVaultUrl, passphrase: secretPass, kb: syntheticKb });
   } catch (e) { scrubbedErr = e.message; }
 
-  t('v22.6 (Security & privacy): nclexProPullWeakTagPrescription blocks non-allowlisted origins and redacts vault passphrase from thrown errors',
+  t('v22.6 (Security & privacy): nclexProPullWeakTagPrescription blocks non-HTTPS origins and redacts vault passphrase from thrown errors',
     /Blocked untrusted NCLEX Pro sync origin/.test(blockedOriginErr) &&
     scrubbedErr.includes('[redacted]') &&
     !scrubbedErr.includes(secretPass));
@@ -328,4 +330,160 @@ module.exports = async function runV226FsrsPrescriptionTests(S, t) {
     serializedDiag.includes('Text or Extra changed; review and confirm the source links.') &&
     S.includes('<NclexProWeakTagBridge idPrefix="nclex" mode="nclex"') &&
     S.includes('<NclexProWeakTagBridge idPrefix="case" mode="cases"'));
+
+  // 7. 4-Pillar Trap Audit object formatting (no "[object Object]") + custom Deck Name override in Anki -> NCLEX Pro sync
+  const trapKb = {
+    metadata: { course: 'NUR 211', exam: 'Exam 3' },
+    conditions: [{
+      id: 'cond-siadh',
+      name: 'SIADH',
+      contrastPartners: ['Diabetes Insipidus'],
+      facts: [
+        { id: 'fact-101', tier: 1, latteBucket: 'Look', trapRole: 'twin-cue', contrastWith: 'Diabetes Insipidus', text: 'Serum sodium <135 mEq/L with high urine specific gravity >1.020' },
+        { id: 'fact-102', tier: 1, latteBucket: 'Treat', trapRole: 'hold-triangle', text: 'Hold free water and restrict fluids; slow 3% hypertonic saline for severe neurologic symptoms' },
+      ],
+    }],
+  };
+  const trapSnap = ctx.ankiSourceSnapshot(trapKb);
+  const trapBatch = { sourceKB: trapKb, snapshot: trapSnap };
+  const sampleAnkiNotes = [{
+    id: 'n-siadh-1',
+    text: '[SIADH] Hold fluid intake and monitor for {{c1::hyponatremia (<135 mEq/L)}}.',
+    extra: 'High urine specific gravity >1.020.',
+    tags: 'Condition::SIADH Nursing::PLATE::Look Tier::1',
+    factIds: ['fact-101', 'fact-102'],
+  }];
+  const liveAuditObj = ctx.ankiCardTrapAudit(sampleAnkiNotes[0], trapBatch, true);
+  const convertedCustom = ctx.nclexProConvertAnkiDeck(sampleAnkiNotes, trapBatch, trapKb, {
+    deckName: 'NUR 211 · Exam 3 — Endocrine Twins',
+    getTrapAudit: c => ctx.ankiCardTrapAudit(c, trapBatch, true),
+    getSourceRef: () => 'slides.pdf p. 4',
+  });
+  const syncBtnsTree = ctx.AnkiNclexProSyncButtons({
+    kept: sampleAnkiNotes, keptCount: 1, batch: trapBatch, kb: trapKb,
+    includeTrapAudit: true, current: true, passphrase: '', syncState: { busy: false, msg: '', err: '' }, setSyncState: noop,
+  });
+  const serializedSyncBtns = JSON.stringify(syncBtnsTree);
+  t('v22.6 (Anki -> NCLEX Pro 4-Pillar Trap Audit & Custom Deck Name): formats {condition, lines} trapAudit object without "[object Object]" and exposes #anki-nclex-pro-deck-name override',
+    Boolean(liveAuditObj && typeof liveAuditObj === 'object' && Array.isArray(liveAuditObj.lines) && liveAuditObj.lines.length > 0) &&
+    convertedCustom.deck.name === 'NUR 211 · Exam 3 — Endocrine Twins' &&
+    convertedCustom.deck.cardCount === convertedCustom.cards.length &&
+    convertedCustom.deck.count === convertedCustom.cards.length &&
+    Boolean(convertedCustom.deck.updatedAt) &&
+    convertedCustom.cards[0].deckName === 'NUR 211 · Exam 3 — Endocrine Twins' &&
+    !convertedCustom.cards[0].trapAudit.includes('[object Object]') &&
+    convertedCustom.cards[0].trapAudit.includes('[SIADH]') &&
+    convertedCustom.cards[0].trapAudit.includes('[3] Hold / Never:') &&
+    ctx.nclexProFormatTrapAudit('[object Object]') === '' &&
+    serializedSyncBtns.includes('anki-nclex-pro-deck-name') &&
+    serializedSyncBtns.includes('NUR 211 · Exam 3'));
+
+  // 8. F2 (Foreign-KB leech isolation): block bare and scoped leech factIds belonging to a different KB
+  const foreignBleedRx = {
+    version: '1.0',
+    kind: 'nclex_pro_weak_tag_prescription',
+    scopeName: 'Mixed KBs',
+    weakConditions: [],
+    weakConcepts: [],
+    weakBuckets: ['Treat'],
+    weakTraps: [],
+    weakFactIds: [
+      { kbKey: 'other_kb_999', factId: 'fact-301', isLeech: true },
+      { kbKey: km.kbKey, factId: 'fact-101', isLeech: true },
+    ],
+    leechFactIds: [
+      'fact-301', // legacy bare leech from foreign KB must be blocked!
+      { kbKey: 'other_kb_999', factId: 'fact-201' }, // scoped foreign object must be blocked!
+      km.kbKey + '|fact-102', // pipe-scoped active KB leech must match!
+      { kbKey: km.kbKey, factId: 'fact-101' }, // object-scoped active KB leech must match!
+    ],
+  };
+  const analyzedForeign = ctx.nclexProAnalyzeWeakTagPrescription(foreignBleedRx, { kb: syntheticKb, nowMs: fixedNow });
+  t('v22.6 (F2 Foreign-KB Leech Isolation): blocks bare and scoped foreign-kbKey leech IDs while matching active-KB object and pipe-scoped leeches',
+    !analyzedForeign.matchedLeechFactIds.includes('fact-301') &&
+    !analyzedForeign.matchedLeechFactIds.includes('fact-201') &&
+    analyzedForeign.matchedLeechFactIds.includes('fact-101') &&
+    analyzedForeign.matchedLeechFactIds.includes('fact-102'));
+
+  // 9. F7 (Case Study FSRS focus wiring & multi-condition primary conditionId sync)
+  let caseFocusState = { condId: 'cond-dka', extraIds: [], focusOut: '', focusCtx: '' };
+  ctx.nclexProApplyPrescriptionToCases(analyzedCompact, { unlockLeeches: true }, {
+    setConditionId: v => { caseFocusState.condId = v; },
+    setCaseExtraConditionIds: v => { caseFocusState.extraIds = v; },
+    setCaseFocusOutcomes: v => { caseFocusState.focusOut = v; },
+    setCaseFocusContext: v => { caseFocusState.focusCtx = v; },
+  });
+  const baseCaseArgs = {
+    conditionName: 'SIADH',
+    facts: [{ id: 'fact-101', latteBucket: 'Look', tier: 1, text: 'Serum sodium <135 mEq/L', sources: [{ filename: 'a.pdf', location: 'p. 1' }] }],
+    difficulty: 'exam', stages: 2, questionsPerStage: 2, includeTypes: { mcq: true, sata: true },
+  };
+  const promptNoFocus = ctx.caseBuildPrompt(baseCaseArgs);
+  const promptWithFocus = ctx.caseBuildPrompt({ ...baseCaseArgs, focusOutcomes: caseFocusState.focusOut, focusContext: caseFocusState.focusCtx });
+  const splitNoFocus = ctx.caseSplitSystemPrompt(promptNoFocus);
+  const splitWithFocus = ctx.caseSplitSystemPrompt(promptWithFocus);
+  t('v22.6 (F7 Case FSRS focus & primary conditionId): multi-condition prescription syncs conditionId[0] and forwards focusOutcomes/focusContext into caseBuildPrompt without perturbing systemInstruction',
+    caseFocusState.condId === 'cond-siadh' &&
+    caseFocusState.focusOut.includes('SIADH') &&
+    caseFocusState.focusCtx.includes('FSRS Remediation') &&
+    !promptNoFocus.includes('FSRS REMEDIATION FOCUS') &&
+    promptWithFocus.includes('FSRS REMEDIATION FOCUS') &&
+    promptWithFocus.includes('SIADH — Look/Treat') &&
+    splitNoFocus.systemInstruction === splitWithFocus.systemInstruction);
+
+  // 10. F9 + F12 + F22 (geminiRequest storeFallback + dropped stream throws Incomplete; cachedContentTokenCount summed across continuation hops; stream:true on repair & n2a)
+  ctx.geminiRequest._storeUnsupported = false;
+  let grCall = 0;
+  mockFetch = async () => {
+    grCall++;
+    if (grCall === 1) {
+      return { ok: false, status: 400, headers: { get: () => 'application/json' }, json: async () => ({ error: { message: 'Unknown name "store": Cannot find field.' } }) };
+    }
+    // Attempt 2 succeeds HTTP 200 but drops stream with no finishReason
+    return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => ({ candidates: [{ content: { parts: [{ text: 'partial' }] } }] }) };
+  };
+  let droppedErr = null;
+  try {
+    await ctx.geminiRequest('synthetic-key', 'gemini-4-hydrogen', { contents: [{ parts: [{ text: 'hi' }] }], generationConfig: { thinkingConfig: { thinkingLevel: 'low' } } }, { retries: 0 });
+  } catch (e) { droppedErr = e; }
+
+  // Continuation hop cachedContentTokenCount summation
+  let contCall = 0, lastMeta = null;
+  mockFetch = async () => {
+    contCall++;
+    if (contCall === 1) {
+      return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => ({ candidates: [{ content: { parts: [{ text: 'Part 1 ' }] }, finishReason: 'CONTINUATION', continuationToken: 'tok1' }], usageMetadata: { promptTokenCount: 1000, cachedContentTokenCount: 800, candidatesTokenCount: 50, totalTokenCount: 1050 } }) };
+    }
+    return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => ({ candidates: [{ content: { parts: [{ text: 'Part 2' }] }, finishReason: 'STOP' }], usageMetadata: { promptTokenCount: 1000, cachedContentTokenCount: 850, candidatesTokenCount: 60, totalTokenCount: 1060 } }) };
+  };
+  const contText = await ctx.geminiRequest('synthetic-key', 'gemini-4-hydrogen', { contents: [{ parts: [{ text: 'hi' }] }], generationConfig: { thinkingConfig: { thinkingLevel: 'low' } } }, { retries: 0, onMeta: m => { lastMeta = m; } });
+  t('v22.6 (F9 & F12/F22 Gemini transport): dropped stream after store:false fallback throws Incomplete (never undefined), cachedContentTokenCount sums across continuation hops, and repair/i2a enable stream:true',
+    droppedErr && /Incomplete response/i.test(droppedErr.message) && droppedErr.incomplete === true &&
+    contText === 'Part 1 Part 2' &&
+    lastMeta && lastMeta.usage && lastMeta.usage.cachedContentTokenCount === 1650 &&
+    S.includes('systemInstruction:staticSysPrompt') &&
+    S.includes('retries:1,stream:true') &&
+    S.includes('retries:4,stream:true'));
+
+  // 11. F13 + F14 (pdf-toc-slice fallbackScanObjects XRef cap & cyclic outline MAX_OUTLINE_NODES cap + 25 MB WeakTagBridge guard)
+  const pdfSlicerSrc = require('fs').readFileSync(require('path').join(__dirname, 'pdf-toc-slice.js'), 'utf8');
+  const pdfSlicer = require('./pdf-toc-slice');
+  // Build a cyclic PDF outline fixture (outline node 4 points Next->5, 5 points First->4!) and ensure inspectPdfTocBuffer terminates cleanly
+  const cyclicPdf = Buffer.from(
+    '%PDF-1.4\n' +
+    '1 0 obj\n<< /Type /Catalog /Pages 2 0 R /Outlines 3 0 R >>\nendobj\n' +
+    '2 0 obj\n<< /Type /Pages /Kids [6 0 R] /Count 1 >>\nendobj\n' +
+    '3 0 obj\n<< /Type /Outlines /First 4 0 R /Last 5 0 R >>\nendobj\n' +
+    '4 0 obj\n<< /Title (Chapter 1) /Next 5 0 R /First 5 0 R >>\nendobj\n' +
+    '5 0 obj\n<< /Title (Cycle Back) /First 4 0 R /Next 4 0 R >>\nendobj\n' +
+    '6 0 obj\n<< /Type /Page /Parent 2 0 R >>\nendobj\n' +
+    '%%EOF\n',
+    'latin1'
+  );
+  const cycToc = pdfSlicer.inspectPdfTocBuffer(cyclicPdf, 'cyclic.pdf');
+  t('v22.6 (F13 & F14 DoS bounds): pdf-toc-slice enforces MAX_XREF_ENTRIES in fallbackScanObjects and terminates cyclic parent-child outlines via MAX_OUTLINE_NODES; WeakTagBridge enforces 25 MB JSON cap',
+    pdfSlicerSrc.includes('const MAX_OUTLINE_NODES = 25000;') &&
+    pdfSlicerSrc.includes('!this.xref.has(objNum) && this.xref.size >= MAX_XREF_ENTRIES') &&
+    cycToc && Array.isArray(cycToc.flat) && cycToc.flat.length <= 2 &&
+    S.includes('NCLEX_PRO_MAX_IMPORT_BYTES=25*1024*1024'));
 };

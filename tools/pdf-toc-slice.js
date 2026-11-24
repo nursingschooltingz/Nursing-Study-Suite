@@ -17,6 +17,7 @@ const MAX_PDF_FILE_BYTES = 150 * 1024 * 1024;
 const MAX_PDF_META_STREAM_BYTES = 32 * 1024 * 1024;
 const MAX_PDF_DEPTH = 64;
 const MAX_XREF_ENTRIES = 1000000;
+const MAX_OUTLINE_NODES = 25000;
 const MAX_OBJSTM_ENTRIES = 100000;
 const MAX_ALPHA_REPEAT = 20;
 const MAX_PREDICTOR_COLUMNS = 65536;
@@ -538,6 +539,9 @@ class PdfReader {
       while ((m = re.exec(text)) !== null) {
         const objNum = Number(m[1]);
         const localOff = base + m.index + m[0].indexOf(m[1]);
+        if (!this.xref.has(objNum) && this.xref.size >= MAX_XREF_ENTRIES) {
+          throw new Error('PDF XRef entry count exceeds safety limit');
+        }
         this.xref.set(objNum, { type: 1, offset: localOff, gen: Number(m[2]) });
       }
       if (end >= this.buf.length) break;
@@ -792,16 +796,16 @@ function resolveDestPage(reader, rawDest, pageObjToPageNum, namedDests, numPages
   return null;
 }
 
-function readOutlineItems(reader, firstRef, pageObjToPageNum, namedDests, numPages, depth = 0) {
-  if (!firstRef || depth > 24) return [];
+function readOutlineItems(reader, firstRef, pageObjToPageNum, namedDests, numPages, depth = 0, budget = { nodes: 0, visited: new Set() }) {
+  if (!firstRef || depth > 24 || budget.nodes >= MAX_OUTLINE_NODES) return [];
   const items = [];
-  const seenSiblings = new Set();
   let cur = firstRef;
-  while (cur) {
+  while (cur && budget.nodes < MAX_OUTLINE_NODES) {
     if (cur.kind === 'ref') {
-      if (seenSiblings.has(cur.num)) break;
-      seenSiblings.add(cur.num);
+      if (budget.visited.has(cur.num)) break;
+      budget.visited.add(cur.num);
     }
+    budget.nodes++;
     const obj = reader.deref(cur);
     const d = obj && obj.dict;
     if (!d) break;
@@ -816,7 +820,7 @@ function readOutlineItems(reader, firstRef, pageObjToPageNum, namedDests, numPag
       }
     }
     const page = resolveDestPage(reader, destSpec, pageObjToPageNum, namedDests, numPages);
-    const kids = d.First ? readOutlineItems(reader, d.First, pageObjToPageNum, namedDests, numPages, depth + 1) : [];
+    const kids = d.First ? readOutlineItems(reader, d.First, pageObjToPageNum, namedDests, numPages, depth + 1, budget) : [];
     items.push({ title, page, items: kids });
     cur = d.Next || null;
   }

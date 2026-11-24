@@ -9,6 +9,30 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [23.0] — 2026-11-23
+
+Production hardening release across **Gemini transport & implicit prefix caching**, **PDF export**, **NCLEX Pro E2E cloud sync & optimistic concurrency**, **fail-closed NGN converters**, **cross-KB FSRS leech isolation**, **Case Study FSRS focus injection**, and **CLI PDF parser DoS bounds**. All 13 byte-frozen prompt constants in `prompt-baseline.json` are unchanged.
+
+### Security & Privacy
+
+- **User-configurable NCLEX Pro Vault URL (`NCLEX_PRO_DEFAULT_URL = ''`, `NCLEX_PRO_URL_KEY`, `nclexProNormalizeUrl`, `nclexProLoadUrl`, `nclexProSaveUrl`, `NclexProSettingsField`).** Removed the hardcoded personal `workers.dev` URL from the public GPL-3.0 HTML and CSP `connect-src` (`https://*.workers.dev` + localhost). Users configure their own Vault URL once in **Study settings** (persisted in `localStorage` with cross-tab sync).
+- **Hardened sync transport (`nclexProFetch`, `nclexProVaultSession`, `nclexProScrubSecret`).** Enforces HTTPS (or localhost), exact origin matching against the configured Vault URL, `redirect: 'error'`, a 30-second `AbortController` timeout, in-memory PBKDF2 key caching (cleared on passphrase/URL change or `401`), and redaction of both raw and URI-encoded passphrases from error messages.
+- **Zero `document.write()` PDF export (`exportAsPdf`).** Replaced `win.document.write(html)` with `DOMParser` + `importNode`/`replaceChild` (falling back to `printViaIframe`), preserving `win.opener = null`, `sessionStorage.clear()`, and single `#lp-print` click binding.
+- **DoS & import size bounds (`NCLEX_PRO_MAX_IMPORT_BYTES`, `tools/pdf-toc-slice.js`).** Enforced a 25 MB file-size cap on `NclexProWeakTagBridge` JSON imports, enforced `MAX_XREF_ENTRIES` in `fallbackScanObjects()`, and added `MAX_OUTLINE_NODES = 25000` with shared cycle detection in `readOutlineItems()`.
+
+### Fixed & Improved
+
+- **Optimistic concurrency & LWW tombstones (`nclexProSyncToCloud`, `nclexProSyncFlashcardsToCloud`).** Cloud sync now sends `expectedRev`, automatically re-fetches, merges, and retries up to 3× on HTTP `409 Conflict`, and uses timestamped LWW tombstones (`deletedSetAt`, `deletedCaseAt`, `deletedDeckAt`) so newer re-syncs cleanly supersede older deletions.
+- **Fail-closed NGN & Ordering converters (`nclexProConvertWorksheet`, `nclexProConvertCaseStudy`, `nclexProConvertCasePacket`, `nclexProConvertAnkiDeck`).** Malformed or unmapped Bow-Tie, Matrix, Cloze, and Ordering items are now skipped and reported in the sync banner rather than silently emitting index-0 or identity answers; Calculation uses the unified range regex; Anki decks emit both `cardCount` and `count`, `updatedAt`, and active scope suffixes so filtered subsets do not overwrite full decks.
+- **Cross-KB leech isolation & Case Study FSRS focus (`nclexProAnalyzeWeakTagPrescription`, `nclexProApplyPrescriptionToCases`, `caseBuildPrompt`, `CaseStudyGenerator`, `NclexProWeakTagBridge`).** Blocks foreign-KB bare and scoped leech IDs from unlocking colliding `fact-*` IDs in the active KB; forwards FSRS `focusOutcomes`/`focusContext` and primary `conditionId` into `CaseStudyGenerator` → `caseBuildPrompt` without perturbing `caseSplitSystemPrompt().systemInstruction`; retains raw cloud snapshots for accurate KB-switch re-analysis.
+- **Gemini transport, prefix caching & safety cleanup (`SAFETY_SETTINGS`, `geminiRequest`, `ngRunGeneratorWithEnv`, `n2aRunImagesWithEnv`, `cardTranscribe`).** Dropped deprecated `HARM_CATEGORY_CIVIC_INTEGRITY`; fixed the sticky `retriedStore` stream-drop bug so dropped streams after a `store: false` fallback throw `Incomplete response` instead of returning `undefined`; accumulated `cachedContentTokenCount` across continuation hops; hoisted static NCLEX Generator rules into `systemInstruction` (`staticSysPrompt`) and enabled `stream: true` on NCLEX item repair and `n2aRunImagesWithEnv`; removed the inline duplicate `CARD_TRANSCRIBE_JSON_SCHEMA` fallback.
+
+### Verification
+
+- **4,228 passed · 0 failed** in `node verify-repo.js` (including all 13 frozen prompt hashes in `prompt-baseline.json`, `Prompts.md`, Babel `< 390 KB` budget with `GizmoChunkAndAllPanels`/`GizmoPreviewDisclose` hoisted to plain script, and V8 compile + render smoke).
+
+---
+
 ## [22.6] — 2026-11-23
 
 Adds the **closed-loop NCLEX Pro FSRS-5 Weak-Tag Prescription Bridge & Leech Fact Re-Angling** across **05 · NCLEX Generator** and **06 · Clinical Case Study Generator**, enabling 1-click E2E-decrypted cloud pull (`/api/progress` + `/api/ai-bank` + `/api/ai-flashcards`) or offline JSON import so FSRS forgetting curves, weak `(Condition × P-LATE × Trap)` clusters, and lapsed Leech `fact-*` IDs from NCLEX Pro automatically scope fresh targeted questions and unfolding clinical cases. All 13 byte-frozen prompt constants in `prompt-baseline.json` are unchanged.

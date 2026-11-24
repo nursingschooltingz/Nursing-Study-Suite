@@ -24,9 +24,10 @@ module.exports=function run(S,t){
     rules.includes('the key and every distractor must trace to supplied facts')&&rules.includes('supplied fact states its own priority, follow the fact')
     &&rules.includes('do not write the item as a priority question')&&rules.includes('in words and without values')&&!rules.includes('${'));
 
-  // Where it is sent: the NCLEX Generator after the batch block, the case prompt after the shared rules. Not the repair or audit prompts.
-  t('v18.1: the NCLEX Generator sends the shared priority order between the batch block and the focus block',
-    count(S,"let prompt=NCLEX_GEN_PROMPT+buildBatchBlock(b,numBatches,size)+'\\n'+PRIORITY_ORDER_RULES+'\\n'+buildFocusBlock()+")===1);
+  // Where it is sent: hoisted into staticSysPrompt (systemInstruction) for NCLEX Generator prefix caching, and the case prompt after the shared rules. Not the repair or audit prompts.
+  t('v18.1: the NCLEX Generator sends the shared priority order in staticSysPrompt (systemInstruction) before the focus block',
+    count(S,"const staticSysPrompt=NCLEX_GEN_PROMPT+'\\n'+PRIORITY_ORDER_RULES+'\\n'+buildFocusBlock()+")===1 &&
+    S.includes('systemInstruction:staticSysPrompt'));
   const builder=name=>{const a=S.indexOf('function '+name+'('),b=S.indexOf('`;\n}',a);if(a<0||b<0)throw Error('Missing builder '+name);
     return new Function('CASE_QUESTION_RULES','PRIORITY_ORDER_RULES','caseRenderFactPacket','caseDifficultyBlock',S.slice(a,b+4)+';return '+name+';')('SHARED-RULES-MARK',rules,()=>'Synthetic fact packet',()=>'DIFFICULTY: exam');};
   const args={conditionName:'Synthetic',facts:[],difficulty:'exam',stages:1,questionsPerStage:1,includeTypes:{mcq:true,prioritization:true},stageNumber:1,q:{id:'q1'},criterion:'Stem clarity',visibleContext:'Synthetic context'};

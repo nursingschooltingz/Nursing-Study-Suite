@@ -349,7 +349,6 @@ const MEASUREMENT_SAFETY_SETTINGS = Object.freeze([
   'HARM_CATEGORY_HATE_SPEECH',
   'HARM_CATEGORY_SEXUALLY_EXPLICIT',
   'HARM_CATEGORY_DANGEROUS_CONTENT',
-  'HARM_CATEGORY_CIVIC_INTEGRITY',
 ].map(category => Object.freeze({ category, threshold: 'BLOCK_NONE' })));
 
 function redactSecrets(text, apiKey) {
