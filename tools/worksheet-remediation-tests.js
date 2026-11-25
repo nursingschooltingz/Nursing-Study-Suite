@@ -175,6 +175,32 @@ module.exports=function worksheetRemediationTests(S,t){
   t('rank numbers written beside the presented steps are not restated as the sequence, so the entry keeps its errors',ranked.every(k=>{const o=ordCheck(k);return !o.out.rewritten.length&&error(o.after);}));
   oc=ordCheck('  1. ANSWER:\n     Alpha step: second, after stabilizing. (Source: C1)\n     Beta step: third, last. (Source: C1)\n     Gamma step: first, most urgent. (Source: C1)');
   t('step lines that only repeat the presented order are not restated as the sequence',!oc.out.rewritten.length&&error(oc.after));
+  // v23.3: sequential 1..n ordinal-prefixed arrow sequences and full-sentence trailing periods normalize and validate cleanly,
+  // while non-sequential/rank inline numbers still stay flagged (preserving the v17.15 safety contract).
+  {
+    const sentQ='  1. Place the planned assessment steps in chronological sequence.\n     ___ Begin at the extremities and move inward.\n     ___ Perform the otoscopic ear inspection.\n     ___ Perform hand hygiene before approaching.\n     ___ Build trust and inspect visually before touching.';
+    const paraWhy='     Why Step 1 is first: Hand hygiene starts safely. (Source: C1)\n     Why Step 2 is second: Visual inspection comes before touch. (Source: C1)\n     Why Step 3 is third: Extremities first lowers fear. (Source: C1)\n     Why Step 4 is fourth: Invasive checks go last. (Source: C1)';
+    const sentCanon='1. ANSWER: Perform hand hygiene before approaching. → Build trust and inspect visually before touching. → Begin at the extremities and move inward. → Perform the otoscopic ear inspection.';
+    const variants=[
+      '  1. ANSWER: 1. Perform hand hygiene before approaching. -> 2. Build trust and inspect visually before touching. -> 3. Begin at the extremities and move inward. -> 4. Perform the otoscopic ear inspection.\n'+paraWhy,
+      '  1. ANSWER: 1) Perform hand hygiene before approaching. → 2) Build trust and inspect visually before touching. → 3) Begin at the extremities and move inward. → 4) Perform the otoscopic ear inspection.\n'+paraWhy,
+      '  1. ANSWER: Step 1: Perform hand hygiene before approaching. -> Step 2: Build trust and inspect visually before touching. -> Step 3: Begin at the extremities and move inward. -> Step 4: Perform the otoscopic ear inspection.\n'+paraWhy,
+      '  1. ANSWER: (1) Perform hand hygiene before approaching. -> (2) Build trust and inspect visually before touching. -> (3) Begin at the extremities and move inward. -> (4) Perform the otoscopic ear inspection.\n'+paraWhy,
+    ];
+    t('v23.3: sequential 1..n ordinal-prefixed arrow ordering answers with full-sentence periods normalize and pass validation directly',
+      variants.every(k=>{const o=ordCheck(k,sentQ);return o.out.rewritten.join()==='1'&&o.p4.includes(sentCanon)&&!error(o.before)&&!error(o.after);}));
+    const droppedDot=ordCheck('  1. ANSWER: 1. Perform hand hygiene before approaching -> 2. Build trust and inspect visually before touching -> 3. Begin at the extremities and move inward -> 4. Perform the otoscopic ear inspection\n'+paraWhy,sentQ);
+    const addedDot=ordCheck('  1. ANSWER: Gamma step, Alpha step, Beta step.\n'+paraWhy.split('\n').slice(0,3).join('\n'),ordQ);
+    t('v23.3: ordering steps with optional trailing periods added or dropped still normalize and validate',
+      droppedDot.out.rewritten.join()==='1'&&droppedDot.p4.includes(sentCanon)&&!error(droppedDot.before)&&!error(droppedDot.after)&&
+      addedDot.out.rewritten.join()==='1'&&addedDot.p4.includes(canon)&&!error(addedDot.after));
+    const badInline=[
+      '  1. ANSWER: 2. Alpha step -> 3. Beta step -> 1. Gamma step\n     First. (Source: C1)\n     Second. (Source: C1)\n     Third. (Source: C1)',
+      '  1. ANSWER: 1. Gamma step -> Alpha step -> Beta step\n     First. (Source: C1)\n     Second. (Source: C1)\n     Third. (Source: C1)',
+    ];
+    t('v23.3: non-sequential rank numbers or inconsistent numbering in inline arrow ordering answers remain rejected',
+      badInline.every(k=>{const o=ordCheck(k);return !o.out.rewritten.length&&error(o.before)&&error(o.after);}));
+  }
   t('worksheets without ordering items pass through unchanged',L.ngCanonicalOrderingAnswers(build()).text===build()&&L.ngCanonicalOrderingAnswers(sataBatch).text===sataBatch);
   t('the generator restates ordering answers after relabelling and before splitting the batch',S.indexOf('const lettered=ngLetterNumberedOptions(raw);')<S.indexOf('const ordered=ngCanonicalOrderingAnswers(raw);')&&S.indexOf('const ordered=ngCanonicalOrderingAnswers(raw);')<S.indexOf('        const P=ngSplitParts(raw);'));
   t('the printed worksheet escapes inner numbers in questions and answers',S.includes('ws.questions.map(ngMdLiteralNumbers)')&&S.includes('ws.answers.map(ngMdLiteralNumbers)'));

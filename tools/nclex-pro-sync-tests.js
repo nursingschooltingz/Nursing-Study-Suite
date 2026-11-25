@@ -11,7 +11,7 @@ module.exports = async function runNclexProSyncTests(S, t) {
   const ngEnd = S.indexOf('// v15.17: immutable arrays retain', ngStart);
   const ngSrc = S.slice(ngStart, ngEnd);
   const ngLabelsStart = S.indexOf('function ngAnswerLabels(');
-  const ngLabelsEnd = S.indexOf('\nfunction ', S.indexOf('function ngRationaleText(') + 10);
+  const ngLabelsEnd = S.indexOf('\nfunction ngWorksheetQuestionIssues(', ngLabelsStart);
   const ngLabelsSrc = S.slice(ngLabelsStart, ngLabelsEnd);
 
   const loadEnv = (mockFetch) => {
@@ -195,6 +195,26 @@ module.exports = async function runNclexProSyncTests(S, t) {
     badCaseOut.items[0].t === 'fill_blank' && badCaseOut.items[0].cor === '120 to 130' && badCaseOut.items[0].unit === 'mL/hr' &&
     badCaseOut.skipped === 4 &&
     badWsOut.items.length === 0 && badWsOut.skipped === 1);
+
+  // 5b. v23.3: nclexProConvertWorksheet grades canonical arrow-separated and sequential 1..n ordering answers in exact step order (not index 0)
+  const ordWs = {
+    questions: [
+      '1. Sequence the pediatric physical examination:\n   ___ Begin at extremities.\n   ___ Perform otoscopic inspection.\n   ___ Perform hand hygiene.\n   ___ Build trust before touching.',
+      '2. Sequence the pediatric physical examination:\n   ___ Begin at extremities.\n   ___ Perform otoscopic inspection.\n   ___ Perform hand hygiene.\n   ___ Build trust before touching.',
+    ],
+    answers: [
+      '1. ANSWER: Perform hand hygiene. → Build trust before touching. → Begin at extremities. → Perform otoscopic inspection.\n   Why Step 1 is first: Clean hands. (Source: C1)\n   Tags: Tier 1 | Generate Solutions',
+      '2. ANSWER: 1. Perform hand hygiene. -> 2. Build trust before touching. -> 3. Begin at extremities. -> 4. Perform otoscopic inspection.\n   Why Step 1 is first: Clean hands. (Source: C1)\n   Tags: Tier 1 | Generate Solutions',
+    ],
+  };
+  const ordWsOut = env.nclexProConvertWorksheet(ordWs, [], sampleKb);
+  t('v23.3: nclexProConvertWorksheet resolves arrow-separated and sequential 1..n ordering answers to exact 0-based indices',
+    ordWsOut.skipped === 0 &&
+    ordWsOut.items.length === 2 &&
+    ordWsOut.items[0].t === 'ordering' &&
+    JSON.stringify(ordWsOut.items[0].cor) === '[2,3,0,1]' &&
+    ordWsOut.items[1].t === 'ordering' &&
+    JSON.stringify(ordWsOut.items[1].cor) === '[2,3,0,1]');
 
   // 6. Passphrase scrubbing (raw + URI-encoded) on error + sessionStorage-only persistence in HTML
   const trickyPass = 'Secret Test/Phrase!99';

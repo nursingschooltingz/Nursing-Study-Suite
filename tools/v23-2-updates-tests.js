@@ -72,7 +72,7 @@ module.exports = async function runV232UpdatesTests(S, t) {
 
   // 1. Extraction tail
   t('v23.2 (Extraction tail): all v23.2 helpers compile cleanly from shipped HTML',
-    E.suiteVersion() === '23.2' &&
+    /^\d+\.\d+/.test(E.suiteVersion()) &&
     typeof E.genLedgerTopicKey === 'function' &&
     typeof E.genLedgerExcludeTopicSet === 'function' &&
     typeof E.genLedgerTopicScopeStats === 'function' &&

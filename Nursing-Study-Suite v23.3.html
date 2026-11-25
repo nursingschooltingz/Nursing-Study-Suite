@@ -15,6 +15,10 @@
      The print preview (about:blank window or srcdoc frame) inherits this policy and uses only its own inline style block and system fonts. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:; img-src 'none'; media-src 'none'; worker-src blob:; frame-src 'self' blob:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://*.workers.dev http://localhost:* http://127.0.0.1:*; style-src 'unsafe-inline'; font-src 'none'">
 <title>P-LATE Study Suite</title>
+<!-- v23.3 (2026-11-24): Ordering Answer Normalizer, Validator & NCLEX Pro Sync Fix (ngCanonicalOrderingAnswers,
+     ngOrderingAnswers, nclexProConvertWorksheet) — recognizes sequential 1..n ordinal-prefixed arrow sequences
+     ("1. Step A -> 2. Step B -> ...") and full-sentence trailing periods while keeping v17.15 rejection of
+     non-sequential/rank numbers. All 13 frozen prompt constants in prompt-baseline.json unchanged. -->
 <!-- v23.2 (2026-11-24): Default Parallel KB Lanes, NGN Matrix Schema & Normalizer Fix, Topic-Based Cross-Session
      Progress Bar & Untouched-Topic Rotation (Case Studies + NCLEX Generator), End-of-Document Validation Banners, &
      NCLEX Pro Tag Parity (laneCount=2, CASE_STUDY_JSON_SCHEMA, caseNormalizeParsedNgnFields, genLedgerTopicKey,
@@ -8537,7 +8541,7 @@ async function ankiSha256(text){
   try{const bytes=new TextEncoder().encode(String(text));const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');}catch{return null;}
 }
 // v16.3: one runtime release value keeps the visible footer and private evidence aligned.
-function suiteVersion(){return '23.2';}
+function suiteVersion(){return '23.3';}
 function ankiSourceAuditLabel(run,current=true){
   if(!run)return 'No source check prepared';
   const labels={prepared:'Prepared — no AI check yet',running:'Checking source',complete:'Completed — review findings and target records',partial:'Partial — review unresolved records and retry',failed:'Failed — check incomplete',cancelled:'Cancelled — check incomplete',interrupted:'Interrupted — check incomplete'};
@@ -12027,9 +12031,13 @@ function ngOrderingAnswers(item,key){
   if(/^\d+(?:(?:\s*(?:,|→|->|>|then|[-–—])\s*|\s+)\d+)+$/i.test(a))return a.match(/\d+/g);
   const norm=s=>String(s||'').replace(/\s+/g,' ').trim();
   const rows=String(key.answerBody||'').split('\n').map(s=>s.replace(/^\s*\d+[.)]\s*/,'').trim()).filter(Boolean);
-  const arrow=a.split(/\s*(?:→|->)\s*/),ordered=arrow.length>1?arrow:rows;
+  // v23.3: an inline arrow-separated answer like "1. Step A -> 2. Step B -> ..." previously failed exact step matching
+  // because only multi-line rows stripped numbering; strip sequential 1..n ordinals only (never non-sequential rank numbers).
+  const rawArrow=a.split(/\s*(?:→|->)\s*/);
+  const stripOrd=arr=>{const ms=arr.map(s=>String(s||'').trim().match(/^(?:step[ \t]+)?(?:\((\d{1,2})\)|(\d{1,2})[ \t]*[.):])[ \t]+([\s\S]+)$/i));return ms.every((m,i)=>m&&Number(m[1]||m[2])===i+1)?ms.map(m=>m[3].trim()):arr;};
+  const arrow=rawArrow.length>1?stripOrd(rawArrow):rawArrow,ordered=arrow.length>1?arrow:rows;
   if(ordered.length!==labels.length)return [];
-  return ordered.map(row=>{const text=ngRationaleText(row),hits=item.steps.filter(s=>text===norm(s.text)||text.startsWith(norm(s.text)+' —')||text.startsWith(norm(s.text)+' –')||text.startsWith(norm(s.text)+':'));return hits.length===1?hits[0].label:'?';});
+  return ordered.map(row=>{const text=norm(ngRationaleText(row)),td=text.replace(/\.$/,''),hits=item.steps.filter(s=>{const st=norm(s.text),sd=st.replace(/\.$/,'');return text===st||(td&&td===sd)||text.startsWith(st+' —')||text.startsWith(st+' –')||text.startsWith(st+':');});return hits.length===1?hits[0].label:'?';});
 }
 function ngWorksheetQuestionIssues(item,key){
   const issues=[],bad=msg=>issues.push({sev:'error',msg:'Q'+item.num+': '+msg}),labels=item.options.map(o=>o.label),answers=ngAnswerLabels(key.answer);
@@ -12348,17 +12356,27 @@ function ngCanonicalOrderingAnswers(raw){
     const head=keyLines[at],lead=head.match(HEAD)[0],label=head.slice(lead.length).match(/^[^:]*:[ \t]*/)[0];
     const rest=head.slice(lead.length+label.length).replace(/^(?:correct[ \t]+)?(?:sequence|order)[ \t]*:[ \t]*/i,'');
     const body=[];for(let j=at+1;j<keyLines.length&&!ENTRY.test(keyLines[j]);j++){if(/^[ \t]*(?:Strategy|Tags):/i.test(keyLines[j]))break;body.push(j);}
-    const steps=it.steps.map(s=>({label:s.label,text:s.text,t:norm(s.text)})),n=steps.length;
+    const steps=it.steps.map(s=>{const t=norm(s.text);return{label:s.label,text:s.text,t,tBare:t.replace(/[.;]+$/,'')};}),n=steps.length;
     // The step whose text a candidate begins with, as a whole phrase; the longest wins.
-    const lead1=c=>{let best=null;for(const s of steps)if(s.t&&(c===s.t||(c.startsWith(s.t)&&/^[\s:—–(),.;>→-]/.test(c.slice(s.t.length))))&&(!best||s.t.length>best.t.length))best=s;return best;};
+    // v23.3: also match sentence steps without their trailing period so full-sentence steps ending in "." still match when a trailing period is added or dropped.
+    const matchStep=c=>{let best=null,bestLen=0;for(const s of steps){const vs=s.tBare&&s.tBare!==s.t?[s.t,s.tBare]:[s.t];for(const v of vs)if(v&&(c===v||(c.startsWith(v)&&/^[\s:—–(),.;>→-]/.test(c.slice(v.length))))&&v.length>bestLen){best=s;bestLen=v.length;}}return best?{step:best,len:bestLen}:null;};
+    const lead1=c=>{const m=matchStep(c);return m?m.step:null;};
     const lineStep=line=>{
       const l=norm(line);
       const cands=[l.replace(/^(?:why[ \t]+)?(?:step[ \t]*)?\d*[ \t]*[:.)]*[ \t]*/,''),...[...l.matchAll(/\(([^()]*)\)/g)].map(m=>m[1].trim()),l.replace(/^[^:]*?\)[ \t]*:[ \t]*/,'')];
       for(const c of cands){const s=lead1(c);if(s)return s;}return null;
     };
-    const fromText=(()=>{let r=norm(ngRationaleText(rest)).replace(/[.;]$/,'');const out=[];
-      while(r){const s=lead1(r);if(!s||out.includes(s))return null;out.push(s);r=r.slice(s.t.length).replace(/^[ \t]*(?:,|;|→|->|>|\bthen\b)?[ \t]*/,'');}
-      return out.length===n?out.map(s=>s.label):null;})();
+    // v23.3: accept sequential 1..n ordinal prefixes ("1. Step A -> 2. Step B -> ...") and preserve trailing periods on full-sentence steps; reject non-sequential/rank prefixes (v17.15 safety contract).
+    const fromText=(()=>{let r=norm(ngRationaleText(rest)),prefCount=0;const out=[],ordRe=/^(?:step[ \t]+)?(?:\((\d{1,2})\)|(\d{1,2})[ \t]*[.):])[ \t]+/i;
+      while(r){
+        let m=matchStep(r);
+        if(!m){const pm=r.match(ordRe);if(pm&&Number(pm[1]||pm[2])===out.length+1){const r2=r.slice(pm[0].length);m=matchStep(r2);if(m){prefCount++;r=r2;}}}
+        if(!m||out.includes(m.step))return null;
+        out.push(m.step);r=r.slice(m.len);
+        if(/^[ \t]*[.;]?[ \t]*$/.test(r)){r='';break;}
+        r=r.replace(/^[ \t]*(?:[.;][ \t]*)?(?:,|;|→|->|>|\bthen\b)?[ \t]*/,'');
+      }
+      return out.length===n&&(prefCount===0||prefCount===n)?out.map(s=>s.label):null;})();
     const hits=body.map(j=>lineStep(keyLines[j])).filter(Boolean),seen=[];hits.forEach(s=>{if(!seen.includes(s))seen.push(s);});
     // Step lines may list the order more than once (a list, then one reason per step); every listing must agree.
     const fromLines=seen.length===n&&hits.every((s,i)=>!i||s===seen[0]||s===seen[seen.indexOf(hits[i-1])+1])?seen.map(s=>s.label):null;
@@ -19448,12 +19466,20 @@ function nclexProConvertWorksheet(ws,batches,kb,opts={}){
     }else if(parsed.type==='Ordering'&&parsed.steps.length>=2){
       t='ordering';
       optsArr=parsed.steps.map(s=>s.text);
-      const ansLines=String(key.answerBody||'').split('\n').map(l=>l.replace(/^\s*\d+[.)]\s*/,'').trim()).filter(Boolean);
-      const order=[];
-      for(const al of ansLines){
-        const low=al.toLowerCase();
-        const found=optsArr.findIndex((txt,i)=>!order.includes(i)&&(txt.toLowerCase()===low||txt.toLowerCase().includes(low.slice(0,24))||low.includes(txt.toLowerCase().slice(0,24))));
-        if(found>=0)order.push(found);
+      // v23.3: resolve arrow-separated / sequential-ordinal / digit ordering keys via ngOrderingAnswers first so canonical "Step A → Step B → ..." answers never mis-grade to presented index 0 on line-by-line scan.
+      let order=[];
+      if(typeof ngOrderingAnswers==='function'){
+        const ordLabels=ngOrderingAnswers(parsed,key),expected=parsed.steps.map(s=>s.label);
+        if(ordLabels.length===expected.length&&new Set(ordLabels).size===ordLabels.length&&ordLabels.every(x=>expected.includes(x)))order=ordLabels.map(lb=>parsed.steps.findIndex(s=>s.label===lb));
+      }
+      if(order.length!==optsArr.length){
+        order=[];
+        const ansLines=String(key.answerBody||'').split('\n').map(l=>l.replace(/^\s*\d+[.)]\s*/,'').trim()).filter(Boolean);
+        for(const al of ansLines){
+          const low=al.toLowerCase();
+          const found=optsArr.findIndex((txt,i)=>!order.includes(i)&&(txt.toLowerCase()===low||txt.toLowerCase().includes(low.slice(0,24))||low.includes(txt.toLowerCase().slice(0,24))));
+          if(found>=0)order.push(found);
+        }
       }
       // v22.6: fail closed on unmapped Ordering keys instead of silently grading [0,1,2,...] as correct.
       if(order.length!==optsArr.length){skipped++;continue;}

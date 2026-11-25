@@ -9,6 +9,22 @@ Releases use the unified verifier for Babel parsing, regression assertions, prom
 
 ---
 
+## [23.3] — 2026-11-24
+
+Fixes false-positive **`Ordering answer must use every presented step exactly once`** validation failures in **05 · NCLEX Generator** when ordering keys use sequential `1..n` ordinal prefixes (`1. Step A -> 2. Step B -> ...`) or full-sentence trailing periods, and aligns **NCLEX Pro** worksheet sync ordering resolution with `ngOrderingAnswers`. All 13 byte-frozen prompt constants in `prompt-baseline.json` are unchanged.
+
+### Fixed
+
+- **Ordering answer normalizer & validator (`ngCanonicalOrderingAnswers`, `ngOrderingAnswers`).** Recognizes sequential `1..n` ordinal prefixes (`1. `, `1) `, `(1) `, `Step 1: `) on inline arrow-separated ordering answers and handles optional trailing periods on full-sentence steps so valid verbatim sequences restate cleanly to `Step 1 → Step 2 → ...` and pass deterministic validation without skipping the batch's AI rubric review or used-fact ledger commit. Preserves the v17.15 safety contract rejecting ambiguous non-sequential/rank inline numbers (`2. Alpha -> 3. Beta -> 1. Gamma`) and partial numbering.
+- **NCLEX Pro worksheet ordering sync (`nclexProConvertWorksheet`).** Resolves Ordering items through `ngOrderingAnswers` first before line-by-line fallback so canonical arrow-separated and sequential-ordinal ordering keys map to their exact 0-based indices while keeping fail-closed `skipped` behavior for unmapped keys.
+
+### Verification
+
+- **4,247 passed · 0 failed** in `node verify-repo.js` (4 new live behavioral assertions across `tools/worksheet-remediation-tests.js` and `tools/nclex-pro-sync-tests.js`).
+- **Prompt bytes & CDN SRI pins.** All 13 frozen hashes in `prompt-baseline.json` pass unchanged; `Prompts.md` synced for `v23.3` across all 25 prompt constants and all 5 dynamic builders; all 7 pinned CDN `<script>` resources plus both `PDF_WORKER_URLS` copies verified via SHA-384 (`9/9`, `0` mismatches).
+
+---
+
 ## [23.2] — 2026-11-24
 
 Defaults **Knowledge Base** extraction to **two parallel lanes**, fixes NGN **Matrix `no correct answer` / `got 0`** validation failures by requiring `correctAnswers` in `CASE_STUDY_JSON_SCHEMA` and hardening `caseNormalizeParsedNgnFields`, adds a **cross-session Topic Progress Bar & untouched-topics-first rotation** across both **05 · NCLEX Generator** and **06 · Clinical Case Study Generator**, moves **packet-level and per-case red validation banners** strictly to the trailing **Warnings, Errors & Review Appendix** by default, and aligns **NCLEX Pro sync tags** (`clinicalLayer`, hierarchical `tags[]`, and clean mixed-case `conditionNames`). All 13 byte-frozen prompt constants in `prompt-baseline.json` are unchanged.

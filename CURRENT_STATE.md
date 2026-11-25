@@ -1,5 +1,11 @@
 # Current maintainer state
 
+## v23.3 Ordering Answer Normalizer, Validator & NCLEX Pro Sync Fix (2026-11-24)
+
+The canonical application is `Nursing-Study-Suite v23.3.html`. All 13 frozen prompt constants match `prompt-baseline.json` unchanged.
+- **Sequential `1..n` ordinal-prefixed arrow ordering answers & full-sentence periods (`ngCanonicalOrderingAnswers`, `ngOrderingAnswers`, `nclexProConvertWorksheet`).** Fixes false-positive `Ordering answer must use every presented step exactly once` failures when the model outputs a verbatim arrow-separated ordering key prefixed with sequential `1. `, `2. `, `3. `, `4. ` (or `1)`, `(1)`, `Step 1:`) or when full-sentence steps end in a trailing period, while preserving the v17.15 safety contract that rejects non-sequential/rank inline numbers (`2. Alpha -> 3. Beta -> 1. Gamma`) and inconsistent numbering. Also updates `nclexProConvertWorksheet` to resolve Ordering items via `ngOrderingAnswers` first so canonical arrow-separated and sequential-ordinal answers map to exact 0-based indices instead of matching index `0` on line-by-line scan.
+- **Verification.** `node verify-repo.js` passes **4,247 assertions (`0 failed`)** (4 new behavioral assertions across `tools/worksheet-remediation-tests.js` and `tools/nclex-pro-sync-tests.js`), `0` AST undeclared references across all 4 inline script blocks, `<script type="text/babel">` well under `500 KB`, all 25 prompt constants + 5 dynamic builders in `Prompts.md`, and live SHA-384 verification of all 7 pinned CDN scripts + both `PDF_WORKER_URLS` copies (`9/9`, `0` mismatches). No live Gemini API calls were made.
+
 ## v23.2 Parallel KB Lanes Default, NGN Matrix Schema Fix, Topic Progress Bar & Rotation, Trailing Validation Banners, & NCLEX Pro Tag Parity (2026-11-24)
 
 The canonical application is `Nursing-Study-Suite v23.2.html`. All 13 frozen prompt constants match `prompt-baseline.json` unchanged.
